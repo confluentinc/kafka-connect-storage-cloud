@@ -44,8 +44,7 @@
 
     <scm>
         <connection>scm:git:git://github.com/confluentinc/kafka-connect-s3.git</connection>
-        <developerConnection>scm:git:git@github.com:confluentinc/kafka-connect-s3.git
-        </developerConnection>
+        <developerConnection>scm:git:git@github.com:confluentinc/kafka-connect-s3.git</developerConnection>
         <url>https://github.com/confluentinc/kafka-connect-s3</url>
         <tag>HEAD</tag>
     </scm>
