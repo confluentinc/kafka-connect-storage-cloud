@@ -51,7 +51,7 @@
 
     <properties>
         <confluent.version>3.2.0-SNAPSHOT</confluent.version>
-        <kafka.version>0.10.2.0-SNAPSHOT</kafka.version>
+        <kafka.version>0.10.1.1-SNAPSHOT</kafka.version>
         <junit.version>4.12</junit.version>
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
     </properties>
