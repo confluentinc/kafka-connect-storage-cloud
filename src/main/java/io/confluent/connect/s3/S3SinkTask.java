@@ -2,7 +2,7 @@
  * Copyright 2016 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file exceptin compliance with the License.
+ * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
@@ -17,14 +17,14 @@
 package io.confluent.connect.s3;
 
 import io.confluent.connect.s3.util.Version;
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.connect.connector.Task;
-import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.sink.SinkTask;
 
-import java.util.List;
+import java.util.Collection;
 import java.util.Map;
 
-public class S3SourceConnector extends SourceConnector {
+public class S3SinkTask extends SinkTask {
 
   @Override
   public String version() {
@@ -35,21 +35,9 @@ public class S3SourceConnector extends SourceConnector {
   public void start(Map<String, String> props) {}
 
   @Override
-  public Class<? extends Task> taskClass() {
-    return S3SourceTask.class;
-  }
-
-  @Override
-  public List<Map<String, String>> taskConfigs(int maxTasks) {
-    return null;
-  }
+  public void put(Collection<SinkRecord> records) throws ConnectException {}
 
   @Override
   public void stop() {}
-
-  @Override
-  public ConfigDef config() {
-    return null;
-  }
 
 }
