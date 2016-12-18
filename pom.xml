@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+
 <!--
   ~ Copyright 2016 Confluent Inc.
   ~
@@ -52,6 +53,7 @@
     <properties>
         <confluent.version>3.2.0-SNAPSHOT</confluent.version>
         <kafka.version>0.10.2.0-SNAPSHOT</kafka.version>
+        <aws.version>1.11.68</aws.version>
         <junit.version>4.12</junit.version>
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
     </properties>
@@ -62,7 +64,23 @@
             <name>Confluent</name>
             <url>${confluent.maven.repo}</url>
         </repository>
+        <repository>
+            <id>findify</id>
+            <url>https://dl.bintray.com/findify/maven/</url>
+        </repository>
     </repositories>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.amazonaws</groupId>
+                <artifactId>aws-java-sdk-bom</artifactId>
+                <version>${aws.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>
@@ -77,9 +95,20 @@
             <version>3.2.0-SNAPSHOT</version>
         </dependency>
         <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-java-sdk-s3</artifactId>
+        </dependency>
+        <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.findify</groupId>
+            <artifactId>s3mock_2.11</artifactId>
+            <version>0.1.5</version>
+            <type>pom</type>
             <scope>test</scope>
         </dependency>
     </dependencies>
