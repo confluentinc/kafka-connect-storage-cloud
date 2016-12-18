@@ -16,15 +16,38 @@
 
 package io.confluent.connect.s3;
 
-import io.confluent.connect.s3.util.Version;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import io.confluent.connect.s3.util.Version;
+
+/**
+ * Connector class for Amazon Simple Storage Service (S3).
+ */
 public class S3SinkConnector extends Connector {
+  private static final Logger log = LoggerFactory.getLogger(S3SinkConnector.class);
+  private Map<String, String> configProps;
+  private S3SinkConnectorConfig config;
+
+  /**
+   * No-arg constructor. It is instantiated by Connect framework.
+   */
+  public S3SinkConnector() {
+    // no-arg constructor required by Connect framework.
+  }
+
+  // visible for testing.
+  S3SinkConnector(S3SinkConnectorConfig config) {
+    this.config = config;
+  }
 
   @Override
   public String version() {
@@ -32,7 +55,11 @@ public class S3SinkConnector extends Connector {
   }
 
   @Override
-  public void start(Map<String, String> props) {}
+  public void start(Map<String, String> props) {
+    configProps = new HashMap<>(props);
+    config = new S3SinkConnectorConfig(props);
+    log.info("Starting S3 connector {}", config.getName());
+  }
 
   @Override
   public Class<? extends Task> taskClass() {
@@ -41,15 +68,22 @@ public class S3SinkConnector extends Connector {
 
   @Override
   public List<Map<String, String>> taskConfigs(int maxTasks) {
-    return null;
+    Map<String, String> taskProps = new HashMap<>(configProps);
+    List<Map<String, String>> taskConfigs = new ArrayList<>(maxTasks);
+    for (int i = 0; i < maxTasks; ++i) {
+      taskConfigs.add(taskProps);
+    }
+    return taskConfigs;
   }
 
   @Override
-  public void stop() {}
+  public void stop() {
+    log.info("Shutting down S3 connector {}", config.getName());
+  }
 
   @Override
   public ConfigDef config() {
-    return null;
+    return S3SinkConnectorConfig.getConfig();
   }
 
 }

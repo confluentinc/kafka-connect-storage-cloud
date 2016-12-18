@@ -16,13 +16,9 @@
 
 package io.confluent.connect.s3.storage;
 
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.ObjectListing;
 import org.apache.kafka.common.TopicPartition;
-
-import java.io.IOException;
 
 import io.confluent.connect.storage.Storage;
 import io.confluent.connect.storage.wal.WAL;
@@ -139,8 +135,8 @@ public class S3Storage implements Storage<ObjectListing, String, S3StorageConfig
    * @throws AmazonServiceException
    */
   @Override
-  public ObjectListing listStatus(String path, String filter) throws IOException {
-    // TODO: Need to figure out who filter has worked and see if using marker does the job.
+  public ObjectListing listStatus(String path, String filter) {
+    // TODO: Need to figure out how filter has worked and see if using marker does the job.
     return listStatus(path);
   }
 
@@ -151,7 +147,7 @@ public class S3Storage implements Storage<ObjectListing, String, S3StorageConfig
    * @throws AmazonServiceException
    */
   @Override
-  public ObjectListing listStatus(String path) throws IOException {
+  public ObjectListing listStatus(String path) {
     return client.listObjects(bucketName, path);
   }
 
