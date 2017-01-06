@@ -21,6 +21,8 @@ import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.metrics.RequestMetricCollector;
 
+import io.confluent.connect.s3.S3SinkConnectorConfig;
+
 /**
  * Configuration of S3 storage class.
  */
@@ -28,21 +30,23 @@ public class S3StorageConfig {
   private final String bucketName;
   private final AWSCredentials credentials;
   private final AWSCredentialsProvider provider;
-  private final ClientConfiguration clientConfig;
+  private final ClientConfiguration s3ClientConfig;
+  private final String ssea;
+  private final int partSize;
   private final RequestMetricCollector collector;
 
   /**
    * Fully configurable constructor.
    *
-   * @param bucketName   name of S3 bucket to contain all Kafka data.
-   * @param provider     provider of credentials for S3 client.
-   * @param credentials  credentials of S3 client to be used if provider is <code>null</code>.
-   * @param clientConfig S3 client configuration.
-   * @param collector    S3 collector request metrics.
+   * @param props S3 connector properties.
+   * @param provider provider of credentials for S3 client.
+   * @param credentials credentials of S3 client to be used if provider is <code>null</code>.
+   * @param s3ClientConfig S3 client configuration.
+   * @param collector S3 collector request metrics.
    */
-  public S3StorageConfig(String bucketName, AWSCredentialsProvider provider, final AWSCredentials credentials,
-                         ClientConfiguration clientConfig, RequestMetricCollector collector) {
-    this.bucketName = bucketName;
+  public S3StorageConfig(S3SinkConnectorConfig props, AWSCredentialsProvider provider, final AWSCredentials credentials,
+                         ClientConfiguration s3ClientConfig, RequestMetricCollector collector) {
+    this.bucketName = props.getBucketName();
     if (provider == null) {
       this.provider = new AWSCredentialsProvider() {
         @Override
@@ -57,84 +61,87 @@ public class S3StorageConfig {
     } else {
       this.provider = provider;
     }
+
     this.provider.refresh();
     this.credentials = this.provider.getCredentials();
-    this.clientConfig = clientConfig;
+    this.s3ClientConfig = s3ClientConfig;
+    this.ssea = props.getSSEA();
+    this.partSize = props.getPartSize();
     this.collector = collector;
   }
 
   /**
    * Constructor with default request metric collector.
    *
-   * @param bucketName   name of S3 bucket to contain all Kafka data.
-   * @param provider     provider of credentials for S3 client.
-   * @param credentials  credentials of S3 client to be used if provider is <code>null</code>.
-   * @param clientConfig S3 client configuration.
+   * @param props S3 connector properties.
+   * @param provider provider of credentials for S3 client.
+   * @param credentials credentials of S3 client to be used if provider is <code>null</code>.
+   * @param s3ClientConfig S3 client configuration.
    */
-  public S3StorageConfig(String bucketName, AWSCredentialsProvider provider, AWSCredentials credentials,
-                         ClientConfiguration clientConfig) {
-    this(bucketName, provider, credentials, clientConfig, RequestMetricCollector.NONE);
+  public S3StorageConfig(S3SinkConnectorConfig props, AWSCredentialsProvider provider, AWSCredentials credentials,
+                         ClientConfiguration s3ClientConfig) {
+    this(props, provider, credentials, s3ClientConfig, RequestMetricCollector.NONE);
   }
 
   /**
    * Constructor with credentials and default request metric collector.
    *
-   * @param bucketName   name of S3 bucket to contain all Kafka data.
-   * @param credentials  credentials of S3 client to be used.
-   * @param clientConfig S3 client configuration.
+   * @param props S3 connector properties.
+   * @param credentials credentials of S3 client to be used.
+   * @param s3ClientConfig S3 client configuration.
    */
-  public S3StorageConfig(String bucketName, AWSCredentials credentials, ClientConfiguration clientConfig) {
-    this(bucketName, null, credentials, clientConfig, RequestMetricCollector.NONE);
+  public S3StorageConfig(S3SinkConnectorConfig props, AWSCredentials credentials, ClientConfiguration s3ClientConfig) {
+    this(props, null, credentials, s3ClientConfig, RequestMetricCollector.NONE);
   }
 
   /**
    * Constructor with credentials' provider and default request metric collector.
    *
-   * @param bucketName   name of S3 bucket to contain all Kafka data.
-   * @param provider     provider of credentials for S3 client.
-   * @param clientConfig S3 client configuration.
+   * @param props S3 connector properties.
+   * @param provider provider of credentials for S3 client.
+   * @param s3ClientConfig S3 client configuration.
    */
-  public S3StorageConfig(String bucketName, AWSCredentialsProvider provider, ClientConfiguration clientConfig) {
-    this(bucketName, provider, null, clientConfig, RequestMetricCollector.NONE);
+  public S3StorageConfig(S3SinkConnectorConfig props, AWSCredentialsProvider provider, ClientConfiguration s3ClientConfig) {
+    this(props, provider, null, s3ClientConfig, RequestMetricCollector.NONE);
   }
 
   /**
    * Constructor with credentials, default client configuration and default request metric collector.
    *
-   * @param bucketName  name of S3 bucket to contain all Kafka data.
+   * @param props S3 connector properties.
    * @param credentials credentials of S3 client to be used.
    */
-  public S3StorageConfig(String bucketName, AWSCredentials credentials) {
-    this(bucketName, null, credentials, new ClientConfiguration(), RequestMetricCollector.NONE);
+  public S3StorageConfig(S3SinkConnectorConfig props, AWSCredentials credentials) {
+    this(props, null, credentials, new ClientConfiguration(), RequestMetricCollector.NONE);
   }
 
   /**
    * Constructor with credentials' provider, default client configuration and default request metric collector.
    *
-   * @param bucketName name of S3 bucket to contain all Kafka data.
-   * @param provider   provider of credentials for S3 client.
+   * @param props S3 connector properties.
+   * @param provider provider of credentials for S3 client.
    */
-  public S3StorageConfig(String bucketName, AWSCredentialsProvider provider) {
-    this(bucketName, provider, null, new ClientConfiguration(), RequestMetricCollector.NONE);
+  public S3StorageConfig(S3SinkConnectorConfig props, AWSCredentialsProvider provider) {
+    this(props, provider, null, new ClientConfiguration(), RequestMetricCollector.NONE);
   }
 
   /**
    * Constructor with client configuration, default credentials discovery and default request metric collector.
    *
-   * @param bucketName   name of S3 bucket to contain all Kafka data.
-   * @param clientConfig S3 client configuration.
+   * @param props S3 connector properties.
+   * @param s3ClientConfig S3 client configuration.
    */
-  public S3StorageConfig(String bucketName, ClientConfiguration clientConfig) {
-    this(bucketName, null, null, clientConfig, RequestMetricCollector.NONE);
+  public S3StorageConfig(S3SinkConnectorConfig props, ClientConfiguration s3ClientConfig) {
+    this(props, null, null, s3ClientConfig, RequestMetricCollector.NONE);
   }
 
   /**
    * Constructor with default configuration settings and default credentials discovery.
    *
-   * @param bucketName name of S3 bucket to contain all Kafka data.
+   * @param props S3 connector properties.
    */
-  public S3StorageConfig(String bucketName) {
-    this(bucketName, null, null, new ClientConfiguration(), RequestMetricCollector.NONE);
+  public S3StorageConfig(S3SinkConnectorConfig props) {
+    this(props, null, null, new ClientConfiguration(), RequestMetricCollector.NONE);
   }
 
   /**
@@ -142,7 +149,7 @@ public class S3StorageConfig {
    *
    * @return the S3 bucket name.
    */
-  public String getBucketName() {
+  public String bucket() {
     return bucketName;
   }
 
@@ -160,7 +167,7 @@ public class S3StorageConfig {
    *
    * @return the credentials' provider.
    */
-  public AWSCredentialsProvider getProvider() {
+  public AWSCredentialsProvider provider() {
     return provider;
   }
 
@@ -169,8 +176,8 @@ public class S3StorageConfig {
    *
    * @return the client configuration.
    */
-  public ClientConfiguration getClientConfig() {
-    return clientConfig;
+  public ClientConfiguration clientConfig() {
+    return s3ClientConfig;
   }
 
   /**
@@ -178,7 +185,25 @@ public class S3StorageConfig {
    *
    * @return the collector.
    */
-  public RequestMetricCollector getCollector() {
+  public RequestMetricCollector collector() {
     return collector;
+  }
+
+  /**
+   * Get the S3 server-side encryption algorithm.
+   *
+   * @return the server-side encryption algorithm.
+   */
+  public String ssea() {
+    return ssea;
+  }
+
+  /**
+   * Get the part size configured for S3 multi-part uploads.
+   *
+   * @return the collector.
+   */
+  public int partSize() {
+    return partSize();
   }
 }

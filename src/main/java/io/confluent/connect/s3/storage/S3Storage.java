@@ -18,7 +18,10 @@ package io.confluent.connect.s3.storage;
 
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.ObjectListing;
+import org.apache.avro.file.SeekableInput;
 import org.apache.kafka.common.TopicPartition;
+
+import java.io.OutputStream;
 
 import io.confluent.connect.storage.Storage;
 import io.confluent.connect.storage.wal.WAL;
@@ -26,11 +29,11 @@ import io.confluent.connect.storage.wal.WAL;
 /**
  * S3 implementation of the storage interface for Connect sinks.
  */
-public class S3Storage implements Storage<ObjectListing, String, S3StorageConfig> {
+public class S3Storage implements Storage<S3StorageConfig, String, ObjectListing> {
 
   private final String url;
   private final String bucketName;
-  private final AmazonS3Client client;
+  private final AmazonS3Client s3;
   private final S3StorageConfig conf;
 
   /**
@@ -42,8 +45,8 @@ public class S3Storage implements Storage<ObjectListing, String, S3StorageConfig
   public S3Storage(S3StorageConfig conf, String url) {
     this.url = url;
     this.conf = conf;
-    this.bucketName = conf.getBucketName();
-    this.client = new AmazonS3Client(conf.getProvider(), conf.getClientConfig(), conf.getCollector());
+    this.bucketName = conf.bucket();
+    this.s3 = new AmazonS3Client(conf.provider(), conf.clientConfig(), conf.collector());
   }
 
   /**
@@ -54,7 +57,7 @@ public class S3Storage implements Storage<ObjectListing, String, S3StorageConfig
    */
   @Override
   public boolean exists(String name) {
-    return client.doesObjectExist(bucketName, name);
+    return s3.doesObjectExist(bucketName, name);
   }
 
   /**
@@ -65,7 +68,7 @@ public class S3Storage implements Storage<ObjectListing, String, S3StorageConfig
    */
   @Override
   public boolean mkdirs(String name) {
-    return client.createBucket(name) != null;
+    return s3.createBucket(name) != null;
   }
 
   /**
@@ -88,9 +91,11 @@ public class S3Storage implements Storage<ObjectListing, String, S3StorageConfig
   @Override
   public void delete(String name) {
     if (bucketName.equals(name)) {
-      client.deleteBucket(name);
+      // TODO: decide whether to support delete for the top-level bucket.
+      // s3.deleteBucket(name);
+      return;
     } else {
-      client.deleteObject(bucketName, name);
+      s3.deleteObject(bucketName, name);
     }
   }
 
@@ -136,8 +141,9 @@ public class S3Storage implements Storage<ObjectListing, String, S3StorageConfig
    */
   @Override
   public ObjectListing listStatus(String path, String filter) {
-    // TODO: Need to figure out how filter has worked and see if using marker does the job.
-    return listStatus(path);
+    // TODO: Would need to figure out how filter has worked and see if using marker does the job.
+    // return listStatus(path);
+    throw new UnsupportedOperationException();
   }
 
   /**
@@ -148,7 +154,7 @@ public class S3Storage implements Storage<ObjectListing, String, S3StorageConfig
    */
   @Override
   public ObjectListing listStatus(String path) {
-    return client.listObjects(bucketName, path);
+    return s3.listObjects(bucketName, path);
   }
 
   @Override
@@ -161,10 +167,26 @@ public class S3Storage implements Storage<ObjectListing, String, S3StorageConfig
     return url;
   }
 
+  @Override
+  public SeekableInput open(String path, S3StorageConfig conf) {
+    throw new UnsupportedOperationException("File reading is not currently supported in S3 Connector");
+  }
+
+  // TODO: very temporary unchecked cast.
+  @Override
+  public OutputStream create(String path, S3StorageConfig conf, boolean overwrite) {
+    // TODO: remove hardcoding
+    if (!overwrite) {
+      throw new UnsupportedOperationException("Creating a file without overwriting is not currently supported in S3 Connector");
+    }
+    long threshold = 1024 * 1024 * 1024;
+    return new S3OutputStream(conf.bucket(), path, conf.ssea(), conf.partSize(), threshold, s3);
+  }
+
   private void renameObject(String source, String target) {
-    if (!source.equals(target) && client.doesObjectExist(bucketName, source)) {
-      client.copyObject(bucketName, source, bucketName, target);
-      client.deleteObject(bucketName, source);
+    if (!source.equals(target) && s3.doesObjectExist(bucketName, source)) {
+      s3.copyObject(bucketName, source, bucketName, target);
+      s3.deleteObject(bucketName, source);
     }
   }
 }
