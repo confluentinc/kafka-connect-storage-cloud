@@ -172,7 +172,6 @@ public class S3Storage implements Storage<S3StorageConfig, String, ObjectListing
     throw new UnsupportedOperationException("File reading is not currently supported in S3 Connector");
   }
 
-  // TODO: very temporary unchecked cast.
   @Override
   public OutputStream create(String path, S3StorageConfig conf, boolean overwrite) {
     // TODO: remove hardcoding

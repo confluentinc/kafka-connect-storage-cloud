@@ -16,15 +16,97 @@
 
 package io.confluent.connect.s3;
 
-import io.confluent.connect.s3.util.Version;
+import com.amazonaws.AmazonClientException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.sink.SinkTaskContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+
+import io.confluent.connect.avro.AvroData;
+import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.s3.storage.S3StorageConfig;
+import io.confluent.connect.s3.util.Version;
+import io.confluent.connect.storage.StorageFactory;
+import io.confluent.connect.storage.format.Format;
+import io.confluent.connect.storage.format.RecordWriterProvider;
+import io.confluent.connect.storage.partitioner.Partitioner;
 
 public class S3SinkTask extends SinkTask {
+  private static final Logger log = LoggerFactory.getLogger(S3SinkTask.class);
+
+  private S3SinkConnectorConfig connectorConfig;
+  private String url;
+  private S3Storage storage;
+  private S3StorageConfig storageConfig;
+  private final Set<TopicPartition> assignment;
+  private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
+  private final Map<TopicPartition, Long> offsets;
+  private Partitioner partitioner;
+  private RecordWriterProvider<S3StorageConfig, AvroData> writerProvider;
+  private AvroData avroData;
+
+  /**
+   * No-arg consturctor. Used by Connect framework.
+   */
+  public S3SinkTask() {
+    // no-arg constructor required by Connect framework.
+    assignment = new HashSet<>();
+    topicPartitionWriters = new HashMap<>();
+    offsets = new HashMap<>();
+  }
+
+  // visible for testing.
+  S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context) {
+    this();
+    this.connectorConfig = connectorConfig;
+    this.context = context;
+  }
+
+  public void start(Map<String, String> props) {
+    try {
+      connectorConfig = new S3SinkConnectorConfig(props);
+      Set<TopicPartition> assignment = context.assignment();
+
+      storageConfig = new S3StorageConfig(connectorConfig);
+      url = connectorConfig.getString(S3SinkConnectorConfig.STORE_URL_CONFIG);
+
+      @SuppressWarnings("unchecked")
+      Class<? extends S3Storage> storageClass = (Class<? extends S3Storage>) Class
+          .forName(connectorConfig.getString(S3SinkConnectorConfig.STORAGE_CLASS_CONFIG));
+      storage = StorageFactory.createStorage(storageClass, S3StorageConfig.class, storageConfig, url);
+
+      createBucket(storageConfig.bucket());
+
+      avroData = new AvroData(connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG));
+      Format<S3StorageConfig, AvroData, String> format = getFormat();
+      writerProvider = format.getRecordWriterProvider();
+
+      partitioner = newPartitioner(connectorConfig);
+
+      open(context.assignment());
+
+      for (TopicPartition tp : assignment) {
+        TopicPartitionWriter topicPartitionWriter =
+            new TopicPartitionWriter(tp, storage, writerProvider, partitioner, connectorConfig, context, avroData);
+        topicPartitionWriters.put(tp, topicPartitionWriter);
+      }
+
+      log.info("Started S3 connector task with assigned partitions {}", assignment);
+    } catch (ClassNotFoundException | IllegalAccessException | InstantiationException e) {
+      throw new ConnectException("Reflection exception: ", e);
+    } catch (AmazonClientException e) {
+      throw new ConnectException(e);
+    }
+  }
 
   @Override
   public String version() {
@@ -32,12 +114,80 @@ public class S3SinkTask extends SinkTask {
   }
 
   @Override
-  public void start(Map<String, String> props) {}
+  public void open(Collection<TopicPartition> partitions) {
+    assignment.clear();
+    assignment.addAll(partitions);
+    for (TopicPartition tp : assignment) {
+      TopicPartitionWriter topicPartitionWriter =
+          new TopicPartitionWriter(tp, storage, writerProvider, partitioner, connectorConfig, context, avroData);
+      topicPartitionWriters.put(tp, topicPartitionWriter);
+    }
+  }
+
+  private void createBucket(String bucketName) {}
+
+  @SuppressWarnings("unchecked")
+  private Format<S3StorageConfig, AvroData, String> getFormat() throws ClassNotFoundException, IllegalAccessException, InstantiationException {
+    String name = connectorConfig.getString(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG);
+    return ((Class<Format<S3StorageConfig, AvroData, String>>) Class.forName(name)).newInstance();
+  }
+
+  private Partitioner newPartitioner(S3SinkConnectorConfig config)
+      throws ClassNotFoundException, IllegalAccessException, InstantiationException {
+
+    @SuppressWarnings("unchecked")
+    Class<? extends Partitioner> partitionerClasss = (Class<? extends Partitioner>)
+        Class.forName(config.getString(S3SinkConnectorConfig.PARTITIONER_CLASS_CONFIG));
+
+    Map<String, Object> map = copyConfig(config);
+    Partitioner partitioner = partitionerClasss.newInstance();
+    partitioner.configure(map);
+    return partitioner;
+  }
+
+  private Map<String, Object> copyConfig(S3SinkConnectorConfig config) {
+    Map<String, Object> map = new HashMap<>();
+    map.put(S3SinkConnectorConfig.PARTITION_FIELD_NAME_CONFIG, config.getString(S3SinkConnectorConfig.PARTITION_FIELD_NAME_CONFIG));
+    map.put(S3SinkConnectorConfig.PARTITION_DURATION_MS_CONFIG, config.getLong(S3SinkConnectorConfig.PARTITION_DURATION_MS_CONFIG));
+    map.put(S3SinkConnectorConfig.PATH_FORMAT_CONFIG, config.getString(S3SinkConnectorConfig.PATH_FORMAT_CONFIG));
+    map.put(S3SinkConnectorConfig.LOCALE_CONFIG, config.getString(S3SinkConnectorConfig.LOCALE_CONFIG));
+    map.put(S3SinkConnectorConfig.TIMEZONE_CONFIG, config.getString(S3SinkConnectorConfig.TIMEZONE_CONFIG));
+    return map;
+  }
 
   @Override
-  public void put(Collection<SinkRecord> records) throws ConnectException {}
+  public void put(Collection<SinkRecord> records) throws ConnectException {
+    for (SinkRecord record : records) {
+      String topic = record.topic();
+      int partition = record.kafkaPartition();
+      TopicPartition tp = new TopicPartition(topic, partition);
+      topicPartitionWriters.get(tp).buffer(record);
+    }
+
+    for (TopicPartition tp: assignment) {
+      topicPartitionWriters.get(tp).write();
+    }
+  }
+
+  public void close(Collection<TopicPartition> partitions) {
+    for (TopicPartition tp : assignment) {
+      try {
+        topicPartitionWriters.get(tp).close();
+      } catch (ConnectException e) {
+        log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
+      } finally {
+        topicPartitionWriters.remove(tp);
+      }
+    }
+  }
 
   @Override
-  public void stop() {}
+  public void stop() {
+    try {
+      storage.close();
+    } catch (Exception e) {
+      throw new ConnectException(e);
+    }
+  }
 
 }
