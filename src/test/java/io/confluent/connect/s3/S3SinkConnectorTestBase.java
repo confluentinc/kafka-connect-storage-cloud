@@ -21,14 +21,16 @@ import org.junit.Before;
 
 import java.util.Map;
 
+import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.storage.StorageSinkTestBase;
 
-public class S3SinkTestBase extends StorageSinkTestBase {
+public class S3SinkConnectorTestBase extends StorageSinkTestBase {
 
-  protected static final String S3_TEST_URL = "http://localhost:8888";
+  protected static final String S3_TEST_URL = "http://127.0.0.1:8181";
   protected static final String S3_TEST_BUCKET_NAME = "kafka.bucket";
 
   protected S3SinkConnectorConfig connectorConfig;
+  protected AvroData avroData;
 
   @Override
   protected Map<String, String> createProps() {
@@ -44,6 +46,8 @@ public class S3SinkTestBase extends StorageSinkTestBase {
   public void setUp() throws Exception {
     super.setUp();
     connectorConfig = new S3SinkConnectorConfig(properties);
+    int schemaCacheSize = connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG);
+    avroData = new AvroData(schemaCacheSize);
   }
 
   @After

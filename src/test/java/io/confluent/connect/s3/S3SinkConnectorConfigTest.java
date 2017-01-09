@@ -23,7 +23,7 @@ import org.junit.rules.ExpectedException;
 
 import static org.junit.Assert.assertEquals;
 
-public class S3SinkConnectorConfigTest extends S3SinkTestBase {
+public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
 
   @Test
   public void testStorageClass() {
