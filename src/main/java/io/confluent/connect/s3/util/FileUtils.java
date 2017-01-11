@@ -20,21 +20,50 @@ import org.apache.kafka.common.TopicPartition;
 
 import io.confluent.connect.s3.S3SinkConnectorConstants;
 
+import static io.confluent.connect.s3.S3SinkConnectorConstants.DIRECTORY_SEPARATOR;
+
 public class FileUtils {
 
-  public static String fileName(String url, String topicsPrefix, String keyPrefix, String name) {
-    return url + "/" + topicsPrefix + "/" + keyPrefix + "/" + name;
+  public static String topicPrefix(String bucketName, String topicsPrefix, String topic) {
+    return bucketName + DIRECTORY_SEPARATOR + topicsPrefix + DIRECTORY_SEPARATOR + topic;
   }
 
-  public static String committedFileName(String url, String topicsPrefix, String keyPrefix, TopicPartition topicPart,
-                                         long startOffset, String extension, String zeroPadFormat) {
-    String name = topicPart.topic()
+  public static String directoryPrefix(String bucketName, String topicsPrefix, String dirPrefix) {
+    return bucketName + DIRECTORY_SEPARATOR + topicsPrefix + DIRECTORY_SEPARATOR + dirPrefix;
+  }
+
+  public static String directoryPrefix(String bucketName, String topicsPrefix, TopicPartition tp) {
+    String topic = tp.topic();
+    int partition = tp.partition();
+    return bucketName + DIRECTORY_SEPARATOR + topicsPrefix + DIRECTORY_SEPARATOR + topic + DIRECTORY_SEPARATOR
+               + partition;
+  }
+
+  public static String fileKey(String bucketName, String topicsPrefix, TopicPartition tp, String name) {
+    String topic = tp.topic();
+    int partition = tp.partition();
+    return bucketName + DIRECTORY_SEPARATOR + topicsPrefix + DIRECTORY_SEPARATOR + topic + DIRECTORY_SEPARATOR
+               + partition + DIRECTORY_SEPARATOR + name;
+  }
+
+  public static String fileKey(String bucketName, String topicsPrefix, String dirPrefix, String name) {
+    return bucketName + DIRECTORY_SEPARATOR + topicsPrefix + DIRECTORY_SEPARATOR + dirPrefix + DIRECTORY_SEPARATOR
+               + name;
+  }
+
+  public static String fileKey(String topicsPrefix, String keyPrefix, String name) {
+    return DIRECTORY_SEPARATOR + topicsPrefix + DIRECTORY_SEPARATOR + keyPrefix + DIRECTORY_SEPARATOR + name;
+  }
+
+  public static String fileKeyToCommit(String topicsPrefix, String dirPrefix, TopicPartition tp, long startOffset,
+                                       String extension, String zeroPadFormat) {
+    String name = tp.topic()
                       + S3SinkConnectorConstants.COMMITTED_FILENAME_SEPARATOR
-                      + topicPart.partition()
+                      + tp.partition()
                       + S3SinkConnectorConstants.COMMITTED_FILENAME_SEPARATOR
                       + String.format(zeroPadFormat, startOffset)
                       + extension;
-    return fileName(url, topicsPrefix, keyPrefix, name);
+    return fileKey(topicsPrefix, dirPrefix, name);
   }
 
 }

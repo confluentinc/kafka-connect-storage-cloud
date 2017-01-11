@@ -51,7 +51,7 @@ public class TopicPartitionWriter {
   private final TopicPartition tp;
   private final Partitioner partitioner;
   private final String url;
-  private final String topicsPrefix;
+  private String topicsDir;
   private State state;
   private final Queue<SinkRecord> buffer;
   private final S3Storage storage;
@@ -61,7 +61,7 @@ public class TopicPartitionWriter {
   private final long rotateIntervalMs;
   private final long rotateScheduleIntervalMs;
   private long nextScheduledRotate;
-  private final RecordWriterProvider<S3StorageConfig, AvroData> writerProvider;
+  private final RecordWriterProvider<S3StorageConfig> writerProvider;
   private final S3StorageConfig conf;
   private final AvroData avroData;
   private long offset;
@@ -78,7 +78,7 @@ public class TopicPartitionWriter {
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
-                              RecordWriterProvider<S3StorageConfig, AvroData> writerProvider,
+                              RecordWriterProvider<S3StorageConfig> writerProvider,
                               Partitioner partitioner,
                               S3SinkConnectorConfig connectorConfig,
                               SinkTaskContext context,
@@ -89,7 +89,7 @@ public class TopicPartitionWriter {
   // Visible for testing
   TopicPartitionWriter(TopicPartition tp,
                        S3Storage storage,
-                       RecordWriterProvider<S3StorageConfig, AvroData> writerProvider,
+                       RecordWriterProvider<S3StorageConfig> writerProvider,
                        Partitioner partitioner,
                        S3SinkConnectorConfig connectorConfig,
                        SinkTaskContext context,
@@ -105,8 +105,8 @@ public class TopicPartitionWriter {
     this.url = storage.url();
     this.conf = storage.conf();
 
-    topicsPrefix = connectorConfig.getString(S3SinkConnectorConfig.TOPICS_DIR_CONFIG);
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
+    topicsDir = connectorConfig.getString(S3SinkConnectorConfig.TOPICS_DIR_CONFIG);
     rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
     rotateScheduleIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG);
     timeoutMs = connectorConfig.getLong(S3SinkConnectorConfig.RETRY_BACKOFF_CONFIG);
@@ -255,7 +255,7 @@ public class TopicPartitionWriter {
     return writers;
   }
 
-  private String getKeyPrefix(String encodedPartition) {
+  private String getDirectoryPrefix(String encodedPartition) {
     return partitioner.generatePartitionedPath(tp.topic(), encodedPartition);
   }
 
@@ -291,7 +291,7 @@ public class TopicPartitionWriter {
       return writers.get(encodedPartition);
     }
     String commitFilename = getCommitFilename(encodedPartition);
-    RecordWriter<SinkRecord> writer = writerProvider.getRecordWriter(conf, commitFilename, record, avroData);
+    RecordWriter<SinkRecord> writer = writerProvider.getRecordWriter(conf, commitFilename);
     writers.put(encodedPartition, writer);
     return writer;
   }
@@ -301,8 +301,9 @@ public class TopicPartitionWriter {
     if (commitFiles.containsKey(encodedPartition)) {
       commitFile = commitFiles.get(encodedPartition);
     } else {
-      String prefix = getKeyPrefix(encodedPartition);
-      commitFile = FileUtils.fileName(url, topicsPrefix, prefix, extension);
+      long startOffset = startOffsets.get(encodedPartition);
+      String prefix = getDirectoryPrefix(encodedPartition);
+      commitFile = FileUtils.fileKeyToCommit(topicsDir, prefix, tp, startOffset, extension, zeroPadOffsetFormat);
       commitFiles.put(encodedPartition, commitFile);
     }
     return commitFile;
@@ -333,15 +334,14 @@ public class TopicPartitionWriter {
     }
 
     String encodedPartition = partitioner.encodePartition(record);
+    if (!startOffsets.containsKey(encodedPartition)) {
+      startOffsets.put(encodedPartition, record.kafkaOffset());
+    }
+
     RecordWriter<SinkRecord> writer = getWriter(record, encodedPartition);
     writer.write(record);
 
-    if (!startOffsets.containsKey(encodedPartition)) {
-      startOffsets.put(encodedPartition, record.kafkaOffset());
-      offsets.put(encodedPartition, record.kafkaOffset());
-    } else {
-      offsets.put(encodedPartition, record.kafkaOffset());
-    }
+    offsets.put(encodedPartition, record.kafkaOffset());
     recordCounter++;
   }
 
@@ -359,10 +359,9 @@ public class TopicPartitionWriter {
     }
 
     long startOffset = startOffsets.get(encodedPartition);
-    String prefix = getKeyPrefix(encodedPartition);
-    String committedFile = FileUtils.committedFileName(url, topicsPrefix, prefix, tp, startOffset, extension,
-                                                       zeroPadOffsetFormat);
-    storage.commit(null, committedFile);
+    String prefix = getDirectoryPrefix(encodedPartition);
+    String file = FileUtils.fileKeyToCommit(topicsDir, prefix, tp, startOffset, extension, zeroPadOffsetFormat);
+    //storage.commit(null, file);
 
     if (writers.containsKey(encodedPartition)) {
       RecordWriter<SinkRecord> writer = writers.get(encodedPartition);
@@ -370,10 +369,16 @@ public class TopicPartitionWriter {
       writers.remove(encodedPartition);
     }
 
+    long commitOffset = offsets.get(encodedPartition);
+    // TODO: Do I need a check here? > than startOffset? > 0?
+    log.debug("Resetting offset for {} to {}", tp, commitOffset);
+    context.offset(tp, commitOffset);
+
     startOffsets.remove(encodedPartition);
+    commitFiles.remove(encodedPartition);
     offset = -1L;
     recordCounter = 0;
-    log.info("Committed {} for {}", committedFile, tp);
+    log.info("Committed {} for {}", file, tp);
   }
 
   private void setRetryTimeout(long timeoutMs) {

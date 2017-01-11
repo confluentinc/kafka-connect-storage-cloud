@@ -51,7 +51,7 @@ public class S3SinkTask extends SinkTask {
   private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
   private final Map<TopicPartition, Long> offsets;
   private Partitioner partitioner;
-  private RecordWriterProvider<S3StorageConfig, AvroData> writerProvider;
+  private RecordWriterProvider<S3StorageConfig> writerProvider;
   private AvroData avroData;
 
   /**
@@ -87,7 +87,7 @@ public class S3SinkTask extends SinkTask {
       createBucket(storageConfig.bucket());
 
       avroData = new AvroData(connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG));
-      Format<S3StorageConfig, AvroData, String> format = getFormat();
+      Format<S3StorageConfig, String> format = getFormat();
       writerProvider = format.getRecordWriterProvider();
 
       partitioner = newPartitioner(connectorConfig);
@@ -127,9 +127,9 @@ public class S3SinkTask extends SinkTask {
   private void createBucket(String bucketName) {}
 
   @SuppressWarnings("unchecked")
-  private Format<S3StorageConfig, AvroData, String> getFormat() throws ClassNotFoundException, IllegalAccessException, InstantiationException {
+  private Format<S3StorageConfig, String> getFormat() throws ClassNotFoundException, IllegalAccessException, InstantiationException {
     String name = connectorConfig.getString(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG);
-    return ((Class<Format<S3StorageConfig, AvroData, String>>) Class.forName(name)).newInstance();
+    return ((Class<Format<S3StorageConfig, String>>) Class.forName(name)).newInstance();
   }
 
   private Partitioner newPartitioner(S3SinkConnectorConfig config)

@@ -23,25 +23,27 @@ import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.format.SchemaFileReader;
 import io.confluent.connect.storage.hive.HiveFactory;
 
-public class AvroFormat implements Format<S3StorageConfig, AvroData, String> {
+public class AvroFormat implements Format<S3StorageConfig, String> {
   private final S3Storage storage;
+  private final AvroData avroData;
 
-  AvroFormat(S3Storage storage) {
+  public AvroFormat(S3Storage storage, AvroData avroData) {
     this.storage = storage;
+    this.avroData = avroData;
   }
 
   @Override
-  public RecordWriterProvider<S3StorageConfig, AvroData> getRecordWriterProvider() {
-    return new AvroRecordWriterProvider(storage);
+  public RecordWriterProvider<S3StorageConfig> getRecordWriterProvider() {
+    return new AvroRecordWriterProvider(storage, avroData);
   }
 
   @Override
-  public SchemaFileReader<S3StorageConfig, String> getSchemaFileReader(AvroData avroData) {
+  public SchemaFileReader<S3StorageConfig, String> getSchemaFileReader() {
     throw new UnsupportedOperationException("Reading schemas from S3 is not currently supported");
   }
 
   @Override
-  public HiveFactory<S3SinkConnectorConfig, AvroData> getHiveFactory() {
+  public HiveFactory<S3SinkConnectorConfig> getHiveFactory() {
     throw new UnsupportedOperationException("Hive integration is not currently supported in S3 Connector");
   }
 

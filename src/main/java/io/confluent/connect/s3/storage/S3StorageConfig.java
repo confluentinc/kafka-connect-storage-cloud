@@ -204,6 +204,6 @@ public class S3StorageConfig {
    * @return the collector.
    */
   public int partSize() {
-    return partSize();
+    return partSize;
   }
 }

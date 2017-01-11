@@ -18,6 +18,7 @@ package io.confluent.connect.s3;
 
 public class S3SinkConnectorConstants {
 
-  public static final String COMMITTED_FILENAME_SEPARATOR = "+";
+  public static final String COMMITTED_FILENAME_SEPARATOR = "#";
+  public static final String DIRECTORY_SEPARATOR = "_";
 
 }

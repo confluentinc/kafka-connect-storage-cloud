@@ -23,6 +23,7 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.io.OutputStream;
 
+import io.confluent.connect.s3.util.StringUtils;
 import io.confluent.connect.storage.Storage;
 import io.confluent.connect.storage.wal.WAL;
 
@@ -49,6 +50,14 @@ public class S3Storage implements Storage<S3StorageConfig, String, ObjectListing
     this.s3 = new AmazonS3Client(conf.provider(), conf.clientConfig(), conf.collector());
   }
 
+  // Visible for testing.
+  public S3Storage(S3StorageConfig conf, String url, String bucketName, AmazonS3Client s3) {
+    this.url = url;
+    this.conf = conf;
+    this.bucketName = bucketName;
+    this.s3 = s3;
+  }
+
   /**
    * {@inheritDoc}
    *
@@ -57,7 +66,17 @@ public class S3Storage implements Storage<S3StorageConfig, String, ObjectListing
    */
   @Override
   public boolean exists(String name) {
-    return s3.doesObjectExist(bucketName, name);
+    return StringUtils.isNotBlank(name) && s3.doesObjectExist(bucketName, name);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @throws SdkClientException
+   * @throws AmazonServiceException
+   */
+  public boolean bucketExists(String bucket) {
+    return StringUtils.isNotBlank(bucket) && s3.doesBucketExist(bucket);
   }
 
   /**
@@ -68,7 +87,7 @@ public class S3Storage implements Storage<S3StorageConfig, String, ObjectListing
    */
   @Override
   public boolean mkdirs(String name) {
-    return s3.createBucket(name) != null;
+    throw new UnsupportedOperationException();
   }
 
   /**
@@ -108,19 +127,14 @@ public class S3Storage implements Storage<S3StorageConfig, String, ObjectListing
   @Override
   public void commit(String temp, String committed) {
     // TODO: Verify this functionality is needed. Throw new UnsupportedOperationException() otherwise
-    renameObject(temp, committed);
+    throw new UnsupportedOperationException();
   }
 
   /**
    * {@inheritDoc}
-   * This method is not supported in S3 storage.
-   *
-   * @throws UnsupportedOperationException
    */
   @Override
-  public void close() {
-    throw new UnsupportedOperationException();
-  }
+  public void close() {}
 
   /**
    * {@inheritDoc}
@@ -174,18 +188,15 @@ public class S3Storage implements Storage<S3StorageConfig, String, ObjectListing
 
   @Override
   public OutputStream create(String path, S3StorageConfig conf, boolean overwrite) {
-    // TODO: remove hardcoding
     if (!overwrite) {
       throw new UnsupportedOperationException("Creating a file without overwriting is not currently supported in S3 Connector");
     }
-    long threshold = 1024 * 1024 * 1024;
-    return new S3OutputStream(conf.bucket(), path, conf.ssea(), conf.partSize(), threshold, s3);
+
+    if (StringUtils.isBlank(path)) {
+      throw new IllegalArgumentException("Path can not be empty!");
+    }
+
+    return new S3OutputStream(conf.bucket(), path, conf.ssea(), conf.partSize(), s3);
   }
 
-  private void renameObject(String source, String target) {
-    if (!source.equals(target) && s3.doesObjectExist(bucketName, source)) {
-      s3.copyObject(bucketName, source, bucketName, target);
-      s3.deleteObject(bucketName, source);
-    }
-  }
 }

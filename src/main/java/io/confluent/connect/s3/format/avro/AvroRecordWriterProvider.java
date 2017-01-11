@@ -16,7 +16,6 @@ package io.confluent.connect.s3.format.avro;
 
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumWriter;
-import org.apache.avro.io.DatumWriter;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -32,14 +31,16 @@ import io.confluent.connect.s3.storage.S3StorageConfig;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 
-public class AvroRecordWriterProvider implements RecordWriterProvider<S3StorageConfig, AvroData> {
+public class AvroRecordWriterProvider implements RecordWriterProvider<S3StorageConfig> {
 
   private static final Logger log = LoggerFactory.getLogger(AvroRecordWriterProvider.class);
   private static final String EXTENSION = ".avro";
   private S3Storage storage;
+  private AvroData avroData;
 
-  AvroRecordWriterProvider(S3Storage storage) {
+  AvroRecordWriterProvider(S3Storage storage, AvroData avroData) {
     this.storage = storage;
+    this.avroData = avroData;
   }
 
   @Override
@@ -48,23 +49,26 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3StorageC
   }
 
   @Override
-  public RecordWriter<SinkRecord> getRecordWriter(S3StorageConfig conf, final String filename, SinkRecord record,
-                                                  final AvroData avroData) {
-    DatumWriter<Object> datumWriter = new GenericDatumWriter<>();
-    final DataFileWriter<Object> writer = new DataFileWriter<>(datumWriter);
-
-    final Schema schema = record.valueSchema();
-    try {
-      OutputStream wrapper = storage.create(filename, conf, true);
-      org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
-      writer.create(avroSchema, wrapper);
-    } catch (IOException e) {
-      throw new ConnectException(e);
-    }
-
+  public RecordWriter<SinkRecord> getRecordWriter(final S3StorageConfig conf, final String filename) {
+    // This is not meant to be a thread-safe writer!
     return new RecordWriter<SinkRecord>() {
+      final DataFileWriter<Object> writer = new DataFileWriter<>(new GenericDatumWriter<>());
+      Schema schema = null;
+
       @Override
       public void write(SinkRecord record) {
+        if (schema == null) {
+          schema = record.valueSchema();
+          try {
+            // TODO: is dumping the filename to logs an issue?
+            log.info("Opening record writer for: " + filename);
+            OutputStream wrapper = storage.create(filename, conf, true);
+            org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
+            writer.create(avroSchema, wrapper);
+          } catch (IOException e) {
+            throw new ConnectException(e);
+          }
+        }
         log.trace("Sink record: {}", record.toString());
         Object value = avroData.fromConnectData(schema, record.value());
         try {
