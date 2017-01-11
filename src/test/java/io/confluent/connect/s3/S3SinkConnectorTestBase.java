@@ -30,6 +30,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
   protected static final String S3_TEST_BUCKET_NAME = "kafka.bucket";
 
   protected S3SinkConnectorConfig connectorConfig;
+  protected String topicsDir;
   protected AvroData avroData;
 
   @Override
@@ -46,6 +47,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
   public void setUp() throws Exception {
     super.setUp();
     connectorConfig = new S3SinkConnectorConfig(properties);
+    topicsDir = connectorConfig.getString(S3SinkConnectorConfig.TOPICS_DIR_CONFIG);
     int schemaCacheSize = connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG);
     avroData = new AvroData(schemaCacheSize);
   }
