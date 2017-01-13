@@ -35,8 +35,8 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3StorageC
 
   private static final Logger log = LoggerFactory.getLogger(AvroRecordWriterProvider.class);
   private static final String EXTENSION = ".avro";
-  private S3Storage storage;
-  private AvroData avroData;
+  private final S3Storage storage;
+  private final AvroData avroData;
 
   AvroRecordWriterProvider(S3Storage storage, AvroData avroData) {
     this.storage = storage;
