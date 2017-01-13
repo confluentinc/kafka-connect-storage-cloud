@@ -36,7 +36,7 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
   protected static final String DM = "_";
   protected static final String FM = "#";
 
-  @Before
+  //@Before
   @Override
   public void setUp() throws Exception {
     super.setUp();

@@ -52,7 +52,7 @@ import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertEquals;
 
 public class TopicPartitionWriterTest extends TestWithMockedS3 {
-  // The default based on default configuration of 10
+  // The default
   private static final String ZERO_PAD_FMT = "%010d";
 
   private RecordWriterProvider<S3StorageConfig> writerProvider;
@@ -71,7 +71,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     return props;
   }
 
-  @Before
   public void setUp() throws Exception {
     super.setUp();
     credentials = new AnonymousAWSCredentials();
@@ -95,14 +94,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
-  public void testFirstThingsFirst() throws Exception {
-    s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
-  }
-
-  @Test
   public void testWriteRecordDefaultWithPadding() throws Exception {
-    tearDown();
     localProps.put(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG, "2");
     setUp();
     Partitioner partitioner = new DefaultPartitioner();
@@ -131,13 +123,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     verify(expectedFiles, records, schema);
   }
 
-  public String getExpectedPath(String bucket, String topic, int partition, String offset) {
-    return s3.getEndpointPrefix() + "://" + bucket + "/" + DM + topic + DM + "partition=" + partition + DM + topic
-               + FM + partition + FM + offset + extension;
-  }
-
   @Test
   public void testWriteRecordFieldPartitioner() throws Exception {
+    setUp();
     Map<String, Object> config = createConfig();
     Partitioner partitioner = new FieldPartitioner();
     partitioner.configure(config);
@@ -176,6 +164,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   @Test
   public void testWriteRecordTimeBasedPartition() throws Exception {
+    setUp();
     Map<String, Object> config = createConfig();
     Partitioner partitioner = new TimeBasedPartitioner();
     partitioner.configure(config);
@@ -195,7 +184,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     topicPartitionWriter.write();
     topicPartitionWriter.close();
-
 
     long partitionDurationMs = (Long) config.get(S3SinkConnectorConfig.PARTITION_DURATION_MS_CONFIG);
     String pathFormat = (String) config.get(S3SinkConnectorConfig.PATH_FORMAT_CONFIG);
@@ -272,24 +260,18 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null);
     int index = 0;
     for (S3ObjectSummary summary : summaries) {
-      String bucket = summary.getBucketName();
-      String endpoint = s3.getEndpointPrefix();
       String key = summary.getKey();
-      System.out.println("Object bucket: " + summary.getBucketName());
-      System.out.println("Object name: " + summary.getKey());
-      String fullKey = key;
-      System.out.println("Full : " + fullKey);
-      assertTrue(expectedKeys.contains(fullKey));
-      // s3.getObject(S3_TEST_BUCKET_NAME, key);
-      //Collection<Object> avroRecords = schemaFileReader.readData(conf, filePath);
+      System.out.println("Full : " + key);
+      assertTrue(expectedKeys.contains(key));
       System.out.println("Object size for now: " + summary.getSize());
       /*
+      // Import the reading method from the other tests.
       assertEquals(3, avroRecords.size());
       for (Object avroRecord: avroRecords) {
         assertEquals(avroData.fromConnectData(schema, records[index]), avroRecord);
       }
       */
-      index++;
+      ++index;
     }
     assertEquals(expectedKeys.size(), summaries.size());
   }

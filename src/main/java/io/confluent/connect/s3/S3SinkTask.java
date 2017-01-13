@@ -25,6 +25,7 @@ import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -49,7 +50,6 @@ public class S3SinkTask extends SinkTask {
   private S3StorageConfig storageConfig;
   private final Set<TopicPartition> assignment;
   private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
-  private final Map<TopicPartition, Long> offsets;
   private Partitioner partitioner;
   private RecordWriterProvider<S3StorageConfig> writerProvider;
   private AvroData avroData;
@@ -61,47 +61,46 @@ public class S3SinkTask extends SinkTask {
     // no-arg constructor required by Connect framework.
     assignment = new HashSet<>();
     topicPartitionWriters = new HashMap<>();
-    offsets = new HashMap<>();
   }
 
   // visible for testing.
-  S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context) {
+  S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage, Partitioner partitioner,
+             AvroData avroData) throws Exception {
     this();
     this.connectorConfig = connectorConfig;
     this.context = context;
+    this.storage = storage;
+    this.partitioner = partitioner;
+    this.avroData = avroData;
+
+    storageConfig = new S3StorageConfig(connectorConfig);
+    url = connectorConfig.getString(S3SinkConnectorConfig.STORE_URL_CONFIG);
+    writerProvider = newFormat().getRecordWriterProvider();
+
+    open(context.assignment());
+    log.info("Started S3 connector task with assigned partitions {}", assignment);
   }
 
   public void start(Map<String, String> props) {
     try {
       connectorConfig = new S3SinkConnectorConfig(props);
-      Set<TopicPartition> assignment = context.assignment();
-
       storageConfig = new S3StorageConfig(connectorConfig);
       url = connectorConfig.getString(S3SinkConnectorConfig.STORE_URL_CONFIG);
 
       @SuppressWarnings("unchecked")
       Class<? extends S3Storage> storageClass = (Class<? extends S3Storage>) Class
-          .forName(connectorConfig.getString(S3SinkConnectorConfig.STORAGE_CLASS_CONFIG));
+                                                                                 .forName(connectorConfig.getString(S3SinkConnectorConfig.STORAGE_CLASS_CONFIG));
       storage = StorageFactory.createStorage(storageClass, S3StorageConfig.class, storageConfig, url);
-
-      createBucket(storageConfig.bucket());
+      storage.bucketExists(storageConfig.bucket());
 
       avroData = new AvroData(connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG));
-      Format<S3StorageConfig, String> format = getFormat();
-      writerProvider = format.getRecordWriterProvider();
-
+      writerProvider = newFormat().getRecordWriterProvider();
       partitioner = newPartitioner(connectorConfig);
 
       open(context.assignment());
-
-      for (TopicPartition tp : assignment) {
-        TopicPartitionWriter topicPartitionWriter =
-            new TopicPartitionWriter(tp, storage, writerProvider, partitioner, connectorConfig, context, avroData);
-        topicPartitionWriters.put(tp, topicPartitionWriter);
-      }
-
-      log.info("Started S3 connector task with assigned partitions {}", assignment);
-    } catch (ClassNotFoundException | IllegalAccessException | InstantiationException e) {
+      log.info("Started S3 connector task with assigned partitions: {}", assignment);
+    } catch (ClassNotFoundException | IllegalAccessException | InstantiationException | InvocationTargetException
+                 | NoSuchMethodException e) {
       throw new ConnectException("Reflection exception: ", e);
     } catch (AmazonClientException e) {
       throw new ConnectException(e);
@@ -118,18 +117,19 @@ public class S3SinkTask extends SinkTask {
     assignment.clear();
     assignment.addAll(partitions);
     for (TopicPartition tp : assignment) {
-      TopicPartitionWriter topicPartitionWriter =
+      TopicPartitionWriter writer =
           new TopicPartitionWriter(tp, storage, writerProvider, partitioner, connectorConfig, context, avroData);
-      topicPartitionWriters.put(tp, topicPartitionWriter);
+      topicPartitionWriters.put(tp, writer);
     }
   }
 
-  private void createBucket(String bucketName) {}
-
   @SuppressWarnings("unchecked")
-  private Format<S3StorageConfig, String> getFormat() throws ClassNotFoundException, IllegalAccessException, InstantiationException {
+  private Format<S3StorageConfig, String> newFormat() throws ClassNotFoundException, IllegalAccessException,
+                                                             InstantiationException, InvocationTargetException,
+                                                             NoSuchMethodException {
     String name = connectorConfig.getString(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG);
-    return ((Class<Format<S3StorageConfig, String>>) Class.forName(name)).newInstance();
+    return ((Class<Format<S3StorageConfig, String>>) Class.forName(name))
+               .getConstructor(S3Storage.class, AvroData.class).newInstance(storage, avroData);
   }
 
   private Partitioner newPartitioner(S3SinkConnectorConfig config)
@@ -137,7 +137,7 @@ public class S3SinkTask extends SinkTask {
 
     @SuppressWarnings("unchecked")
     Class<? extends Partitioner> partitionerClasss = (Class<? extends Partitioner>)
-        Class.forName(config.getString(S3SinkConnectorConfig.PARTITIONER_CLASS_CONFIG));
+                                                         Class.forName(config.getString(S3SinkConnectorConfig.PARTITIONER_CLASS_CONFIG));
 
     Map<String, Object> map = copyConfig(config);
     Partitioner partitioner = partitionerClasss.newInstance();
@@ -188,6 +188,10 @@ public class S3SinkTask extends SinkTask {
     } catch (Exception e) {
       throw new ConnectException(e);
     }
+  }
+
+  Partitioner getPartitioner() {
+    return partitioner;
   }
 
 }

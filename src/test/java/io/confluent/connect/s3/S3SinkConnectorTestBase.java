@@ -39,10 +39,13 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     Map<String, String> props = super.createProps();
     props.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, S3_TEST_BUCKET_NAME);
     props.put(S3SinkConnectorConfig.STORAGE_CLASS_CONFIG, "io.confluent.connect.s3.storage.S3Storage");
+    props.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, "io.confluent.connect.s3.format.avro.AvroFormat");
+    props.put(
+        S3SinkConnectorConfig.PARTITIONER_CLASS_CONFIG, "io.confluent.connect.storage.partitioner.DefaultPartitioner");
     return props;
   }
 
-  @Before
+  //@Before
   @Override
   public void setUp() throws Exception {
     super.setUp();

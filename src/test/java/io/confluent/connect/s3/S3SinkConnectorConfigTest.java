@@ -17,6 +17,7 @@
 package io.confluent.connect.s3;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -25,8 +26,14 @@ import static org.junit.Assert.assertEquals;
 
 public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
 
+  @Before
+  @Override
+  public void setUp() throws Exception {
+    super.setUp();
+  }
+
   @Test
-  public void testStorageClass() {
+  public void testStorageClass() throws Exception {
     // No real test case yet
     connectorConfig = new S3SinkConnectorConfig(properties);
     assertEquals("io.confluent.connect.s3.storage.S3Storage", connectorConfig.getString(S3SinkConnectorConfig.STORAGE_CLASS_CONFIG));
@@ -36,7 +43,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   public ExpectedException thrown = ExpectedException.none();
 
   @Test
-  public void testUndefinedURL() {
+  public void testUndefinedURL() throws Exception {
     properties.remove(S3SinkConnectorConfig.STORE_URL_CONFIG);
     thrown.expect(ConfigException.class);
     thrown.expectMessage("Missing required configuration \"" + S3SinkConnectorConfig.STORE_URL_CONFIG

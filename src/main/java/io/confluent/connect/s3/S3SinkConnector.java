@@ -44,7 +44,7 @@ public class S3SinkConnector extends Connector {
     // no-arg constructor required by Connect framework.
   }
 
-  // visible for testing.
+  // Visible for testing.
   S3SinkConnector(S3SinkConnectorConfig config) {
     this.config = config;
   }
