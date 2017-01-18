@@ -23,8 +23,8 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.io.OutputStream;
 
-import io.confluent.connect.s3.util.StringUtils;
 import io.confluent.connect.storage.Storage;
+import io.confluent.connect.storage.common.util.StringUtils;
 import io.confluent.connect.storage.wal.WAL;
 
 /**

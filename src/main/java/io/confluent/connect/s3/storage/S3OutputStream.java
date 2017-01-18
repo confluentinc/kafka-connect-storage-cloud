@@ -37,7 +37,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-import io.confluent.connect.s3.util.StringUtils;
+import io.confluent.connect.storage.common.util.StringUtils;
 
 /**
  * (The implementation has borrowed the general structure from Hadoop's implementation

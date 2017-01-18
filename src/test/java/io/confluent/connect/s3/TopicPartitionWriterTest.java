@@ -21,23 +21,21 @@ import com.amazonaws.auth.AnonymousAWSCredentials;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.storage.S3Storage;
@@ -48,6 +46,7 @@ import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.FieldPartitioner;
 import io.confluent.connect.storage.partitioner.Partitioner;
+import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 
 import static junit.framework.TestCase.assertTrue;
@@ -99,8 +98,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void testWriteRecordDefaultWithPadding() throws Exception {
     localProps.put(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG, "2");
     setUp();
-    Partitioner partitioner = new DefaultPartitioner();
-    partitioner.configure(Collections.<String, Object>emptyMap());
+    Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(rawConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, avroData);
 
@@ -128,11 +127,10 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @Test
   public void testWriteRecordFieldPartitioner() throws Exception {
     setUp();
-    Map<String, Object> config = createConfig();
-    Partitioner partitioner = new FieldPartitioner();
-    partitioner.configure(config);
+    Partitioner<FieldSchema> partitioner = new FieldPartitioner<>();
+    partitioner.configure(rawConfig);
 
-    String partitionField = (String) config.get(S3SinkConnectorConfig.PARTITION_FIELD_NAME_CONFIG);
+    String partitionField = (String) rawConfig.get(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, avroData);
@@ -167,9 +165,10 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @Test
   public void testWriteRecordTimeBasedPartition() throws Exception {
     setUp();
-    Map<String, Object> config = createConfig();
-    Partitioner partitioner = new TimeBasedPartitioner();
-    partitioner.configure(config);
+    rawConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG,
+               "io.confluent.connect.storage.hive.schema.TimeBasedSchemaGenerator");
+    Partitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    partitioner.configure(rawConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, avroData);
@@ -187,9 +186,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     topicPartitionWriter.write();
     topicPartitionWriter.close();
 
-    long partitionDurationMs = (Long) config.get(S3SinkConnectorConfig.PARTITION_DURATION_MS_CONFIG);
-    String pathFormat = (String) config.get(S3SinkConnectorConfig.PATH_FORMAT_CONFIG);
-    String timeZoneString = (String) config.get(S3SinkConnectorConfig.TIMEZONE_CONFIG);
+    long partitionDurationMs = (Long) rawConfig.get(PartitionerConfig.PARTITION_DURATION_MS_CONFIG);
+    String pathFormat = (String) rawConfig.get(PartitionerConfig.PATH_FORMAT_CONFIG);
+    String timeZoneString = (String) rawConfig.get(PartitionerConfig.TIMEZONE_CONFIG);
     long timestamp = System.currentTimeMillis();
 
     String encodedPartition = TimeUtils.encodeTimestamp(partitionDurationMs, pathFormat, timeZoneString, timestamp);
@@ -202,16 +201,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
 
     verify(expectedFiles, records, schema);
-  }
-
-  private Map<String, Object> createConfig() {
-    Map<String, Object> config = new HashMap<>();
-    config.put(S3SinkConnectorConfig.PARTITION_FIELD_NAME_CONFIG, "int");
-    config.put(S3SinkConnectorConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.HOURS.toMillis(1));
-    config.put(S3SinkConnectorConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH_");
-    config.put(S3SinkConnectorConfig.LOCALE_CONFIG, "en");
-    config.put(S3SinkConnectorConfig.TIMEZONE_CONFIG, "America/Los_Angeles");
-    return config;
   }
 
   private Struct[] createRecords(Schema schema) {

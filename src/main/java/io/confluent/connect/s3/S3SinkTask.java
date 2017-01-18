@@ -17,6 +17,7 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -37,9 +38,12 @@ import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.storage.S3StorageConfig;
 import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.StorageFactory;
+import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
+import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.partitioner.Partitioner;
+import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
 public class S3SinkTask extends SinkTask {
   private static final Logger log = LoggerFactory.getLogger(S3SinkTask.class);
@@ -50,7 +54,7 @@ public class S3SinkTask extends SinkTask {
   private S3StorageConfig storageConfig;
   private final Set<TopicPartition> assignment;
   private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
-  private Partitioner partitioner;
+  private Partitioner<FieldSchema> partitioner;
   private RecordWriterProvider<S3StorageConfig> writerProvider;
   private AvroData avroData;
 
@@ -64,8 +68,8 @@ public class S3SinkTask extends SinkTask {
   }
 
   // visible for testing.
-  S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage, Partitioner partitioner,
-             AvroData avroData) throws Exception {
+  S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage,
+             Partitioner<FieldSchema> partitioner, AvroData avroData) throws Exception {
     this();
     this.connectorConfig = connectorConfig;
     this.context = context;
@@ -74,7 +78,7 @@ public class S3SinkTask extends SinkTask {
     this.avroData = avroData;
 
     storageConfig = new S3StorageConfig(connectorConfig);
-    url = connectorConfig.getString(S3SinkConnectorConfig.STORE_URL_CONFIG);
+    url = connectorConfig.getCommonConfig().getString(StorageCommonConfig.STORE_URL_CONFIG);
     writerProvider = newFormat().getRecordWriterProvider();
 
     open(context.assignment());
@@ -85,15 +89,16 @@ public class S3SinkTask extends SinkTask {
     try {
       connectorConfig = new S3SinkConnectorConfig(props);
       storageConfig = new S3StorageConfig(connectorConfig);
-      url = connectorConfig.getString(S3SinkConnectorConfig.STORE_URL_CONFIG);
+      url = connectorConfig.getCommonConfig().getString(StorageCommonConfig.STORE_URL_CONFIG);
 
       @SuppressWarnings("unchecked")
-      Class<? extends S3Storage> storageClass = (Class<? extends S3Storage>) Class
-                                                                                 .forName(connectorConfig.getString(S3SinkConnectorConfig.STORAGE_CLASS_CONFIG));
+      Class<? extends S3Storage> storageClass =
+          (Class<? extends S3Storage>) Class.forName(connectorConfig.getCommonConfig().getString(
+              StorageCommonConfig.STORAGE_CLASS_CONFIG));
       storage = StorageFactory.createStorage(storageClass, S3StorageConfig.class, storageConfig, url);
       storage.bucketExists(storageConfig.bucket());
 
-      avroData = new AvroData(connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG));
+      avroData = new AvroData(connectorConfig.getHiveConfig().getInt(HiveConfig.SCHEMA_CACHE_SIZE_CONFIG));
       writerProvider = newFormat().getRecordWriterProvider();
       partitioner = newPartitioner(connectorConfig);
 
@@ -132,26 +137,31 @@ public class S3SinkTask extends SinkTask {
                .getConstructor(S3Storage.class, AvroData.class).newInstance(storage, avroData);
   }
 
-  private Partitioner newPartitioner(S3SinkConnectorConfig config)
+  private Partitioner<FieldSchema> newPartitioner(S3SinkConnectorConfig config)
       throws ClassNotFoundException, IllegalAccessException, InstantiationException {
 
     @SuppressWarnings("unchecked")
-    Class<? extends Partitioner> partitionerClasss = (Class<? extends Partitioner>)
-                                                         Class.forName(config.getString(S3SinkConnectorConfig.PARTITIONER_CLASS_CONFIG));
+    Class<? extends Partitioner<FieldSchema>> partitionerClass =
+        (Class<? extends Partitioner<FieldSchema>>)
+            Class.forName(config.getParitionerConfig().getString(PartitionerConfig.PARTITIONER_CLASS_CONFIG));
 
-    Map<String, Object> map = copyConfig(config);
-    Partitioner partitioner = partitionerClasss.newInstance();
-    partitioner.configure(map);
+    Map<String, Object> rawConfig = copyConfig(config);
+    Partitioner<FieldSchema> partitioner = partitionerClass.newInstance();
+    partitioner.configure(rawConfig);
     return partitioner;
   }
 
   private Map<String, Object> copyConfig(S3SinkConnectorConfig config) {
     Map<String, Object> map = new HashMap<>();
-    map.put(S3SinkConnectorConfig.PARTITION_FIELD_NAME_CONFIG, config.getString(S3SinkConnectorConfig.PARTITION_FIELD_NAME_CONFIG));
-    map.put(S3SinkConnectorConfig.PARTITION_DURATION_MS_CONFIG, config.getLong(S3SinkConnectorConfig.PARTITION_DURATION_MS_CONFIG));
-    map.put(S3SinkConnectorConfig.PATH_FORMAT_CONFIG, config.getString(S3SinkConnectorConfig.PATH_FORMAT_CONFIG));
-    map.put(S3SinkConnectorConfig.LOCALE_CONFIG, config.getString(S3SinkConnectorConfig.LOCALE_CONFIG));
-    map.put(S3SinkConnectorConfig.TIMEZONE_CONFIG, config.getString(S3SinkConnectorConfig.TIMEZONE_CONFIG));
+    PartitionerConfig partitionerConfig = config.getParitionerConfig();
+    map.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG, partitionerConfig.getString(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG));
+    map.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, partitionerConfig.getLong(PartitionerConfig.PARTITION_DURATION_MS_CONFIG));
+    map.put(PartitionerConfig.PATH_FORMAT_CONFIG, partitionerConfig.getString(PartitionerConfig.PATH_FORMAT_CONFIG));
+    map.put(PartitionerConfig.LOCALE_CONFIG, partitionerConfig.getString(PartitionerConfig.LOCALE_CONFIG));
+    map.put(PartitionerConfig.TIMEZONE_CONFIG, partitionerConfig.getString(PartitionerConfig.TIMEZONE_CONFIG));
+    map.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, partitionerConfig.getString(PartitionerConfig.PARTITIONER_CLASS_CONFIG));
+    map.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, partitionerConfig.getString(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG));
+    map.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, config.getCommonConfig().getString(StorageCommonConfig.DIRECTORY_DELIM_CONFIG));
     return map;
   }
 
@@ -190,7 +200,7 @@ public class S3SinkTask extends SinkTask {
     }
   }
 
-  Partitioner getPartitioner() {
+  Partitioner<FieldSchema> getPartitioner() {
     return partitioner;
   }
 

@@ -17,12 +17,16 @@
 package io.confluent.connect.s3;
 
 import org.junit.After;
-import org.junit.Before;
 
+import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.storage.StorageSinkTestBase;
+import io.confluent.connect.storage.common.StorageCommonConfig;
+import io.confluent.connect.storage.hive.HiveConfig;
+import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
 public class S3SinkConnectorTestBase extends StorageSinkTestBase {
 
@@ -32,16 +36,19 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
   protected S3SinkConnectorConfig connectorConfig;
   protected String topicsDir;
   protected AvroData avroData;
+  protected Map<String, Object> rawConfig = new HashMap<>();
 
   @Override
   protected Map<String, String> createProps() {
     url = S3_TEST_URL;
     Map<String, String> props = super.createProps();
+    props.put(StorageCommonConfig.STORAGE_CLASS_CONFIG, "io.confluent.connect.s3.storage.S3Storage");
     props.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, S3_TEST_BUCKET_NAME);
-    props.put(S3SinkConnectorConfig.STORAGE_CLASS_CONFIG, "io.confluent.connect.s3.storage.S3Storage");
     props.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, "io.confluent.connect.s3.format.avro.AvroFormat");
     props.put(
-        S3SinkConnectorConfig.PARTITIONER_CLASS_CONFIG, "io.confluent.connect.storage.partitioner.DefaultPartitioner");
+        PartitionerConfig.PARTITIONER_CLASS_CONFIG, "io.confluent.connect.storage.partitioner.DefaultPartitioner");
+    props.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, PartitionerConfig.SCHEMA_GENERATOR_CLASS_DEFAULT);
+    props.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, "_");
     return props;
   }
 
@@ -50,9 +57,10 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
   public void setUp() throws Exception {
     super.setUp();
     connectorConfig = new S3SinkConnectorConfig(properties);
-    topicsDir = connectorConfig.getString(S3SinkConnectorConfig.TOPICS_DIR_CONFIG);
-    int schemaCacheSize = connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG);
+    topicsDir = connectorConfig.getCommonConfig().getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
+    int schemaCacheSize = connectorConfig.getHiveConfig().getInt(HiveConfig.SCHEMA_CACHE_SIZE_CONFIG);
     avroData = new AvroData(schemaCacheSize);
+    rawConfig = createDefaultConfig();
   }
 
   @After
@@ -60,5 +68,18 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
   public void tearDown() throws Exception {
     super.tearDown();
   }
+
+  private Map<String, Object> createDefaultConfig() {
+    Map<String, Object> config = new HashMap<>();
+    config.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG, "int");
+    config.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.HOURS.toMillis(1));
+    config.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH_");
+    config.put(PartitionerConfig.LOCALE_CONFIG, "en");
+    config.put(PartitionerConfig.TIMEZONE_CONFIG, "America/Los_Angeles");
+    config.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, PartitionerConfig.SCHEMA_GENERATOR_CLASS_DEFAULT);
+    config.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, "_");
+    return config;
+  }
+
 }
 

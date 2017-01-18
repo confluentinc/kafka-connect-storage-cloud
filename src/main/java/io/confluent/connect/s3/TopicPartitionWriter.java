@@ -16,6 +16,7 @@
 
 package io.confluent.connect.s3;
 
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
@@ -38,9 +39,12 @@ import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.storage.S3StorageConfig;
 import io.confluent.connect.s3.util.FileUtils;
+import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
+import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.partitioner.Partitioner;
+import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
 import io.confluent.connect.storage.util.DateTimeUtils;
 
@@ -51,7 +55,7 @@ public class TopicPartitionWriter {
   private final Map<String, RecordWriter<SinkRecord>> writers;
   private final Map<String, Schema> currentSchemas;
   private final TopicPartition tp;
-  private final Partitioner partitioner;
+  private final Partitioner<FieldSchema> partitioner;
   private final String url;
   private String topicsDir;
   private State state;
@@ -81,7 +85,7 @@ public class TopicPartitionWriter {
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
                               RecordWriterProvider<S3StorageConfig> writerProvider,
-                              Partitioner partitioner,
+                              Partitioner<FieldSchema> partitioner,
                               S3SinkConnectorConfig connectorConfig,
                               SinkTaskContext context,
                               AvroData avroData) {
@@ -92,7 +96,7 @@ public class TopicPartitionWriter {
   TopicPartitionWriter(TopicPartition tp,
                        S3Storage storage,
                        RecordWriterProvider<S3StorageConfig> writerProvider,
-                       Partitioner partitioner,
+                       Partitioner<FieldSchema> partitioner,
                        S3SinkConnectorConfig connectorConfig,
                        SinkTaskContext context,
                        AvroData avroData,
@@ -108,12 +112,12 @@ public class TopicPartitionWriter {
     this.conf = storage.conf();
 
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
-    topicsDir = connectorConfig.getString(S3SinkConnectorConfig.TOPICS_DIR_CONFIG);
+    topicsDir = connectorConfig.getCommonConfig().getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
     rotateScheduleIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG);
     timeoutMs = connectorConfig.getLong(S3SinkConnectorConfig.RETRY_BACKOFF_CONFIG);
     compatibility = StorageSchemaCompatibility.getCompatibility(
-        connectorConfig.getString(S3SinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG));
+        connectorConfig.getHiveConfig().getString(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG));
 
     buffer = new LinkedList<>();
     commitFiles = new HashMap<>();
@@ -130,7 +134,7 @@ public class TopicPartitionWriter {
                               + "d";
 
     timezone = rotateScheduleIntervalMs > 0 ?
-                   DateTimeZone.forID(connectorConfig.getString(S3SinkConnectorConfig.TIMEZONE_CONFIG)) :
+                   DateTimeZone.forID(connectorConfig.getParitionerConfig().getString(PartitionerConfig.TIMEZONE_CONFIG)) :
                    null;
 
     // Initialize rotation timers

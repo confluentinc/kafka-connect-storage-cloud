@@ -24,6 +24,9 @@ import org.apache.kafka.common.config.ConfigDef.Width;
 import java.util.Map;
 
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
+import io.confluent.connect.storage.common.StorageCommonConfig;
+import io.confluent.connect.storage.hive.HiveConfig;
+import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
@@ -43,6 +46,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private static final String PART_SIZE_DISPLAY = "S3 Part Size";
 
   private final String name;
+
+  private final StorageCommonConfig commonConfig;
+  private final HiveConfig hiveConfig;
+  private final PartitionerConfig partitionerConfig;
 
   static {
     {
@@ -85,7 +92,22 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   protected S3SinkConnectorConfig(ConfigDef configDef, Map<String, String> props) {
     super(configDef, props);
+    commonConfig = new StorageCommonConfig(props);
+    hiveConfig = new HiveConfig(props);
+    partitionerConfig = new PartitionerConfig(props);
     this.name = parseName(props);
+  }
+
+  public StorageCommonConfig getCommonConfig() {
+    return commonConfig;
+  }
+
+  public PartitionerConfig getParitionerConfig() {
+    return partitionerConfig;
+  }
+
+  public HiveConfig getHiveConfig() {
+    return hiveConfig;
   }
 
   public String getBucketName() {

@@ -19,6 +19,7 @@ package io.confluent.connect.s3;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AnonymousAWSCredentials;
 import com.amazonaws.services.s3.AmazonS3Client;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -66,7 +67,7 @@ public class S3SinkTaskTest extends TestWithMockedS3 {
   private S3StorageConfig storageConfig;
   private AWSCredentials credentials;
   private AmazonS3Client s3;
-  Partitioner partitioner;
+  Partitioner<FieldSchema> partitioner;
   S3SinkTask task;
   int flushSize;
   Map<String, String> localProps = new HashMap<>();
@@ -107,8 +108,8 @@ public class S3SinkTaskTest extends TestWithMockedS3 {
   @Test
   public void testWriteRecord() throws Exception {
     setUp();
-    partitioner = new DefaultPartitioner();
-    partitioner.configure(Collections.<String, Object>emptyMap());
+    partitioner = new DefaultPartitioner<>();
+    partitioner.configure(rawConfig);
     s3.createBucket(S3_TEST_BUCKET_NAME);
     assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
     replayAll();
@@ -155,8 +156,8 @@ public class S3SinkTaskTest extends TestWithMockedS3 {
   @Test
   public void testRecoveryWithPartialFile() throws Exception {
     setUp();
-    partitioner = new DefaultPartitioner();
-    partitioner.configure(Collections.<String, Object>emptyMap());
+    partitioner = new DefaultPartitioner<>();
+    partitioner.configure(rawConfig);
     s3.createBucket(S3_TEST_BUCKET_NAME);
     assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
 
@@ -213,8 +214,8 @@ public class S3SinkTaskTest extends TestWithMockedS3 {
   public void testWriteRecordsSpanningMultipleParts() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10000");
     setUp();
-    partitioner = new DefaultPartitioner();
-    partitioner.configure(Collections.<String, Object>emptyMap());
+    partitioner = new DefaultPartitioner<>();
+    partitioner.configure(rawConfig);
     s3.createBucket(S3_TEST_BUCKET_NAME);
     assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
