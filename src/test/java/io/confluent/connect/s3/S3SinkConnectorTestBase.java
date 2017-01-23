@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import io.confluent.connect.avro.AvroData;
+import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.storage.StorageSinkTestBase;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.hive.HiveConfig;
@@ -44,10 +45,10 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     Map<String, String> props = super.createProps();
     props.put(StorageCommonConfig.STORAGE_CLASS_CONFIG, "io.confluent.connect.s3.storage.S3Storage");
     props.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, S3_TEST_BUCKET_NAME);
-    props.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, "io.confluent.connect.s3.format.avro.AvroFormat");
-    props.put(
-        PartitionerConfig.PARTITIONER_CLASS_CONFIG, "io.confluent.connect.storage.partitioner.DefaultPartitioner");
-    props.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, PartitionerConfig.SCHEMA_GENERATOR_CLASS_DEFAULT);
+    props.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
+    props.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, PartitionerConfig.PARTITIONER_CLASS_DEFAULT.getName());
+    props.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG,
+              PartitionerConfig.SCHEMA_GENERATOR_CLASS_DEFAULT.getName());
     props.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, "_");
     return props;
   }

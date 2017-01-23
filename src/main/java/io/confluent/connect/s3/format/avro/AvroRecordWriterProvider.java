@@ -51,9 +51,9 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3StorageC
   }
 
   @Override
-  public RecordWriter<SinkRecord> getRecordWriter(final S3StorageConfig conf, final String filename) {
+  public RecordWriter getRecordWriter(final S3StorageConfig conf, final String filename) {
     // This is not meant to be a thread-safe writer!
-    return new RecordWriter<SinkRecord>() {
+    return new RecordWriter() {
       final DataFileWriter<Object> writer = new DataFileWriter<>(new GenericDatumWriter<>());
       Schema schema = null;
 

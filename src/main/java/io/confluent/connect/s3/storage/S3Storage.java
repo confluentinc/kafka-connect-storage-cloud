@@ -19,18 +19,16 @@ package io.confluent.connect.s3.storage;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.ObjectListing;
 import org.apache.avro.file.SeekableInput;
-import org.apache.kafka.common.TopicPartition;
 
 import java.io.OutputStream;
 
 import io.confluent.connect.storage.Storage;
 import io.confluent.connect.storage.common.util.StringUtils;
-import io.confluent.connect.storage.wal.WAL;
 
 /**
  * S3 implementation of the storage interface for Connect sinks.
  */
-public class S3Storage implements Storage<S3StorageConfig, String, ObjectListing> {
+public class S3Storage implements Storage<S3StorageConfig, ObjectListing> {
 
   private final String url;
   private final String bucketName;
@@ -41,7 +39,7 @@ public class S3Storage implements Storage<S3StorageConfig, String, ObjectListing
    * Construct an S3 storage class given a configuration and an AWS S3 address.
    *
    * @param conf the S3 configuration.
-   * @param url  the S3 address.
+   * @param url the S3 address.
    */
   public S3Storage(S3StorageConfig conf, String url) {
     this.url = url;
@@ -86,7 +84,7 @@ public class S3Storage implements Storage<S3StorageConfig, String, ObjectListing
    * @throws AmazonServiceException
    */
   @Override
-  public boolean mkdirs(String name) {
+  public boolean create(String name) {
     throw new UnsupportedOperationException();
   }
 
@@ -97,7 +95,7 @@ public class S3Storage implements Storage<S3StorageConfig, String, ObjectListing
    * @throws UnsupportedOperationException
    */
   @Override
-  public void append(String filename, Object object) {
+  public OutputStream append(String filename) {
     throw new UnsupportedOperationException();
   }
 
@@ -120,54 +118,18 @@ public class S3Storage implements Storage<S3StorageConfig, String, ObjectListing
 
   /**
    * {@inheritDoc}
-   *
-   * @throws SdkClientException
-   * @throws AmazonServiceException
-   */
-  @Override
-  public void commit(String temp, String committed) {
-    // TODO: Verify this functionality is needed. Throw new UnsupportedOperationException() otherwise
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * {@inheritDoc}
    */
   @Override
   public void close() {}
 
   /**
    * {@inheritDoc}
-   * This method is not supported in S3 storage.
-   *
-   * @throws UnsupportedOperationException
-   */
-  @Override
-  public WAL wal(String topicsDir, TopicPartition topicPart) {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * {@inheritDoc}
    *
    * @throws SdkClientException
    * @throws AmazonServiceException
    */
   @Override
-  public ObjectListing listStatus(String path, String filter) {
-    // TODO: Would need to figure out how filter has worked and see if using marker does the job.
-    // return listStatus(path);
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * {@inheritDoc}
-   *
-   * @throws SdkClientException
-   * @throws AmazonServiceException
-   */
-  @Override
-  public ObjectListing listStatus(String path) {
+  public ObjectListing list(String path) {
     return s3.listObjects(bucketName, path);
   }
 
@@ -198,5 +160,4 @@ public class S3Storage implements Storage<S3StorageConfig, String, ObjectListing
 
     return new S3OutputStream(conf.bucket(), path, conf.ssea(), conf.partSize(), s3);
   }
-
 }

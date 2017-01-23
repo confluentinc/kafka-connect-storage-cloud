@@ -46,9 +46,9 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3StorageC
   }
 
   @Override
-  public RecordWriter<SinkRecord> getRecordWriter(final S3StorageConfig conf, final String filename) {
+  public RecordWriter getRecordWriter(final S3StorageConfig conf, final String filename) {
     try {
-      return new RecordWriter<SinkRecord>() {
+      return new RecordWriter() {
         final OutputStream wrapper = storage.create(filename, conf, true);
         final ObjectOutputStream writer = new ObjectOutputStream(wrapper);
 

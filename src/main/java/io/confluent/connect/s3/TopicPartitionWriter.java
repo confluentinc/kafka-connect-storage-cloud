@@ -52,7 +52,7 @@ public class TopicPartitionWriter {
   private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriter.class);
 
   private final Map<String, String> commitFiles;
-  private final Map<String, RecordWriter<SinkRecord>> writers;
+  private final Map<String, RecordWriter> writers;
   private final Map<String, Schema> currentSchemas;
   private final TopicPartition tp;
   private final Partitioner<FieldSchema> partitioner;
@@ -186,13 +186,13 @@ public class TopicPartitionWriter {
             SinkRecord record = buffer.peek();
             Schema valueSchema = record.valueSchema();
             String encodedPartition = partitioner.encodePartition(record);
-            Schema currentSchema = currentSchemas.get(encodedPartition);
-            if (currentSchema == null) {
-              currentSchema = record.valueSchema();
+            Schema currentValueSchema = currentSchemas.get(encodedPartition);
+            if (currentValueSchema == null) {
+              currentValueSchema = record.valueSchema();
               currentSchemas.put(encodedPartition, valueSchema);
             }
 
-            if (compatibility.shouldChangeSchema(valueSchema, currentSchema)) {
+            if (compatibility.shouldChangeSchema(record, null, currentValueSchema)) {
               currentSchemas.put(encodedPartition, valueSchema);
               if (recordCounter > 0) {
                 nextState();
@@ -200,7 +200,7 @@ public class TopicPartitionWriter {
                 break;
               }
             } else {
-              SinkRecord projectedRecord = compatibility.project(record, currentSchema);
+              SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
               writeRecord(projectedRecord);
               buffer.poll();
               if (shouldRotate(projectedRecord.timestamp())) {
@@ -257,7 +257,7 @@ public class TopicPartitionWriter {
     return offset;
   }
 
-  public Map<String, RecordWriter<SinkRecord>> getWriters() {
+  public Map<String, RecordWriter> getWriters() {
     return writers;
   }
 
@@ -292,12 +292,12 @@ public class TopicPartitionWriter {
     context.resume(tp);
   }
 
-  private RecordWriter<SinkRecord> getWriter(SinkRecord record, String encodedPartition) throws ConnectException {
+  private RecordWriter getWriter(SinkRecord record, String encodedPartition) throws ConnectException {
     if (writers.containsKey(encodedPartition)) {
       return writers.get(encodedPartition);
     }
     String commitFilename = getCommitFilename(encodedPartition);
-    RecordWriter<SinkRecord> writer = writerProvider.getRecordWriter(conf, commitFilename);
+    RecordWriter writer = writerProvider.getRecordWriter(conf, commitFilename);
     writers.put(encodedPartition, writer);
     return writer;
   }
@@ -344,7 +344,7 @@ public class TopicPartitionWriter {
       startOffsets.put(encodedPartition, record.kafkaOffset());
     }
 
-    RecordWriter<SinkRecord> writer = getWriter(record, encodedPartition);
+    RecordWriter writer = getWriter(record, encodedPartition);
     writer.write(record);
 
     offsets.put(encodedPartition, record.kafkaOffset());
@@ -370,7 +370,7 @@ public class TopicPartitionWriter {
     //storage.commit(null, file);
 
     if (writers.containsKey(encodedPartition)) {
-      RecordWriter<SinkRecord> writer = writers.get(encodedPartition);
+      RecordWriter writer = writers.get(encodedPartition);
       writer.close();
       writers.remove(encodedPartition);
     }

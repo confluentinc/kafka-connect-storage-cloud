@@ -16,7 +16,6 @@
 
 package io.confluent.connect.s3.format.json;
 
-import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.storage.S3StorageConfig;
 import io.confluent.connect.storage.format.Format;
@@ -42,7 +41,7 @@ public class JsonFormat implements Format<S3StorageConfig, String> {
   }
 
   @Override
-  public HiveFactory<S3SinkConnectorConfig> getHiveFactory() {
+  public HiveFactory getHiveFactory() {
     throw new UnsupportedOperationException("Hive integration is not currently supported in S3 Connector");
   }
 

@@ -43,6 +43,7 @@ import io.confluent.connect.s3.storage.S3StorageConfig;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
+import io.confluent.connect.storage.hive.schema.TimeBasedSchemaGenerator;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.FieldPartitioner;
 import io.confluent.connect.storage.partitioner.Partitioner;
@@ -165,8 +166,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @Test
   public void testWriteRecordTimeBasedPartition() throws Exception {
     setUp();
-    rawConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG,
-               "io.confluent.connect.storage.hive.schema.TimeBasedSchemaGenerator");
+    rawConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, TimeBasedSchemaGenerator.class);
     Partitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
     partitioner.configure(rawConfig);
 

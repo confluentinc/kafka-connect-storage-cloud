@@ -93,8 +93,8 @@ public class S3SinkTask extends SinkTask {
 
       @SuppressWarnings("unchecked")
       Class<? extends S3Storage> storageClass =
-          (Class<? extends S3Storage>) Class.forName(connectorConfig.getCommonConfig().getString(
-              StorageCommonConfig.STORAGE_CLASS_CONFIG));
+          (Class<? extends S3Storage>)
+              connectorConfig.getCommonConfig().getClass(StorageCommonConfig.STORAGE_CLASS_CONFIG);
       storage = StorageFactory.createStorage(storageClass, S3StorageConfig.class, storageConfig, url);
       storage.bucketExists(storageConfig.bucket());
 
@@ -132,9 +132,9 @@ public class S3SinkTask extends SinkTask {
   private Format<S3StorageConfig, String> newFormat() throws ClassNotFoundException, IllegalAccessException,
                                                              InstantiationException, InvocationTargetException,
                                                              NoSuchMethodException {
-    String name = connectorConfig.getString(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG);
-    return ((Class<Format<S3StorageConfig, String>>) Class.forName(name))
-               .getConstructor(S3Storage.class, AvroData.class).newInstance(storage, avroData);
+    Class<Format<S3StorageConfig, String>> formatClass =
+        (Class<Format<S3StorageConfig, String>>) connectorConfig.getClass(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG);
+    return formatClass.getConstructor(S3Storage.class, AvroData.class).newInstance(storage, avroData);
   }
 
   private Partitioner<FieldSchema> newPartitioner(S3SinkConnectorConfig config)
@@ -143,7 +143,7 @@ public class S3SinkTask extends SinkTask {
     @SuppressWarnings("unchecked")
     Class<? extends Partitioner<FieldSchema>> partitionerClass =
         (Class<? extends Partitioner<FieldSchema>>)
-            Class.forName(config.getParitionerConfig().getString(PartitionerConfig.PARTITIONER_CLASS_CONFIG));
+            config.getParitionerConfig().getClass(PartitionerConfig.PARTITIONER_CLASS_CONFIG);
 
     Map<String, Object> rawConfig = copyConfig(config);
     Partitioner<FieldSchema> partitioner = partitionerClass.newInstance();
@@ -154,14 +154,22 @@ public class S3SinkTask extends SinkTask {
   private Map<String, Object> copyConfig(S3SinkConnectorConfig config) {
     Map<String, Object> map = new HashMap<>();
     PartitionerConfig partitionerConfig = config.getParitionerConfig();
-    map.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG, partitionerConfig.getString(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG));
-    map.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, partitionerConfig.getLong(PartitionerConfig.PARTITION_DURATION_MS_CONFIG));
-    map.put(PartitionerConfig.PATH_FORMAT_CONFIG, partitionerConfig.getString(PartitionerConfig.PATH_FORMAT_CONFIG));
-    map.put(PartitionerConfig.LOCALE_CONFIG, partitionerConfig.getString(PartitionerConfig.LOCALE_CONFIG));
-    map.put(PartitionerConfig.TIMEZONE_CONFIG, partitionerConfig.getString(PartitionerConfig.TIMEZONE_CONFIG));
-    map.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, partitionerConfig.getString(PartitionerConfig.PARTITIONER_CLASS_CONFIG));
-    map.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, partitionerConfig.getString(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG));
-    map.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, config.getCommonConfig().getString(StorageCommonConfig.DIRECTORY_DELIM_CONFIG));
+    map.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG,
+            partitionerConfig.getString(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG));
+    map.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG,
+            partitionerConfig.getLong(PartitionerConfig.PARTITION_DURATION_MS_CONFIG));
+    map.put(PartitionerConfig.PATH_FORMAT_CONFIG,
+            partitionerConfig.getString(PartitionerConfig.PATH_FORMAT_CONFIG));
+    map.put(PartitionerConfig.LOCALE_CONFIG,
+            partitionerConfig.getString(PartitionerConfig.LOCALE_CONFIG));
+    map.put(PartitionerConfig.TIMEZONE_CONFIG,
+            partitionerConfig.getString(PartitionerConfig.TIMEZONE_CONFIG));
+    map.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG,
+            partitionerConfig.getClass(PartitionerConfig.PARTITIONER_CLASS_CONFIG));
+    map.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG,
+            partitionerConfig.getClass(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG));
+    map.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG,
+            config.getCommonConfig().getString(StorageCommonConfig.DIRECTORY_DELIM_CONFIG));
     return map;
   }
 

@@ -21,6 +21,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
+import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 
 import static org.junit.Assert.assertEquals;
@@ -38,8 +39,8 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   public void testStorageClass() throws Exception {
     // No real test case yet
     connectorConfig = new S3SinkConnectorConfig(properties);
-    assertEquals("io.confluent.connect.s3.storage.S3Storage",
-                 connectorConfig.getCommonConfig().getString(StorageCommonConfig.STORAGE_CLASS_CONFIG));
+    assertEquals(S3Storage.class,
+                 connectorConfig.getCommonConfig().getClass(StorageCommonConfig.STORAGE_CLASS_CONFIG));
   }
 
   @Rule
