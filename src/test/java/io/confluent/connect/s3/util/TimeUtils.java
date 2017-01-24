@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.connect.s3;
+package io.confluent.connect.s3.util;
 
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;

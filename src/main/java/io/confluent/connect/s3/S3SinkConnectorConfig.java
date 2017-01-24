@@ -149,7 +149,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     if (config == null) {
       throw new ConfigException(String.format("Unknown configuration '%s'", key));
     }
-    return config.getValue(key);
+    return config == this ? super.get(key) : config.get(key);
   }
 
   public Map<String, ?> plainValues() {

@@ -37,7 +37,6 @@ import java.util.Queue;
 
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.storage.S3StorageConfig;
-import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
@@ -74,6 +73,8 @@ public class TopicPartitionWriter {
   private final StorageSchemaCompatibility compatibility;
   private final String extension;
   private final String zeroPadOffsetFormat;
+  private final String dirDelim;
+  private final String fileDelim;
   private final DateTimeZone timezone;
   private final Time time;
 
@@ -118,6 +119,8 @@ public class TopicPartitionWriter {
     state = State.WRITE_STARTED;
     failureTime = -1L;
     offset = -1L;
+    dirDelim = connectorConfig.getString(StorageCommonConfig.DIRECTORY_DELIM_CONFIG);
+    fileDelim = connectorConfig.getString(StorageCommonConfig.FILE_DELIM_CONFIG);
     extension = writerProvider.getExtension();
     zeroPadOffsetFormat = "%0" + connectorConfig.getInt(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG)
                               + "d";
@@ -298,10 +301,24 @@ public class TopicPartitionWriter {
     } else {
       long startOffset = startOffsets.get(encodedPartition);
       String prefix = getDirectoryPrefix(encodedPartition);
-      commitFile = FileUtils.fileKeyToCommit(topicsDir, prefix, tp, startOffset, extension, zeroPadOffsetFormat);
+      commitFile = fileKeyToCommit(prefix, startOffset);
       commitFiles.put(encodedPartition, commitFile);
     }
     return commitFile;
+  }
+
+  private String fileKey(String topicsPrefix, String keyPrefix, String name) {
+    return dirDelim + topicsPrefix + dirDelim + keyPrefix + dirDelim + name;
+  }
+
+  private String fileKeyToCommit(String dirPrefix, long startOffset) {
+    String name = tp.topic()
+                      + fileDelim
+                      + tp.partition()
+                      + fileDelim
+                      + String.format(zeroPadOffsetFormat, startOffset)
+                      + extension;
+    return fileKey(topicsDir, dirPrefix, name);
   }
 
   private void writeRecord(SinkRecord record) {
@@ -337,7 +354,7 @@ public class TopicPartitionWriter {
 
     long startOffset = startOffsets.get(encodedPartition);
     String prefix = getDirectoryPrefix(encodedPartition);
-    String file = FileUtils.fileKeyToCommit(topicsDir, prefix, tp, startOffset, extension, zeroPadOffsetFormat);
+    String file = fileKeyToCommit(prefix, startOffset);
 
     if (writers.containsKey(encodedPartition)) {
       RecordWriter writer = writers.get(encodedPartition);

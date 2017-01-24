@@ -26,6 +26,8 @@ import java.io.File;
 import java.util.Map;
 import java.util.UUID;
 
+import io.confluent.connect.storage.common.StorageCommonConfig;
+
 public class TestWithMockedS3 extends S3SinkConnectorTestBase {
 
   protected S3Mock s3mock;
@@ -33,8 +35,13 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
   @Rule
   public TemporaryFolder s3mockRoot = new TemporaryFolder();
 
-  protected static final String DM = "_";
-  protected static final String FM = "#";
+  @Override
+  protected Map<String, String> createProps() {
+    Map<String, String> props = super.createProps();
+    props.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, "_");
+    props.put(StorageCommonConfig.FILE_DELIM_CONFIG, "#");
+    return props;
+  }
 
   //@Before
   @Override
