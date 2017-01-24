@@ -78,7 +78,7 @@ public class S3SinkTask extends SinkTask {
     this.avroData = avroData;
 
     storageConfig = new S3StorageConfig(connectorConfig);
-    url = connectorConfig.getCommonConfig().getString(StorageCommonConfig.STORE_URL_CONFIG);
+    url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
     writerProvider = newFormat().getRecordWriterProvider();
 
     open(context.assignment());
@@ -89,12 +89,12 @@ public class S3SinkTask extends SinkTask {
     try {
       connectorConfig = new S3SinkConnectorConfig(props);
       storageConfig = new S3StorageConfig(connectorConfig);
-      url = connectorConfig.getCommonConfig().getString(StorageCommonConfig.STORE_URL_CONFIG);
+      url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
 
       @SuppressWarnings("unchecked")
       Class<? extends S3Storage> storageClass =
           (Class<? extends S3Storage>)
-              connectorConfig.getCommonConfig().getClass(StorageCommonConfig.STORAGE_CLASS_CONFIG);
+              connectorConfig.getClass(StorageCommonConfig.STORAGE_CLASS_CONFIG);
       storage = StorageFactory.createStorage(storageClass, S3StorageConfig.class, storageConfig, url);
       if (!storage.bucketExists()) {
         throw new DataException("No-existent S3 bucket: " + storageConfig.bucket());
@@ -107,7 +107,7 @@ public class S3SinkTask extends SinkTask {
       open(context.assignment());
       log.info("Started S3 connector task with assigned partitions: {}", assignment);
     } catch (ClassNotFoundException | IllegalAccessException | InstantiationException | InvocationTargetException
-                 | NoSuchMethodException e) {
+        | NoSuchMethodException e) {
       throw new ConnectException("Reflection exception: ", e);
     } catch (AmazonClientException e) {
       throw new ConnectException(e);
@@ -145,34 +145,11 @@ public class S3SinkTask extends SinkTask {
     @SuppressWarnings("unchecked")
     Class<? extends Partitioner<FieldSchema>> partitionerClass =
         (Class<? extends Partitioner<FieldSchema>>)
-            config.getParitionerConfig().getClass(PartitionerConfig.PARTITIONER_CLASS_CONFIG);
+            config.getClass(PartitionerConfig.PARTITIONER_CLASS_CONFIG);
 
-    Map<String, Object> rawConfig = copyConfig(config);
     Partitioner<FieldSchema> partitioner = partitionerClass.newInstance();
-    partitioner.configure(rawConfig);
+    partitioner.configure(new HashMap<>(config.plainValues()));
     return partitioner;
-  }
-
-  private Map<String, Object> copyConfig(S3SinkConnectorConfig config) {
-    Map<String, Object> map = new HashMap<>();
-    PartitionerConfig partitionerConfig = config.getParitionerConfig();
-    map.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG,
-            partitionerConfig.getString(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG));
-    map.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG,
-            partitionerConfig.getLong(PartitionerConfig.PARTITION_DURATION_MS_CONFIG));
-    map.put(PartitionerConfig.PATH_FORMAT_CONFIG,
-            partitionerConfig.getString(PartitionerConfig.PATH_FORMAT_CONFIG));
-    map.put(PartitionerConfig.LOCALE_CONFIG,
-            partitionerConfig.getString(PartitionerConfig.LOCALE_CONFIG));
-    map.put(PartitionerConfig.TIMEZONE_CONFIG,
-            partitionerConfig.getString(PartitionerConfig.TIMEZONE_CONFIG));
-    map.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG,
-            partitionerConfig.getClass(PartitionerConfig.PARTITIONER_CLASS_CONFIG));
-    map.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG,
-            partitionerConfig.getClass(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG));
-    map.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG,
-            config.getCommonConfig().getString(StorageCommonConfig.DIRECTORY_DELIM_CONFIG));
-    return map;
   }
 
   @Override

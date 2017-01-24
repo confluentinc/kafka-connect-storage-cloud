@@ -102,12 +102,12 @@ public class TopicPartitionWriter {
     this.conf = storage.conf();
 
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
-    topicsDir = connectorConfig.getCommonConfig().getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
+    topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
     rotateScheduleIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG);
     timeoutMs = connectorConfig.getLong(S3SinkConnectorConfig.RETRY_BACKOFF_CONFIG);
     compatibility = StorageSchemaCompatibility.getCompatibility(
-        connectorConfig.getHiveConfig().getString(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG));
+        connectorConfig.getString(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG));
 
     buffer = new LinkedList<>();
     commitFiles = new HashMap<>();
@@ -123,7 +123,7 @@ public class TopicPartitionWriter {
                               + "d";
 
     timezone = rotateScheduleIntervalMs > 0 ?
-                   DateTimeZone.forID(connectorConfig.getParitionerConfig().getString(PartitionerConfig.TIMEZONE_CONFIG)) :
+                   DateTimeZone.forID(connectorConfig.getString(PartitionerConfig.TIMEZONE_CONFIG)) :
                    null;
 
     // Initialize rotation timers

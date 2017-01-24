@@ -59,7 +59,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
   public void setUp() throws Exception {
     super.setUp();
     connectorConfig = new S3SinkConnectorConfig(properties);
-    topicsDir = connectorConfig.getCommonConfig().getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
+    topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     int schemaCacheSize = connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG);
     avroData = new AvroData(schemaCacheSize);
     rawConfig = createDefaultConfig();

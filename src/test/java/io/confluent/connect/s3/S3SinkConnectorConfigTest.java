@@ -40,7 +40,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     // No real test case yet
     connectorConfig = new S3SinkConnectorConfig(properties);
     assertEquals(S3Storage.class,
-                 connectorConfig.getCommonConfig().getClass(StorageCommonConfig.STORAGE_CLASS_CONFIG));
+                 connectorConfig.getClass(StorageCommonConfig.STORAGE_CLASS_CONFIG));
   }
 
   @Rule
@@ -56,7 +56,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     */
     connectorConfig = new S3SinkConnectorConfig(properties);
 
-    assertNull(connectorConfig.getCommonConfig().getString(StorageCommonConfig.STORE_URL_CONFIG));
+    assertNull(connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG));
   }
 
 }

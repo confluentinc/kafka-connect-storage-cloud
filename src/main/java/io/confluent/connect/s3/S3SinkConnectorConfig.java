@@ -16,14 +16,20 @@
 
 package io.confluent.connect.s3;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
+import org.apache.kafka.common.config.ConfigException;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
+import io.confluent.connect.storage.common.ComposableConfig;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
@@ -50,6 +56,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private final StorageCommonConfig commonConfig;
   private final HiveConfig hiveConfig;
   private final PartitionerConfig partitionerConfig;
+
+  private final Map<String, ComposableConfig> propertyToConfig = new HashMap<>();
+  private final Set<AbstractConfig> allConfigs = new HashSet<>();
 
   static {
     {
@@ -96,18 +105,21 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     hiveConfig = new HiveConfig(originalsStrings());
     partitionerConfig = new PartitionerConfig(originalsStrings());
     this.name = parseName(originalsStrings());
+    addToGlobal(hiveConfig);
+    addToGlobal(partitionerConfig);
+    addToGlobal(commonConfig);
+    addToGlobal(this);
   }
 
-  public StorageCommonConfig getCommonConfig() {
-    return commonConfig;
+  private void addToGlobal(AbstractConfig config) {
+    allConfigs.add(config);
+    addConfig(config.values(), (ComposableConfig) config);
   }
 
-  public PartitionerConfig getParitionerConfig() {
-    return partitionerConfig;
-  }
-
-  public HiveConfig getHiveConfig() {
-    return hiveConfig;
+  private void addConfig(Map<String, ?> parsedProps, ComposableConfig config) {
+    for (String key : parsedProps.keySet()) {
+      propertyToConfig.put(key, config);
+    }
   }
 
   public String getBucketName() {
@@ -131,4 +143,20 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return name;
   }
 
+  @Override
+  public Object get(String key) {
+    ComposableConfig config = propertyToConfig.get(key);
+    if (config == null) {
+      throw new ConfigException(String.format("Unknown configuration '%s'", key));
+    }
+    return config.getValue(key);
+  }
+
+  public Map<String, ?> plainValues() {
+    Map<String, Object> map = new HashMap<>();
+    for (AbstractConfig config : allConfigs) {
+      map.putAll(config.values());
+    }
+    return map;
+  }
 }
