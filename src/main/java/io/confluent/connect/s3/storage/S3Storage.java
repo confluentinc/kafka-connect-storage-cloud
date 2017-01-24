@@ -73,8 +73,8 @@ public class S3Storage implements Storage<S3StorageConfig, ObjectListing> {
    * @throws SdkClientException
    * @throws AmazonServiceException
    */
-  public boolean bucketExists(String bucket) {
-    return StringUtils.isNotBlank(bucket) && s3.doesBucketExist(bucket);
+  public boolean bucketExists() {
+    return StringUtils.isNotBlank(bucketName) && s3.doesBucketExist(bucketName);
   }
 
   /**

@@ -20,6 +20,7 @@ import com.amazonaws.AmazonClientException;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -41,7 +42,6 @@ import io.confluent.connect.storage.StorageFactory;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
-import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
@@ -96,9 +96,11 @@ public class S3SinkTask extends SinkTask {
           (Class<? extends S3Storage>)
               connectorConfig.getCommonConfig().getClass(StorageCommonConfig.STORAGE_CLASS_CONFIG);
       storage = StorageFactory.createStorage(storageClass, S3StorageConfig.class, storageConfig, url);
-      storage.bucketExists(storageConfig.bucket());
+      if (!storage.bucketExists()) {
+        throw new DataException("No-existent S3 bucket: " + storageConfig.bucket());
+      }
 
-      avroData = new AvroData(connectorConfig.getHiveConfig().getInt(HiveConfig.SCHEMA_CACHE_SIZE_CONFIG));
+      avroData = new AvroData(connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG));
       writerProvider = newFormat().getRecordWriterProvider();
       partitioner = newPartitioner(connectorConfig);
 
@@ -119,11 +121,11 @@ public class S3SinkTask extends SinkTask {
 
   @Override
   public void open(Collection<TopicPartition> partitions) {
-    assignment.clear();
+    // assignment should be empty, either because this is the initial call or because it follows a call to "close".
     assignment.addAll(partitions);
     for (TopicPartition tp : assignment) {
       TopicPartitionWriter writer =
-          new TopicPartitionWriter(tp, storage, writerProvider, partitioner, connectorConfig, context, avroData);
+          new TopicPartitionWriter(tp, storage, writerProvider, partitioner, connectorConfig, context);
       topicPartitionWriters.put(tp, writer);
     }
   }
@@ -193,10 +195,11 @@ public class S3SinkTask extends SinkTask {
         topicPartitionWriters.get(tp).close();
       } catch (ConnectException e) {
         log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
-      } finally {
-        topicPartitionWriters.remove(tp);
       }
     }
+
+    topicPartitionWriters.clear();
+    assignment.clear();
   }
 
   @Override

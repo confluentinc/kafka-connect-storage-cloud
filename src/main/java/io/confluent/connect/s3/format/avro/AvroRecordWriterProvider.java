@@ -62,8 +62,7 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3StorageC
         if (schema == null) {
           schema = record.valueSchema();
           try {
-            // TODO: is dumping the filename to logs an issue?
-            log.info("Opening record writer for: " + filename);
+            log.info("Opening record writer for: {}", filename);
             OutputStream wrapper = storage.create(filename, conf, true);
             org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
             writer.create(avroSchema, wrapper);
@@ -71,7 +70,7 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3StorageC
             throw new ConnectException(e);
           }
         }
-        log.trace("Sink record: {}", record.toString());
+        log.trace("Sink record: {}", record);
         Object value = avroData.fromConnectData(schema, record.value());
         try {
           writer.append(value);

@@ -54,7 +54,7 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3StorageC
 
         @Override
         public void write(SinkRecord record) {
-          log.trace("Sink record: {}", record.toString());
+          log.trace("Sink record: {}", record);
           try {
             writer.writeObject(record.value());
             writer.write("\n".getBytes());

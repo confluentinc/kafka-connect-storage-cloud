@@ -27,6 +27,8 @@ import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.storage.StorageSinkTestBase;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.hive.HiveConfig;
+import io.confluent.connect.storage.hive.schema.DefaultSchemaGenerator;
+import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
 public class S3SinkConnectorTestBase extends StorageSinkTestBase {
@@ -47,8 +49,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     props.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, S3_TEST_BUCKET_NAME);
     props.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
     props.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, PartitionerConfig.PARTITIONER_CLASS_DEFAULT.getName());
-    props.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG,
-              PartitionerConfig.SCHEMA_GENERATOR_CLASS_DEFAULT.getName());
+    props.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, DefaultSchemaGenerator.class.getName());
     props.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, "_");
     return props;
   }
@@ -59,7 +60,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     super.setUp();
     connectorConfig = new S3SinkConnectorConfig(properties);
     topicsDir = connectorConfig.getCommonConfig().getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
-    int schemaCacheSize = connectorConfig.getHiveConfig().getInt(HiveConfig.SCHEMA_CACHE_SIZE_CONFIG);
+    int schemaCacheSize = connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG);
     avroData = new AvroData(schemaCacheSize);
     rawConfig = createDefaultConfig();
   }
@@ -77,7 +78,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     config.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH_");
     config.put(PartitionerConfig.LOCALE_CONFIG, "en");
     config.put(PartitionerConfig.TIMEZONE_CONFIG, "America/Los_Angeles");
-    config.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, PartitionerConfig.SCHEMA_GENERATOR_CLASS_DEFAULT);
+    config.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, DefaultSchemaGenerator.class);
     config.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, "_");
     return config;
   }

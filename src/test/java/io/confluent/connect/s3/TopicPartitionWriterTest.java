@@ -102,7 +102,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
     partitioner.configure(rawConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, avroData);
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
 
     String key = "key";
     Schema schema = createSchema();
@@ -134,7 +134,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String partitionField = (String) rawConfig.get(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, avroData);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
 
     String key = "key";
     Schema schema = createSchema();
@@ -171,7 +171,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     partitioner.configure(rawConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, avroData);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
 
     String key = "key";
     Schema schema = createSchema();

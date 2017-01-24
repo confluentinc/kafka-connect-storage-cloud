@@ -35,7 +35,6 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
 
-import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.storage.S3StorageConfig;
 import io.confluent.connect.s3.util.FileUtils;
@@ -56,11 +55,9 @@ public class TopicPartitionWriter {
   private final Map<String, Schema> currentSchemas;
   private final TopicPartition tp;
   private final Partitioner<FieldSchema> partitioner;
-  private final String url;
   private String topicsDir;
   private State state;
   private final Queue<SinkRecord> buffer;
-  private final S3Storage storage;
   private final SinkTaskContext context;
   private int recordCounter;
   private final int flushSize;
@@ -69,9 +66,7 @@ public class TopicPartitionWriter {
   private long nextScheduledRotate;
   private final RecordWriterProvider<S3StorageConfig> writerProvider;
   private final S3StorageConfig conf;
-  private final AvroData avroData;
   private long offset;
-  private boolean sawInvalidOffset;
   private final Map<String, Long> startOffsets;
   private final Map<String, Long> offsets;
   private long timeoutMs;
@@ -87,9 +82,8 @@ public class TopicPartitionWriter {
                               RecordWriterProvider<S3StorageConfig> writerProvider,
                               Partitioner<FieldSchema> partitioner,
                               S3SinkConnectorConfig connectorConfig,
-                              SinkTaskContext context,
-                              AvroData avroData) {
-    this(tp, storage, writerProvider, partitioner, connectorConfig, context, avroData, Time.SYSTEM);
+                              SinkTaskContext context) {
+    this(tp, storage, writerProvider, partitioner, connectorConfig, context, Time.SYSTEM);
   }
 
   // Visible for testing
@@ -99,16 +93,12 @@ public class TopicPartitionWriter {
                        Partitioner<FieldSchema> partitioner,
                        S3SinkConnectorConfig connectorConfig,
                        SinkTaskContext context,
-                       AvroData avroData,
                        Time time) {
     this.time = time;
     this.tp = tp;
     this.context = context;
-    this.avroData = avroData;
-    this.storage = storage;
     this.writerProvider = writerProvider;
     this.partitioner = partitioner;
-    this.url = storage.url();
     this.conf = storage.conf();
 
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
@@ -128,7 +118,6 @@ public class TopicPartitionWriter {
     state = State.WRITE_STARTED;
     failureTime = -1L;
     offset = -1L;
-    sawInvalidOffset = false;
     extension = writerProvider.getExtension();
     zeroPadOffsetFormat = "%0" + connectorConfig.getInt(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG)
                               + "d";
@@ -317,26 +306,8 @@ public class TopicPartitionWriter {
 
   private void writeRecord(SinkRecord record) {
     // TODO: double-check this is valid in all cases of start-up/recovery
-    long expectedOffset = offset + recordCounter;
     if (offset == -1) {
       offset = record.kafkaOffset();
-    } else if (record.kafkaOffset() != expectedOffset) {
-      // Currently it's possible to see stale data with the wrong offset after a rebalance when you
-      // rewind, which we do since we manage our own offsets. See KAFKA-2894.
-      if (!sawInvalidOffset) {
-        log.info(
-            "Ignoring stale out-of-order record in {}-{}. Has offset {} instead of expected offset {}",
-            record.topic(), record.kafkaPartition(), record.kafkaOffset(), expectedOffset);
-      }
-      sawInvalidOffset = true;
-      return;
-    }
-
-    if (sawInvalidOffset) {
-      log.info(
-          "Recovered from stale out-of-order records in {}-{} with offset {}",
-          record.topic(), record.kafkaPartition(), expectedOffset);
-      sawInvalidOffset = false;
     }
 
     String encodedPartition = partitioner.encodePartition(record);
@@ -367,7 +338,6 @@ public class TopicPartitionWriter {
     long startOffset = startOffsets.get(encodedPartition);
     String prefix = getDirectoryPrefix(encodedPartition);
     String file = FileUtils.fileKeyToCommit(topicsDir, prefix, tp, startOffset, extension, zeroPadOffsetFormat);
-    //storage.commit(null, file);
 
     if (writers.containsKey(encodedPartition)) {
       RecordWriter writer = writers.get(encodedPartition);

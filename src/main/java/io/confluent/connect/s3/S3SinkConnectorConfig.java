@@ -42,7 +42,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String PART_SIZE_CONFIG = "s3.part.size";
   private static final String PART_SIZE_DOC = "The Part Size in S3 Multi-part Uploads.";
-  private static final int PART_SIZE_DEFAULT = 5 * 1024 * 1024;
+  private static final int PART_SIZE_DEFAULT = 100 * 1024 * 1024;
   private static final String PART_SIZE_DISPLAY = "S3 Part Size";
 
   private final String name;
@@ -64,6 +64,16 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         Width.MEDIUM,
                         S3_BUCKET_DISPLAY);
 
+      CONFIG_DEF.define(PART_SIZE_CONFIG,
+                        Type.INT,
+                        PART_SIZE_DEFAULT,
+                        Importance.HIGH,
+                        PART_SIZE_DOC,
+                        group,
+                        ++orderInGroup,
+                        Width.MEDIUM,
+                        PART_SIZE_DISPLAY);
+
       CONFIG_DEF.define(SSEA_CONFIG,
                         Type.STRING,
                         SSEA_DEFAULT,
@@ -73,16 +83,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         ++orderInGroup,
                         Width.MEDIUM,
                         SSEA_DISPLAY);
-
-      CONFIG_DEF.define(PART_SIZE_CONFIG,
-                        Type.INT,
-                        PART_SIZE_DEFAULT,
-                        Importance.LOW,
-                        PART_SIZE_DOC,
-                        group,
-                        ++orderInGroup,
-                        Width.MEDIUM,
-                        PART_SIZE_DISPLAY);
     }
   }
 
@@ -92,10 +92,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   protected S3SinkConnectorConfig(ConfigDef configDef, Map<String, String> props) {
     super(configDef, props);
-    commonConfig = new StorageCommonConfig(props);
-    hiveConfig = new HiveConfig(props);
-    partitionerConfig = new PartitionerConfig(props);
-    this.name = parseName(props);
+    commonConfig = new StorageCommonConfig(originalsStrings());
+    hiveConfig = new HiveConfig(originalsStrings());
+    partitionerConfig = new PartitionerConfig(originalsStrings());
+    this.name = parseName(originalsStrings());
   }
 
   public StorageCommonConfig getCommonConfig() {
