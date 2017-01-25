@@ -39,7 +39,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
   protected S3SinkConnectorConfig connectorConfig;
   protected String topicsDir;
   protected AvroData avroData;
-  protected Map<String, Object> rawConfig = new HashMap<>();
+  protected Map<String, Object> parsedConfig = new HashMap<>();
 
   @Override
   protected Map<String, String> createProps() {
@@ -62,7 +62,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     int schemaCacheSize = connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG);
     avroData = new AvroData(schemaCacheSize);
-    rawConfig = createDefaultConfig();
+    parsedConfig = createDefaultConfig();
   }
 
   @After

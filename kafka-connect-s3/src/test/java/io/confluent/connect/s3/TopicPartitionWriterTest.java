@@ -100,8 +100,10 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void testWriteRecordDefaultWithPadding() throws Exception {
     localProps.put(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG, "2");
     setUp();
+
+    // Define the partitioner
     Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
-    partitioner.configure(rawConfig);
+    partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
 
@@ -115,6 +117,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       topicPartitionWriter.buffer(record);
     }
 
+    // Test actual write
     topicPartitionWriter.write();
     topicPartitionWriter.close();
 
@@ -129,10 +132,10 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @Test
   public void testWriteRecordFieldPartitioner() throws Exception {
     setUp();
-    Partitioner<FieldSchema> partitioner = new FieldPartitioner<>();
-    partitioner.configure(rawConfig);
 
-    String partitionField = (String) rawConfig.get(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG);
+    // Define the partitioner
+    Partitioner<FieldSchema> partitioner = new FieldPartitioner<>();
+    partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
@@ -147,10 +150,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       topicPartitionWriter.buffer(record);
     }
 
+    // Test actual write
     topicPartitionWriter.write();
     topicPartitionWriter.close();
 
-
+    String partitionField = (String) parsedConfig.get(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG);
     String dirPrefix1 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(16));
     String dirPrefix2 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(17));
     String dirPrefix3 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(18));
@@ -167,9 +171,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @Test
   public void testWriteRecordTimeBasedPartition() throws Exception {
     setUp();
-    rawConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, TimeBasedSchemaGenerator.class);
+
+    // Define the partitioner
     Partitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
-    partitioner.configure(rawConfig);
+    parsedConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, TimeBasedSchemaGenerator.class);
+    partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
@@ -184,22 +190,21 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       topicPartitionWriter.buffer(record);
     }
 
+    // Test actual write
     topicPartitionWriter.write();
     topicPartitionWriter.close();
 
-    long partitionDurationMs = (Long) rawConfig.get(PartitionerConfig.PARTITION_DURATION_MS_CONFIG);
-    String pathFormat = (String) rawConfig.get(PartitionerConfig.PATH_FORMAT_CONFIG);
-    String timeZoneString = (String) rawConfig.get(PartitionerConfig.TIMEZONE_CONFIG);
+    long partitionDurationMs = (Long) parsedConfig.get(PartitionerConfig.PARTITION_DURATION_MS_CONFIG);
+    String pathFormat = (String) parsedConfig.get(PartitionerConfig.PATH_FORMAT_CONFIG);
+    String timeZoneString = (String) parsedConfig.get(PartitionerConfig.TIMEZONE_CONFIG);
     long timestamp = System.currentTimeMillis();
-
     String encodedPartition = TimeUtils.encodeTimestamp(partitionDurationMs, pathFormat, timeZoneString, timestamp);
 
     String dirPrefix = partitioner.generatePartitionedPath(TOPIC, encodedPartition);
-
     Set<String> expectedFiles = new HashSet<>();
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
+    for (int i : new int[]{0, 3, 6}) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
+    }
 
     verify(expectedFiles, records, schema);
   }
@@ -226,24 +231,16 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         .put("float", 12.2f)
         .put("double", 12.2);
 
-    ArrayList<Struct> records = new ArrayList<>();
-    records.add(record1);
-    records.add(record2);
-    records.add(record3);
-    return records.toArray(new Struct[records.size()]);
+    return new Struct[]{record1, record2, record3};
   }
 
 
   private ArrayList<SinkRecord> createSinkRecords(Struct[] records, String key, Schema schema) {
     ArrayList<SinkRecord> sinkRecords = new ArrayList<>();
-    long offset = 0;
-    for (Struct record : records) {
-      for (long count = 0; count < 3; count++) {
-        SinkRecord sinkRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, record,
-                                               offset + count);
-        sinkRecords.add(sinkRecord);
+    for (int offset = 0, i = 0, count = 3; i < records.length; ++i, offset += count) {
+      for (int j = 0; j < count; ++j) {
+        sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records[i], offset + j));
       }
-      offset = offset + 3;
     }
     return sinkRecords;
   }
@@ -271,11 +268,13 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   private List<S3ObjectSummary> listObjects(String bucket, String prefix) {
     List<S3ObjectSummary> objects = new ArrayList<>();
     ObjectListing listing;
+
     if (prefix == null) {
       listing = s3.listObjects(bucket);
     } else {
       listing = s3.listObjects(bucket, prefix);
     }
+
     objects.addAll(listing.getObjectSummaries());
     while (listing.isTruncated()) {
       listing = s3.listNextBatchOfObjects(listing);
