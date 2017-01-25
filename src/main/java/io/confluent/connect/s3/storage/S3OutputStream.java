@@ -25,7 +25,6 @@ import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PartETag;
-import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,23 +53,17 @@ public class S3OutputStream extends OutputStream {
   private ByteBuffer buffer;
   private MultipartUpload multiPartUpload;
 
-  public S3OutputStream(String bucket, String key, String ssea, long partSize, AmazonS3Client s3) {
+  public S3OutputStream(String key, S3StorageConfig conf, AmazonS3Client s3) {
     this.s3 = s3;
-    this.bucket = bucket;
+    this.bucket = conf.bucket();
     this.key = key;
-    this.ssea = ssea;
-    // TODO: Should enforce that in config as well?
-    if (partSize > Integer.MAX_VALUE) {
-      log.warn("Part size of multipart uploads reduced to 2^31 - 1 bytes (~2.14GB)");
-      this.partSize = Integer.MAX_VALUE;
-    } else {
-      this.partSize = (int) partSize;
-    }
+    this.ssea = conf.ssea();
+    this.partSize = conf.partSize();
     this.closed = false;
     this.buffer = ByteBuffer.allocate(this.partSize);
     this.progressListener = new ConnectProgressListener();
     this.multiPartUpload = null;
-    log.debug("Create S3OutputStream for bucket '{}' key '{}'", bucket, key);
+    log.debug("Create S3OutputStream for:  '{}' key '{}'", bucket, key);
   }
 
   @Override
@@ -102,11 +95,24 @@ public class S3OutputStream extends OutputStream {
   }
 
   private void uploadPart() throws IOException {
+    uploadPart(partSize);
+    buffer.reset();
+  }
+
+  private void uploadPart(int size) throws IOException {
     if (multiPartUpload == null) {
       multiPartUpload = newMultipartUpload();
     }
-    multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), partSize);
-    buffer.reset();
+
+    try {
+      multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), size);
+    } catch (Exception e) {
+      // TODO: elaborate on the exception interpretation. We might be able to retry.
+      if (multiPartUpload != null) {
+        multiPartUpload.abort();
+      }
+      throw new IOException("Part upload failed: ", e.getCause());
+    }
   }
 
   @Override
@@ -115,15 +121,12 @@ public class S3OutputStream extends OutputStream {
       return;
     }
     closed = true;
+
     try {
-      if (multiPartUpload == null) {
-        putObject();
-      } else {
-        if (buffer.hasRemaining()) {
-          multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), buffer.position() + 1);
-        }
-        multiPartUpload.complete();
+      if (buffer.hasRemaining()) {
+        uploadPart(buffer.position() + 1);
       }
+      multiPartUpload.complete();
       log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
     } catch (Exception e) {
       if (multiPartUpload != null) {
@@ -151,20 +154,6 @@ public class S3OutputStream extends OutputStream {
       // TODO: elaborate on the exception interpretation. If this is an AmazonServiceException,
       // there's more info to be extracted.
       throw new IOException("Unable to initiate MultipartUpload: " + e, e);
-    }
-  }
-
-  private void putObject() throws IOException {
-    log.debug("Executing regular upload for bucket '{}' key '{}'", bucket, key);
-    ObjectMetadata meta = newObjectMetadata();
-    meta.setContentLength(buffer.position() + 1);
-    PutObjectRequest putObjectRequest =
-        new PutObjectRequest(bucket, key, new ByteArrayInputStream(buffer.array()), meta)
-            .withGeneralProgressListener(progressListener);
-    try {
-      s3.putObject(putObjectRequest);
-    } catch (AmazonClientException e) {
-      throw new IOException("Regular upload failed", e.getCause());
     }
   }
 

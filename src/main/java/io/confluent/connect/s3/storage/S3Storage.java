@@ -158,6 +158,6 @@ public class S3Storage implements Storage<S3StorageConfig, ObjectListing> {
       throw new IllegalArgumentException("Path can not be empty!");
     }
 
-    return new S3OutputStream(conf.bucket(), path, conf.ssea(), conf.partSize(), s3);
+    return new S3OutputStream(path, conf, s3);
   }
 }

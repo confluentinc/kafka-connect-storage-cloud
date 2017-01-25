@@ -37,7 +37,6 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -56,7 +55,7 @@ import static org.powermock.api.easymock.PowerMock.verifyAll;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({S3SinkTask.class, StorageFactory.class})
-@PowerMockIgnore({"io.findify.s3mock.*", "akka.*", "javax.*"})
+@PowerMockIgnore({"io.findify.s3mock.*", "akka.*", "javax.*", "org.xml.*"})
 public class S3SinkTaskTest extends TestWithMockedS3 {
 
   private static final String ZERO_PAD_FMT = "%010d";

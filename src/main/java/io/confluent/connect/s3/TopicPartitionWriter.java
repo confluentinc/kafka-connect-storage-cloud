@@ -363,7 +363,6 @@ public class TopicPartitionWriter {
     }
 
     long commitOffset = offsets.get(encodedPartition);
-    // TODO: Do I need a check here? > than startOffset? > 0?
     log.debug("Resetting offset for {} to {}", tp, commitOffset);
     context.offset(tp, commitOffset);
 
