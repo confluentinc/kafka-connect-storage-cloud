@@ -162,7 +162,7 @@
                 <inherited>true</inherited>
                 <configuration>
                     <source>1.7</source>
-                    <target>1.8</target>
+                    <target>1.7</target>
                     <compilerArguments>
                         <Xlint:all/>
                         <!-- bootstrap class path not set in conjunction with -source 1.7 -->
@@ -183,6 +183,19 @@
                     <showWarnings>true</showWarnings>
                     <showDeprecation>false</showDeprecation>
                 </configuration>
+                <executions>
+                    <execution>
+                        <id>test-compile</id>
+                        <phase>process-test-sources</phase>
+                        <goals>
+                            <goal>testCompile</goal>
+                        </goals>
+                        <configuration>
+                            <source>1.7</source>
+                            <target>1.8</target>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <artifactId>maven-assembly-plugin</artifactId>
