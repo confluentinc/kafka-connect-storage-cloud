@@ -1,13 +1,13 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: kafka-connect-storage-cloud
+Upstream-Name: ##PACKAGENAME##
 Source: https://github.com/confluentinc/kafka-connect-storage-cloud
 
 Files: *
-Copyright: 2015 Confluent, Inc.
+Copyright: 2017 Confluent, Inc.
 License: Apache-2
 
 Files: debian/*
-Copyright: 2015 Confluent, Inc.
+Copyright: 2017 Confluent, Inc.
 License: Apache-2
 
 License: Apache-2

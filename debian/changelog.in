@@ -1,0 +1,5 @@
+##PACKAGENAME## (0.1~SNAPSHOT-1) unstable; urgency=low
+
+  * Initial release.
+
+ -- Confluent Packaging <packages@confluent.io>  Thu, 26 Jan 2017 13:42:59 +0000

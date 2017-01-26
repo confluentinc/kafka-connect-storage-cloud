@@ -1,0 +1,14 @@
+Source: confluent-kafka-connect-s3
+Section: misc
+Priority: optional
+Maintainer: Confluent Packaging <packages@confluent.io>
+Build-Depends: debhelper (>= 9), java7-jdk, javahelper (>= 0.40),
+ make, maven
+Standards-Version: 3.9.3
+Homepage: http://confluent.io
+
+Package: confluent-kafka-connect-s3
+Architecture: all
+Depends: confluent-kafka-connect-storage-common
+Description: Kafka Connect S3 connector for copying data between Kafka and 
+ Amazon Simple Storage Service (S3).

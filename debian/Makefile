@@ -11,8 +11,8 @@ ifndef VERSION
 VERSION=$(shell grep version pom.xml | head -n 1 | awk -F'>|<' '{ print $$3 }')
 endif
 
-export PACKAGE_TITLE=kafka-connect-storage-cloud
-export FULL_PACKAGE_TITLE=confluent-kafka-connect-storage-cloud
+export PACKAGE_TITLE ?= kafka-connect-s3
+export FULL_PACKAGE_TITLE=confluent-$(PACKAGE_TITLE)
 export PACKAGE_NAME=$(FULL_PACKAGE_TITLE)-$(VERSION)
 
 # Defaults that are likely to vary by platform. These are cleanly separated so
@@ -78,7 +78,7 @@ endif
 
 build: apply-patches
 ifeq ($(SKIP_TESTS),yes)
-	mvn -DskipTests=true install
+	mvn -Dmaven.test.skip=true install
 else
 	mvn install
 endif
@@ -98,6 +98,15 @@ distclean: clean
 
 test:
 
-.PHONY: clean install
+.PHONY: clean install debian-files
+
+# This generates the debian control, changelog and copyright files. You should only be running this
+# from the top-level directory using make -f debian/Makefile, never while in the debian/ directory.
+debian-files:
+	cp debian/$$FULL_PACKAGE_TITLE-control.in debian/control
+	cat debian/changelog.in | sed s@##PACKAGENAME##@$$FULL_PACKAGE_TITLE@g > debian/changelog
+	cat debian/copyright.in | sed s@##PACKAGENAME##@$$FULL_PACKAGE_TITLE@g > debian/copyright
+	git add debian
+	git commit -m "Add control, changelog and copyright files"
 
 check:
