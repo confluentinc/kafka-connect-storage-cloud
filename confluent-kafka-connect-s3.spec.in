@@ -1,22 +1,21 @@
-Summary: Kafka Connect connectors for copying data between Kafka and Cloud Storage.
-Name: confluent-kafka-connect-storage-cloud
+Summary: Kafka Connect S3 connector for copying data between Kafka and Amazon Simple Storage Service (S3).
+Name: confluent-kafka-connect-s3
 Version: ##RPMVERSION##
 Release: ##RPMRELEASE##
 Group: Applications/Internet
 License: Apache (v2)
-Source0: confluent-kafka-connect-storage-cloud-%{version}.tar.gz
+Source0: confluent-kafka-connect-s3-%{version}.tar.gz
 URL: http://confluent.io
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 Vendor: Confluent, Inc.
 Packager: Confluent Packaging <packages@confluent.io>
 BuildArch: noarch
 
-Requires: confluent-common
+Requires: confluent-kafka-connect-storage-common
 
 %description
 
-Kafka Connect Storage Cloud is a suite of Kafka Connectors for copying data between Kafka and Cloud storage such as
-Amazon S3, Google Cloud Storage or Azure Storage.
+Kafka Connect S3 is a connector for copying data between Kafka and Amazon Simple Storage Service (S3).
 
 %define __jar_repack %{nil}
 
@@ -44,18 +43,18 @@ exit 0
 %{__mkdir_p} %{buildroot}
 %{__cp} -R * %{buildroot}
 # The spec file gets included, get rid of it
-%{__rm} %{buildroot}/confluent-kafka-connect-storage-cloud.spec
+%{__rm} %{buildroot}/confluent-kafka-connect-s3.spec
 
 %files
 %defattr(-,root,root)
-/etc/kafka-connect-storage-cloud
-/usr/share/java/kafka-connect-storage-cloud
-/usr/share/doc/kafka-connect-storage-cloud
+/etc/kafka-connect-s3
+/usr/share/java/kafka-connect-s3
+/usr/share/doc/kafka-connect-s3
 
 %clean
 #used to cleanup things outside the build area and possibly inside.
 [ "%{buildroot}" != "/" ] && %{__rm} -rf %{buildroot}
 
 %changelog
-* Wed Nov 11 2015 Confluent Packaging <packages@confluent.io>
+* Thu Jan 26 2017 Confluent Packaging <packages@confluent.io>
 - Initial import
