@@ -11,8 +11,8 @@ ifndef VERSION
 VERSION=$(shell grep version pom.xml | head -n 1 | awk -F'>|<' '{ print $$3 }')
 endif
 
-export PACKAGE_TITLE=kafka-connect-storage-cloud
-export FULL_PACKAGE_TITLE=confluent-kafka-connect-storage-cloud
+export PACKAGE_TITLE ?= kafka-connect-s3
+export FULL_PACKAGE_TITLE=confluent-$(PACKAGE_TITLE)
 export PACKAGE_NAME=$(FULL_PACKAGE_TITLE)-$(VERSION)
 
 # Defaults that are likely to vary by platform. These are cleanly separated so
