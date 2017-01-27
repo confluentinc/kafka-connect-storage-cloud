@@ -37,7 +37,7 @@ function copy_subpackage() {
 }
 
 case "${PACKAGE_TITLE}" in
-  "kafka-connect-s3", "kafka-connect-gcs", "kafka-connect-azure")
+  "kafka-connect-s3" | "kafka-connect-gcs" | "kafka-connect-azure")
     copy_subpackage ${PACKAGE_TITLE}
     ;;
   *)
