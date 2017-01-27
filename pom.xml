@@ -22,17 +22,17 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.confluent</groupId>
-    <artifactId>kafka-connect-s3</artifactId>
-    <packaging>jar</packaging>
+    <artifactId>kafka-connect-storage-cloud</artifactId>
+    <packaging>pom</packaging>
     <version>3.3.0-SNAPSHOT</version>
-    <name>kafka-connect-s3</name>
+    <name>kafka-connect-storage-cloud</name>
     <organization>
         <name>Confluent, Inc.</name>
         <url>http://confluent.io</url>
     </organization>
     <url>http://confluent.io</url>
     <description>
-        Kafka Connect connector for Amazon Simple Storage Service (S3)
+        Kafka Connect suite of connectors for copying data between Kafka and cloud storage types.
     </description>
 
     <licenses>
@@ -44,21 +44,24 @@
     </licenses>
 
     <scm>
-        <connection>scm:git:git://github.com/confluentinc/kafka-connect-s3.git</connection>
-        <developerConnection>scm:git:git@github.com:confluentinc/kafka-connect-s3.git</developerConnection>
-        <url>https://github.com/confluentinc/kafka-connect-s3</url>
+        <connection>scm:git:git://github.com/confluentinc/kafka-connect-storage-cloud.git</connection>
+        <developerConnection>scm:git:git@github.com:confluentinc/kafka-connect-storage-cloud.git</developerConnection>
+        <url>https://github.com/confluentinc/kafka-connect-storage-cloud</url>
         <tag>HEAD</tag>
     </scm>
+
+    <modules>
+        <module>kafka-connect-s3</module>
+    </modules>
 
     <properties>
         <confluent.version>3.3.0-SNAPSHOT</confluent.version>
         <kafka.version>0.10.3.0-SNAPSHOT</kafka.version>
-        <aws.version>1.11.68</aws.version>
         <junit.version>4.12</junit.version>
         <easymock.version>3.4</easymock.version>
         <powermock.version>1.6.6</powermock.version>
-        <s3mock.version>0.1.5</s3mock.version>
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
+        <maven-assembly.version>2.6</maven-assembly.version>
     </properties>
 
     <repositories>
@@ -67,23 +70,7 @@
             <name>Confluent</name>
             <url>${confluent.maven.repo}</url>
         </repository>
-        <repository>
-            <id>findify</id>
-            <url>https://dl.bintray.com/findify/maven/</url>
-        </repository>
     </repositories>
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>com.amazonaws</groupId>
-                <artifactId>aws-java-sdk-bom</artifactId>
-                <version>${aws.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
 
     <dependencies>
         <dependency>
@@ -118,16 +105,6 @@
             <version>${confluent.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-java-sdk-s3</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.findify</groupId>
-            <artifactId>s3mock_2.11</artifactId>
-            <version>${s3mock.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>${junit.version}</version>
@@ -154,126 +131,74 @@
     </dependencies>
 
     <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>2.5.1</version>
-                <inherited>true</inherited>
-                <configuration>
-                    <source>1.7</source>
-                    <target>1.7</target>
-                    <compilerArguments>
-                        <Xlint:all/>
-                        <!-- bootstrap class path not set in conjunction with -source 1.7 -->
-                        <Xlint:-options/>
-                        <!-- serializable class ... has no definition of serialVersionUID -->
-                        <Xlint:-serial/>
-                        <!-- bad path element ".../repository/org/apache/derby/derby/10.10.2.0/derbyLocale_*.jar": no such file or directory -->
-                        <Xlint:-path/>
-                        <!--
-                        WALFile.java:[333,16] [deprecation] sync() in Syncable has been deprecated
-                        Apparently SuppressWarnings("deprecation") doesn't cover this on JDK 7
-                        -->
-                        <Xlint:-deprecation/>
-                        <!-- Needed for DataWriter.java because @SuppressWarnings("unchecked") doesn't cover this on JDK 7 -->
-                        <Xlint:-unchecked/>
-                        <Werror/>
-                    </compilerArguments>
-                    <showWarnings>true</showWarnings>
-                    <showDeprecation>false</showDeprecation>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>test-compile</id>
-                        <phase>process-test-sources</phase>
-                        <goals>
-                            <goal>testCompile</goal>
-                        </goals>
-                        <configuration>
-                            <source>1.7</source>
-                            <target>1.8</target>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <version>2.5.3</version>
-                <configuration>
-                    <descriptors>
-                        <descriptor>src/assembly/development.xml</descriptor>
-                        <descriptor>src/assembly/package.xml</descriptor>
-                    </descriptors>
-                    <attach>false</attach>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>make-assembly</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>single</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>2.18.1</version>
-                <configuration>
-                    <argLine>-Djava.awt.headless=true -XX:MaxPermSize=512m</argLine>
-                    <reuseForks>false</reuseForks>
-                    <forkCount>1</forkCount>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-checkstyle-plugin</artifactId>
-                <version>2.17</version>
-                <executions>
-                    <execution>
-                        <id>validate</id>
-                        <phase>validate</phase>
-                        <configuration>
-                            <configLocation>checkstyle/checkstyle.xml</configLocation>
-                            <encoding>UTF-8</encoding>
-                            <consoleOutput>true</consoleOutput>
-                            <failsOnError>true</failsOnError>
-                            <includeResources>false</includeResources>
-                            <includeTestResources>false</includeTestResources>
-                        </configuration>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-
-        <resources>
-            <resource>
-                <directory>src/main/resources</directory>
-                <filtering>true</filtering>
-            </resource>
-        </resources>
+        <pluginManagement>
+            <plugins>
+              <plugin>
+                  <groupId>org.apache.maven.plugins</groupId>
+                  <artifactId>maven-compiler-plugin</artifactId>
+                  <version>2.5.1</version>
+                  <configuration>
+                      <source>1.7</source>
+                      <target>1.7</target>
+                      <compilerArguments>
+                          <Xlint:all/>
+                          <!-- bootstrap class path not set in conjunction with -source 1.7 -->
+                          <Xlint:-options/>
+                          <!-- serializable class ... has no definition of serialVersionUID -->
+                          <Xlint:-serial/>
+                          <!-- bad path element ".../repository/org/apache/derby/derby/10.10.2.0/derbyLocale_*.jar": no such file or directory -->
+                          <Xlint:-path/>
+                          <!--
+                          WALFile.java:[333,16] [deprecation] sync() in Syncable has been deprecated
+                          Apparently SuppressWarnings("deprecation") doesn't cover this on JDK 7
+                          -->
+                          <Xlint:-deprecation/>
+                          <!-- Needed for DataWriter.java because @SuppressWarnings("unchecked") doesn't cover this on JDK 7 -->
+                          <Xlint:-unchecked/>
+                          <Werror/>
+                      </compilerArguments>
+                      <showWarnings>true</showWarnings>
+                      <showDeprecation>false</showDeprecation>
+                  </configuration>
+              </plugin>
+              <plugin>
+                  <groupId>org.apache.maven.plugins</groupId>
+                  <artifactId>maven-surefire-plugin</artifactId>
+                  <version>2.18.1</version>
+                  <configuration>
+                      <argLine>-Djava.awt.headless=true -XX:MaxPermSize=512m</argLine>
+                      <reuseForks>false</reuseForks>
+                      <forkCount>1</forkCount>
+                  </configuration>
+              </plugin>
+              <plugin>
+                  <groupId>org.apache.maven.plugins</groupId>
+                  <artifactId>maven-checkstyle-plugin</artifactId>
+                  <version>2.17</version>
+                  <executions>
+                      <execution>
+                          <id>validate</id>
+                          <phase>validate</phase>
+                          <configuration>
+                              <configLocation>checkstyle/checkstyle.xml</configLocation>
+                              <encoding>UTF-8</encoding>
+                              <consoleOutput>true</consoleOutput>
+                              <failsOnError>true</failsOnError>
+                              <includeResources>false</includeResources>
+                              <includeTestResources>false</includeTestResources>
+                          </configuration>
+                          <goals>
+                              <goal>check</goal>
+                          </goals>
+                      </execution>
+                  </executions>
+              </plugin>
+              <plugin>
+                  <groupId>org.apache.maven.plugins</groupId>
+                  <artifactId>maven-assembly-plugin</artifactId>
+                  <version>${maven-assembly.version}</version>
+              </plugin>
+          </plugins>
+        </pluginManagement>
     </build>
-
-    <profiles>
-        <profile>
-            <id>standalone</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <artifactId>maven-assembly-plugin</artifactId>
-                        <configuration>
-                            <descriptors>
-                                <descriptor>src/assembly/standalone.xml</descriptor>
-                            </descriptors>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
 </project>
