@@ -76,6 +76,7 @@ ifeq ($(APPLY_PATCHES),yes)
 	cat patches/series | xargs -iPATCH bash -c 'patch -p1 < patches/PATCH'
 endif
 
+# if set, skips both compilation and execution of tests
 build: apply-patches
 ifeq ($(SKIP_TESTS),yes)
 	mvn -Dmaven.test.skip=true install
