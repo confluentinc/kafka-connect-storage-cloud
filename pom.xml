@@ -57,6 +57,9 @@
     <properties>
         <confluent.version>3.2.0-SNAPSHOT</confluent.version>
         <kafka.version>0.10.2.0-SNAPSHOT</kafka.version>
+        <junit.version>4.12</junit.version>
+        <easymock.version>3.4</easymock.version>
+        <powermock.version>1.6.6</powermock.version>
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
         <maven-assembly.version>2.6</maven-assembly.version>
     </properties>
@@ -85,6 +88,45 @@
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-core</artifactId>
             <version>${confluent.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-connect-storage-format</artifactId>
+            <version>${confluent.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-connect-storage-hive</artifactId>
+            <version>${confluent.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-connect-storage-partitioner</artifactId>
+            <version>${confluent.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.easymock</groupId>
+            <artifactId>easymock</artifactId>
+            <version>${easymock.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.powermock</groupId>
+            <artifactId>powermock-module-junit4</artifactId>
+            <version>${powermock.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.powermock</groupId>
+            <artifactId>powermock-api-easymock</artifactId>
+            <version>${powermock.version}</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
