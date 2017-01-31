@@ -39,7 +39,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
   protected S3SinkConnectorConfig connectorConfig;
   protected String topicsDir;
   protected AvroData avroData;
-  protected Map<String, Object> parsedConfig = new HashMap<>();
+  protected Map<String, Object> parsedConfig;
 
   @Override
   protected Map<String, String> createProps() {
@@ -50,7 +50,12 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     props.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
     props.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, PartitionerConfig.PARTITIONER_CLASS_DEFAULT.getName());
     props.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, DefaultSchemaGenerator.class.getName());
-    props.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, "_");
+    props.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG, "int");
+    props.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, String.valueOf(TimeUnit.HOURS.toMillis(1)));
+    props.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH_");
+    props.put(PartitionerConfig.LOCALE_CONFIG, "en");
+    props.put(PartitionerConfig.TIMEZONE_CONFIG, "America/Los_Angeles");
+    props.put(HiveConfig.HIVE_CONF_DIR_CONFIG, "America/Los_Angeles");
     return props;
   }
 
@@ -62,25 +67,13 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     int schemaCacheSize = connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG);
     avroData = new AvroData(schemaCacheSize);
-    parsedConfig = createDefaultConfig();
+    parsedConfig = new HashMap<>(connectorConfig.plainValues());
   }
 
   @After
   @Override
   public void tearDown() throws Exception {
     super.tearDown();
-  }
-
-  private Map<String, Object> createDefaultConfig() {
-    Map<String, Object> config = new HashMap<>();
-    config.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG, "int");
-    config.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.HOURS.toMillis(1));
-    config.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH_");
-    config.put(PartitionerConfig.LOCALE_CONFIG, "en");
-    config.put(PartitionerConfig.TIMEZONE_CONFIG, "America/Los_Angeles");
-    config.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, DefaultSchemaGenerator.class);
-    config.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, "_");
-    return config;
   }
 
 }

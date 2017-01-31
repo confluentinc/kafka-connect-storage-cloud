@@ -89,7 +89,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   public void testWriteRecord() throws Exception {
     setUp();
     partitioner = new DefaultPartitioner<>();
-    partitioner.configure(rawConfig);
+    partitioner.configure(parsedConfig);
     s3.createBucket(S3_TEST_BUCKET_NAME);
     assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
@@ -134,7 +134,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   public void testRecoveryWithPartialFile() throws Exception {
     setUp();
     partitioner = new DefaultPartitioner<>();
-    partitioner.configure(rawConfig);
+    partitioner.configure(parsedConfig);
     s3.createBucket(S3_TEST_BUCKET_NAME);
     assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
 
@@ -190,7 +190,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10000");
     setUp();
     partitioner = new DefaultPartitioner<>();
-    partitioner.configure(rawConfig);
+    partitioner.configure(parsedConfig);
     s3.createBucket(S3_TEST_BUCKET_NAME);
     assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
