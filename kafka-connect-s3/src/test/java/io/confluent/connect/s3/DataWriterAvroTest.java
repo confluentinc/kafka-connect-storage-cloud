@@ -27,6 +27,7 @@ import org.junit.After;
 import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -48,11 +49,10 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   private static final String ZERO_PAD_FMT = "%010d";
 
   private final String extension = ".avro";
-  private S3Storage storage;
-
-  private S3StorageConfig storageConfig;
   private AWSCredentials credentials;
-  private AmazonS3Client s3;
+  protected S3StorageConfig storageConfig;
+  protected S3Storage storage;
+  protected AmazonS3Client s3;
   Partitioner<FieldSchema> partitioner;
   S3SinkTask task;
   Map<String, String> localProps = new HashMap<>();
@@ -99,19 +99,10 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     task.close(context.assignment());
     task.stop();
 
-    // Last file doesn't satisfy size requirement and gets discarded on close
     long[] validOffsets = {0, 3, 6};
-    for (int i = 1; i < validOffsets.length; ++i) {
-      long startOffset = validOffsets[i - 1];
-      long size = validOffsets[i] - startOffset;
-
-      Collection<Object> records = readRecords(topicsDir, getDirectory(), TOPIC_PARTITION, startOffset, extension,
-                                               ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
-      assertEquals(size, records.size());
-      verifyContents(sinkRecords, records);
-
-    }
+    verify(sinkRecords, validOffsets);
   }
+
 
   @Test
   public void testRecoveryWithPartialFile() throws Exception {
@@ -132,17 +123,8 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     task.close(context.assignment());
     task.stop();
 
-    // Last file doesn't satisfy size requirement and gets discarded on close
     long[] validOffsets = {0, 3, 6};
-    for (int i = 1; i < validOffsets.length; ++i) {
-      long startOffset = validOffsets[i - 1];
-      long size = validOffsets[i] - startOffset;
-
-      Collection<Object> records = readRecords(topicsDir, getDirectory(), TOPIC_PARTITION, startOffset, extension,
-                                               ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
-      assertEquals(size, records.size());
-      verifyContents(sinkRecords, records);
-    }
+    verify(sinkRecords, validOffsets);
   }
 
   @Test
@@ -159,17 +141,8 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     task.close(context.assignment());
     task.stop();
 
-    // Last file doesn't satisfy size requirement and gets discarded on close
     long[] validOffsets = {0, 10000};
-    for (int i = 1; i < validOffsets.length; ++i) {
-      long startOffset = validOffsets[i - 1];
-      long size = validOffsets[i] - startOffset;
-
-      Collection<Object> records = readRecords(topicsDir, getDirectory(), TOPIC_PARTITION, startOffset, extension,
-                                               ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
-      assertEquals(size, records.size());
-      verifyContents(sinkRecords, records);
-    }
+    verify(sinkRecords, validOffsets);
   }
 
   @Test
@@ -223,7 +196,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
    * @param size the number of records to return.
    * @return
    */
-  private List<SinkRecord> createRecords(int size) {
+  protected List<SinkRecord> createRecords(int size) {
     return createRecords(size, 0);
   }
 
@@ -234,7 +207,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
    * @param startOffset the starting offset.
    * @return the list of records.
    */
-  private List<SinkRecord> createRecords(int size, long startOffset) {
+  protected List<SinkRecord> createRecords(int size, long startOffset) {
     String key = "key";
     Schema schema = createSchema();
     Struct record = createRecord(schema);
@@ -246,7 +219,12 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     return sinkRecords;
   }
 
-  private void verifyContents(List<SinkRecord> expectedRecords, Collection<Object> records) {
+  protected String getDirectory() {
+    String encodedPartition = "partition=" + String.valueOf(PARTITION);
+    return partitioner.generatePartitionedPath(TOPIC, encodedPartition);
+  }
+
+  protected void verifyContents(List<SinkRecord> expectedRecords, Collection<Object> records) {
     int i = 0;
     for (Object avroRecord : records) {
       Schema schema = expectedRecords.get(i).valueSchema();
@@ -255,9 +233,18 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     }
   }
 
-  private String getDirectory() {
-    String encodedPartition = "partition=" + String.valueOf(PARTITION);
-    return partitioner.generatePartitionedPath(TOPIC, encodedPartition);
+  protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets) throws IOException {
+    // Last file doesn't satisfy size requirement and gets discarded on close
+    for (int i = 1; i < validOffsets.length; ++i) {
+      long startOffset = validOffsets[i - 1];
+      long size = validOffsets[i] - startOffset;
+
+      Collection<Object> records = readRecords(topicsDir, getDirectory(), TOPIC_PARTITION, startOffset, extension,
+                                               ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
+      assertEquals(size, records.size());
+      verifyContents(sinkRecords, records);
+
+    }
   }
 }
 
