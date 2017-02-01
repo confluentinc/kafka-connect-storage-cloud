@@ -19,7 +19,6 @@ package io.confluent.connect.s3;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AnonymousAWSCredentials;
 import com.amazonaws.services.s3.AmazonS3Client;
-import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.connect.data.Schema;
@@ -126,7 +125,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, "%02d"));
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, "%02d"));
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, "%02d"));
-    verify(expectedFiles, records, schema);
+    verify(expectedFiles, 3, schema, records);
   }
 
   @Test
@@ -164,8 +163,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix2, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix3, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
 
-    verify(expectedFiles, records, schema);
-    verify(expectedFiles, records, schema);
+    verify(expectedFiles, 3, schema, records);
+    verify(expectedFiles, 3, schema, records);
   }
 
   @Test
@@ -206,7 +205,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
     }
 
-    verify(expectedFiles, records, schema);
+    verify(expectedFiles, 3, schema, records);
   }
 
   private Struct[] createRecords(Schema schema) {
@@ -245,42 +244,21 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     return sinkRecords;
   }
 
-  private void verify(Set<String> expectedKeys, Struct[] records, Schema schema) throws IOException {
-    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null);
+  private void verify(Set<String> expectedFileKeys, int expectedSize, Schema schema, Struct[] records) throws IOException {
+    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
     int index = 0;
     for (S3ObjectSummary summary : summaries) {
-      String key = summary.getKey();
-      System.out.println("Full : " + key);
-      assertTrue(expectedKeys.contains(key));
-      System.out.println("Object size for now: " + summary.getSize());
-      /*
-      // Import the reading method from the other tests.
-      assertEquals(3, avroRecords.size());
-      for (Object avroRecord: avroRecords) {
+      String fileKey = summary.getKey();
+      assertTrue(expectedFileKeys.contains(fileKey));
+
+      Collection<Object> actualRecords = readRecords(S3_TEST_BUCKET_NAME, fileKey, s3);
+      assertEquals(expectedSize, actualRecords.size());
+      for (Object avroRecord : actualRecords) {
         assertEquals(avroData.fromConnectData(schema, records[index]), avroRecord);
       }
-      */
       ++index;
     }
-    assertEquals(expectedKeys.size(), summaries.size());
+    assertEquals(expectedFileKeys.size(), summaries.size());
   }
 
-  private List<S3ObjectSummary> listObjects(String bucket, String prefix) {
-    List<S3ObjectSummary> objects = new ArrayList<>();
-    ObjectListing listing;
-
-    if (prefix == null) {
-      listing = s3.listObjects(bucket);
-    } else {
-      listing = s3.listObjects(bucket, prefix);
-    }
-
-    objects.addAll(listing.getObjectSummaries());
-    while (listing.isTruncated()) {
-      listing = s3.listNextBatchOfObjects(listing);
-      objects.addAll(listing.getObjectSummaries());
-    }
-
-    return objects;
-  }
 }

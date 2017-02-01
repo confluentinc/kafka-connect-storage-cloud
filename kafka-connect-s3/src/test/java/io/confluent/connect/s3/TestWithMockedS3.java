@@ -16,19 +16,34 @@
 
 package io.confluent.connect.s3;
 
+import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.ObjectListing;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.findify.s3mock.S3Mock;
+import org.apache.kafka.common.TopicPartition;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.TemporaryFolder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import io.confluent.connect.s3.format.avro.AvroUtils;
+import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 
 public class TestWithMockedS3 extends S3SinkConnectorTestBase {
+
+  private static final Logger log = LoggerFactory.getLogger(TestWithMockedS3.class);
 
   protected S3Mock s3mock;
   protected String port;
@@ -61,4 +76,36 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
     s3mock.stop();
   }
 
+  public static List<S3ObjectSummary> listObjects(String bucket, String prefix, AmazonS3Client s3) {
+    List<S3ObjectSummary> objects = new ArrayList<>();
+    ObjectListing listing;
+
+    if (prefix == null) {
+      listing = s3.listObjects(bucket);
+    } else {
+      listing = s3.listObjects(bucket, prefix);
+    }
+
+    objects.addAll(listing.getObjectSummaries());
+    while (listing.isTruncated()) {
+      listing = s3.listNextBatchOfObjects(listing);
+      objects.addAll(listing.getObjectSummaries());
+    }
+
+    return objects;
+  }
+
+  public static Collection<Object> readRecords(String topicsDir, String directory, TopicPartition tp, long startOffset,
+                                               String extension, String zeroPadFormat, String bucketName,
+                                               AmazonS3Client s3) throws IOException {
+      String fileKey = FileUtils.fileKeyToCommit(topicsDir, directory, tp, startOffset, extension, zeroPadFormat);
+      return readRecords(bucketName, fileKey, s3);
+  }
+
+  public static Collection<Object> readRecords(String bucketName, String fileKey, AmazonS3Client s3) throws IOException {
+      log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
+      InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
+
+      return AvroUtils.getRecords(in);
+  }
 }
