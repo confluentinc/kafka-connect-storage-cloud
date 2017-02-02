@@ -128,7 +128,7 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
     };
 
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
-               .withAccelerateModeEnabled(config.getBoolean(S3SinkConnectorConfig.ACCELERATED_MODE_CONFIG))
+               .withAccelerateModeEnabled(config.getBoolean(S3SinkConnectorConfig.WAN_MODE_CONFIG))
                .withPathStyleAccessEnabled(true)
                .withCredentials(provider);
 

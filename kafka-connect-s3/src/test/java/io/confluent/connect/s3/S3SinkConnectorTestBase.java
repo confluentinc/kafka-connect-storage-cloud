@@ -16,9 +16,6 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.AnonymousAWSCredentials;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.s3.AmazonS3;
@@ -35,7 +32,6 @@ import io.confluent.connect.storage.StorageSinkTestBase;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.hive.schema.DefaultSchemaGenerator;
-import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
 public class S3SinkConnectorTestBase extends StorageSinkTestBase {
@@ -85,7 +81,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
 
   public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
-               .withAccelerateModeEnabled(config.getBoolean(S3SinkConnectorConfig.ACCELERATED_MODE_CONFIG))
+               .withAccelerateModeEnabled(config.getBoolean(S3SinkConnectorConfig.WAN_MODE_CONFIG))
                .withPathStyleAccessEnabled(true)
                .withCredentials(new DefaultAWSCredentialsProviderChain());
 

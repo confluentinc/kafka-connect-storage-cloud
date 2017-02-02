@@ -28,7 +28,7 @@ import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.storage.Storage;
 import io.confluent.connect.storage.common.util.StringUtils;
 
-import static io.confluent.connect.s3.S3SinkConnectorConfig.ACCELERATED_MODE_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
 
 /**
@@ -56,7 +56,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
   public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
-                                        .withAccelerateModeEnabled(config.getBoolean(ACCELERATED_MODE_CONFIG))
+                                        .withAccelerateModeEnabled(config.getBoolean(WAN_MODE_CONFIG))
                                         .withPathStyleAccessEnabled(true)
                                         .withCredentials(config.getCredentialsProvider());
 

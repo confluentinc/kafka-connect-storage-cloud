@@ -54,16 +54,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String PART_SIZE_CONFIG = "s3.part.size";
   public static final int PART_SIZE_DEFAULT = 100 * 1024 * 1024;
 
-  // AWS Client group
-  public static final String ACCELERATED_MODE_CONFIG = "aws.client.accelerated.mode";
-  private static final boolean ACCELERATED_MODE_DEFAULT = false;
+  public static final String WAN_MODE_CONFIG = "s3.wan.mode";
+  private static final boolean WAN_MODE_DEFAULT = false;
 
-  // AWS General group
-  public static final String CREDENTIALS_PROVIDER_CLASS_CONFIG = "aws.credentials.provider.class";
+  public static final String CREDENTIALS_PROVIDER_CLASS_CONFIG = "s3.credentials.provider.class";
   public static final Class<? extends AWSCredentialsProvider> CREDENTIALS_PROVIDER_CLASS_DEFAULT =
       DefaultAWSCredentialsProviderChain.class;
 
-  public static final String REGION_CONFIG = "aws.region";
+  public static final String REGION_CONFIG = "s3.region";
   public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
 
   private final String name;
@@ -108,26 +106,16 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         ++orderInGroup,
                         Width.MEDIUM,
                         "S3 Server Side Encryption Algorithm");
-    }
 
-    {
-      final String group = "AWS S3-specific";
-      int orderInGroup = 0;
-
-      CONFIG_DEF.define(ACCELERATED_MODE_CONFIG,
+      CONFIG_DEF.define(WAN_MODE_CONFIG,
                         Type.BOOLEAN,
-                        ACCELERATED_MODE_DEFAULT,
+                        WAN_MODE_DEFAULT,
                         Importance.MEDIUM,
                         "Use S3 accelerated endpoint.",
                         group,
                         ++orderInGroup,
                         Width.LONG,
                         "S3 accelerated endpoint enabled.");
-    }
-
-    {
-      final String group = "AWS General";
-      int orderInGroup = 0;
 
       CONFIG_DEF.define(REGION_CONFIG,
                         Type.STRING,
@@ -144,9 +132,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       CONFIG_DEF.define(CREDENTIALS_PROVIDER_CLASS_CONFIG,
                         Type.CLASS,
                         CREDENTIALS_PROVIDER_CLASS_DEFAULT,
-                        Importance.MEDIUM,
-                        "The credentials provider or provider chain to use to authenticate to AWS. By default the "
-                        + " connector will use the 'DefaultAWSCredentialsProviderChain'.",
+                        Importance.LOW,
+                        "Credentials provider or provider chain to use for authentication to AWS. By default the "
+                        + " connector uses 'DefaultAWSCredentialsProviderChain'.",
                         group,
                         ++orderInGroup,
                         Width.LONG,
