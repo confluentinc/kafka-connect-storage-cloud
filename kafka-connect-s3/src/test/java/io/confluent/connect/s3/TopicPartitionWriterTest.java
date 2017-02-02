@@ -16,9 +16,7 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AnonymousAWSCredentials;
-import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.connect.data.Schema;
@@ -38,7 +36,6 @@ import java.util.Set;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.s3.storage.S3StorageConfig;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.s3.util.TimeUtils;
 import io.confluent.connect.storage.format.Format;
@@ -57,13 +54,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   // The default
   private static final String ZERO_PAD_FMT = "%010d";
 
-  private RecordWriterProvider<S3StorageConfig> writerProvider;
+  private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private S3Storage storage;
   private static String extension;
 
-  private S3StorageConfig storageConfig;
-  private AWSCredentials credentials;
-  private AmazonS3Client s3;
+  private AmazonS3 s3;
   Map<String, String> localProps = new HashMap<>();
 
   @Override
@@ -75,15 +70,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   public void setUp() throws Exception {
     super.setUp();
-    credentials = new AnonymousAWSCredentials();
-    storageConfig = new S3StorageConfig(connectorConfig, credentials);
 
-    s3 = new AmazonS3Client(storageConfig.provider(), storageConfig.clientConfig(), storageConfig.collector());
-    s3.setEndpoint(S3_TEST_URL);
+    s3 = newS3Client(connectorConfig);
+    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
 
-    storage = new S3Storage(storageConfig, url, S3_TEST_BUCKET_NAME, s3);
-
-    Format<S3StorageConfig, String> format = new AvroFormat(storage, avroData);
+    Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage, avroData);
     writerProvider = format.getRecordWriterProvider();
     extension = writerProvider.getExtension();
   }

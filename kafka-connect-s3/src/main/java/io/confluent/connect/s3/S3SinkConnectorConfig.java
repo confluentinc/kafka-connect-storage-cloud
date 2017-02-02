@@ -64,7 +64,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       DefaultAWSCredentialsProviderChain.class;
 
   public static final String REGION_CONFIG = "aws.region";
-  public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.name();
+  public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
 
   private final String name;
 

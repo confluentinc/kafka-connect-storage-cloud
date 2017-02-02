@@ -36,7 +36,6 @@ import java.util.Set;
 
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.s3.storage.S3StorageConfig;
 import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.StorageFactory;
 import io.confluent.connect.storage.common.StorageCommonConfig;
@@ -51,11 +50,10 @@ public class S3SinkTask extends SinkTask {
   private S3SinkConnectorConfig connectorConfig;
   private String url;
   private S3Storage storage;
-  private S3StorageConfig storageConfig;
   private final Set<TopicPartition> assignment;
   private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
   private Partitioner<FieldSchema> partitioner;
-  private RecordWriterProvider<S3StorageConfig> writerProvider;
+  private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private AvroData avroData;
 
   /**
@@ -77,7 +75,6 @@ public class S3SinkTask extends SinkTask {
     this.partitioner = partitioner;
     this.avroData = avroData;
 
-    storageConfig = new S3StorageConfig(connectorConfig);
     url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
     writerProvider = newFormat().getRecordWriterProvider();
 
@@ -88,16 +85,15 @@ public class S3SinkTask extends SinkTask {
   public void start(Map<String, String> props) {
     try {
       connectorConfig = new S3SinkConnectorConfig(props);
-      storageConfig = new S3StorageConfig(connectorConfig);
       url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
 
       @SuppressWarnings("unchecked")
       Class<? extends S3Storage> storageClass =
           (Class<? extends S3Storage>)
               connectorConfig.getClass(StorageCommonConfig.STORAGE_CLASS_CONFIG);
-      storage = StorageFactory.createStorage(storageClass, S3StorageConfig.class, storageConfig, url);
+      storage = StorageFactory.createStorage(storageClass, S3SinkConnectorConfig.class, connectorConfig, url);
       if (!storage.bucketExists()) {
-        throw new DataException("No-existent S3 bucket: " + storageConfig.bucket());
+        throw new DataException("No-existent S3 bucket: " + connectorConfig.getBucketName());
       }
 
       avroData = new AvroData(connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG));
@@ -131,11 +127,11 @@ public class S3SinkTask extends SinkTask {
   }
 
   @SuppressWarnings("unchecked")
-  private Format<S3StorageConfig, String> newFormat() throws ClassNotFoundException, IllegalAccessException,
+  private Format<S3SinkConnectorConfig, String> newFormat() throws ClassNotFoundException, IllegalAccessException,
                                                              InstantiationException, InvocationTargetException,
                                                              NoSuchMethodException {
-    Class<Format<S3StorageConfig, String>> formatClass =
-        (Class<Format<S3StorageConfig, String>>) connectorConfig.getClass(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG);
+    Class<Format<S3SinkConnectorConfig, String>> formatClass =
+        (Class<Format<S3SinkConnectorConfig, String>>) connectorConfig.getClass(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG);
     return formatClass.getConstructor(S3Storage.class, AvroData.class).newInstance(storage, avroData);
   }
 

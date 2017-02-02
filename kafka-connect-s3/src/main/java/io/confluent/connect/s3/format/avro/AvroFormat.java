@@ -17,14 +17,14 @@
 package io.confluent.connect.s3.format.avro;
 
 import io.confluent.connect.avro.AvroData;
+import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.s3.storage.S3StorageConfig;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.format.SchemaFileReader;
 import io.confluent.connect.storage.hive.HiveFactory;
 
-public class AvroFormat implements Format<S3StorageConfig, String> {
+public class AvroFormat implements Format<S3SinkConnectorConfig, String> {
   private final S3Storage storage;
   private final AvroData avroData;
 
@@ -34,12 +34,12 @@ public class AvroFormat implements Format<S3StorageConfig, String> {
   }
 
   @Override
-  public RecordWriterProvider<S3StorageConfig> getRecordWriterProvider() {
+  public RecordWriterProvider<S3SinkConnectorConfig> getRecordWriterProvider() {
     return new AvroRecordWriterProvider(storage, avroData);
   }
 
   @Override
-  public SchemaFileReader<S3StorageConfig, String> getSchemaFileReader() {
+  public SchemaFileReader<S3SinkConnectorConfig, String> getSchemaFileReader() {
     throw new UnsupportedOperationException("Reading schemas from S3 is not currently supported");
   }
 

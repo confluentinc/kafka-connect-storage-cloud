@@ -19,7 +19,7 @@ package io.confluent.connect.s3.storage;
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.event.ProgressEvent;
 import com.amazonaws.event.ProgressListener;
-import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
 import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
@@ -36,6 +36,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
 
 /**
@@ -43,7 +44,7 @@ import io.confluent.connect.storage.common.util.StringUtils;
  */
 public class S3OutputStream extends OutputStream {
   private static final Logger log = LoggerFactory.getLogger(S3OutputStream.class);
-  private final AmazonS3Client s3;
+  private final AmazonS3 s3;
   private final String bucket;
   private final String key;
   private final String ssea;
@@ -53,12 +54,12 @@ public class S3OutputStream extends OutputStream {
   private ByteBuffer buffer;
   private MultipartUpload multiPartUpload;
 
-  public S3OutputStream(String key, S3StorageConfig conf, AmazonS3Client s3) {
+  public S3OutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
     this.s3 = s3;
-    this.bucket = conf.bucket();
+    this.bucket = conf.getBucketName();
     this.key = key;
-    this.ssea = conf.ssea();
-    this.partSize = conf.partSize();
+    this.ssea = conf.getSSEA();
+    this.partSize = conf.getPartSize();
     this.closed = false;
     this.buffer = ByteBuffer.allocate(this.partSize);
     this.progressListener = new ConnectProgressListener();

@@ -36,7 +36,6 @@ import java.util.Map;
 import java.util.Queue;
 
 import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.s3.storage.S3StorageConfig;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
@@ -63,8 +62,7 @@ public class TopicPartitionWriter {
   private final long rotateIntervalMs;
   private final long rotateScheduleIntervalMs;
   private long nextScheduledRotate;
-  private final RecordWriterProvider<S3StorageConfig> writerProvider;
-  private final S3StorageConfig conf;
+  private final RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private long offset;
   private final Map<String, Long> startOffsets;
   private final Map<String, Long> offsets;
@@ -80,17 +78,16 @@ public class TopicPartitionWriter {
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
-                              RecordWriterProvider<S3StorageConfig> writerProvider,
+                              RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
                               Partitioner<FieldSchema> partitioner,
                               S3SinkConnectorConfig connectorConfig,
                               SinkTaskContext context) {
-    this(tp, storage, writerProvider, partitioner, connectorConfig, context, Time.SYSTEM);
+    this(tp, writerProvider, partitioner, connectorConfig, context, Time.SYSTEM);
   }
 
   // Visible for testing
   TopicPartitionWriter(TopicPartition tp,
-                       S3Storage storage,
-                       RecordWriterProvider<S3StorageConfig> writerProvider,
+                       RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
                        Partitioner<FieldSchema> partitioner,
                        S3SinkConnectorConfig connectorConfig,
                        SinkTaskContext context,
@@ -100,7 +97,6 @@ public class TopicPartitionWriter {
     this.context = context;
     this.writerProvider = writerProvider;
     this.partitioner = partitioner;
-    this.conf = storage.conf();
 
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
@@ -289,7 +285,7 @@ public class TopicPartitionWriter {
       return writers.get(encodedPartition);
     }
     String commitFilename = getCommitFilename(encodedPartition);
-    RecordWriter writer = writerProvider.getRecordWriter(conf, commitFilename);
+    RecordWriter writer = writerProvider.getRecordWriter(null, commitFilename);
     writers.put(encodedPartition, writer);
     return writer;
   }

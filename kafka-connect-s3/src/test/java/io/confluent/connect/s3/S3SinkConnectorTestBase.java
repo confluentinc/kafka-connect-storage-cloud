@@ -16,6 +16,13 @@
 
 package io.confluent.connect.s3;
 
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.AnonymousAWSCredentials;
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.client.builder.AwsClientBuilder;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import org.junit.After;
 
 import java.util.HashMap;
@@ -74,6 +81,19 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
   @Override
   public void tearDown() throws Exception {
     super.tearDown();
+  }
+
+  public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
+    AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
+               .withAccelerateModeEnabled(config.getBoolean(S3SinkConnectorConfig.ACCELERATED_MODE_CONFIG))
+               .withPathStyleAccessEnabled(true)
+               .withCredentials(new DefaultAWSCredentialsProviderChain());
+
+    builder = url == null ?
+                  builder.withRegion(config.getString(S3SinkConnectorConfig.REGION_CONFIG)) :
+                  builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(url, ""));
+
+    return builder.build();
   }
 
 }
