@@ -89,7 +89,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       CONFIG_DEF.define(PART_SIZE_CONFIG,
                         Type.INT,
                         PART_SIZE_DEFAULT,
-                        ConfigDef.Range.between(1, Integer.MAX_VALUE),
+                        new PartRange(),
                         Importance.HIGH,
                         "The Part Size in S3 Multi-part Uploads.",
                         group,
@@ -220,6 +220,32 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       map.putAll(config.values());
     }
     return map;
+  }
+
+  private static class PartRange implements ConfigDef.Validator {
+    // S3 specific limit
+    final int min = 5 * 1024 * 1024;
+    // Connector specific
+    final int max = Integer.MAX_VALUE;
+
+    @Override
+    public void ensureValid(String name, Object value) {
+      if (value == null) {
+        throw new ConfigException(name, value, "Part size must be non-null");
+      }
+      Number number = (Number) value;
+      int min = 5 * 1024 * 1024;
+      if (number.longValue() < min) {
+        throw new ConfigException(name, value, "Part size must be at least: " + min + " bytes (5MB)");
+      }
+      if (number.longValue() > max) {
+        throw new ConfigException(name, value, "Part size must be no more: " + Integer.MAX_VALUE + " bytes (~2GB)");
+      }
+    }
+
+    public String toString() {
+      return "[" + min + ",...," + max + "]";
+    }
   }
 
   private static class RegionRecommender implements ConfigDef.Recommender {
