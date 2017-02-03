@@ -304,7 +304,7 @@ public class TopicPartitionWriter {
   }
 
   private String fileKey(String topicsPrefix, String keyPrefix, String name) {
-    return dirDelim + topicsPrefix + dirDelim + keyPrefix + dirDelim + name;
+    return topicsPrefix + dirDelim + keyPrefix + dirDelim + name;
   }
 
   private String fileKeyToCommit(String dirPrefix, long startOffset) {
@@ -348,10 +348,6 @@ public class TopicPartitionWriter {
       return;
     }
 
-    long startOffset = startOffsets.get(encodedPartition);
-    String prefix = getDirectoryPrefix(encodedPartition);
-    String file = fileKeyToCommit(prefix, startOffset);
-
     if (writers.containsKey(encodedPartition)) {
       RecordWriter writer = writers.get(encodedPartition);
       writer.close();
@@ -363,10 +359,10 @@ public class TopicPartitionWriter {
     context.offset(tp, commitOffset);
 
     startOffsets.remove(encodedPartition);
-    commitFiles.remove(encodedPartition);
+    String filename = commitFiles.remove(encodedPartition);
     offset = -1L;
     recordCounter = 0;
-    log.info("Committed {} for {}", file, tp);
+    log.info("Committed {} for {}", filename, tp);
   }
 
   private void setRetryTimeout(long timeoutMs) {
