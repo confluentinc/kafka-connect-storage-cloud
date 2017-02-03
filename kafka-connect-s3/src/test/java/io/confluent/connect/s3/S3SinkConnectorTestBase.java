@@ -16,6 +16,10 @@
 
 package io.confluent.connect.s3;
 
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.client.builder.AwsClientBuilder;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import org.junit.After;
 
 import java.util.HashMap;
@@ -28,7 +32,6 @@ import io.confluent.connect.storage.StorageSinkTestBase;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.hive.schema.DefaultSchemaGenerator;
-import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
 public class S3SinkConnectorTestBase extends StorageSinkTestBase {
@@ -74,6 +77,19 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
   @Override
   public void tearDown() throws Exception {
     super.tearDown();
+  }
+
+  public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
+    AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
+               .withAccelerateModeEnabled(config.getBoolean(S3SinkConnectorConfig.WAN_MODE_CONFIG))
+               .withPathStyleAccessEnabled(true)
+               .withCredentials(new DefaultAWSCredentialsProviderChain());
+
+    builder = url == null ?
+                  builder.withRegion(config.getString(S3SinkConnectorConfig.REGION_CONFIG)) :
+                  builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(url, ""));
+
+    return builder.build();
   }
 
 }

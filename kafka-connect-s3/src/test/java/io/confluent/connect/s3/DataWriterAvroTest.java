@@ -17,8 +17,7 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AnonymousAWSCredentials;
-import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.AmazonS3;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
@@ -36,7 +35,6 @@ import java.util.Map;
 
 import io.confluent.connect.s3.format.avro.AvroUtils;
 import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.s3.storage.S3StorageConfig;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.Partitioner;
@@ -50,9 +48,8 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
 
   private final String extension = ".avro";
   private AWSCredentials credentials;
-  protected S3StorageConfig storageConfig;
   protected S3Storage storage;
-  protected AmazonS3Client s3;
+  protected AmazonS3 s3;
   Partitioner<FieldSchema> partitioner;
   S3SinkTask task;
   Map<String, String> localProps = new HashMap<>();
@@ -67,13 +64,10 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   //@Before should be ommitted in order to be able to add properties per test.
   public void setUp() throws Exception {
     super.setUp();
-    credentials = new AnonymousAWSCredentials();
-    storageConfig = new S3StorageConfig(connectorConfig, credentials);
 
-    s3 = new AmazonS3Client(storageConfig.provider(), storageConfig.clientConfig(), storageConfig.collector());
-    s3.setEndpoint(S3_TEST_URL);
+    s3 = newS3Client(connectorConfig);
 
-    storage = new S3Storage(storageConfig, url, S3_TEST_BUCKET_NAME, s3);
+    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
 
     partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);

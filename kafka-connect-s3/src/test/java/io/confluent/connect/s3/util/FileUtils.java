@@ -23,7 +23,7 @@ public class FileUtils {
   public static final String TEST_DIRECTORY_DELIM = "_";
 
   public static String fileKey(String topicsPrefix, String keyPrefix, String name) {
-    return TEST_DIRECTORY_DELIM + topicsPrefix + TEST_DIRECTORY_DELIM + keyPrefix + TEST_DIRECTORY_DELIM + name;
+    return topicsPrefix + TEST_DIRECTORY_DELIM + keyPrefix + TEST_DIRECTORY_DELIM + name;
   }
 
   public static String fileKeyToCommit(String topicsPrefix, String dirPrefix, TopicPartition tp, long startOffset,

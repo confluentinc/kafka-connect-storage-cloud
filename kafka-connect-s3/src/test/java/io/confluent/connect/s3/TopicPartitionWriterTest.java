@@ -16,9 +16,7 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AnonymousAWSCredentials;
-import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.connect.data.Schema;
@@ -26,19 +24,19 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.s3.storage.S3StorageConfig;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.s3.util.TimeUtils;
 import io.confluent.connect.storage.format.Format;
@@ -50,20 +48,19 @@ import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 
-import static junit.framework.TestCase.assertTrue;
+import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 
 public class TopicPartitionWriterTest extends TestWithMockedS3 {
   // The default
   private static final String ZERO_PAD_FMT = "%010d";
 
-  private RecordWriterProvider<S3StorageConfig> writerProvider;
+  private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private S3Storage storage;
   private static String extension;
 
-  private S3StorageConfig storageConfig;
-  private AWSCredentials credentials;
-  private AmazonS3Client s3;
+  private AmazonS3 s3;
   Map<String, String> localProps = new HashMap<>();
 
   @Override
@@ -75,15 +72,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   public void setUp() throws Exception {
     super.setUp();
-    credentials = new AnonymousAWSCredentials();
-    storageConfig = new S3StorageConfig(connectorConfig, credentials);
 
-    s3 = new AmazonS3Client(storageConfig.provider(), storageConfig.clientConfig(), storageConfig.collector());
-    s3.setEndpoint(S3_TEST_URL);
+    s3 = newS3Client(connectorConfig);
+    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
 
-    storage = new S3Storage(storageConfig, url, S3_TEST_BUCKET_NAME, s3);
-
-    Format<S3StorageConfig, String> format = new AvroFormat(storage, avroData);
+    Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage, avroData);
     writerProvider = format.getRecordWriterProvider();
     extension = writerProvider.getExtension();
   }
@@ -121,7 +114,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     topicPartitionWriter.close();
 
     String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
-    Set<String> expectedFiles = new HashSet<>();
+    List<String> expectedFiles = new ArrayList<>();
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, "%02d"));
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, "%02d"));
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, "%02d"));
@@ -158,7 +151,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String dirPrefix2 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(17));
     String dirPrefix3 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(18));
 
-    Set<String> expectedFiles = new HashSet<>();
+    List<String> expectedFiles = new ArrayList<>();
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix2, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix3, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
@@ -200,11 +193,10 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String encodedPartition = TimeUtils.encodeTimestamp(partitionDurationMs, pathFormat, timeZoneString, timestamp);
 
     String dirPrefix = partitioner.generatePartitionedPath(TOPIC, encodedPartition);
-    Set<String> expectedFiles = new HashSet<>();
+    List<String> expectedFiles = new ArrayList<>();
     for (int i : new int[]{0, 3, 6}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
     }
-
     verify(expectedFiles, 3, schema, records);
   }
 
@@ -244,13 +236,20 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     return sinkRecords;
   }
 
-  private void verify(Set<String> expectedFileKeys, int expectedSize, Schema schema, Struct[] records) throws IOException {
+  private void verify(List<String> expectedFileKeys, int expectedSize, Schema schema, Struct[] records) throws IOException {
     List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
-    int index = 0;
+    List<String> actualFiles = new ArrayList<>();
     for (S3ObjectSummary summary : summaries) {
       String fileKey = summary.getKey();
-      assertTrue(expectedFileKeys.contains(fileKey));
+      actualFiles.add(fileKey);
+    }
 
+    Collections.sort(actualFiles);
+    Collections.sort(expectedFileKeys);
+    assertThat(actualFiles, is(expectedFileKeys));
+
+    int index = 0;
+    for (String fileKey : actualFiles) {
       Collection<Object> actualRecords = readRecords(S3_TEST_BUCKET_NAME, fileKey, s3);
       assertEquals(expectedSize, actualRecords.size());
       for (Object avroRecord : actualRecords) {
@@ -258,7 +257,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       }
       ++index;
     }
-    assertEquals(expectedFileKeys.size(), summaries.size());
   }
 
 }

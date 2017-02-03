@@ -20,7 +20,6 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.After;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
@@ -33,7 +32,6 @@ import java.util.List;
 
 import io.confluent.connect.s3.format.avro.AvroUtils;
 import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.s3.storage.S3StorageConfig;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.StorageFactory;
 
@@ -52,8 +50,8 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
   public void setUp() throws Exception {
     super.setUp();
     Capture<Class<S3Storage>> capturedStorage = EasyMock.newCapture();
-    Capture<Class<S3StorageConfig>> capturedStorageConf = EasyMock.newCapture();
-    Capture<S3StorageConfig> capturedConf = EasyMock.newCapture();
+    Capture<Class<S3SinkConnectorConfig>> capturedStorageConf = EasyMock.newCapture();
+    Capture<S3SinkConnectorConfig> capturedConf = EasyMock.newCapture();
     Capture<String> capturedUrl = EasyMock.newCapture();
     PowerMock.mockStatic(StorageFactory.class);
     EasyMock.expect(StorageFactory.createStorage(EasyMock.capture(capturedStorage),

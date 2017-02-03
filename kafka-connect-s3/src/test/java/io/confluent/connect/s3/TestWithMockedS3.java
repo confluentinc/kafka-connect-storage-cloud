@@ -16,13 +16,17 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.AnonymousAWSCredentials;
+import com.amazonaws.client.builder.AwsClientBuilder;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.findify.s3mock.S3Mock;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.After;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
@@ -76,7 +80,7 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
     s3mock.stop();
   }
 
-  public static List<S3ObjectSummary> listObjects(String bucket, String prefix, AmazonS3Client s3) {
+  public static List<S3ObjectSummary> listObjects(String bucket, String prefix, AmazonS3 s3) {
     List<S3ObjectSummary> objects = new ArrayList<>();
     ObjectListing listing;
 
@@ -97,15 +101,42 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
 
   public static Collection<Object> readRecords(String topicsDir, String directory, TopicPartition tp, long startOffset,
                                                String extension, String zeroPadFormat, String bucketName,
-                                               AmazonS3Client s3) throws IOException {
+                                               AmazonS3 s3) throws IOException {
       String fileKey = FileUtils.fileKeyToCommit(topicsDir, directory, tp, startOffset, extension, zeroPadFormat);
       return readRecords(bucketName, fileKey, s3);
   }
 
-  public static Collection<Object> readRecords(String bucketName, String fileKey, AmazonS3Client s3) throws IOException {
+  public static Collection<Object> readRecords(String bucketName, String fileKey, AmazonS3 s3) throws IOException {
       log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
       InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
 
       return AvroUtils.getRecords(in);
   }
+
+  @Override
+  public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
+    final AWSCredentialsProvider provider = new AWSCredentialsProvider() {
+      private final AnonymousAWSCredentials credentials = new AnonymousAWSCredentials();
+      @Override
+      public AWSCredentials getCredentials() {
+        return credentials;
+      }
+
+      @Override
+      public void refresh() {
+      }
+    };
+
+    AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
+               .withAccelerateModeEnabled(config.getBoolean(S3SinkConnectorConfig.WAN_MODE_CONFIG))
+               .withPathStyleAccessEnabled(true)
+               .withCredentials(provider);
+
+    builder = url == null ?
+                  builder.withRegion(config.getString(S3SinkConnectorConfig.REGION_CONFIG)) :
+                  builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(url, ""));
+
+    return builder.build();
+  }
+
 }
