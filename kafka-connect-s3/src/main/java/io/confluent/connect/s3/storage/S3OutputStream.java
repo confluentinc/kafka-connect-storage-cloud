@@ -26,6 +26,7 @@ import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PartETag;
 import com.amazonaws.services.s3.model.UploadPartRequest;
+import org.apache.kafka.connect.errors.DataException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -97,11 +98,12 @@ public class S3OutputStream extends OutputStream {
 
   private void uploadPart() throws IOException {
     uploadPart(partSize);
-    buffer.reset();
+    buffer.clear();
   }
 
   private void uploadPart(int size) throws IOException {
     if (multiPartUpload == null) {
+      log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
       multiPartUpload = newMultipartUpload();
     }
 
@@ -133,6 +135,7 @@ public class S3OutputStream extends OutputStream {
       if (multiPartUpload != null) {
         multiPartUpload.abort();
       }
+      throw new DataException("Multipart upload aborted", e);
     } finally {
       buffer.clear();
       super.close();
