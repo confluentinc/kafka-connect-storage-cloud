@@ -60,7 +60,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
                                         .withPathStyleAccessEnabled(true)
                                         .withCredentials(config.getCredentialsProvider());
 
-    builder = url == null ?
+    builder = StringUtils.isBlank(url) ?
                   builder.withRegion(config.getString(REGION_CONFIG)) :
                   builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(url, ""));
 
