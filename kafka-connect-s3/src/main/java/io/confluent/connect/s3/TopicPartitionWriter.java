@@ -57,7 +57,7 @@ public class TopicPartitionWriter {
   private State state;
   private final Queue<SinkRecord> buffer;
   private final SinkTaskContext context;
-  private int recordCounter;
+  private int recordCount;
   private final int flushSize;
   private final long rotateIntervalMs;
   private final long rotateScheduleIntervalMs;
@@ -182,7 +182,7 @@ public class TopicPartitionWriter {
 
             if (compatibility.shouldChangeSchema(record, null, currentValueSchema)) {
               currentSchemas.put(encodedPartition, valueSchema);
-              if (recordCounter > 0) {
+              if (recordCount > 0) {
                 nextState();
               } else {
                 break;
@@ -219,10 +219,9 @@ public class TopicPartitionWriter {
       }
     }
     if (buffer.isEmpty()) {
-      // Need to define this corner case in S3
-      // committing files after waiting for rotateIntervalMs time but less than flush.size records available
-      // if (recordCounter > 0 && shouldRotate(now))
-
+      // Because of manual reset to the latest committed offset, any buffered records that didn't make it to
+      // the store will be re-read. Therefore, recordCount needs to be reset here.
+      recordCount = 0;
       resume();
       setState(State.WRITE_STARTED);
     }
@@ -267,22 +266,22 @@ public class TopicPartitionWriter {
     boolean scheduledRotation = rotateScheduleIntervalMs > 0
                                     && timestamp != null
                                     && timestamp >= nextScheduledRotate;
-    boolean messageSizeRotation = recordCounter >= flushSize;
+    boolean messageSizeRotation = recordCount >= flushSize;
 
-    log.trace("Should rotate (counter {} >= flush size {} and schedule interval {} next schedule {} timestamp {})? {}",
-              recordCounter, flushSize, rotateScheduleIntervalMs, nextScheduledRotate, timestamp,
+    log.trace("Should rotate (count {} >= flush size {} and schedule interval {} next schedule {} timestamp {})? {}",
+              recordCount, flushSize, rotateScheduleIntervalMs, nextScheduledRotate, timestamp,
               scheduledRotation || messageSizeRotation);
 
     return scheduledRotation || messageSizeRotation;
   }
 
   private void pause() {
-    log.trace("Pausing writer for topic-partition {}", tp);
+    log.trace("Pausing writer for topic-partition '{}'", tp);
     context.pause(tp);
   }
 
   private void resume() {
-    log.trace("Resuming writer for topic-partition {}", tp);
+    log.trace("Resuming writer for topic-partition '{}'", tp);
     context.resume(tp);
   }
 
@@ -341,9 +340,9 @@ public class TopicPartitionWriter {
     writer.write(record);
 
     offsets.put(encodedPartition, recordOffset);
-    recordCounter++;
+    ++recordCount;
     log.trace("Setting writer's offset for '{}' to {} - Total records {}", encodedPartition, recordOffset,
-              recordCounter);
+              recordCount);
   }
 
   private void commitFiles() {
@@ -366,14 +365,15 @@ public class TopicPartitionWriter {
       log.debug("Removed writer for '{}'", encodedPartition);
     }
 
-    long commitOffset = offsets.get(encodedPartition);
+    // Reset the offset to a value immediately higher than the last exported record.
+    long commitOffset = offsets.get(encodedPartition) + 1;
     context.offset(tp, commitOffset);
     log.debug("Reset offset for {} to {}", tp, commitOffset);
 
     startOffsets.remove(encodedPartition);
     String filename = commitFiles.remove(encodedPartition);
     offset = -1L;
-    recordCounter = 0;
+    recordCount = 0;
     log.info("Committed {} for {}", filename, tp);
   }
 
