@@ -178,7 +178,9 @@ public class S3SinkTask extends SinkTask {
   @Override
   public void stop() {
     try {
-      storage.close();
+      if (storage != null) {
+        storage.close();
+      }
     } catch (Exception e) {
       throw new ConnectException(e);
     }
