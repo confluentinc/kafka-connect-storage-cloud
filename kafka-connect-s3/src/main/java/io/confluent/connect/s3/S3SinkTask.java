@@ -103,7 +103,7 @@ public class S3SinkTask extends SinkTask {
       open(context.assignment());
       log.info("Started S3 connector task with assigned partitions: {}", assignment);
     } catch (ClassNotFoundException | IllegalAccessException | InstantiationException | InvocationTargetException
-        | NoSuchMethodException e) {
+                 | NoSuchMethodException e) {
       throw new ConnectException("Reflection exception: ", e);
     } catch (AmazonClientException e) {
       throw new ConnectException(e);
@@ -128,8 +128,8 @@ public class S3SinkTask extends SinkTask {
 
   @SuppressWarnings("unchecked")
   private Format<S3SinkConnectorConfig, String> newFormat() throws ClassNotFoundException, IllegalAccessException,
-                                                             InstantiationException, InvocationTargetException,
-                                                             NoSuchMethodException {
+                                                                   InstantiationException, InvocationTargetException,
+                                                                   NoSuchMethodException {
     Class<Format<S3SinkConnectorConfig, String>> formatClass =
         (Class<Format<S3SinkConnectorConfig, String>>) connectorConfig.getClass(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG);
     return formatClass.getConstructor(S3Storage.class, AvroData.class).newInstance(storage, avroData);
@@ -156,8 +156,11 @@ public class S3SinkTask extends SinkTask {
       TopicPartition tp = new TopicPartition(topic, partition);
       topicPartitionWriters.get(tp).buffer(record);
     }
+    if (log.isDebugEnabled()) {
+      log.debug("Read {} records from Kafka", records.size());
+    }
 
-    for (TopicPartition tp: assignment) {
+    for (TopicPartition tp : assignment) {
       topicPartitionWriters.get(tp).write();
     }
   }

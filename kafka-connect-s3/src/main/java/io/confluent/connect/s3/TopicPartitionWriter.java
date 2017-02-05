@@ -269,14 +269,20 @@ public class TopicPartitionWriter {
                                     && timestamp >= nextScheduledRotate;
     boolean messageSizeRotation = recordCounter >= flushSize;
 
+    log.trace("Should rotate (counter {} >= flush size {} and schedule interval {} next schedule {} timestamp {})? {}",
+              recordCounter, flushSize, rotateScheduleIntervalMs, nextScheduledRotate, timestamp,
+              scheduledRotation || messageSizeRotation);
+
     return scheduledRotation || messageSizeRotation;
   }
 
   private void pause() {
+    log.trace("Pausing writer for topic-partition {}", tp);
     context.pause(tp);
   }
 
   private void resume() {
+    log.trace("Resuming writer for topic-partition {}", tp);
     context.resume(tp);
   }
 
@@ -319,20 +325,25 @@ public class TopicPartitionWriter {
 
   private void writeRecord(SinkRecord record) {
     // TODO: double-check this is valid in all cases of start-up/recovery
+    long recordOffset = record.kafkaOffset();
     if (offset == -1) {
-      offset = record.kafkaOffset();
+      offset = recordOffset;
+      log.trace("Writer's offset: -1. Resetting to: {}", offset);
     }
 
     String encodedPartition = partitioner.encodePartition(record);
     if (!startOffsets.containsKey(encodedPartition)) {
-      startOffsets.put(encodedPartition, record.kafkaOffset());
+      log.trace("Setting writer's start offset for '{}' to {}", encodedPartition, recordOffset);
+      startOffsets.put(encodedPartition, recordOffset);
     }
 
     RecordWriter writer = getWriter(record, encodedPartition);
     writer.write(record);
 
-    offsets.put(encodedPartition, record.kafkaOffset());
+    offsets.put(encodedPartition, recordOffset);
     recordCounter++;
+    log.trace("Setting writer's offset for '{}' to {} - Total records {}", encodedPartition, recordOffset,
+              recordCounter);
   }
 
   private void commitFiles() {
@@ -352,11 +363,12 @@ public class TopicPartitionWriter {
       RecordWriter writer = writers.get(encodedPartition);
       writer.close();
       writers.remove(encodedPartition);
+      log.debug("Removed writer for '{}'", encodedPartition);
     }
 
     long commitOffset = offsets.get(encodedPartition);
-    log.debug("Resetting offset for {} to {}", tp, commitOffset);
     context.offset(tp, commitOffset);
+    log.debug("Reset offset for {} to {}", tp, commitOffset);
 
     startOffsets.remove(encodedPartition);
     String filename = commitFiles.remove(encodedPartition);

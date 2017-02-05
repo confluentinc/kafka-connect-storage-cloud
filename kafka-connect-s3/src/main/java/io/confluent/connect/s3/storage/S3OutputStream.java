@@ -65,7 +65,7 @@ public class S3OutputStream extends OutputStream {
     this.buffer = ByteBuffer.allocate(this.partSize);
     this.progressListener = new ConnectProgressListener();
     this.multiPartUpload = null;
-    log.debug("Create S3OutputStream for:  '{}' key '{}'", bucket, key);
+    log.debug("Create S3OutputStream for bucket '{}' key '{}'", bucket, key);
   }
 
   @Override
