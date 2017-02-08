@@ -346,10 +346,11 @@ public class TopicPartitionWriter {
   }
 
   private void commitFiles() {
-    for (String encodedPartition : commitFiles.keySet()) {
-      commitFile(encodedPartition);
+    for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
+      commitFile(entry.getKey());
+      log.info("Committed {} for {}", entry.getValue(), tp);
     }
-    currentSchemas.clear();
+    commitFiles.clear();
   }
 
   private void commitFile(String encodedPartition) {
@@ -371,10 +372,8 @@ public class TopicPartitionWriter {
     log.debug("Reset offset for {} to {}", tp, commitOffset);
 
     startOffsets.remove(encodedPartition);
-    String filename = commitFiles.remove(encodedPartition);
     offset = -1L;
     recordCount = 0;
-    log.info("Committed {} for {}", filename, tp);
   }
 
   private void setRetryTimeout(long timeoutMs) {
