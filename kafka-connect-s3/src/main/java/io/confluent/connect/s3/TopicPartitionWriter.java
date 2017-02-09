@@ -229,8 +229,11 @@ public class TopicPartitionWriter {
 
   public void close() throws ConnectException {
     log.debug("Closing TopicPartitionWriter {}", tp);
-    // abort any outstanding multi-part uploads? Wait for them?
-    // writers.abort?
+    for (RecordWriter writer : writers.values()) {
+      if (writer != null) {
+        writer.close();
+      }
+    }
     writers.clear();
     startOffsets.clear();
     offsets.clear();
@@ -361,7 +364,8 @@ public class TopicPartitionWriter {
 
     if (writers.containsKey(encodedPartition)) {
       RecordWriter writer = writers.get(encodedPartition);
-      writer.close();
+      // Commits the file and closes the underlying output stream.
+      writer.flush();
       writers.remove(encodedPartition);
       log.debug("Removed writer for '{}'", encodedPartition);
     }

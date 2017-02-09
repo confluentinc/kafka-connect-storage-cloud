@@ -29,6 +29,7 @@ import java.io.OutputStream;
 
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
@@ -56,6 +57,7 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3SinkConn
     return new RecordWriter() {
       final DataFileWriter<Object> writer = new DataFileWriter<>(new GenericDatumWriter<>());
       Schema schema = null;
+      S3OutputStream s3out;
 
       @Override
       public void write(SinkRecord record) {
@@ -63,9 +65,9 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3SinkConn
           schema = record.valueSchema();
           try {
             log.info("Opening record writer for: {}", filename);
-            OutputStream wrapper = storage.create(filename, conf, true);
+            s3out = storage.create(filename, true);
             org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
-            writer.create(avroSchema, wrapper);
+            writer.create(avroSchema, s3out);
           } catch (IOException e) {
             throw new ConnectException(e);
           }
@@ -74,6 +76,17 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3SinkConn
         Object value = avroData.fromConnectData(schema, record.value());
         try {
           writer.append(value);
+        } catch (IOException e) {
+          throw new ConnectException(e);
+        }
+      }
+
+      @Override
+      public void flush() {
+        try {
+          // Flush is required to commit all the records before closing the writer.
+          writer.flush();
+          s3out.commit();
         } catch (IOException e) {
           throw new ConnectException(e);
         }

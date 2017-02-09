@@ -165,10 +165,16 @@ public class S3SinkTask extends SinkTask {
     }
   }
 
+  @Override
   public void close(Collection<TopicPartition> partitions) {
     for (TopicPartition tp : assignment) {
       try {
-        topicPartitionWriters.get(tp).close();
+        TopicPartitionWriter writer = topicPartitionWriters.get(tp);
+        if (writer != null) {
+          writer.close();
+        } else {
+          log.warn("Writer unavailable at close for {}.", tp);
+        }
       } catch (ConnectException e) {
         log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
       }

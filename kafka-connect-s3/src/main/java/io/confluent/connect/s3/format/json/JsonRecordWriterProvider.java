@@ -26,6 +26,7 @@ import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
@@ -49,8 +50,8 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     try {
       return new RecordWriter() {
-        final OutputStream wrapper = storage.create(filename, conf, true);
-        final ObjectOutputStream writer = new ObjectOutputStream(wrapper);
+        final S3OutputStream s3out = storage.create(filename, true);
+        final ObjectOutputStream writer = new ObjectOutputStream(s3out);
 
         @Override
         public void write(SinkRecord record) {
@@ -58,6 +59,15 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
           try {
             writer.writeObject(record.value());
             writer.write("\n".getBytes());
+          } catch (IOException e) {
+            throw new ConnectException(e);
+          }
+        }
+
+        @Override
+        public void flush() {
+          try {
+            s3out.commit();
           } catch (IOException e) {
             throw new ConnectException(e);
           }
