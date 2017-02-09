@@ -127,7 +127,7 @@ public class S3OutputStream extends OutputStream {
 
     try {
       if (buffer.hasRemaining()) {
-        uploadPart(buffer.position() + 1);
+        uploadPart(buffer.position());
       }
       multiPartUpload.complete();
       log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
