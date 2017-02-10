@@ -65,7 +65,7 @@ public class S3OutputStream extends OutputStream {
     this.buffer = ByteBuffer.allocate(this.partSize);
     this.progressListener = new ConnectProgressListener();
     this.multiPartUpload = null;
-    log.debug("Create S3OutputStream for:  '{}' key '{}'", bucket, key);
+    log.debug("Create S3OutputStream for bucket '{}' key '{}'", bucket, key);
   }
 
   @Override
@@ -113,8 +113,31 @@ public class S3OutputStream extends OutputStream {
       // TODO: elaborate on the exception interpretation. We might be able to retry.
       if (multiPartUpload != null) {
         multiPartUpload.abort();
+        log.debug("Multipart upload aborted for bucket '{}' key '{}'.", bucket, key);
       }
       throw new IOException("Part upload failed: ", e.getCause());
+    }
+  }
+
+  public void commit() throws IOException {
+    if (closed) {
+      log.warn("Tried to commit data for bucket '{}' key '{}' on a closed stream. Ignoring.");
+      return;
+    }
+
+    try {
+      if (buffer.hasRemaining()) {
+        uploadPart(buffer.position());
+      }
+      multiPartUpload.complete();
+      log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
+    } catch (Exception e) {
+      log.error("Multipart upload failed to complete for bucket '{}' key '{}'", bucket, key);
+      throw new DataException("Multipart upload failed to complete.", e);
+    } finally {
+      buffer.clear();
+      multiPartUpload = null;
+      close();
     }
   }
 
@@ -124,22 +147,11 @@ public class S3OutputStream extends OutputStream {
       return;
     }
     closed = true;
-
-    try {
-      if (buffer.hasRemaining()) {
-        uploadPart(buffer.position() + 1);
-      }
-      multiPartUpload.complete();
-      log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
-    } catch (Exception e) {
-      if (multiPartUpload != null) {
-        multiPartUpload.abort();
-      }
-      throw new DataException("Multipart upload aborted", e);
-    } finally {
-      buffer.clear();
-      super.close();
+    if (multiPartUpload != null) {
+      multiPartUpload.abort();
+      log.debug("Multipart upload aborted for bucket '{}' key '{}'.", bucket, key);
     }
+    super.close();
   }
 
   private ObjectMetadata newObjectMetadata() {
@@ -197,6 +209,7 @@ public class S3OutputStream extends OutputStream {
       try {
         s3.abortMultipartUpload(new AbortMultipartUploadRequest(bucket, key, uploadId));
       } catch (Exception e) {
+        // ignoring failure on abort.
         log.warn("Unable to abort multipart upload, you may need to purge uploaded parts: ", e);
       }
     }
