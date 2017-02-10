@@ -207,8 +207,7 @@ public class S3SinkTask extends SinkTask {
     }
   }
 
-  Partitioner<FieldSchema> getPartitioner() {
-    return partitioner;
+  TopicPartitionWriter getTopicPartionWriter(TopicPartition tp) {
+    return topicPartitionWriters.get(tp);
   }
-
 }
