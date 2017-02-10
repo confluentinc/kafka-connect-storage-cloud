@@ -16,17 +16,19 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.SchemaProjector;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -250,9 +252,29 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     verify(sinkRecords, validOffsets);
   }
 
+  @Rule
+  public ExpectedException thrown = ExpectedException.none();
+
   @Test
   public void testProjectNoVersion() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "2");
+    localProps.put(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG, "BACKWARD");
     setUp();
+
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+    List<SinkRecord> sinkRecords = createRecordsNoVersion(1, 0);
+    sinkRecords.addAll(createRecordsWithAlteringSchemas(7, 0));
+
+    thrown.expect(RuntimeException.class);
+    // Perform write
+    try {
+      task.put(sinkRecords);
+    } finally {
+      task.close(context.assignment());
+      task.stop();
+      long[] validOffsets = {};
+      verify(Collections.<SinkRecord>emptyList(), validOffsets);
+    }
   }
 
   @Test
@@ -291,6 +313,31 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
       for (long offset = startOffset; offset < startOffset + size; ++offset) {
         sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), Schema.STRING_SCHEMA, key, schema, record, offset));
       }
+    }
+    return sinkRecords;
+  }
+
+  protected List<SinkRecord> createRecordsNoVersion(int size, long startOffset) {
+    String key = "key";
+    Schema schemaNoVersion = SchemaBuilder.struct().name("record")
+                                 .field("boolean", Schema.BOOLEAN_SCHEMA)
+                                 .field("int", Schema.INT32_SCHEMA)
+                                 .field("long", Schema.INT64_SCHEMA)
+                                 .field("float", Schema.FLOAT32_SCHEMA)
+                                 .field("double", Schema.FLOAT64_SCHEMA)
+                                 .build();
+
+    Struct recordNoVersion = new Struct(schemaNoVersion);
+    recordNoVersion.put("boolean", true)
+        .put("int", 12)
+        .put("long", 12L)
+        .put("float", 12.2f)
+        .put("double", 12.2);
+
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    for (long offset = startOffset; offset < startOffset + size; ++offset) {
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schemaNoVersion,
+                                     recordNoVersion, offset));
     }
     return sinkRecords;
   }
@@ -346,7 +393,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
       throws IOException {
     List<String> expectedFiles = new ArrayList<>();
     for (TopicPartition tp : partitions) {
-      for (int i = 1, j = 0; i < validOffsets.length; ++i) {
+      for (int i = 1; i < validOffsets.length; ++i) {
         long startOffset = validOffsets[i - 1];
         expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp,
                                                     startOffset, extension, ZERO_PAD_FMT));

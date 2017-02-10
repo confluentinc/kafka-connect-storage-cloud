@@ -43,19 +43,10 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
                  connectorConfig.getClass(StorageCommonConfig.STORAGE_CLASS_CONFIG));
   }
 
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
-
   @Test
   public void testUndefinedURL() throws Exception {
     properties.remove(StorageCommonConfig.STORE_URL_CONFIG);
-    /*
-    thrown.expect(ConfigException.class);
-    thrown.expectMessage("Missing required configuration \"" + StorageCommonConfig.STORE_URL_CONFIG
-                         + "\" which has no default value.");
-    */
     connectorConfig = new S3SinkConnectorConfig(properties);
-
     assertNull(connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG));
   }
 
