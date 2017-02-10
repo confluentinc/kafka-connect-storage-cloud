@@ -18,9 +18,11 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaProjector;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
@@ -39,10 +41,13 @@ import java.util.Set;
 import io.confluent.connect.s3.format.avro.AvroUtils;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
+import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.Partitioner;
 
+import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 public class DataWriterAvroTest extends TestWithMockedS3 {
@@ -50,7 +55,6 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   private static final String ZERO_PAD_FMT = "%010d";
 
   private final String extension = ".avro";
-  private AWSCredentials credentials;
   protected S3Storage storage;
   protected AmazonS3 s3;
   Partitioner<FieldSchema> partitioner;
@@ -86,7 +90,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   }
 
   @Test
-  public void testWriteRecord() throws Exception {
+  public void testWriteRecords() throws Exception {
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
 
@@ -173,11 +177,6 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   }
 
   @Test
-  public void testGetPreviousOffsets() throws Exception {
-    setUp();
-  }
-
-  @Test
   public void testWriteInterleavedRecordsInMultiplePartitionsNonZeroInitialOffset() throws Exception {
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
@@ -199,17 +198,56 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
 
   @Test
   public void testProjectBackward() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "2");
+    localProps.put(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG, "BACKWARD");
     setUp();
+
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+    List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(7, 0);
+
+    // Perform write
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 1, 3, 5, 7};
+    verify(sinkRecords, validOffsets);
   }
 
   @Test
   public void testProjectNone() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "2");
     setUp();
+
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+    List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(7, 0);
+
+    // Perform write
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 1, 2, 3, 4, 5, 6};
+    verify(sinkRecords, validOffsets);
   }
 
   @Test
   public void testProjectForward() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "2");
+    localProps.put(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG, "FORWARD");
     setUp();
+
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+    // By excluding the first element we get a list starting with record having the new schema.
+    List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(8, 0).subList(1, 8);
+
+    // Perform write
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {1, 2, 4, 6, 8};
+    verify(sinkRecords, validOffsets);
   }
 
   @Test
@@ -257,6 +295,27 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     return sinkRecords;
   }
 
+  protected List<SinkRecord> createRecordsWithAlteringSchemas(int size, long startOffset) {
+    String key = "key";
+    Schema schema = createSchema();
+    Struct record = createRecord(schema);
+    Schema newSchema = createNewSchema();
+    Struct newRecord = createNewRecord(newSchema);
+
+    int limit = (size / 2) * 2;
+    boolean remainder = size % 2 > 0;
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    for (long offset = startOffset; offset < startOffset + limit; ++offset) {
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, record, offset));
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, newSchema, newRecord, ++offset));
+    }
+    if (remainder) {
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, record,
+                                     startOffset + size - 1));
+    }
+    return sinkRecords;
+  }
+
   protected List<SinkRecord> createRecordsInterleaved(int size, long startOffset, Set<TopicPartition> partitions) {
     String key = "key";
     Schema schema = createSchema();
@@ -283,12 +342,39 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     return partitioner.generatePartitionedPath(topic, encodedPartition);
   }
 
-  protected void verifyContents(List<SinkRecord> expectedRecords, Collection<Object> records) {
-    int i = 0;
+  protected void verifyFileListing(long[] validOffsets, Set<TopicPartition> partitions)
+      throws IOException {
+    List<String> expectedFiles = new ArrayList<>();
+    for (TopicPartition tp : partitions) {
+      for (int i = 1, j = 0; i < validOffsets.length; ++i) {
+        long startOffset = validOffsets[i - 1];
+        expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp,
+                                                    startOffset, extension, ZERO_PAD_FMT));
+      }
+    }
+
+    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<String> actualFiles = new ArrayList<>();
+    for (S3ObjectSummary summary : summaries) {
+      String fileKey = summary.getKey();
+      actualFiles.add(fileKey);
+    }
+
+    Collections.sort(actualFiles);
+    Collections.sort(expectedFiles);
+    assertThat(actualFiles, is(expectedFiles));
+  }
+
+  protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records) {
+    Schema expectedSchema = null;
     for (Object avroRecord : records) {
-      Schema schema = expectedRecords.get(i).valueSchema();
-      Struct record = (Struct) expectedRecords.get(i++).value();
-      assertEquals(avroData.fromConnectData(schema, record), avroRecord);
+      if (expectedSchema == null) {
+        expectedSchema = expectedRecords.get(startIndex).valueSchema();
+      }
+      Object expectedValue = SchemaProjector.project(expectedRecords.get(startIndex).valueSchema(),
+                                                     expectedRecords.get(startIndex++).value(),
+                                                     expectedSchema);
+      assertEquals(avroData.fromConnectData(expectedSchema, expectedValue), avroRecord);
     }
   }
 
@@ -296,17 +382,28 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     verify(sinkRecords, validOffsets, Collections.singleton(new TopicPartition(TOPIC, PARTITION)));
   }
 
+  /**
+   * Verify files and records are uploaded appropriately.
+   * @param sinkRecords a flat list of the records that need to appear in potentially several files in S3.
+   * @param validOffsets an array containing the offsets that map to uploaded files for a topic-partition.
+   *                     Offsets appear in ascending order, the difference between two consecutive offsets
+   *                     equals the expected size of the file, and last offset in exclusive.
+   * @throws IOException
+   */
   protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, Set<TopicPartition> partitions)
       throws IOException {
+    verifyFileListing(validOffsets, partitions);
     for (TopicPartition tp : partitions) {
-      for (int i = 1; i < validOffsets.length; ++i) {
+      for (int i = 1, j = 0; i < validOffsets.length; ++i) {
         long startOffset = validOffsets[i - 1];
         long size = validOffsets[i] - startOffset;
 
+        FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset, extension, ZERO_PAD_FMT);
         Collection<Object> records = readRecords(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset,
                                                  extension, ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
         assertEquals(size, records.size());
-        verifyContents(sinkRecords, records);
+        verifyContents(sinkRecords, j, records);
+        j += size;
       }
     }
   }

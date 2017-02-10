@@ -33,6 +33,8 @@ import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.hive.schema.DefaultSchemaGenerator;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
+import io.confluent.connect.storage.schema.SchemaCompatibility;
+import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
 
 public class S3SinkConnectorTestBase extends StorageSinkTestBase {
 
@@ -43,6 +45,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
   protected String topicsDir;
   protected AvroData avroData;
   protected Map<String, Object> parsedConfig;
+  protected SchemaCompatibility compatibility;
 
   @Override
   protected Map<String, String> createProps() {
@@ -72,6 +75,8 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     int schemaCacheSize = connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG);
     avroData = new AvroData(schemaCacheSize);
     parsedConfig = new HashMap<>(connectorConfig.plainValues());
+    compatibility = StorageSchemaCompatibility.getCompatibility(
+                    connectorConfig.getString(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG));
   }
 
   @After
