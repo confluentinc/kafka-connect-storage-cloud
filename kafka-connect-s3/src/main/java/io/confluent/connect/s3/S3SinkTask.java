@@ -18,6 +18,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
@@ -166,20 +167,31 @@ public class S3SinkTask extends SinkTask {
   }
 
   @Override
+  public void flush(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    // No-op. The connector is managing the offsets.
+  }
+
+  @Override
+  public Map<TopicPartition, OffsetAndMetadata> preCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
+    for (TopicPartition tp : assignment) {
+      Long offset = topicPartitionWriters.get(tp).getOffsetToCommitAndReset();
+      if (offset != null && offset > offsets.get(tp).offset()) {
+        offsetsToCommit.put(tp, new OffsetAndMetadata(offset));
+      }
+    }
+    return offsetsToCommit;
+  }
+
+  @Override
   public void close(Collection<TopicPartition> partitions) {
     for (TopicPartition tp : assignment) {
       try {
-        TopicPartitionWriter writer = topicPartitionWriters.get(tp);
-        if (writer != null) {
-          writer.close();
-        } else {
-          log.warn("Writer unavailable at close for {}.", tp);
-        }
+        topicPartitionWriters.get(tp).close();
       } catch (ConnectException e) {
         log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
       }
     }
-
     topicPartitionWriters.clear();
     assignment.clear();
   }

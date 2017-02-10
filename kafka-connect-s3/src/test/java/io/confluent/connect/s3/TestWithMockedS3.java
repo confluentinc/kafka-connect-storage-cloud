@@ -98,7 +98,7 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
         objects.addAll(listing.getObjectSummaries());
       }
     } catch (AmazonS3Exception e) {
-     log.warn("listObjects for bucket '{}' prefix '{}' returned error code: " + e.getStatusCode());
+     log.warn("listObjects for bucket '{}' prefix '{}' returned error code: {}", bucket, prefix, e.getStatusCode());
     }
 
     return objects;

@@ -51,7 +51,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 
 public class TopicPartitionWriterTest extends TestWithMockedS3 {
-  private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriter.class);
   // The default
   private static final String ZERO_PAD_FMT = "%010d";
 
@@ -258,7 +257,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     String key = "key";
     Schema schema = createSchema();
-    Struct[] records = createRecords(schema);
+    List<Struct> records = createRecordBatches(schema, 3, 3);
 
     Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
 

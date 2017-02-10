@@ -25,7 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.OutputStream;
 
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
@@ -82,11 +81,13 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3SinkConn
       }
 
       @Override
-      public void flush() {
+      public void commit() {
         try {
-          // Flush is required to commit all the records before closing the writer.
+          // Flush is required here, because closing the writer will close the underlying S3 output stream before
+          // committing any data to S3.
           writer.flush();
           s3out.commit();
+          writer.close();
         } catch (IOException e) {
           throw new ConnectException(e);
         }

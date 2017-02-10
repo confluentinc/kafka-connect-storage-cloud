@@ -63,9 +63,9 @@ public class TopicPartitionWriter {
   private final long rotateScheduleIntervalMs;
   private long nextScheduledRotate;
   private final RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
-  private long offset;
+  private long currentOffset;
+  private Long offsetToCommit;
   private final Map<String, Long> startOffsets;
-  private final Map<String, Long> offsets;
   private long timeoutMs;
   private long failureTime;
   private final StorageSchemaCompatibility compatibility;
@@ -111,10 +111,9 @@ public class TopicPartitionWriter {
     writers = new HashMap<>();
     currentSchemas = new HashMap<>();
     startOffsets = new HashMap<>();
-    offsets = new HashMap<>();
     state = State.WRITE_STARTED;
     failureTime = -1L;
-    offset = -1L;
+    currentOffset = -1L;
     dirDelim = connectorConfig.getString(StorageCommonConfig.DIRECTORY_DELIM_CONFIG);
     fileDelim = connectorConfig.getString(StorageCommonConfig.FILE_DELIM_CONFIG);
     extension = writerProvider.getExtension();
@@ -176,23 +175,22 @@ public class TopicPartitionWriter {
             String encodedPartition = partitioner.encodePartition(record);
             Schema currentValueSchema = currentSchemas.get(encodedPartition);
             if (currentValueSchema == null) {
-              currentValueSchema = record.valueSchema();
               currentSchemas.put(encodedPartition, valueSchema);
+              currentValueSchema = valueSchema;
             }
 
             if (compatibility.shouldChangeSchema(record, null, currentValueSchema)) {
+              // This branch is never true for the first record read by this TopicPartitionWriter
               currentSchemas.put(encodedPartition, valueSchema);
-              if (recordCount > 0) {
-                nextState();
-              } else {
-                break;
-              }
+              offsetToCommit = currentOffset;
+              nextState();
             } else {
               SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
               writeRecord(projectedRecord);
               buffer.poll();
               if (shouldRotate(projectedRecord.timestamp())) {
-                log.info("Starting commit and rotation for topic partition {} with start offset {} and end offset {}", tp, startOffsets, offsets);
+                log.info("Starting commit and rotation for topic partition {} with start offset {}", tp, startOffsets);
+                offsetToCommit = currentOffset + 1;
                 nextState();
                 // Fall through and try to rotate immediately
               } else {
@@ -219,9 +217,6 @@ public class TopicPartitionWriter {
       }
     }
     if (buffer.isEmpty()) {
-      // Because of manual reset to the latest committed offset, any buffered records that didn't make it to
-      // the store will be re-read. Therefore, recordCount needs to be reset here.
-      recordCount = 0;
       resume();
       setState(State.WRITE_STARTED);
     }
@@ -236,15 +231,16 @@ public class TopicPartitionWriter {
     }
     writers.clear();
     startOffsets.clear();
-    offsets.clear();
   }
 
   public void buffer(SinkRecord sinkRecord) {
     buffer.add(sinkRecord);
   }
 
-  public long offset() {
-    return offset;
+  public Long getOffsetToCommitAndReset() {
+    Long latest = offsetToCommit;
+    offsetToCommit = null;
+    return latest;
   }
 
   public Map<String, RecordWriter> getWriters() {
@@ -326,34 +322,29 @@ public class TopicPartitionWriter {
   }
 
   private void writeRecord(SinkRecord record) {
-    // TODO: double-check this is valid in all cases of start-up/recovery
-    long recordOffset = record.kafkaOffset();
-    if (offset == -1) {
-      offset = recordOffset;
-      log.trace("Writer's offset: -1. Resetting to: {}", offset);
-    }
+    currentOffset = record.kafkaOffset();
 
     String encodedPartition = partitioner.encodePartition(record);
     if (!startOffsets.containsKey(encodedPartition)) {
-      log.trace("Setting writer's start offset for '{}' to {}", encodedPartition, recordOffset);
-      startOffsets.put(encodedPartition, recordOffset);
+      log.trace("Setting writer's start offset for '{}' to {}", encodedPartition, currentOffset);
+      startOffsets.put(encodedPartition, currentOffset);
     }
 
     RecordWriter writer = getWriter(record, encodedPartition);
     writer.write(record);
-
-    offsets.put(encodedPartition, recordOffset);
     ++recordCount;
-    log.trace("Setting writer's offset for '{}' to {} - Total records {}", encodedPartition, recordOffset,
-              recordCount);
   }
 
   private void commitFiles() {
+    // offsetToCommit has been set already. Any exceptions will kill this task. No RetriableException are thrown.
     for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
       commitFile(entry.getKey());
-      log.info("Committed {} for {}", entry.getValue(), tp);
+      log.debug("Committed {} for {}", entry.getValue(), tp);
     }
     commitFiles.clear();
+    currentSchemas.clear();
+    recordCount = 0;
+    log.info("Files committed to S3. Target commit offset for {} is {}", tp, offsetToCommit);
   }
 
   private void commitFile(String encodedPartition) {
@@ -365,19 +356,12 @@ public class TopicPartitionWriter {
     if (writers.containsKey(encodedPartition)) {
       RecordWriter writer = writers.get(encodedPartition);
       // Commits the file and closes the underlying output stream.
-      writer.flush();
+      writer.commit();
       writers.remove(encodedPartition);
       log.debug("Removed writer for '{}'", encodedPartition);
     }
 
-    // Reset the offset to a value immediately higher than the last exported record.
-    long commitOffset = offsets.get(encodedPartition) + 1;
-    context.offset(tp, commitOffset);
-    log.debug("Reset offset for {} to {}", tp, commitOffset);
-
     startOffsets.remove(encodedPartition);
-    offset = -1L;
-    recordCount = 0;
   }
 
   private void setRetryTimeout(long timeoutMs) {
