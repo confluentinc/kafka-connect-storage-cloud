@@ -51,6 +51,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     props.put(StorageCommonConfig.STORAGE_CLASS_CONFIG, "io.confluent.connect.s3.storage.S3Storage");
     props.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, S3_TEST_BUCKET_NAME);
     props.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
+    props.put(MockS3SinkConnectorConfig.TEST_PART_SIZE_CONFIG, "1024");
     props.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, PartitionerConfig.PARTITIONER_CLASS_DEFAULT.getName());
     props.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, DefaultSchemaGenerator.class.getName());
     props.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG, "int");
@@ -66,7 +67,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    connectorConfig = new S3SinkConnectorConfig(properties);
+    connectorConfig = new MockS3SinkConnectorConfig(properties);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     int schemaCacheSize = connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG);
     avroData = new AvroData(schemaCacheSize);

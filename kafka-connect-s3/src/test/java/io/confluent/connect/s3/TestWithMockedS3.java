@@ -22,6 +22,7 @@ import com.amazonaws.auth.AnonymousAWSCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.findify.s3mock.S3Mock;
@@ -84,16 +85,20 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
     List<S3ObjectSummary> objects = new ArrayList<>();
     ObjectListing listing;
 
-    if (prefix == null) {
-      listing = s3.listObjects(bucket);
-    } else {
-      listing = s3.listObjects(bucket, prefix);
-    }
+    try {
+      if (prefix == null) {
+        listing = s3.listObjects(bucket);
+      } else {
+        listing = s3.listObjects(bucket, prefix);
+      }
 
-    objects.addAll(listing.getObjectSummaries());
-    while (listing.isTruncated()) {
-      listing = s3.listNextBatchOfObjects(listing);
       objects.addAll(listing.getObjectSummaries());
+      while (listing.isTruncated()) {
+        listing = s3.listNextBatchOfObjects(listing);
+        objects.addAll(listing.getObjectSummaries());
+      }
+    } catch (AmazonS3Exception e) {
+     log.warn("listObjects for bucket '{}' prefix '{}' returned error code: " + e.getStatusCode());
     }
 
     return objects;

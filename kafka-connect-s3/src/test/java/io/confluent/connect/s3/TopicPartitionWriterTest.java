@@ -24,8 +24,6 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -244,6 +242,41 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
     }
     verify(expectedFiles, 3, schema, records);
+  }
+
+  @Test
+  public void testNoFilesWrittenWithoutCommit() throws Exception {
+    // Setting size-based rollup to 10 but will produce fewer records. Commit should not happen.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10");
+    setUp();
+
+    // Define the partitioner
+    Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
+
+    String key = "key";
+    Schema schema = createSchema();
+    Struct[] records = createRecords(schema);
+
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
+    List<String> expectedFiles = new ArrayList<>();
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, "%02d"));
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, "%02d"));
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, "%02d"));
+    // Record size argument does not matter.
+    verify(Collections.<String>emptyList(), -1, schema, records);
   }
 
   // Create a batch of records with incremental numeric field values. Total number of records is given by 'size'.
