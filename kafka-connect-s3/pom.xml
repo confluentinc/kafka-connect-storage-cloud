@@ -36,7 +36,7 @@
     </description>
 
     <properties>
-        <aws.version>1.11.68</aws.version>
+        <aws.version>1.11.86</aws.version>
         <s3mock.version>0.1.5</s3mock.version>
     </properties>
 

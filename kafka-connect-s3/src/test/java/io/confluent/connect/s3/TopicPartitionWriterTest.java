@@ -16,10 +16,7 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AnonymousAWSCredentials;
-import com.amazonaws.services.s3.AmazonS3Client;
-import com.amazonaws.services.s3.model.ObjectListing;
+import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.connect.data.Schema;
@@ -27,19 +24,19 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.s3.storage.S3StorageConfig;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.s3.util.TimeUtils;
 import io.confluent.connect.storage.format.Format;
@@ -51,20 +48,19 @@ import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 
-import static junit.framework.TestCase.assertTrue;
+import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 
 public class TopicPartitionWriterTest extends TestWithMockedS3 {
   // The default
   private static final String ZERO_PAD_FMT = "%010d";
 
-  private RecordWriterProvider<S3StorageConfig> writerProvider;
+  private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private S3Storage storage;
   private static String extension;
 
-  private S3StorageConfig storageConfig;
-  private AWSCredentials credentials;
-  private AmazonS3Client s3;
+  private AmazonS3 s3;
   Map<String, String> localProps = new HashMap<>();
 
   @Override
@@ -76,15 +72,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   public void setUp() throws Exception {
     super.setUp();
-    credentials = new AnonymousAWSCredentials();
-    storageConfig = new S3StorageConfig(connectorConfig, credentials);
 
-    s3 = new AmazonS3Client(storageConfig.provider(), storageConfig.clientConfig(), storageConfig.collector());
-    s3.setEndpoint(S3_TEST_URL);
+    s3 = newS3Client(connectorConfig);
+    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
 
-    storage = new S3Storage(storageConfig, url, S3_TEST_BUCKET_NAME, s3);
-
-    Format<S3StorageConfig, String> format = new AvroFormat(storage, avroData);
+    Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage, avroData);
     writerProvider = format.getRecordWriterProvider();
     extension = writerProvider.getExtension();
   }
@@ -100,8 +92,10 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void testWriteRecordDefaultWithPadding() throws Exception {
     localProps.put(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG, "2");
     setUp();
+
+    // Define the partitioner
     Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
-    partitioner.configure(rawConfig);
+    partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
 
@@ -115,24 +109,25 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       topicPartitionWriter.buffer(record);
     }
 
+    // Test actual write
     topicPartitionWriter.write();
     topicPartitionWriter.close();
 
     String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
-    Set<String> expectedFiles = new HashSet<>();
+    List<String> expectedFiles = new ArrayList<>();
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, "%02d"));
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, "%02d"));
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, "%02d"));
-    verify(expectedFiles, records, schema);
+    verify(expectedFiles, 3, schema, records);
   }
 
   @Test
   public void testWriteRecordFieldPartitioner() throws Exception {
     setUp();
-    Partitioner<FieldSchema> partitioner = new FieldPartitioner<>();
-    partitioner.configure(rawConfig);
 
-    String partitionField = (String) rawConfig.get(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG);
+    // Define the partitioner
+    Partitioner<FieldSchema> partitioner = new FieldPartitioner<>();
+    partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
@@ -147,29 +142,32 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       topicPartitionWriter.buffer(record);
     }
 
+    // Test actual write
     topicPartitionWriter.write();
     topicPartitionWriter.close();
 
-
+    String partitionField = (String) parsedConfig.get(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG);
     String dirPrefix1 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(16));
     String dirPrefix2 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(17));
     String dirPrefix3 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(18));
 
-    Set<String> expectedFiles = new HashSet<>();
+    List<String> expectedFiles = new ArrayList<>();
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix2, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix3, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
 
-    verify(expectedFiles, records, schema);
-    verify(expectedFiles, records, schema);
+    verify(expectedFiles, 3, schema, records);
+    verify(expectedFiles, 3, schema, records);
   }
 
   @Test
   public void testWriteRecordTimeBasedPartition() throws Exception {
     setUp();
-    rawConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, TimeBasedSchemaGenerator.class);
+
+    // Define the partitioner
     Partitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
-    partitioner.configure(rawConfig);
+    parsedConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, TimeBasedSchemaGenerator.class);
+    partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
@@ -184,24 +182,22 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       topicPartitionWriter.buffer(record);
     }
 
+    // Test actual write
     topicPartitionWriter.write();
     topicPartitionWriter.close();
 
-    long partitionDurationMs = (Long) rawConfig.get(PartitionerConfig.PARTITION_DURATION_MS_CONFIG);
-    String pathFormat = (String) rawConfig.get(PartitionerConfig.PATH_FORMAT_CONFIG);
-    String timeZoneString = (String) rawConfig.get(PartitionerConfig.TIMEZONE_CONFIG);
+    long partitionDurationMs = (Long) parsedConfig.get(PartitionerConfig.PARTITION_DURATION_MS_CONFIG);
+    String pathFormat = (String) parsedConfig.get(PartitionerConfig.PATH_FORMAT_CONFIG);
+    String timeZoneString = (String) parsedConfig.get(PartitionerConfig.TIMEZONE_CONFIG);
     long timestamp = System.currentTimeMillis();
-
     String encodedPartition = TimeUtils.encodeTimestamp(partitionDurationMs, pathFormat, timeZoneString, timestamp);
 
     String dirPrefix = partitioner.generatePartitionedPath(TOPIC, encodedPartition);
-
-    Set<String> expectedFiles = new HashSet<>();
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
-
-    verify(expectedFiles, records, schema);
+    List<String> expectedFiles = new ArrayList<>();
+    for (int i : new int[]{0, 3, 6}) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
+    }
+    verify(expectedFiles, 3, schema, records);
   }
 
   private Struct[] createRecords(Schema schema) {
@@ -226,62 +222,41 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         .put("float", 12.2f)
         .put("double", 12.2);
 
-    ArrayList<Struct> records = new ArrayList<>();
-    records.add(record1);
-    records.add(record2);
-    records.add(record3);
-    return records.toArray(new Struct[records.size()]);
+    return new Struct[]{record1, record2, record3};
   }
 
 
   private ArrayList<SinkRecord> createSinkRecords(Struct[] records, String key, Schema schema) {
     ArrayList<SinkRecord> sinkRecords = new ArrayList<>();
-    long offset = 0;
-    for (Struct record : records) {
-      for (long count = 0; count < 3; count++) {
-        SinkRecord sinkRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, record,
-                                               offset + count);
-        sinkRecords.add(sinkRecord);
+    for (int offset = 0, i = 0, count = 3; i < records.length; ++i, offset += count) {
+      for (int j = 0; j < count; ++j) {
+        sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records[i], offset + j));
       }
-      offset = offset + 3;
     }
     return sinkRecords;
   }
 
-  private void verify(Set<String> expectedKeys, Struct[] records, Schema schema) throws IOException {
-    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null);
-    int index = 0;
+  private void verify(List<String> expectedFileKeys, int expectedSize, Schema schema, Struct[] records) throws IOException {
+    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<String> actualFiles = new ArrayList<>();
     for (S3ObjectSummary summary : summaries) {
-      String key = summary.getKey();
-      System.out.println("Full : " + key);
-      assertTrue(expectedKeys.contains(key));
-      System.out.println("Object size for now: " + summary.getSize());
-      /*
-      // Import the reading method from the other tests.
-      assertEquals(3, avroRecords.size());
-      for (Object avroRecord: avroRecords) {
+      String fileKey = summary.getKey();
+      actualFiles.add(fileKey);
+    }
+
+    Collections.sort(actualFiles);
+    Collections.sort(expectedFileKeys);
+    assertThat(actualFiles, is(expectedFileKeys));
+
+    int index = 0;
+    for (String fileKey : actualFiles) {
+      Collection<Object> actualRecords = readRecords(S3_TEST_BUCKET_NAME, fileKey, s3);
+      assertEquals(expectedSize, actualRecords.size());
+      for (Object avroRecord : actualRecords) {
         assertEquals(avroData.fromConnectData(schema, records[index]), avroRecord);
       }
-      */
       ++index;
     }
-    assertEquals(expectedKeys.size(), summaries.size());
   }
 
-  private List<S3ObjectSummary> listObjects(String bucket, String prefix) {
-    List<S3ObjectSummary> objects = new ArrayList<>();
-    ObjectListing listing;
-    if (prefix == null) {
-      listing = s3.listObjects(bucket);
-    } else {
-      listing = s3.listObjects(bucket, prefix);
-    }
-    objects.addAll(listing.getObjectSummaries());
-    while (listing.isTruncated()) {
-      listing = s3.listNextBatchOfObjects(listing);
-      objects.addAll(listing.getObjectSummaries());
-    }
-
-    return objects;
-  }
 }

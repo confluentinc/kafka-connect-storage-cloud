@@ -28,12 +28,12 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 import io.confluent.connect.avro.AvroData;
+import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.s3.storage.S3StorageConfig;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 
-public class AvroRecordWriterProvider implements RecordWriterProvider<S3StorageConfig> {
+public class AvroRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
 
   private static final Logger log = LoggerFactory.getLogger(AvroRecordWriterProvider.class);
   private static final String EXTENSION = ".avro";
@@ -51,7 +51,7 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3StorageC
   }
 
   @Override
-  public RecordWriter getRecordWriter(final S3StorageConfig conf, final String filename) {
+  public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     // This is not meant to be a thread-safe writer!
     return new RecordWriter() {
       final DataFileWriter<Object> writer = new DataFileWriter<>(new GenericDatumWriter<>());

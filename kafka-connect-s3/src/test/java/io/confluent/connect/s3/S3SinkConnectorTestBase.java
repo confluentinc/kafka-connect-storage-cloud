@@ -16,6 +16,10 @@
 
 package io.confluent.connect.s3;
 
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.client.builder.AwsClientBuilder;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import org.junit.After;
 
 import java.util.HashMap;
@@ -28,7 +32,6 @@ import io.confluent.connect.storage.StorageSinkTestBase;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.hive.schema.DefaultSchemaGenerator;
-import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
 public class S3SinkConnectorTestBase extends StorageSinkTestBase {
@@ -39,7 +42,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
   protected S3SinkConnectorConfig connectorConfig;
   protected String topicsDir;
   protected AvroData avroData;
-  protected Map<String, Object> rawConfig = new HashMap<>();
+  protected Map<String, Object> parsedConfig;
 
   @Override
   protected Map<String, String> createProps() {
@@ -50,7 +53,12 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     props.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
     props.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, PartitionerConfig.PARTITIONER_CLASS_DEFAULT.getName());
     props.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, DefaultSchemaGenerator.class.getName());
-    props.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, "_");
+    props.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG, "int");
+    props.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, String.valueOf(TimeUnit.HOURS.toMillis(1)));
+    props.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH_");
+    props.put(PartitionerConfig.LOCALE_CONFIG, "en");
+    props.put(PartitionerConfig.TIMEZONE_CONFIG, "America/Los_Angeles");
+    props.put(HiveConfig.HIVE_CONF_DIR_CONFIG, "America/Los_Angeles");
     return props;
   }
 
@@ -62,7 +70,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     int schemaCacheSize = connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG);
     avroData = new AvroData(schemaCacheSize);
-    rawConfig = createDefaultConfig();
+    parsedConfig = new HashMap<>(connectorConfig.plainValues());
   }
 
   @After
@@ -71,16 +79,17 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     super.tearDown();
   }
 
-  private Map<String, Object> createDefaultConfig() {
-    Map<String, Object> config = new HashMap<>();
-    config.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG, "int");
-    config.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.HOURS.toMillis(1));
-    config.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH_");
-    config.put(PartitionerConfig.LOCALE_CONFIG, "en");
-    config.put(PartitionerConfig.TIMEZONE_CONFIG, "America/Los_Angeles");
-    config.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, DefaultSchemaGenerator.class);
-    config.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, "_");
-    return config;
+  public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
+    AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
+               .withAccelerateModeEnabled(config.getBoolean(S3SinkConnectorConfig.WAN_MODE_CONFIG))
+               .withPathStyleAccessEnabled(true)
+               .withCredentials(new DefaultAWSCredentialsProviderChain());
+
+    builder = url == null ?
+                  builder.withRegion(config.getString(S3SinkConnectorConfig.REGION_CONFIG)) :
+                  builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(url, ""));
+
+    return builder.build();
   }
 
 }
