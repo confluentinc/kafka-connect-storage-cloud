@@ -66,6 +66,7 @@ public class TopicPartitionWriter {
   private final RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private long currentOffset;
   private Long offsetToCommit;
+  private Long nextOffsetToCommit;
   private final Map<String, Long> startOffsets;
   private long timeoutMs;
   private long failureTime;
@@ -183,7 +184,7 @@ public class TopicPartitionWriter {
             if (compatibility.shouldChangeSchema(record, null, currentValueSchema)) {
               // This branch is never true for the first record read by this TopicPartitionWriter
               currentSchemas.put(encodedPartition, valueSchema);
-              offsetToCommit = currentOffset;
+              nextOffsetToCommit = currentOffset;
               nextState();
             } else {
               SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
@@ -191,7 +192,7 @@ public class TopicPartitionWriter {
               buffer.poll();
               if (shouldRotate(projectedRecord.timestamp())) {
                 log.info("Starting commit and rotation for topic partition {} with start offset {}", tp, startOffsets);
-                offsetToCommit = currentOffset + 1;
+                nextOffsetToCommit = currentOffset + 1;
                 nextState();
                 // Fall through and try to rotate immediately
               } else {
@@ -329,11 +330,11 @@ public class TopicPartitionWriter {
   }
 
   private void commitFiles() {
-    // offsetToCommit has been set already. Any exceptions will kill this task. No RetriableException are thrown.
     for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
       commitFile(entry.getKey());
       log.debug("Committed {} for {}", entry.getValue(), tp);
     }
+    offsetToCommit = nextOffsetToCommit;
     commitFiles.clear();
     currentSchemas.clear();
     recordCount = 0;
