@@ -176,8 +176,12 @@ public class S3SinkTask extends SinkTask {
     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
     for (TopicPartition tp : assignment) {
       Long offset = topicPartitionWriters.get(tp).getOffsetToCommitAndReset();
-      if (offset != null && offset > offsets.get(tp).offset()) {
-        offsetsToCommit.put(tp, new OffsetAndMetadata(offset));
+      if (offset != null) {
+        OffsetAndMetadata previous = offsets.get(tp);
+        // Commit offset only if there was progress.
+        if (previous == null || offset > previous.offset()) {
+          offsetsToCommit.put(tp, new OffsetAndMetadata(offset));
+        }
       }
     }
     return offsetsToCommit;
