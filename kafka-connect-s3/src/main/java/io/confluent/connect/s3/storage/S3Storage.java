@@ -60,7 +60,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
                                         .withPathStyleAccessEnabled(true)
                                         .withCredentials(config.getCredentialsProvider());
 
-    builder = url == null ?
+    builder = StringUtils.isBlank(url) ?
                   builder.withRegion(config.getString(REGION_CONFIG)) :
                   builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(url, ""));
 
@@ -167,6 +167,10 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
   @Override
   public OutputStream create(String path, S3SinkConnectorConfig conf, boolean overwrite) {
+    return create(path, overwrite);
+  }
+
+  public S3OutputStream create(String path, boolean overwrite) {
     if (!overwrite) {
       throw new UnsupportedOperationException("Creating a file without overwriting is not currently supported in S3 Connector");
     }

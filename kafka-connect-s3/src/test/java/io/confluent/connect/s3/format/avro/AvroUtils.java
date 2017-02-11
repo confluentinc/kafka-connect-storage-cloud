@@ -58,7 +58,7 @@ public class AvroUtils {
       Object value = avroData.fromConnectData(schema, record.value());
       writer.append(value);
     }
-    writer.close();
+    writer.flush();
     return out.toByteArray();
   }
 

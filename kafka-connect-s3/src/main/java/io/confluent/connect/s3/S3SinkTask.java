@@ -18,6 +18,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
@@ -103,7 +104,7 @@ public class S3SinkTask extends SinkTask {
       open(context.assignment());
       log.info("Started S3 connector task with assigned partitions: {}", assignment);
     } catch (ClassNotFoundException | IllegalAccessException | InstantiationException | InvocationTargetException
-        | NoSuchMethodException e) {
+                 | NoSuchMethodException e) {
       throw new ConnectException("Reflection exception: ", e);
     } catch (AmazonClientException e) {
       throw new ConnectException(e);
@@ -128,8 +129,8 @@ public class S3SinkTask extends SinkTask {
 
   @SuppressWarnings("unchecked")
   private Format<S3SinkConnectorConfig, String> newFormat() throws ClassNotFoundException, IllegalAccessException,
-                                                             InstantiationException, InvocationTargetException,
-                                                             NoSuchMethodException {
+                                                                   InstantiationException, InvocationTargetException,
+                                                                   NoSuchMethodException {
     Class<Format<S3SinkConnectorConfig, String>> formatClass =
         (Class<Format<S3SinkConnectorConfig, String>>) connectorConfig.getClass(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG);
     return formatClass.getConstructor(S3Storage.class, AvroData.class).newInstance(storage, avroData);
@@ -156,12 +157,37 @@ public class S3SinkTask extends SinkTask {
       TopicPartition tp = new TopicPartition(topic, partition);
       topicPartitionWriters.get(tp).buffer(record);
     }
+    if (log.isDebugEnabled()) {
+      log.debug("Read {} records from Kafka", records.size());
+    }
 
-    for (TopicPartition tp: assignment) {
+    for (TopicPartition tp : assignment) {
       topicPartitionWriters.get(tp).write();
     }
   }
 
+  @Override
+  public void flush(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    // No-op. The connector is managing the offsets.
+  }
+
+  @Override
+  public Map<TopicPartition, OffsetAndMetadata> preCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
+    for (TopicPartition tp : assignment) {
+      Long offset = topicPartitionWriters.get(tp).getOffsetToCommitAndReset();
+      if (offset != null) {
+        OffsetAndMetadata previous = offsets.get(tp);
+        // Commit offset only if there was progress.
+        if (previous == null || offset > previous.offset()) {
+          offsetsToCommit.put(tp, new OffsetAndMetadata(offset));
+        }
+      }
+    }
+    return offsetsToCommit;
+  }
+
+  @Override
   public void close(Collection<TopicPartition> partitions) {
     for (TopicPartition tp : assignment) {
       try {
@@ -170,7 +196,6 @@ public class S3SinkTask extends SinkTask {
         log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
       }
     }
-
     topicPartitionWriters.clear();
     assignment.clear();
   }
@@ -178,14 +203,15 @@ public class S3SinkTask extends SinkTask {
   @Override
   public void stop() {
     try {
-      storage.close();
+      if (storage != null) {
+        storage.close();
+      }
     } catch (Exception e) {
       throw new ConnectException(e);
     }
   }
 
-  Partitioner<FieldSchema> getPartitioner() {
-    return partitioner;
+  TopicPartitionWriter getTopicPartitionWriter(TopicPartition tp) {
+    return topicPartitionWriters.get(tp);
   }
-
 }

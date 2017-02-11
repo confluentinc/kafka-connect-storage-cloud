@@ -234,7 +234,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         throw new ConfigException(name, value, "Part size must be non-null");
       }
       Number number = (Number) value;
-      int min = 5 * 1024 * 1024;
       if (number.longValue() < min) {
         throw new ConfigException(name, value, "Part size must be at least: " + min + " bytes (5MB)");
       }

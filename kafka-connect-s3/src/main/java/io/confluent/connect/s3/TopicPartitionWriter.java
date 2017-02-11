@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.errors.SchemaProjectorException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -57,15 +58,16 @@ public class TopicPartitionWriter {
   private State state;
   private final Queue<SinkRecord> buffer;
   private final SinkTaskContext context;
-  private int recordCounter;
+  private int recordCount;
   private final int flushSize;
   private final long rotateIntervalMs;
   private final long rotateScheduleIntervalMs;
   private long nextScheduledRotate;
   private final RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
-  private long offset;
+  private long currentOffset;
+  private Long offsetToCommit;
+  private Long nextOffsetToCommit;
   private final Map<String, Long> startOffsets;
-  private final Map<String, Long> offsets;
   private long timeoutMs;
   private long failureTime;
   private final StorageSchemaCompatibility compatibility;
@@ -111,10 +113,9 @@ public class TopicPartitionWriter {
     writers = new HashMap<>();
     currentSchemas = new HashMap<>();
     startOffsets = new HashMap<>();
-    offsets = new HashMap<>();
     state = State.WRITE_STARTED;
     failureTime = -1L;
-    offset = -1L;
+    currentOffset = -1L;
     dirDelim = connectorConfig.getString(StorageCommonConfig.DIRECTORY_DELIM_CONFIG);
     fileDelim = connectorConfig.getString(StorageCommonConfig.FILE_DELIM_CONFIG);
     extension = writerProvider.getExtension();
@@ -176,23 +177,22 @@ public class TopicPartitionWriter {
             String encodedPartition = partitioner.encodePartition(record);
             Schema currentValueSchema = currentSchemas.get(encodedPartition);
             if (currentValueSchema == null) {
-              currentValueSchema = record.valueSchema();
               currentSchemas.put(encodedPartition, valueSchema);
+              currentValueSchema = valueSchema;
             }
 
             if (compatibility.shouldChangeSchema(record, null, currentValueSchema)) {
+              // This branch is never true for the first record read by this TopicPartitionWriter
               currentSchemas.put(encodedPartition, valueSchema);
-              if (recordCounter > 0) {
-                nextState();
-              } else {
-                break;
-              }
+              nextOffsetToCommit = currentOffset;
+              nextState();
             } else {
               SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
               writeRecord(projectedRecord);
               buffer.poll();
               if (shouldRotate(projectedRecord.timestamp())) {
-                log.info("Starting commit and rotation for topic partition {} with start offset {} and end offset {}", tp, startOffsets, offsets);
+                log.info("Starting commit and rotation for topic partition {} with start offset {}", tp, startOffsets);
+                nextOffsetToCommit = currentOffset + 1;
                 nextState();
                 // Fall through and try to rotate immediately
               } else {
@@ -210,8 +210,8 @@ public class TopicPartitionWriter {
             log.error("{} is not a valid state to write record for topic partition {}.", state, tp);
         }
       } catch (SchemaProjectorException | IllegalWorkerStateException e) {
-        throw new RuntimeException(e);
-      } catch (ConnectException e) {
+        throw new ConnectException(e);
+      } catch (RetriableException e) {
         log.error("Exception on topic partition {}: ", tp, e);
         failureTime = time.milliseconds();
         setRetryTimeout(timeoutMs);
@@ -219,10 +219,6 @@ public class TopicPartitionWriter {
       }
     }
     if (buffer.isEmpty()) {
-      // Need to define this corner case in S3
-      // committing files after waiting for rotateIntervalMs time but less than flush.size records available
-      // if (recordCounter > 0 && shouldRotate(now))
-
       resume();
       setState(State.WRITE_STARTED);
     }
@@ -230,23 +226,21 @@ public class TopicPartitionWriter {
 
   public void close() throws ConnectException {
     log.debug("Closing TopicPartitionWriter {}", tp);
-    // abort any outstanding multi-part uploads? Wait for them?
-    // writers.abort?
+    for (RecordWriter writer : writers.values()) {
+      writer.close();
+    }
     writers.clear();
     startOffsets.clear();
-    offsets.clear();
   }
 
   public void buffer(SinkRecord sinkRecord) {
     buffer.add(sinkRecord);
   }
 
-  public long offset() {
-    return offset;
-  }
-
-  public Map<String, RecordWriter> getWriters() {
-    return writers;
+  public Long getOffsetToCommitAndReset() {
+    Long latest = offsetToCommit;
+    offsetToCommit = null;
+    return latest;
   }
 
   private String getDirectoryPrefix(String encodedPartition) {
@@ -262,21 +256,25 @@ public class TopicPartitionWriter {
   }
 
   private boolean shouldRotate(Long timestamp) {
-    // TODO: is this appropriate for late data? (creation of arbitrarily small files possible).
-    // If not, it should be disabled.
     boolean scheduledRotation = rotateScheduleIntervalMs > 0
                                     && timestamp != null
                                     && timestamp >= nextScheduledRotate;
-    boolean messageSizeRotation = recordCounter >= flushSize;
+    boolean messageSizeRotation = recordCount >= flushSize;
+
+    log.trace("Should rotate (count {} >= flush size {} and schedule interval {} next schedule {} timestamp {})? {}",
+              recordCount, flushSize, rotateScheduleIntervalMs, nextScheduledRotate, timestamp,
+              scheduledRotation || messageSizeRotation);
 
     return scheduledRotation || messageSizeRotation;
   }
 
   private void pause() {
+    log.trace("Pausing writer for topic-partition '{}'", tp);
     context.pause(tp);
   }
 
   private void resume() {
+    log.trace("Resuming writer for topic-partition '{}'", tp);
     context.resume(tp);
   }
 
@@ -318,28 +316,29 @@ public class TopicPartitionWriter {
   }
 
   private void writeRecord(SinkRecord record) {
-    // TODO: double-check this is valid in all cases of start-up/recovery
-    if (offset == -1) {
-      offset = record.kafkaOffset();
-    }
+    currentOffset = record.kafkaOffset();
 
     String encodedPartition = partitioner.encodePartition(record);
     if (!startOffsets.containsKey(encodedPartition)) {
-      startOffsets.put(encodedPartition, record.kafkaOffset());
+      log.trace("Setting writer's start offset for '{}' to {}", encodedPartition, currentOffset);
+      startOffsets.put(encodedPartition, currentOffset);
     }
 
     RecordWriter writer = getWriter(record, encodedPartition);
     writer.write(record);
-
-    offsets.put(encodedPartition, record.kafkaOffset());
-    recordCounter++;
+    ++recordCount;
   }
 
   private void commitFiles() {
-    for (String encodedPartition : commitFiles.keySet()) {
-      commitFile(encodedPartition);
+    for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
+      commitFile(entry.getKey());
+      log.debug("Committed {} for {}", entry.getValue(), tp);
     }
+    offsetToCommit = nextOffsetToCommit;
+    commitFiles.clear();
     currentSchemas.clear();
+    recordCount = 0;
+    log.info("Files committed to S3. Target commit offset for {} is {}", tp, offsetToCommit);
   }
 
   private void commitFile(String encodedPartition) {
@@ -350,19 +349,13 @@ public class TopicPartitionWriter {
 
     if (writers.containsKey(encodedPartition)) {
       RecordWriter writer = writers.get(encodedPartition);
-      writer.close();
+      // Commits the file and closes the underlying output stream.
+      writer.commit();
       writers.remove(encodedPartition);
+      log.debug("Removed writer for '{}'", encodedPartition);
     }
 
-    long commitOffset = offsets.get(encodedPartition);
-    log.debug("Resetting offset for {} to {}", tp, commitOffset);
-    context.offset(tp, commitOffset);
-
     startOffsets.remove(encodedPartition);
-    String filename = commitFiles.remove(encodedPartition);
-    offset = -1L;
-    recordCounter = 0;
-    log.info("Committed {} for {}", filename, tp);
   }
 
   private void setRetryTimeout(long timeoutMs) {
