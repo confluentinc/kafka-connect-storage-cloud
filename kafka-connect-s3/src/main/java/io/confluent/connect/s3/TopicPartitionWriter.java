@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.errors.SchemaProjectorException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -208,8 +209,8 @@ public class TopicPartitionWriter {
             log.error("{} is not a valid state to write record for topic partition {}.", state, tp);
         }
       } catch (SchemaProjectorException | IllegalWorkerStateException e) {
-        throw new RuntimeException(e);
-      } catch (ConnectException e) {
+        throw new ConnectException(e);
+      } catch (RetriableException e) {
         log.error("Exception on topic partition {}: ", tp, e);
         failureTime = time.milliseconds();
         setRetryTimeout(timeoutMs);
@@ -225,9 +226,7 @@ public class TopicPartitionWriter {
   public void close() throws ConnectException {
     log.debug("Closing TopicPartitionWriter {}", tp);
     for (RecordWriter writer : writers.values()) {
-      if (writer != null) {
-        writer.close();
-      }
+      writer.close();
     }
     writers.clear();
     startOffsets.clear();
@@ -243,10 +242,6 @@ public class TopicPartitionWriter {
     return latest;
   }
 
-  public Map<String, RecordWriter> getWriters() {
-    return writers;
-  }
-
   private String getDirectoryPrefix(String encodedPartition) {
     return partitioner.generatePartitionedPath(tp.topic(), encodedPartition);
   }
@@ -260,8 +255,6 @@ public class TopicPartitionWriter {
   }
 
   private boolean shouldRotate(Long timestamp) {
-    // TODO: is this appropriate for late data? (creation of arbitrarily small files possible).
-    // If not, it should be disabled.
     boolean scheduledRotation = rotateScheduleIntervalMs > 0
                                     && timestamp != null
                                     && timestamp >= nextScheduledRotate;

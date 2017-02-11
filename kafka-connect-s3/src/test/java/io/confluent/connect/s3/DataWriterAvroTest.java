@@ -24,11 +24,10 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.SchemaProjector;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -212,12 +211,12 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
 
     task.close(context.assignment());
     // Set the new assignment to the context
-    assignment = nextAssignment;
+    context.setAssignment(nextAssignment);
     task.open(context.assignment());
 
-    assertEquals(null, task.getTopicPartionWriter(TOPIC_PARTITION2));
-    assertNotNull(task.getTopicPartionWriter(TOPIC_PARTITION));
-    assertNotNull(task.getTopicPartionWriter(TOPIC_PARTITION3));
+    assertEquals(null, task.getTopicPartitionWriter(TOPIC_PARTITION2));
+    assertNotNull(task.getTopicPartitionWriter(TOPIC_PARTITION));
+    assertNotNull(task.getTopicPartitionWriter(TOPIC_PARTITION3));
 
     long[] validOffsets = {0, 3, 6};
     verify(sinkRecords, validOffsets, originalAssignment);
@@ -297,10 +296,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     verify(sinkRecords, validOffsets);
   }
 
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
-
-  @Test
+  @Test(expected=ConnectException.class)
   public void testProjectNoVersion() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "2");
     localProps.put(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG, "BACKWARD");
@@ -310,7 +306,6 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     List<SinkRecord> sinkRecords = createRecordsNoVersion(1, 0);
     sinkRecords.addAll(createRecordsWithAlteringSchemas(7, 0));
 
-    thrown.expect(RuntimeException.class);
     // Perform write
     try {
       task.put(sinkRecords);

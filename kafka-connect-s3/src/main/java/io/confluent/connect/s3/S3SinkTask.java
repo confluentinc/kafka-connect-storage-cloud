@@ -207,7 +207,7 @@ public class S3SinkTask extends SinkTask {
     }
   }
 
-  TopicPartitionWriter getTopicPartionWriter(TopicPartition tp) {
+  TopicPartitionWriter getTopicPartitionWriter(TopicPartition tp) {
     return topicPartitionWriters.get(tp);
   }
 }
