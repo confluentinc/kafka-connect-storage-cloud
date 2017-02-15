@@ -19,6 +19,7 @@ package io.confluent.connect.s3;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -38,6 +39,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import io.confluent.connect.s3.format.avro.AvroUtils;
@@ -192,6 +194,51 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
 
     long[] validOffsets = {9, 12, 15};
     verify(sinkRecords, validOffsets, context.assignment());
+  }
+
+  @Test
+  public void testPreCommit() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "3");
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+
+    List<SinkRecord> sinkRecords1 = createRecordsInterleaved(3 * context.assignment().size(), 0, context.assignment());
+
+    task.put(sinkRecords1);
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = task.preCommit(null);
+
+    long[] validOffsets1 = {3, 3};
+    verifyOffsets(offsetsToCommit, validOffsets1, context.assignment());
+
+    List<SinkRecord> sinkRecords2 = createRecordsInterleaved(2 * context.assignment().size(), 3, context.assignment());
+
+    task.put(sinkRecords2);
+    offsetsToCommit = task.preCommit(null);
+
+    // Actual values are null, we set to negative for the verifier.
+    long[] validOffsets2 = {-1, -1};
+    verifyOffsets(offsetsToCommit, validOffsets2, context.assignment());
+
+    List<SinkRecord> sinkRecords3 = createRecordsInterleaved(context.assignment().size(), 5, context.assignment());
+
+    task.put(sinkRecords3);
+    offsetsToCommit = task.preCommit(null);
+
+    long[] validOffsets3 = {6, 6};
+    verifyOffsets(offsetsToCommit, validOffsets3, context.assignment());
+
+    List<SinkRecord> sinkRecords4 = createRecordsInterleaved(3 * context.assignment().size(), 6, context.assignment());
+
+    // Include all the records beside the last one in the second partition
+    task.put(sinkRecords4.subList(0, 3 * context.assignment().size() - 1));
+    offsetsToCommit = task.preCommit(null);
+
+    // Actual values are null, we set to negative for the verifier.
+    long[] validOffsets4 = {9, -1};
+    verifyOffsets(offsetsToCommit, validOffsets4, context.assignment());
+
+    task.close(context.assignment());
+    task.stop();
   }
 
   @Test
@@ -510,6 +557,27 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
         j += size;
       }
     }
+  }
+
+  /**
+   * Verify files and records are uploaded appropriately.
+   * @param sinkRecords a flat list of the records that need to appear in potentially several files in S3.
+   * @param validOffsets an array containing the offsets that map to uploaded files for a topic-partition.
+   *                     Offsets appear in ascending order, the difference between two consecutive offsets
+   *                     equals the expected size of the file, and last offset in exclusive.
+   * @throws IOException
+   */
+  protected void verifyOffsets(Map<TopicPartition, OffsetAndMetadata> actualOffsets, long[] validOffsets,
+                              Set<TopicPartition> partitions) {
+    int i = 0;
+    Map<TopicPartition, OffsetAndMetadata> expectedOffsets = new HashMap<>();
+    for (TopicPartition tp : partitions) {
+      long offset = validOffsets[i++];
+      if (offset >= 0) {
+        expectedOffsets.put(tp, new OffsetAndMetadata(offset, ""));
+      }
+    }
+    assertTrue(Objects.equals(actualOffsets, expectedOffsets));
   }
 }
 
