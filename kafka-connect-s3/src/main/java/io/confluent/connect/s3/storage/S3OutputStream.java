@@ -41,7 +41,9 @@ import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
 
 /**
- * (The implementation has borrowed the general structure from Hadoop's implementation
+ * Output stream enabling multi-part uploads of Kafka records.
+ *
+ * The implementation has borrowed the general structure of Hadoop's implementation.
  */
 public class S3OutputStream extends OutputStream {
   private static final Logger log = LoggerFactory.getLogger(S3OutputStream.class);
