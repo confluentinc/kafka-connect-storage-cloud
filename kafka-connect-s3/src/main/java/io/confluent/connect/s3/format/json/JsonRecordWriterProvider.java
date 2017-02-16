@@ -16,14 +16,14 @@
 
 package io.confluent.connect.s3.format.json;
 
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.storage.S3OutputStream;
@@ -36,9 +36,11 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
   private static final Logger log = LoggerFactory.getLogger(JsonRecordWriterProvider.class);
   private static final String EXTENSION = ".json";
   private final S3Storage storage;
+  private final ObjectMapper mapper;
 
   JsonRecordWriterProvider(S3Storage storage) {
     this.storage = storage;
+    this.mapper = new ObjectMapper();
   }
 
   @Override
@@ -51,14 +53,13 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
     try {
       return new RecordWriter() {
         final S3OutputStream s3out = storage.create(filename, true);
-        final ObjectOutputStream writer = new ObjectOutputStream(s3out);
+        final JsonGenerator writer = mapper.getFactory().createGenerator(s3out);
 
         @Override
         public void write(SinkRecord record) {
           log.trace("Sink record: {}", record);
           try {
             writer.writeObject(record.value());
-            writer.write("\n".getBytes());
           } catch (IOException e) {
             throw new ConnectException(e);
           }

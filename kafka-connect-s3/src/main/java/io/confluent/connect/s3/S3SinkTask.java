@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Set;
 
 import io.confluent.connect.avro.AvroData;
+import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.StorageFactory;
@@ -58,7 +59,7 @@ public class S3SinkTask extends SinkTask {
   private AvroData avroData;
 
   /**
-   * No-arg consturctor. Used by Connect framework.
+   * No-arg constructor. Used by Connect framework.
    */
   public S3SinkTask() {
     // no-arg constructor required by Connect framework.
@@ -133,6 +134,10 @@ public class S3SinkTask extends SinkTask {
                                                                    NoSuchMethodException {
     Class<Format<S3SinkConnectorConfig, String>> formatClass =
         (Class<Format<S3SinkConnectorConfig, String>>) connectorConfig.getClass(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG);
+    if (formatClass.isAssignableFrom(JsonFormat.class)) {
+      return formatClass.getConstructor(S3Storage.class).newInstance(storage);
+    }
+
     return formatClass.getConstructor(S3Storage.class, AvroData.class).newInstance(storage, avroData);
   }
 

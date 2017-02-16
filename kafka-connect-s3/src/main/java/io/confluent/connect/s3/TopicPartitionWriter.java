@@ -181,7 +181,7 @@ public class TopicPartitionWriter {
               currentValueSchema = valueSchema;
             }
 
-            if (compatibility.shouldChangeSchema(record, null, currentValueSchema)) {
+            if (compatibility.shouldChangeSchema(record, null, currentValueSchema) && recordCount > 0) {
               // This branch is never true for the first record read by this TopicPartitionWriter
               currentSchemas.put(encodedPartition, valueSchema);
               nextOffsetToCommit = currentOffset;

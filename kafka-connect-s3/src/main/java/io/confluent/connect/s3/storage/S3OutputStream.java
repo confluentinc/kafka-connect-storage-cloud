@@ -121,7 +121,7 @@ public class S3OutputStream extends OutputStream {
 
   public void commit() throws IOException {
     if (closed) {
-      log.warn("Tried to commit data for bucket '{}' key '{}' on a closed stream. Ignoring.");
+      log.warn("Tried to commit data for bucket '{}' key '{}' on a closed stream. Ignoring.", bucket, key);
       return;
     }
 

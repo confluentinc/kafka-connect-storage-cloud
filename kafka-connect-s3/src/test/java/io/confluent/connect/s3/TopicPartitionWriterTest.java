@@ -184,12 +184,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String dirPrefix3 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(18));
 
     List<Struct> expectedRecords = new ArrayList<>();
-    long lbase = 16;
-    double dbase = 12.2;
+    int ibase = 16;
+    float fbase = 12.2f;
     // The expected sequence of records is constructed taking into account that sorting of files occurs in verify
     for (int i = 0; i < 3; ++i) {
       for (int j = 0; j < 6; ++j) {
-        expectedRecords.add(createRecord(schema, lbase + i, dbase + i));
+        expectedRecords.add(createRecord(schema, ibase + i, fbase + i));
       }
     }
 
@@ -270,32 +270,28 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     topicPartitionWriter.close();
 
     String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
-    List<String> expectedFiles = new ArrayList<>();
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, "%02d"));
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, "%02d"));
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, "%02d"));
     // Record size argument does not matter.
     verify(Collections.<String>emptyList(), -1, schema, records);
   }
 
   // Create a batch of records with incremental numeric field values. Total number of records is given by 'size'.
-  private Struct createRecord(Schema schema, long lbase, double dbase) {
+  private Struct createRecord(Schema schema, int ibase, float fbase) {
     return new Struct(schema)
                .put("boolean", true)
-               .put("int", (int) lbase)
-               .put("long", lbase)
-               .put("float", (float) dbase)
-               .put("double", dbase);
+               .put("int", ibase)
+               .put("long", (long) ibase)
+               .put("float", fbase)
+               .put("double", (double) fbase);
   }
 
   // Create a batch of records with incremental numeric field values. Total number of records is given by 'size'.
   private List<Struct> createRecordBatch(Schema schema, int size) {
     ArrayList<Struct> records = new ArrayList<>(size);
-    long lbase = 16;
-    double dbase = 12.2;
+    int ibase = 16;
+    float fbase = 12.2f;
 
     for (int i = 0; i < size; ++i) {
-      records.add(createRecord(schema, lbase + i, dbase + i));
+      records.add(createRecord(schema, ibase + i, fbase + i));
     }
     return records;
   }
@@ -333,7 +329,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     int index = 0;
     for (String fileKey : actualFiles) {
-      Collection<Object> actualRecords = readRecords(S3_TEST_BUCKET_NAME, fileKey, s3);
+      Collection<Object> actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3);
       assertEquals(expectedSize, actualRecords.size());
       for (Object avroRecord : actualRecords) {
         Object expectedRecord = avroData.fromConnectData(schema, records.get(index++));

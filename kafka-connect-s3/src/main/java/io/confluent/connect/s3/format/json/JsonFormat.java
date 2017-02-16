@@ -26,7 +26,7 @@ import io.confluent.connect.storage.hive.HiveFactory;
 public class JsonFormat implements Format<S3SinkConnectorConfig, String> {
   private final S3Storage storage;
 
-  JsonFormat(S3Storage storage) {
+  public JsonFormat(S3Storage storage) {
     this.storage = storage;
   }
 
