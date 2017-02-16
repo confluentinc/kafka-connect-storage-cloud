@@ -42,7 +42,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   private final String bucketName;
   private final AmazonS3 s3;
   private final S3SinkConnectorConfig conf;
-  private final String versionFormat;
+  private static final String VERSION_FORMAT = "APN/1.0 Confluent/%1$s Kafka S3 Connector/%1$s";
 
   /**
    * Construct an S3 storage class given a configuration and an AWS S3 address.
@@ -53,7 +53,6 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   public S3Storage(S3SinkConnectorConfig conf, String url) {
     this.url = url;
     this.conf = conf;
-    this.versionFormat = "APN/1.0 Confluent/%1$s Kafka S3 Connector/%1$s";
     this.bucketName = conf.getBucketName();
     this.s3 = newS3Client(conf);
   }
@@ -66,7 +65,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
                                         .withClientConfiguration(
                                             PredefinedClientConfigurations.defaultConfig()
                                                 .withUserAgentPrefix(
-                                                    String.format(versionFormat, Version.getVersion())));
+                                                    String.format(VERSION_FORMAT, Version.getVersion())));
 
     builder = StringUtils.isBlank(url) ?
                   builder.withRegion(config.getString(REGION_CONFIG)) :
@@ -79,7 +78,6 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   public S3Storage(S3SinkConnectorConfig conf, String url, String bucketName, AmazonS3 s3) {
     this.url = url;
     this.conf = conf;
-    this.versionFormat = "APN/1.0 Confluent/%1$s Kafka S3 Connector/1$s";
     this.bucketName = bucketName;
     this.s3 = s3;
   }
