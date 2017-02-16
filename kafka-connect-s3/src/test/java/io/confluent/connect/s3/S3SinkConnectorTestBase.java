@@ -26,7 +26,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.storage.StorageSinkTestBase;
 import io.confluent.connect.storage.common.StorageCommonConfig;
@@ -43,7 +42,6 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
 
   protected S3SinkConnectorConfig connectorConfig;
   protected String topicsDir;
-  protected AvroData avroData;
   protected Map<String, Object> parsedConfig;
   protected SchemaCompatibility compatibility;
 
@@ -72,8 +70,6 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     super.setUp();
     connectorConfig = new MockS3SinkConnectorConfig(properties);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
-    int schemaCacheSize = connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG);
-    avroData = new AvroData(schemaCacheSize);
     parsedConfig = new HashMap<>(connectorConfig.plainValues());
     compatibility = StorageSchemaCompatibility.getCompatibility(
                     connectorConfig.getString(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG));

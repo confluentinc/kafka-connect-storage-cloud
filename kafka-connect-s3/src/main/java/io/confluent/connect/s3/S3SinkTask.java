@@ -35,8 +35,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import io.confluent.connect.avro.AvroData;
-import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.StorageFactory;
@@ -55,8 +53,8 @@ public class S3SinkTask extends SinkTask {
   private final Set<TopicPartition> assignment;
   private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
   private Partitioner<FieldSchema> partitioner;
+  private Format<S3SinkConnectorConfig, String> format;
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
-  private AvroData avroData;
 
   /**
    * No-arg constructor. Used by Connect framework.
@@ -69,16 +67,16 @@ public class S3SinkTask extends SinkTask {
 
   // visible for testing.
   S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage,
-             Partitioner<FieldSchema> partitioner, AvroData avroData) throws Exception {
+             Partitioner<FieldSchema> partitioner, Format<S3SinkConnectorConfig, String> format) throws Exception {
     this();
     this.connectorConfig = connectorConfig;
     this.context = context;
     this.storage = storage;
     this.partitioner = partitioner;
-    this.avroData = avroData;
+    this.format = format;
 
     url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
-    writerProvider = newFormat().getRecordWriterProvider();
+    writerProvider = this.format.getRecordWriterProvider();
 
     open(context.assignment());
     log.info("Started S3 connector task with assigned partitions {}", assignment);
@@ -98,7 +96,6 @@ public class S3SinkTask extends SinkTask {
         throw new DataException("No-existent S3 bucket: " + connectorConfig.getBucketName());
       }
 
-      avroData = new AvroData(connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG));
       writerProvider = newFormat().getRecordWriterProvider();
       partitioner = newPartitioner(connectorConfig);
 
@@ -134,11 +131,7 @@ public class S3SinkTask extends SinkTask {
                                                                    NoSuchMethodException {
     Class<Format<S3SinkConnectorConfig, String>> formatClass =
         (Class<Format<S3SinkConnectorConfig, String>>) connectorConfig.getClass(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG);
-    if (formatClass.isAssignableFrom(JsonFormat.class)) {
-      return formatClass.getConstructor(S3Storage.class).newInstance(storage);
-    }
-
-    return formatClass.getConstructor(S3Storage.class, AvroData.class).newInstance(storage, avroData);
+    return formatClass.getConstructor(S3Storage.class).newInstance(storage);
   }
 
   private Partitioner<FieldSchema> newPartitioner(S3SinkConnectorConfig config)
@@ -213,7 +206,13 @@ public class S3SinkTask extends SinkTask {
     }
   }
 
+  // Visible for testing
   TopicPartitionWriter getTopicPartitionWriter(TopicPartition tp) {
     return topicPartitionWriters.get(tp);
+  }
+
+  // Visible for testing
+  Format<S3SinkConnectorConfig, String> getFormat() {
+    return format;
   }
 }

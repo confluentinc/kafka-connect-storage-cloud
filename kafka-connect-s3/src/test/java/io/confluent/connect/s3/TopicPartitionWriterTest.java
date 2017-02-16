@@ -56,6 +56,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private S3Storage storage;
+  private AvroFormat format;
   private static String extension;
 
   private AmazonS3 s3;
@@ -73,8 +74,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     s3 = newS3Client(connectorConfig);
     storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+    format = new AvroFormat(storage);
 
-    Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage, avroData);
+    Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
     writerProvider = format.getRecordWriterProvider();
     extension = writerProvider.getExtension();
   }
@@ -332,7 +334,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       Collection<Object> actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3);
       assertEquals(expectedSize, actualRecords.size());
       for (Object avroRecord : actualRecords) {
-        Object expectedRecord = avroData.fromConnectData(schema, records.get(index++));
+        Object expectedRecord = format.getAvroData().fromConnectData(schema, records.get(index++));
         assertEquals(expectedRecord, avroRecord);
       }
     }

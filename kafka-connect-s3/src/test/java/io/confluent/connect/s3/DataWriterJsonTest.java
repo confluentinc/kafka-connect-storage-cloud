@@ -19,10 +19,8 @@ package io.confluent.connect.s3;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
@@ -35,7 +33,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 import io.confluent.connect.s3.format.json.JsonFormat;
@@ -57,6 +54,7 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
   protected S3Storage storage;
   protected AmazonS3 s3;
   Partitioner<FieldSchema> partitioner;
+  JsonFormat format;
   S3SinkTask task;
   Map<String, String> localProps = new HashMap<>();
 
@@ -67,7 +65,7 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
     return props;
   }
 
-  //@Before should be ommitted in order to be able to add properties per test.
+  //@Before should be omitted in order to be able to add properties per test.
   public void setUp() throws Exception {
     super.setUp();
 
@@ -77,6 +75,7 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
 
     partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
+    format = new JsonFormat(storage);
     s3.createBucket(S3_TEST_BUCKET_NAME);
     assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
   }
@@ -92,7 +91,7 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
   public void testNoSchema() throws Exception {
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
 
     List<SinkRecord> sinkRecords = createRecordsNoSchema(7 * context.assignment().size(), 0, context.assignment());
     task.put(sinkRecords);
@@ -101,16 +100,6 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
 
     long[] validOffsets = {0, 3, 6};
     verify(sinkRecords, validOffsets, context.assignment());
-  }
-
-  /**
-   * Return a list of new records starting at zero offset.
-   *
-   * @param size the number of records to return.
-   * @return
-   */
-  protected List<SinkRecord> createRecords(int size) {
-    return createRecords(size, 0);
   }
 
   /**
@@ -165,73 +154,6 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
     return sinkRecords;
   }
 
-  protected List<SinkRecord> createRecordsNoVersion(int size, long startOffset) {
-    String key = "key";
-    Schema schemaNoVersion = SchemaBuilder.struct().name("record")
-                                 .field("boolean", Schema.BOOLEAN_SCHEMA)
-                                 .field("int", Schema.INT32_SCHEMA)
-                                 .field("long", Schema.INT64_SCHEMA)
-                                 .field("float", Schema.FLOAT32_SCHEMA)
-                                 .field("double", Schema.FLOAT64_SCHEMA)
-                                 .build();
-
-    Struct recordNoVersion = new Struct(schemaNoVersion);
-    recordNoVersion.put("boolean", true)
-        .put("int", 12)
-        .put("long", 12L)
-        .put("float", 12.2f)
-        .put("double", 12.2);
-
-    List<SinkRecord> sinkRecords = new ArrayList<>();
-    for (long offset = startOffset; offset < startOffset + size; ++offset) {
-      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schemaNoVersion,
-                                     recordNoVersion, offset));
-    }
-    return sinkRecords;
-  }
-
-  protected List<SinkRecord> createRecordsWithAlteringSchemas(int size, long startOffset) {
-    String key = "key";
-    Schema schema = createSchema();
-    Struct record = createRecord(schema);
-    Schema newSchema = createNewSchema();
-    Struct newRecord = createNewRecord(newSchema);
-
-    int limit = (size / 2) * 2;
-    boolean remainder = size % 2 > 0;
-    List<SinkRecord> sinkRecords = new ArrayList<>();
-    for (long offset = startOffset; offset < startOffset + limit; ++offset) {
-      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, record, offset));
-      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, newSchema, newRecord, ++offset));
-    }
-    if (remainder) {
-      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, record,
-                                     startOffset + size - 1));
-    }
-    return sinkRecords;
-  }
-
-  protected List<SinkRecord> createRecordsInterleaved(int size, long startOffset, Set<TopicPartition> partitions) {
-    String key = "key";
-    Schema schema = createSchema();
-    Struct record = createRecord(schema);
-
-    List<SinkRecord> sinkRecords = new ArrayList<>();
-    for (long offset = startOffset, total = 0; total < size; ++offset) {
-      for (TopicPartition tp : partitions) {
-        sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), Schema.STRING_SCHEMA, key, schema, record, offset));
-        if (++total >= size) {
-          break;
-        }
-      }
-    }
-    return sinkRecords;
-  }
-
-  protected String getDirectory() {
-    return getDirectory(TOPIC, PARTITION);
-  }
-
   protected String getDirectory(String topic, int partition) {
     String encodedPartition = "partition=" + String.valueOf(partition);
     return partitioner.generatePartitionedPath(topic, encodedPartition);
@@ -276,10 +198,6 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
     }
   }
 
-  protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets) throws IOException {
-    verify(sinkRecords, validOffsets, Collections.singleton(new TopicPartition(TOPIC, PARTITION)), false);
-  }
-
   protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, Set<TopicPartition> partitions)
       throws IOException {
     verify(sinkRecords, validOffsets, partitions, false);
@@ -313,27 +231,6 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
         j += size;
       }
     }
-  }
-
-  /**
-   * Verify files and records are uploaded appropriately.
-   * @param sinkRecords a flat list of the records that need to appear in potentially several files in S3.
-   * @param validOffsets an array containing the offsets that map to uploaded files for a topic-partition.
-   *                     Offsets appear in ascending order, the difference between two consecutive offsets
-   *                     equals the expected size of the file, and last offset in exclusive.
-   * @throws IOException
-   */
-  protected void verifyOffsets(Map<TopicPartition, OffsetAndMetadata> actualOffsets, long[] validOffsets,
-                              Set<TopicPartition> partitions) {
-    int i = 0;
-    Map<TopicPartition, OffsetAndMetadata> expectedOffsets = new HashMap<>();
-    for (TopicPartition tp : partitions) {
-      long offset = validOffsets[i++];
-      if (offset >= 0) {
-        expectedOffsets.put(tp, new OffsetAndMetadata(offset, ""));
-      }
-    }
-    assertTrue(Objects.equals(actualOffsets, expectedOffsets));
   }
 }
 

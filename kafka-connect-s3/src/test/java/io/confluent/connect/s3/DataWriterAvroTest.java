@@ -42,6 +42,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.avro.AvroUtils;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
@@ -62,6 +63,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   private final String extension = ".avro";
   protected S3Storage storage;
   protected AmazonS3 s3;
+  AvroFormat format;
   Partitioner<FieldSchema> partitioner;
   S3SinkTask task;
   Map<String, String> localProps = new HashMap<>();
@@ -83,6 +85,8 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
 
     partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
+    format = new AvroFormat(storage);
+
     s3.createBucket(S3_TEST_BUCKET_NAME);
     assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
   }
@@ -97,7 +101,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   @Test
   public void testWriteRecords() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
 
     List<SinkRecord> sinkRecords = createRecords(7);
     // Perform write
@@ -116,14 +120,14 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
 
     // Upload partial file.
     List<SinkRecord> sinkRecords = createRecords(2);
-    byte[] partialData = AvroUtils.putRecords(sinkRecords, avroData);
+    byte[] partialData = AvroUtils.putRecords(sinkRecords, format.getAvroData());
     String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT);
     s3.putObject(S3_TEST_BUCKET_NAME, fileKey, new ByteArrayInputStream(partialData), null);
 
     // Accumulate rest of the records.
     sinkRecords.addAll(createRecords(5, 2));
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
     // Perform write
     task.put(sinkRecords);
     task.close(context.assignment());
@@ -138,7 +142,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10000");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
 
     List<SinkRecord> sinkRecords = createRecords(11000);
 
@@ -154,7 +158,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   @Test
   public void testWriteRecordsInMultiplePartitions() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
 
     List<SinkRecord> sinkRecords = createRecords(7, 0, context.assignment());
     // Perform write
@@ -169,7 +173,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   @Test
   public void testWriteInterleavedRecordsInMultiplePartitions() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
 
     List<SinkRecord> sinkRecords = createRecordsInterleaved(7 * context.assignment().size(), 0, context.assignment());
     // Perform write
@@ -184,7 +188,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   @Test
   public void testWriteInterleavedRecordsInMultiplePartitionsNonZeroInitialOffset() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
 
     List<SinkRecord> sinkRecords = createRecordsInterleaved(7 * context.assignment().size(), 9, context.assignment());
     // Perform write
@@ -200,7 +204,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   public void testPreCommit() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "3");
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
 
     List<SinkRecord> sinkRecords1 = createRecordsInterleaved(3 * context.assignment().size(), 0, context.assignment());
 
@@ -244,7 +248,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   @Test
   public void testRebalance() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
 
     List<SinkRecord> sinkRecords = createRecordsInterleaved(7 * context.assignment().size(), 0, context.assignment());
     // Starts with TOPIC_PARTITION and TOPIC_PARTITION2
@@ -295,7 +299,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     localProps.put(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG, "BACKWARD");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
     List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(7, 0);
 
     // Perform write
@@ -312,7 +316,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "2");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
     List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(7, 0);
 
     // Perform write
@@ -330,7 +334,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     localProps.put(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG, "FORWARD");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
     // By excluding the first element we get a list starting with record having the new schema.
     List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(8, 0).subList(1, 8);
 
@@ -349,7 +353,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     localProps.put(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG, "BACKWARD");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, avroData);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
     List<SinkRecord> sinkRecords = createRecordsNoVersion(1, 0);
     sinkRecords.addAll(createRecordsWithAlteringSchemas(7, 0));
 
@@ -511,7 +515,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
       Object expectedValue = SchemaProjector.project(expectedRecords.get(startIndex).valueSchema(),
                                                      expectedRecords.get(startIndex++).value(),
                                                      expectedSchema);
-      assertEquals(avroData.fromConnectData(expectedSchema, expectedValue), avroRecord);
+      assertEquals(format.getAvroData().fromConnectData(expectedSchema, expectedValue), avroRecord);
     }
   }
 

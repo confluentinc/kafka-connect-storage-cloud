@@ -91,7 +91,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
 
     // Upload partial file.
     List<SinkRecord> sinkRecords = createRecords(2);
-    byte[] partialData = AvroUtils.putRecords(sinkRecords, avroData);
+    byte[] partialData = AvroUtils.putRecords(sinkRecords, format.getAvroData());
     String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT);
     s3.putObject(S3_TEST_BUCKET_NAME, fileKey, new ByteArrayInputStream(partialData), null);
 
