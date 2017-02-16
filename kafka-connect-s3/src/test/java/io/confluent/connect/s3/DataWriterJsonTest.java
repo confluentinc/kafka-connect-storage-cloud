@@ -134,17 +134,17 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
     List<SinkRecord> sinkRecords = new ArrayList<>();
     for (long offset = startOffset, total = 0; total < size; ++offset) {
       for (TopicPartition tp : partitions) {
-      String record = "{\"schema\":{\"type\":\"struct\",\"fields\":[ " +
-                          "{\"type\":\"boolean\",\"optional\":true,\"field\":\"booleanField\"}," +
-                          "{\"type\":\"int32\",\"optional\":true,\"field\":\"intField\"}," +
-                          "{\"type\":\"int64\",\"optional\":true,\"field\":\"longField\"}," +
-                          "{\"type\":\"string\",\"optional\":false,\"field\":\"stringField\"}]," +
-                          "\"payload\":" +
-                          "{\"booleanField\":\"true\"," +
-                          "\"intField\":" + String.valueOf(ibase) + "," +
-                          "\"longField\":" + String.valueOf((long) ibase) + "," +
-                          "\"stringField\":str" + String.valueOf(ibase) +
-                          "}}";
+        String record = "{\"schema\":{\"type\":\"struct\",\"fields\":[ " +
+                            "{\"type\":\"boolean\",\"optional\":true,\"field\":\"booleanField\"}," +
+                            "{\"type\":\"int32\",\"optional\":true,\"field\":\"intField\"}," +
+                            "{\"type\":\"int64\",\"optional\":true,\"field\":\"longField\"}," +
+                            "{\"type\":\"string\",\"optional\":false,\"field\":\"stringField\"}]," +
+                            "\"payload\":" +
+                            "{\"booleanField\":\"true\"," +
+                            "\"intField\":" + String.valueOf(ibase) + "," +
+                            "\"longField\":" + String.valueOf((long) ibase) + "," +
+                            "\"stringField\":str" + String.valueOf(ibase) +
+                            "}}";
         sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), null, key, null, record, offset));
         if (++total >= size) {
           break;
