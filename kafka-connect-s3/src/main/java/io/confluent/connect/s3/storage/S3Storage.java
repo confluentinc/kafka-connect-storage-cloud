@@ -42,7 +42,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   private final String bucketName;
   private final AmazonS3 s3;
   private final S3SinkConnectorConfig conf;
-  private static final String VERSION_FORMAT = "APN/1.0 Confluent/%1$s Kafka S3 Connector/%1$s";
+  private static final String VERSION_FORMAT = "APN/1.0 Confluent/1.0 KafkaS3Connector/%s";
 
   /**
    * Construct an S3 storage class given a configuration and an AWS S3 address.
