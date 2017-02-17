@@ -22,11 +22,13 @@ import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -49,6 +51,7 @@ import static org.junit.Assert.assertTrue;
 public class DataWriterJsonTest extends TestWithMockedS3 {
 
   private static final String ZERO_PAD_FMT = "%010d";
+  private JsonConverter converter;
 
   private final String extension = ".json";
   protected S3Storage storage;
@@ -68,9 +71,10 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
   //@Before should be omitted in order to be able to add properties per test.
   public void setUp() throws Exception {
     super.setUp();
+    converter = new JsonConverter();
+    converter.configure(Collections.singletonMap("schemas.enable", "false"), false);
 
     s3 = newS3Client(connectorConfig);
-
     storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
 
     partitioner = new DefaultPartitioner<>();
@@ -88,12 +92,12 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
   }
 
   @Test
-  public void testNoSchema() throws Exception {
+  public void testWithSchema() throws Exception {
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
 
-    List<SinkRecord> sinkRecords = createRecordsNoSchema(7 * context.assignment().size(), 0, context.assignment());
+    List<SinkRecord> sinkRecords = createRecordsInterleaved(7 * context.assignment().size(), 0, context.assignment());
     task.put(sinkRecords);
     task.close(context.assignment());
     task.stop();
@@ -102,15 +106,36 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
     verify(sinkRecords, validOffsets, context.assignment());
   }
 
-  /**
-   * Return a list of new records starting at the given offset.
-   *
-   * @param size the number of records to return.
-   * @param startOffset the starting offset.
-   * @return the list of records.
-   */
-  protected List<SinkRecord> createRecords(int size, long startOffset) {
-    return createRecords(size, startOffset, Collections.singleton(new TopicPartition(TOPIC, PARTITION)));
+  @Test
+  public void testNoSchema() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+
+    List<SinkRecord> sinkRecords = createJsonRecordsWithoutSchema(7 * context.assignment().size(), 0, context.assignment());
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 3, 6};
+    verify(sinkRecords, validOffsets, context.assignment());
+  }
+
+  protected List<SinkRecord> createRecordsInterleaved(int size, long startOffset, Set<TopicPartition> partitions) {
+    String key = "key";
+    Schema schema = createSchema();
+    Struct record = createRecord(schema);
+
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    for (long offset = startOffset, total = 0; total < size; ++offset) {
+      for (TopicPartition tp : partitions) {
+        sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), Schema.STRING_SCHEMA, key, schema, record, offset));
+        if (++total >= size) {
+          break;
+        }
+      }
+    }
+    return sinkRecords;
   }
 
   protected List<SinkRecord> createRecords(int size, long startOffset, Set<TopicPartition> partitions) {
@@ -127,7 +152,7 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
     return sinkRecords;
   }
 
-  protected List<SinkRecord> createRecordsNoSchema(int size, long startOffset, Set<TopicPartition> partitions) {
+  protected List<SinkRecord> createJsonRecordsWithoutSchema(int size, long startOffset, Set<TopicPartition> partitions) {
     String key = "key";
     int ibase = 12;
 
@@ -192,9 +217,13 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
 
   protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records) {
     for (Object jsonRecord : records) {
-      Object expected = expectedRecords.get(startIndex++).value();
-      //assertEquals(expectedRecords.get(startIndex++).value(), jsonRecord);
-      assertEquals(expected, jsonRecord);
+      SinkRecord expectedRecord = expectedRecords.get(startIndex++);
+      Object expectedValue = expectedRecord.value();
+      if (expectedValue instanceof Struct) {
+        expectedValue = new String(converter.fromConnectData(
+            TOPIC, expectedRecord.valueSchema(), expectedRecord.value()), StandardCharsets.UTF_8);
+      }
+      assertEquals(expectedValue, jsonRecord);
     }
   }
 

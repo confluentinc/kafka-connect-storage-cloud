@@ -18,12 +18,15 @@ package io.confluent.connect.s3.format.json;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.storage.S3OutputStream;
@@ -37,10 +40,12 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
   private static final String EXTENSION = ".json";
   private final S3Storage storage;
   private final ObjectMapper mapper;
+  private final JsonConverter converter;
 
-  JsonRecordWriterProvider(S3Storage storage) {
+  JsonRecordWriterProvider(S3Storage storage, JsonConverter converter) {
     this.storage = storage;
     this.mapper = new ObjectMapper();
+    this.converter = converter;
   }
 
   @Override
@@ -59,7 +64,12 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
         public void write(SinkRecord record) {
           log.trace("Sink record: {}", record);
           try {
-            writer.writeObject(record.value());
+            Object value = record.value();
+            if (value instanceof Struct) {
+              value = new String(converter.fromConnectData(
+                  record.topic(), record.valueSchema(), record.value()), StandardCharsets.UTF_8);
+            }
+            writer.writeObject(value);
           } catch (IOException e) {
             throw new ConnectException(e);
           }
