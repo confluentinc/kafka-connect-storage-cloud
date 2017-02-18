@@ -105,7 +105,7 @@ public class S3OutputStream extends OutputStream {
 
   private void uploadPart(int size) throws IOException {
     if (multiPartUpload == null) {
-      log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
+      log.debug("New multi-part upload for bucket '{}' key '{}'", bucket, key);
       multiPartUpload = newMultipartUpload();
     }
 

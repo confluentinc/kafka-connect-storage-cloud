@@ -138,20 +138,6 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
     return sinkRecords;
   }
 
-  protected List<SinkRecord> createRecords(int size, long startOffset, Set<TopicPartition> partitions) {
-    String key = "key";
-    Schema schema = createSchema();
-    Struct record = createRecord(schema);
-
-    List<SinkRecord> sinkRecords = new ArrayList<>();
-    for (TopicPartition tp : partitions) {
-      for (long offset = startOffset; offset < startOffset + size; ++offset) {
-        sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), Schema.STRING_SCHEMA, key, schema, record, offset));
-      }
-    }
-    return sinkRecords;
-  }
-
   protected List<SinkRecord> createJsonRecordsWithoutSchema(int size, long startOffset, Set<TopicPartition> partitions) {
     String key = "key";
     int ibase = 12;

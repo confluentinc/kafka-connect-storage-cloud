@@ -372,7 +372,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
    * Return a list of new records starting at zero offset.
    *
    * @param size the number of records to return.
-   * @return
+   * @return the list of records.
    */
   protected List<SinkRecord> createRecords(int size) {
     return createRecords(size, 0);
@@ -558,14 +558,6 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     }
   }
 
-  /**
-   * Verify files and records are uploaded appropriately.
-   * @param sinkRecords a flat list of the records that need to appear in potentially several files in S3.
-   * @param validOffsets an array containing the offsets that map to uploaded files for a topic-partition.
-   *                     Offsets appear in ascending order, the difference between two consecutive offsets
-   *                     equals the expected size of the file, and last offset in exclusive.
-   * @throws IOException
-   */
   protected void verifyOffsets(Map<TopicPartition, OffsetAndMetadata> actualOffsets, long[] validOffsets,
                               Set<TopicPartition> partitions) {
     int i = 0;

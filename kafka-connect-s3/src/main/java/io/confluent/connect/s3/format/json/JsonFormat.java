@@ -18,7 +18,6 @@ package io.confluent.connect.s3.format.json;
 
 import org.apache.kafka.connect.json.JsonConverter;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 

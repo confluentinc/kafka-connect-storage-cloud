@@ -17,9 +17,7 @@
 package io.confluent.connect.s3;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.common.StorageCommonConfig;

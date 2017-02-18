@@ -16,32 +16,11 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import com.amazonaws.regions.RegionUtils;
-import com.amazonaws.regions.Regions;
-import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.errors.ConnectException;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
-
-import io.confluent.connect.storage.StorageSinkConnectorConfig;
-import io.confluent.connect.storage.common.ComposableConfig;
-import io.confluent.connect.storage.common.StorageCommonConfig;
-import io.confluent.connect.storage.hive.HiveConfig;
-import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
 public class MockS3SinkConnectorConfig extends S3SinkConnectorConfig {
   public static final String TEST_PART_SIZE_CONFIG = "test.s3.part.size";
