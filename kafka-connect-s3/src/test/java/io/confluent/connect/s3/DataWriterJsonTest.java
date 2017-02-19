@@ -18,6 +18,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
@@ -28,7 +29,6 @@ import org.junit.After;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -54,12 +54,13 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
   private JsonConverter converter;
 
   private final String extension = ".json";
+  protected final ObjectMapper mapper = new ObjectMapper();
   protected S3Storage storage;
   protected AmazonS3 s3;
-  Partitioner<FieldSchema> partitioner;
-  JsonFormat format;
-  S3SinkTask task;
-  Map<String, String> localProps = new HashMap<>();
+  protected Partitioner<FieldSchema> partitioner;
+  protected JsonFormat format;
+  protected S3SinkTask task;
+  protected Map<String, String> localProps = new HashMap<>();
 
   @Override
   protected Map<String, String> createProps() {
@@ -201,13 +202,14 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
     assertThat(actualFiles, is(expectedFiles));
   }
 
-  protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records) {
+  protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records)
+      throws IOException{
     for (Object jsonRecord : records) {
       SinkRecord expectedRecord = expectedRecords.get(startIndex++);
       Object expectedValue = expectedRecord.value();
       if (expectedValue instanceof Struct) {
-        expectedValue = new String(converter.fromConnectData(
-            TOPIC, expectedRecord.valueSchema(), expectedRecord.value()), StandardCharsets.UTF_8);
+        byte[] expectedBytes = converter.fromConnectData(TOPIC, expectedRecord.valueSchema(), expectedRecord.value());
+        expectedValue = mapper.readValue(expectedBytes, Object.class);
       }
       assertEquals(expectedValue, jsonRecord);
     }

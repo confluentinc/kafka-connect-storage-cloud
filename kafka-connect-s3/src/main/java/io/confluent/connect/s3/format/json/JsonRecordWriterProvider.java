@@ -66,10 +66,12 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
           try {
             Object value = record.value();
             if (value instanceof Struct) {
-              value = new String(converter.fromConnectData(
-                  record.topic(), record.valueSchema(), record.value()), StandardCharsets.UTF_8);
+              byte[] rawJson = converter.fromConnectData(record.topic(), record.valueSchema(), value);
+              s3out.write(rawJson);
+              s3out.write("\n".getBytes());
+            } else {
+              writer.writeObject(value);
             }
-            writer.writeObject(value);
           } catch (IOException e) {
             throw new ConnectException(e);
           }

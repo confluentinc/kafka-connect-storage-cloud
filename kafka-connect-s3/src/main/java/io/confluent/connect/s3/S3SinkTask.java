@@ -175,7 +175,7 @@ public class S3SinkTask extends SinkTask {
     for (TopicPartition tp : assignment) {
       Long offset = topicPartitionWriters.get(tp).getOffsetToCommitAndReset();
       if (offset != null) {
-        log.trace("Forwarding to framework request to commit offset: {} for tp: {}", offset, tp);
+        log.trace("Forwarding to framework request to commit offset: {} for {}", offset, tp);
         offsetsToCommit.put(tp, new OffsetAndMetadata(offset));
       }
     }
