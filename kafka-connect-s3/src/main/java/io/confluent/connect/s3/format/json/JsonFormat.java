@@ -16,6 +16,11 @@
 
 package io.confluent.connect.s3.format.json;
 
+import org.apache.kafka.connect.json.JsonConverter;
+
+import java.util.HashMap;
+import java.util.Map;
+
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.Format;
@@ -25,14 +30,21 @@ import io.confluent.connect.storage.hive.HiveFactory;
 
 public class JsonFormat implements Format<S3SinkConnectorConfig, String> {
   private final S3Storage storage;
+  private final JsonConverter converter;
 
-  JsonFormat(S3Storage storage) {
+  public JsonFormat(S3Storage storage) {
     this.storage = storage;
+    this.converter = new JsonConverter();
+    Map<String, Object> converterConfig = new HashMap<>();
+    converterConfig.put("schemas.enable", "false");
+    converterConfig.put("schemas.cache.size",
+                        String.valueOf(storage.conf().get(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG)));
+    this.converter.configure(converterConfig, false);
   }
 
   @Override
   public RecordWriterProvider<S3SinkConnectorConfig> getRecordWriterProvider() {
-    return new JsonRecordWriterProvider(storage);
+    return new JsonRecordWriterProvider(storage, converter);
   }
 
   @Override

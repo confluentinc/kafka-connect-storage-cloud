@@ -16,14 +16,17 @@
 
 package io.confluent.connect.s3.format.json;
 
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.storage.S3OutputStream;
@@ -36,9 +39,13 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
   private static final Logger log = LoggerFactory.getLogger(JsonRecordWriterProvider.class);
   private static final String EXTENSION = ".json";
   private final S3Storage storage;
+  private final ObjectMapper mapper;
+  private final JsonConverter converter;
 
-  JsonRecordWriterProvider(S3Storage storage) {
+  JsonRecordWriterProvider(S3Storage storage, JsonConverter converter) {
     this.storage = storage;
+    this.mapper = new ObjectMapper();
+    this.converter = converter;
   }
 
   @Override
@@ -51,14 +58,20 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
     try {
       return new RecordWriter() {
         final S3OutputStream s3out = storage.create(filename, true);
-        final ObjectOutputStream writer = new ObjectOutputStream(s3out);
+        final JsonGenerator writer = mapper.getFactory().createGenerator(s3out);
 
         @Override
         public void write(SinkRecord record) {
           log.trace("Sink record: {}", record);
           try {
-            writer.writeObject(record.value());
-            writer.write("\n".getBytes());
+            Object value = record.value();
+            if (value instanceof Struct) {
+              byte[] rawJson = converter.fromConnectData(record.topic(), record.valueSchema(), value);
+              s3out.write(rawJson);
+              s3out.write("\n".getBytes());
+            } else {
+              writer.writeObject(value);
+            }
           } catch (IOException e) {
             throw new ConnectException(e);
           }

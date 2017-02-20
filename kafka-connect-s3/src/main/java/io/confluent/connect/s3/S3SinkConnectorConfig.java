@@ -132,6 +132,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       CONFIG_DEF.define(CREDENTIALS_PROVIDER_CLASS_CONFIG,
                         Type.CLASS,
                         CREDENTIALS_PROVIDER_CLASS_DEFAULT,
+                        new CredentialsProviderValidator(),
                         Importance.LOW,
                         "Credentials provider or provider chain to use for authentication to AWS. By default the "
                         + " connector uses 'DefaultAWSCredentialsProviderChain'.",
@@ -189,11 +190,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     } catch (IllegalAccessException | InstantiationException e) {
       throw new ConnectException("Invalid class for: " + S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG, e);
     }
-  }
-
-  public ClientConfiguration getClientConfiguration() {
-    // Currently return just the default.
-    return new ClientConfiguration();
   }
 
   protected static String parseName(Map<String, String> props) {

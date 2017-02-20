@@ -28,9 +28,9 @@ public class AvroFormat implements Format<S3SinkConnectorConfig, String> {
   private final S3Storage storage;
   private final AvroData avroData;
 
-  public AvroFormat(S3Storage storage, AvroData avroData) {
+  public AvroFormat(S3Storage storage) {
     this.storage = storage;
-    this.avroData = avroData;
+    this.avroData = new AvroData(storage.conf().getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG));
   }
 
   @Override
@@ -48,4 +48,7 @@ public class AvroFormat implements Format<S3SinkConnectorConfig, String> {
     throw new UnsupportedOperationException("Hive integration is not currently supported in S3 Connector");
   }
 
+  public AvroData getAvroData() {
+    return avroData;
+  }
 }

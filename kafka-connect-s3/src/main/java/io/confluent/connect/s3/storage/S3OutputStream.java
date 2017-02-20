@@ -41,7 +41,9 @@ import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
 
 /**
- * (The implementation has borrowed the general structure from Hadoop's implementation
+ * Output stream enabling multi-part uploads of Kafka records.
+ *
+ * The implementation has borrowed the general structure of Hadoop's implementation.
  */
 public class S3OutputStream extends OutputStream {
   private static final Logger log = LoggerFactory.getLogger(S3OutputStream.class);
@@ -103,7 +105,7 @@ public class S3OutputStream extends OutputStream {
 
   private void uploadPart(int size) throws IOException {
     if (multiPartUpload == null) {
-      log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
+      log.debug("New multi-part upload for bucket '{}' key '{}'", bucket, key);
       multiPartUpload = newMultipartUpload();
     }
 
@@ -121,7 +123,7 @@ public class S3OutputStream extends OutputStream {
 
   public void commit() throws IOException {
     if (closed) {
-      log.warn("Tried to commit data for bucket '{}' key '{}' on a closed stream. Ignoring.");
+      log.warn("Tried to commit data for bucket '{}' key '{}' on a closed stream. Ignoring.", bucket, key);
       return;
     }
 
