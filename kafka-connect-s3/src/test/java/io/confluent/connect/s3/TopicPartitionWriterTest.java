@@ -24,8 +24,6 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -58,6 +56,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private S3Storage storage;
+  private AvroFormat format;
   private static String extension;
 
   private AmazonS3 s3;
@@ -75,8 +74,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     s3 = newS3Client(connectorConfig);
     storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+    format = new AvroFormat(storage);
 
-    Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage, avroData);
+    Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
     writerProvider = format.getRecordWriterProvider();
     extension = writerProvider.getExtension();
   }
@@ -86,6 +86,39 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void tearDown() throws Exception {
     super.tearDown();
     localProps.clear();
+  }
+
+  @Test
+  public void testWriteRecordDefaultWithPaddingSeq() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG, "2");
+    setUp();
+
+    // Define the partitioner
+    Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatch(schema, 10);
+
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
+    List<String> expectedFiles = new ArrayList<>();
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, "%02d"));
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, "%02d"));
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, "%02d"));
+    verify(expectedFiles, 3, schema, records);
   }
 
   @Test
@@ -101,7 +134,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     String key = "key";
     Schema schema = createSchema();
-    Struct[] records = createRecords(schema);
+    List<Struct> records = createRecordBatches(schema, 3, 3);
 
     Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
 
@@ -123,6 +156,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   @Test
   public void testWriteRecordFieldPartitioner() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "9");
     setUp();
 
     // Define the partitioner
@@ -134,7 +168,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     String key = "key";
     Schema schema = createSchema();
-    Struct[] records = createRecords(schema);
+    List<Struct> records = createRecordBatches(schema, 3, 6);
 
     Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
 
@@ -151,13 +185,24 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String dirPrefix2 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(17));
     String dirPrefix3 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(18));
 
-    List<String> expectedFiles = new ArrayList<>();
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix2, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix3, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
+    List<Struct> expectedRecords = new ArrayList<>();
+    int ibase = 16;
+    float fbase = 12.2f;
+    // The expected sequence of records is constructed taking into account that sorting of files occurs in verify
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 6; ++j) {
+        expectedRecords.add(createRecord(schema, ibase + i, fbase + i));
+      }
+    }
 
-    verify(expectedFiles, 3, schema, records);
-    verify(expectedFiles, 3, schema, records);
+    List<String> expectedFiles = new ArrayList<>();
+    for(int i = 0; i < 18; i += 9) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix2, TOPIC_PARTITION, i + 1, extension, ZERO_PAD_FMT));
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix3, TOPIC_PARTITION, i + 2, extension, ZERO_PAD_FMT));
+    }
+
+    verify(expectedFiles, 3, schema, expectedRecords);
   }
 
   @Test
@@ -174,7 +219,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     String key = "key";
     Schema schema = createSchema();
-    Struct[] records = createRecords(schema);
+    List<Struct> records = createRecordBatches(schema, 3, 3);
 
     Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
 
@@ -200,43 +245,79 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     verify(expectedFiles, 3, schema, records);
   }
 
-  private Struct[] createRecords(Schema schema) {
-    Struct record1 = new Struct(schema)
-        .put("boolean", true)
-        .put("int", 16)
-        .put("long", 12L)
-        .put("float", 12.2f)
-        .put("double", 12.2);
+  @Test
+  public void testNoFilesWrittenWithoutCommit() throws Exception {
+    // Setting size-based rollup to 10 but will produce fewer records. Commit should not happen.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10");
+    setUp();
 
-    Struct record2 = new Struct(schema)
-        .put("boolean", true)
-        .put("int", 17)
-        .put("long", 12L)
-        .put("float", 12.2f)
-        .put("double", 12.2);
+    // Define the partitioner
+    Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
 
-    Struct record3 = new Struct(schema)
-        .put("boolean", true)
-        .put("int", 18)
-        .put("long", 12L)
-        .put("float", 12.2f)
-        .put("double", 12.2);
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 3);
 
-    return new Struct[]{record1, record2, record3};
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
+    // Record size argument does not matter.
+    verify(Collections.<String>emptyList(), -1, schema, records);
   }
 
+  // Create a batch of records with incremental numeric field values. Total number of records is given by 'size'.
+  private Struct createRecord(Schema schema, int ibase, float fbase) {
+    return new Struct(schema)
+               .put("boolean", true)
+               .put("int", ibase)
+               .put("long", (long) ibase)
+               .put("float", fbase)
+               .put("double", (double) fbase);
+  }
 
-  private ArrayList<SinkRecord> createSinkRecords(Struct[] records, String key, Schema schema) {
+  // Create a batch of records with incremental numeric field values. Total number of records is given by 'size'.
+  private List<Struct> createRecordBatch(Schema schema, int size) {
+    ArrayList<Struct> records = new ArrayList<>(size);
+    int ibase = 16;
+    float fbase = 12.2f;
+
+    for (int i = 0; i < size; ++i) {
+      records.add(createRecord(schema, ibase + i, fbase + i));
+    }
+    return records;
+  }
+
+  // Create a list of records by repeating the same record batch. Total number of records: 'batchesNum' x 'batchSize'
+  private List<Struct> createRecordBatches(Schema schema, int batchSize, int batchesNum) {
+    ArrayList<Struct> records = new ArrayList<>();
+    for (int i = 0; i < batchesNum; ++i) {
+      records.addAll(createRecordBatch(schema, batchSize));
+    }
+    return records;
+  }
+
+  // Given a list of records, create a list of sink records with contiguous offsets.
+  private ArrayList<SinkRecord> createSinkRecords(List<Struct> records, String key, Schema schema) {
     ArrayList<SinkRecord> sinkRecords = new ArrayList<>();
-    for (int offset = 0, i = 0, count = 3; i < records.length; ++i, offset += count) {
-      for (int j = 0; j < count; ++j) {
-        sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records[i], offset + j));
-      }
+    for (int i = 0; i < records.size(); ++i) {
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(i), i));
     }
     return sinkRecords;
   }
 
-  private void verify(List<String> expectedFileKeys, int expectedSize, Schema schema, Struct[] records) throws IOException {
+  private void verify(List<String> expectedFileKeys, int expectedSize, Schema schema, List<Struct> records)
+      throws IOException {
     List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
     List<String> actualFiles = new ArrayList<>();
     for (S3ObjectSummary summary : summaries) {
@@ -250,12 +331,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     int index = 0;
     for (String fileKey : actualFiles) {
-      Collection<Object> actualRecords = readRecords(S3_TEST_BUCKET_NAME, fileKey, s3);
+      Collection<Object> actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3);
       assertEquals(expectedSize, actualRecords.size());
       for (Object avroRecord : actualRecords) {
-        assertEquals(avroData.fromConnectData(schema, records[index]), avroRecord);
+        Object expectedRecord = format.getAvroData().fromConnectData(schema, records.get(index++));
+        assertEquals(expectedRecord, avroRecord);
       }
-      ++index;
     }
   }
 

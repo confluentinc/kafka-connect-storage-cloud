@@ -91,7 +91,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
 
     // Upload partial file.
     List<SinkRecord> sinkRecords = createRecords(2);
-    byte[] partialData = AvroUtils.putRecords(sinkRecords, avroData);
+    byte[] partialData = AvroUtils.putRecords(sinkRecords, format.getAvroData());
     String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT);
     s3.putObject(S3_TEST_BUCKET_NAME, fileKey, new ByteArrayInputStream(partialData), null);
 
@@ -130,51 +130,6 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
 
     long[] validOffsets = {0, 10000};
     verify(sinkRecords, validOffsets);
-  }
-
-  @Test
-  public void testWriteRecordMultiplePartitions() throws Exception {
-    setUp();
-  }
-
-  @Test
-  public void testGetPreviousOffsets() throws Exception {
-    setUp();
-  }
-
-  @Test
-  public void testWriteRecordNonZeroInitialOffset() throws Exception {
-    setUp();
-  }
-
-  @Test
-  public void testRebalance() throws Exception {
-    setUp();
-  }
-
-  @Test
-  public void testProjectBackWard() throws Exception {
-    setUp();
-  }
-
-  @Test
-  public void testProjectNone() throws Exception {
-    setUp();
-  }
-
-  @Test
-  public void testProjectForward() throws Exception {
-    setUp();
-  }
-
-  @Test
-  public void testProjectNoVersion() throws Exception {
-    setUp();
-  }
-
-  @Test
-  public void testFlushPartialFile() throws Exception {
-    setUp();
   }
 
 }

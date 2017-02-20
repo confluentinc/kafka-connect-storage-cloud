@@ -18,6 +18,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
@@ -34,7 +35,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.StorageFactory;
@@ -53,11 +53,11 @@ public class S3SinkTask extends SinkTask {
   private final Set<TopicPartition> assignment;
   private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
   private Partitioner<FieldSchema> partitioner;
+  private Format<S3SinkConnectorConfig, String> format;
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
-  private AvroData avroData;
 
   /**
-   * No-arg consturctor. Used by Connect framework.
+   * No-arg constructor. Used by Connect framework.
    */
   public S3SinkTask() {
     // no-arg constructor required by Connect framework.
@@ -67,16 +67,16 @@ public class S3SinkTask extends SinkTask {
 
   // visible for testing.
   S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage,
-             Partitioner<FieldSchema> partitioner, AvroData avroData) throws Exception {
+             Partitioner<FieldSchema> partitioner, Format<S3SinkConnectorConfig, String> format) throws Exception {
     this();
     this.connectorConfig = connectorConfig;
     this.context = context;
     this.storage = storage;
     this.partitioner = partitioner;
-    this.avroData = avroData;
+    this.format = format;
 
     url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
-    writerProvider = newFormat().getRecordWriterProvider();
+    writerProvider = this.format.getRecordWriterProvider();
 
     open(context.assignment());
     log.info("Started S3 connector task with assigned partitions {}", assignment);
@@ -96,14 +96,13 @@ public class S3SinkTask extends SinkTask {
         throw new DataException("No-existent S3 bucket: " + connectorConfig.getBucketName());
       }
 
-      avroData = new AvroData(connectorConfig.getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG));
       writerProvider = newFormat().getRecordWriterProvider();
       partitioner = newPartitioner(connectorConfig);
 
       open(context.assignment());
       log.info("Started S3 connector task with assigned partitions: {}", assignment);
     } catch (ClassNotFoundException | IllegalAccessException | InstantiationException | InvocationTargetException
-        | NoSuchMethodException e) {
+                 | NoSuchMethodException e) {
       throw new ConnectException("Reflection exception: ", e);
     } catch (AmazonClientException e) {
       throw new ConnectException(e);
@@ -128,11 +127,11 @@ public class S3SinkTask extends SinkTask {
 
   @SuppressWarnings("unchecked")
   private Format<S3SinkConnectorConfig, String> newFormat() throws ClassNotFoundException, IllegalAccessException,
-                                                             InstantiationException, InvocationTargetException,
-                                                             NoSuchMethodException {
+                                                                   InstantiationException, InvocationTargetException,
+                                                                   NoSuchMethodException {
     Class<Format<S3SinkConnectorConfig, String>> formatClass =
         (Class<Format<S3SinkConnectorConfig, String>>) connectorConfig.getClass(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG);
-    return formatClass.getConstructor(S3Storage.class, AvroData.class).newInstance(storage, avroData);
+    return formatClass.getConstructor(S3Storage.class).newInstance(storage);
   }
 
   private Partitioner<FieldSchema> newPartitioner(S3SinkConnectorConfig config)
@@ -156,12 +155,34 @@ public class S3SinkTask extends SinkTask {
       TopicPartition tp = new TopicPartition(topic, partition);
       topicPartitionWriters.get(tp).buffer(record);
     }
+    if (log.isDebugEnabled()) {
+      log.debug("Read {} records from Kafka", records.size());
+    }
 
-    for (TopicPartition tp: assignment) {
+    for (TopicPartition tp : assignment) {
       topicPartitionWriters.get(tp).write();
     }
   }
 
+  @Override
+  public void flush(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    // No-op. The connector is managing the offsets.
+  }
+
+  @Override
+  public Map<TopicPartition, OffsetAndMetadata> preCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
+    for (TopicPartition tp : assignment) {
+      Long offset = topicPartitionWriters.get(tp).getOffsetToCommitAndReset();
+      if (offset != null) {
+        log.trace("Forwarding to framework request to commit offset: {} for {}", offset, tp);
+        offsetsToCommit.put(tp, new OffsetAndMetadata(offset));
+      }
+    }
+    return offsetsToCommit;
+  }
+
+  @Override
   public void close(Collection<TopicPartition> partitions) {
     for (TopicPartition tp : assignment) {
       try {
@@ -170,7 +191,6 @@ public class S3SinkTask extends SinkTask {
         log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
       }
     }
-
     topicPartitionWriters.clear();
     assignment.clear();
   }
@@ -178,14 +198,21 @@ public class S3SinkTask extends SinkTask {
   @Override
   public void stop() {
     try {
-      storage.close();
+      if (storage != null) {
+        storage.close();
+      }
     } catch (Exception e) {
       throw new ConnectException(e);
     }
   }
 
-  Partitioner<FieldSchema> getPartitioner() {
-    return partitioner;
+  // Visible for testing
+  TopicPartitionWriter getTopicPartitionWriter(TopicPartition tp) {
+    return topicPartitionWriters.get(tp);
   }
 
+  // Visible for testing
+  Format<S3SinkConnectorConfig, String> getFormat() {
+    return format;
+  }
 }

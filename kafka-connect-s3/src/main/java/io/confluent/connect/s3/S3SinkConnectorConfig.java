@@ -132,6 +132,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       CONFIG_DEF.define(CREDENTIALS_PROVIDER_CLASS_CONFIG,
                         Type.CLASS,
                         CREDENTIALS_PROVIDER_CLASS_DEFAULT,
+                        new CredentialsProviderValidator(),
                         Importance.LOW,
                         "Credentials provider or provider chain to use for authentication to AWS. By default the "
                         + " connector uses 'DefaultAWSCredentialsProviderChain'.",
@@ -191,11 +192,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     }
   }
 
-  public ClientConfiguration getClientConfiguration() {
-    // Currently return just the default.
-    return new ClientConfiguration();
-  }
-
   protected static String parseName(Map<String, String> props) {
     String nameProp = props.get("name");
     return nameProp != null ? nameProp : "S3-sink";
@@ -234,7 +230,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         throw new ConfigException(name, value, "Part size must be non-null");
       }
       Number number = (Number) value;
-      int min = 5 * 1024 * 1024;
       if (number.longValue() < min) {
         throw new ConfigException(name, value, "Part size must be at least: " + min + " bytes (5MB)");
       }

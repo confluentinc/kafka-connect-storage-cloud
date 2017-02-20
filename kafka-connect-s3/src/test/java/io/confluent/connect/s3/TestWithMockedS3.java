@@ -22,6 +22,7 @@ import com.amazonaws.auth.AnonymousAWSCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.findify.s3mock.S3Mock;
@@ -42,6 +43,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import io.confluent.connect.s3.format.avro.AvroUtils;
+import io.confluent.connect.s3.format.json.JsonUtils;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 
@@ -84,16 +86,20 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
     List<S3ObjectSummary> objects = new ArrayList<>();
     ObjectListing listing;
 
-    if (prefix == null) {
-      listing = s3.listObjects(bucket);
-    } else {
-      listing = s3.listObjects(bucket, prefix);
-    }
+    try {
+      if (prefix == null) {
+        listing = s3.listObjects(bucket);
+      } else {
+        listing = s3.listObjects(bucket, prefix);
+      }
 
-    objects.addAll(listing.getObjectSummaries());
-    while (listing.isTruncated()) {
-      listing = s3.listNextBatchOfObjects(listing);
       objects.addAll(listing.getObjectSummaries());
+      while (listing.isTruncated()) {
+        listing = s3.listNextBatchOfObjects(listing);
+        objects.addAll(listing.getObjectSummaries());
+      }
+    } catch (AmazonS3Exception e) {
+     log.warn("listObjects for bucket '{}' prefix '{}' returned error code: {}", bucket, prefix, e.getStatusCode());
     }
 
     return objects;
@@ -103,14 +109,27 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
                                                String extension, String zeroPadFormat, String bucketName,
                                                AmazonS3 s3) throws IOException {
       String fileKey = FileUtils.fileKeyToCommit(topicsDir, directory, tp, startOffset, extension, zeroPadFormat);
-      return readRecords(bucketName, fileKey, s3);
+      if (".avro".equals(extension)) {
+        return readRecordsAvro(bucketName, fileKey, s3);
+      } else if (".json".equals(extension)) {
+        return readRecordsJson(bucketName, fileKey, s3);
+      } else {
+        throw new IllegalArgumentException("Unknown extension: " + extension);
+      }
   }
 
-  public static Collection<Object> readRecords(String bucketName, String fileKey, AmazonS3 s3) throws IOException {
+  public static Collection<Object> readRecordsAvro(String bucketName, String fileKey, AmazonS3 s3) throws IOException {
       log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
       InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
 
       return AvroUtils.getRecords(in);
+  }
+
+  public static Collection<Object> readRecordsJson(String bucketName, String fileKey, AmazonS3 s3) throws IOException {
+      log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
+      InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
+
+      return JsonUtils.getRecords(in);
   }
 
   @Override

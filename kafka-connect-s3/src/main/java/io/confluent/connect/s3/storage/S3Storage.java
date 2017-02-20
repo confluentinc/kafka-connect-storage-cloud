@@ -16,6 +16,7 @@
 
 package io.confluent.connect.s3.storage;
 
+import com.amazonaws.PredefinedClientConfigurations;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
@@ -25,6 +26,7 @@ import org.apache.avro.file.SeekableInput;
 import java.io.OutputStream;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.Storage;
 import io.confluent.connect.storage.common.util.StringUtils;
 
@@ -40,6 +42,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   private final String bucketName;
   private final AmazonS3 s3;
   private final S3SinkConnectorConfig conf;
+  private static final String VERSION_FORMAT = "APN/1.0 Confluent/1.0 KafkaS3Connector/%s";
 
   /**
    * Construct an S3 storage class given a configuration and an AWS S3 address.
@@ -58,9 +61,13 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
                                         .withAccelerateModeEnabled(config.getBoolean(WAN_MODE_CONFIG))
                                         .withPathStyleAccessEnabled(true)
-                                        .withCredentials(config.getCredentialsProvider());
+                                        .withCredentials(config.getCredentialsProvider())
+                                        .withClientConfiguration(
+                                            PredefinedClientConfigurations.defaultConfig()
+                                                .withUserAgentPrefix(
+                                                    String.format(VERSION_FORMAT, Version.getVersion())));
 
-    builder = url == null ?
+    builder = StringUtils.isBlank(url) ?
                   builder.withRegion(config.getString(REGION_CONFIG)) :
                   builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(url, ""));
 
@@ -167,6 +174,10 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
   @Override
   public OutputStream create(String path, S3SinkConnectorConfig conf, boolean overwrite) {
+    return create(path, overwrite);
+  }
+
+  public S3OutputStream create(String path, boolean overwrite) {
     if (!overwrite) {
       throw new UnsupportedOperationException("Creating a file without overwriting is not currently supported in S3 Connector");
     }
