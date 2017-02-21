@@ -1,12 +1,13 @@
-.. _connect_replicator:
+.. _connect_s3:
 
-Confluent Kafka Replicator
-==========================
+Confluent S3 Connector
+======================
 
 Contents:
 
 .. toctree::
    :maxdepth: 3
 
-   connect_replicator
+   connect_s3
    configuration_options
+   changelog

@@ -234,7 +234,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'kafkaconnectreplicator', u'Kafka Connect S3',
+    ('index', 'kafkaconnects3', u'Kafka Connect S3',
      [u'Confluent, Inc.'], 1)
 ]
 
