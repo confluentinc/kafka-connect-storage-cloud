@@ -8,6 +8,6 @@ Contents:
 .. toctree::
    :maxdepth: 3
 
-   connect_s3
+   s3_connector
    configuration_options
    changelog
