@@ -135,15 +135,37 @@ with the rest of the records contained in the other two files.
 
 Configuration
 -------------
-This section first gives example configurations that cover common scenarios, then provides an exhaustive
-description of the available configuration options.
+This section first gives example configurations that cover common scenarios. For detailed description of all the
+available configuration options of the S3 connector go to :ref: Configuration Options<configuration_options>
 
 Example
 ~~~~~~~
 Here is the content of ``etc/kafka-connect-s3/quickstart-s3.properties``::
 
+  name=s3-sink
+  connector.class=io.confluent.connect.s3.S3SinkConnector
+  tasks.max=1
+  topics=s3_topic
+  flush.size=3
+
+The first few settings are common settings you have seen specified in other connectors too. The ``topics`` specifies
+the topics we want to export data from, in this case ``s3_topic``. The ``flush.size`` specifies the number of records
+the connector needs to write before completing a multipart upload to S3:
+
+  s3.bucket.name=confluent-kafka-connect-s3-testing
+  s3.part.size=5242880
+
+The next settings are specific to Amazon S3. A mandatory setting is the name of your S3 bucket to host the exported
+Kafka records. Other useful settings are ``s3.region``, which you should set if you use a region other than the
+default, and ``s3.part.size`` to control the size of each part in the multipart uploads that will be used to upload a
+single chunk of Kafka records.
+
+
 Format and Partitioner
 ~~~~~~~~~~~~~~~~~~~~~~
+TODO: complete this section briefly.
+
 
 Schema Evolution
 ----------------
+TODO: complete this section briefly, probably with a reference to the section in the HDFS connector.
