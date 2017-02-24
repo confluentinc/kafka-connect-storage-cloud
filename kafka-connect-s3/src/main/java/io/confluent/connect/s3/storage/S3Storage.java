@@ -18,9 +18,11 @@ package io.confluent.connect.s3.storage;
 
 import com.amazonaws.PredefinedClientConfigurations;
 import com.amazonaws.client.builder.AwsClientBuilder;
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ObjectListing;
+import com.amazonaws.services.s3.model.Region;
 import org.apache.avro.file.SeekableInput;
 
 import java.io.OutputStream;
@@ -67,9 +69,14 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
                                                 .withUserAgentPrefix(
                                                     String.format(VERSION_FORMAT, Version.getVersion())));
 
-    builder = StringUtils.isBlank(url) ?
-                  builder.withRegion(config.getString(REGION_CONFIG)) :
-                  builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(url, ""));
+    if (StringUtils.isBlank(url)) {
+      String region = config.getString(REGION_CONFIG);
+      builder = "us-east-1".equals(region) ?
+                    builder.withRegion(Regions.US_EAST_1):
+                    builder.withRegion(region);
+    } else {
+      builder = builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(url, ""));
+    }
 
     return builder.build();
   }
