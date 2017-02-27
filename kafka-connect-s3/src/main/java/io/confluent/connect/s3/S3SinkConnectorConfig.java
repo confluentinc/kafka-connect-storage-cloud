@@ -305,7 +305,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   public static void main(String[] args) {
-    System.out.println(CONFIG_DEF.toEnrichedRst());
+    System.out.println(getConfig().toEnrichedRst());
   }
 
 }

@@ -106,9 +106,9 @@ in S3, for instance by using AWS CLI::
 
 You should see three objects with keys::
 
-topics/s3_topic/partition=0/s3_topic+0+0000000000.avro
-topics/s3_topic/partition=0/s3_topic+0+0000000003.avro
-topics/s3_topic/partition=0/s3_topic+0+0000000006.avro
+  topics/s3_topic/partition=0/s3_topic+0+0000000000.avro
+  topics/s3_topic/partition=0/s3_topic+0+0000000003.avro
+  topics/s3_topic/partition=0/s3_topic+0+0000000006.avro
 
 Each file is encoded as ``<topic>+<kafkaPartition>+<startOffset>.<format>``.
 
