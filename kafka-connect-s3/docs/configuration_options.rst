@@ -1,3 +1,5 @@
+.. _s3_configuration_options:
+
 Configuration Options
 ---------------------
 

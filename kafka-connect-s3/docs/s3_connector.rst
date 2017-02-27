@@ -1,13 +1,13 @@
 S3 Connector
 ==============
 
-The S3 connector, currently available as sink, allows you to export data from Kafka topics to S3 objects in a
-variety of formats. In addition, given deterministic partitioners, the S3 connector exports data by guaranteeing
-exactly-once delivery semantics to the consumers of the S3 objects it produces.
+The S3 connector, currently available as a sink, allows you to export data from Kafka topics to S3 objects in
+either Avro or JSON formats. In addition, for certain data layouts, S3 connector exports data by guaranteeing
+exactly-once delivery semantics to consumers of the S3 objects it produces.
 
-Being a sink, the S3 connector periodically polls data from Kafka and in turn uploads them
+Being a sink, the S3 connector periodically polls data from Kafka and in turn uploads it
 to S3. A partitioner is used to split the data of every Kafka partition into chunks. Each chunk of data is
-represented as an S3 object, whose key name encodes the topic, the kafka partition and the start offset of
+represented as an S3 object, whose key name encodes the topic, the Kafka partition and the start offset of
 this data chunk. If no partitioner is specified in the configuration, the default partitioner which
 preserves Kafka partitioning is used. The size of each data chunk is determined by the number of
 records written to S3 and by schema compatibility.
@@ -17,10 +17,10 @@ Features
 The S3 connector offers a variety of features:
 
 * **Exactly Once Delivery**: Records that are exported using a deterministic partitioner are delivered with exactly-once
-  semantics as far as the user of the S3 bucket is concerned.
+  semantics regardless of the eventual consistency of S3.
 
 * **Pluggable Data Format with or without Schema**: Out of the box, the connector supports writing data to S3 in Avro
-  and Json format. Besides records with schema, the connector supports exporting plain Json records without schema in
+  and JSON format. Besides records with schema, the connector supports exporting plain JSON records without schema in
   text files, one record per-line. In general, the connector may accept any format that provides an implementation of
   the ``Format`` interface.
 
@@ -30,48 +30,46 @@ The S3 connector offers a variety of features:
   schema change, it decides whether to roll the file or project the record to the proper schema according to
   the ``schema.compatibility`` configuration in use.
 
-* **Pluggable Partitioner**: The connector comes out of the box with partitioners that support default partitioning,
-  field partitioning, and time-based partitioning in days or hours. You may implement your own partitioners by
-  extending the ``Partitioner`` class. Additionally, you can customize time based partitioning by extending the
-  ``TimeBasedPartitioner`` class.
+* **Pluggable Partitioner**: The connector comes out of the box with partitioners that support default partitioning
+  based on Kafka partitions, field partitioning, and time-based partitioning in days or hours. You may implement your
+  own partitioners by extending the ``Partitioner`` class. Additionally, you can customize time based partitioning by
+  extending the ``TimeBasedPartitioner`` class.
 
 
 Exactly-once delivery on top of eventual consistency
 ----------------------------------------------------
-Given the same set of Kafka records, the S3 connector is able to provide exactly-once semantics to consumers of the
-objects it exports to S3 under the condition that the connector is supplied with a deterministic partitioner.
+The S3 connector is able to provide exactly-once semantics to consumers of the objects it exports to S3, under the
+condition that the connector is supplied with a deterministic partitioner.
 
-Currently, out of the available partitioners, deterministic are the default and field partitioners. These partitioners
-take into account ``flush.size`` and ``schema.compatibility`` to decide when to roll and commit a new file to S3. When
-any of these partitioners is used, splitting of files always happens at the same offsets for a given set of Kafka records.
-The connector, by using multipart uploads in S3 and encoding the start offset in the files it commits, always delivers
-files in S3 that contain the same records, even under the presence of failures. If a connector task fails before a multipart upload
-completes, the file does not become visible to S3. If, on the other hand, a failure occurs after the upload has completed
-but before the corresponding offset is committed to Kafka by the connector, then a re-upload will take place. However,
-such a re-upload is transparent to the user of the S3 bucket, who at any time will have access to the same
-records available by the successfully uploaded files.
+Currently, out of the available partitioners, the default and field partitioners are deterministic. This implies that,
+when any of these partitioners is used, splitting of files always happens at the same offsets for a given set of Kafka
+records. These partitioners take into account ``flush.size`` and ``schema.compatibility`` to decide when to roll and
+save a new file to S3. The connector always delivers files in S3 that contain the same records, even under the
+presence of failures. If a connector task fails before an upload completes, the file does not become visible to S3. If,
+on the other hand, a failure occurs after the upload has completed but before the corresponding offset is committed to
+Kafka by the connector, then a re-upload will take place. However, such a re-upload is transparent to the user of the S3
+bucket, who at any time will have access to the same records made eventually available by successful uploads to S3.
 
-In the current version, as opposed to the default and field partitioners, the time-based partitioners still depend on
-wall-clock time to partition data, similar to the way time-based partitioners available with the HDFS connector do.
-A version of time-based partitioners based only on record timestamps that will guarantee exactly-once delivery to S3
-will become soon available.
+In the current version, time-based partitioners, as opposed to default and field partitioners, depend on wall-clock time
+to partition data. A version of time-based partitioners based only on record timestamps that will guarantee exactly-once
+delivery to S3 will become soon available.
 
 
 Quickstart
 ----------
 In this Quickstart, we use the S3 connector to export data produced by the Avro console producer to S3.
 
-Before you begin, make sure that Zookeeper, Kafka and SchemaRegistry services are running. Instructions on how to
-start these services are available at the :ref:`Confluent Platform Quickstart<quickstart>`. You also need to create a
-destination bucket in S3 with appropriate permissions in advance.
+Before you begin, make sure that Zookeeper, Kafka and Schema Registry services are running. Instructions on how to
+start these services are available at the :ref:`Confluent Platform Quickstart<quickstart>`. You also need to create an
+S3 destination bucket in advance and grant the user or IAM role running the connector
+`write access <http://docs.aws.amazon.com/AmazonS3/latest/UG/EditingBucketPermissions.html>`_ to it.
 
-This Quickstart assumes that you started the required services with the default configurations and
-you should make necessary changes according to the actual configurations used.
+This Quickstart assumes that you started the required services with the default configurations; if you have different
+settings, you will need to adjust the commands to the actual configurations used.
 
 .. note:: You need to make sure the connector user has write access to the S3 bucket
-   specified in ``s3.bucket.name`` and has deployed credentials in a way that makes them accessible through the
-   ``DefaultAWSCredentialsProviderChain```. Alternatively, you may supply the connector with your custom credentials
-   provider by setting the property ``s3.credentials.provider.class``.
+   specified in ``s3.bucket.name`` and has deployed credentials
+   `appropriately <http://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/credentials.html>`_.
 
 First, start the Avro console producer::
 
@@ -101,18 +99,18 @@ following command to start Kafka connect with the S3 connector::
   etc/kafka-connect-s3/quickstart-s3.properties
 
 You should see that the process starts up, logs a few messages and then uploads data from Kafka
-to S3. Once the connector finishes ingesting records to S3, check that the data is available
-in S3, for instance using the AWS CLI::
+to S3. Once the connector has ingested some records check that the data is available
+in S3, for instance by using AWS CLI::
 
   $ aws s3api list-objects --bucket "your-bucket-name"
 
 You should see three objects with keys::
 
-``topics/s3_topic/partition=0/s3_topic+0+0000000000.avro``
-``topics/s3_topic/partition=0/s3_topic+0+0000000003.avro``
-``topics/s3_topic/partition=0/s3_topic+0+0000000006.avro``
+topics/s3_topic/partition=0/s3_topic+0+0000000000.avro
+topics/s3_topic/partition=0/s3_topic+0+0000000003.avro
+topics/s3_topic/partition=0/s3_topic+0+0000000006.avro
 
-Each file is encoded as ``topic+kafkaPartition+startOffset.format``.
+Each file is encoded as ``<topic>+<kafkaPartition>+<startOffset>.<format>``.
 
 To verify the contents, first copy each file from S3 to your local filesystem, for instance by running::
 
@@ -135,12 +133,12 @@ with the rest of the records contained in the other two files.
 
 Configuration
 -------------
-This section first gives example configurations that cover common scenarios. For detailed description of all the
-available configuration options of the S3 connector go to :ref: Configuration Options<configuration_options>
+This section gives example configurations that cover common scenarios. For detailed description of all the
+available configuration options of the S3 connector go to :ref:`Configuration Options<s3_configuration_options>`
 
 Example
 ~~~~~~~
-Here is the content of ``etc/kafka-connect-s3/quickstart-s3.properties``::
+The example settings are contained in ``etc/kafka-connect-s3/quickstart-s3.properties`` as follows::
 
   name=s3-sink
   connector.class=io.confluent.connect.s3.S3SinkConnector
@@ -148,9 +146,9 @@ Here is the content of ``etc/kafka-connect-s3/quickstart-s3.properties``::
   topics=s3_topic
   flush.size=3
 
-The first few settings are common settings you have seen specified in other connectors too. The ``topics`` specifies
-the topics we want to export data from, in this case ``s3_topic``. The ``flush.size`` specifies the number of records
-the connector needs to write before completing a multipart upload to S3:
+The first few settings are common to most connectors. ``topics`` specifies the topics we want to export data from, in
+this case ``s3_topic``. The property ``flush.size`` specifies the number of records the connector needs to write before
+completing a multipart upload to S3. ::
 
   s3.bucket.name=confluent-kafka-connect-s3-testing
   s3.part.size=5242880
@@ -158,14 +156,21 @@ the connector needs to write before completing a multipart upload to S3:
 The next settings are specific to Amazon S3. A mandatory setting is the name of your S3 bucket to host the exported
 Kafka records. Other useful settings are ``s3.region``, which you should set if you use a region other than the
 default, and ``s3.part.size`` to control the size of each part in the multipart uploads that will be used to upload a
-single chunk of Kafka records.
+single chunk of Kafka records. ::
 
+  storage.class=io.confluent.connect.s3.storage.S3Storage
+  format.class=io.confluent.connect.s3.format.avro.AvroFormat
+  schema.generator.class=io.confluent.connect.storage.hive.schema.DefaultSchemaGenerator
+  partitioner.class=io.confluent.connect.storage.partitioner.DefaultPartitioner
 
-Format and Partitioner
-~~~~~~~~~~~~~~~~~~~~~~
-TODO: complete this section briefly.
+These class settings are required to specify the storage interface (here S3), the output file format, currently
+`io.confluent.connect.s3.format.avro.AvroFormat` or `io.confluent.connect.s3.format.json.JsonFormat` and the partitioner
+class along with its schema generator class. When using a format with no schema definition, it is sufficient to set the
+schema generator class to its default value. ::
 
+  schema.compatibility=NONE
 
-Schema Evolution
-----------------
-TODO: complete this section briefly, probably with a reference to the section in the HDFS connector.
+Finally, schema evolution is disabled in this example by setting `schema.compatibility` to `NONE`. Schema evolution in
+S3 connector is defined in the same way as in the HDFS connector
+`here <../../../connect-hdfs/docs/hdfs_connector.html#schema-evolution>`_
+
