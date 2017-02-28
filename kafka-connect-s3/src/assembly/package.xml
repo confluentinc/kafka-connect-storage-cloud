@@ -26,11 +26,23 @@
     <includeBaseDirectory>false</includeBaseDirectory>
     <fileSets>
         <fileSet>
+            <directory>${project.parent.basedir}</directory>
+            <outputDirectory>share/doc/kafka-connect-s3/</outputDirectory>
+            <includes>
+                <include>version.txt</include>
+                <include>README*</include>
+            </includes>
+        </fileSet>
+        <fileSet>
             <directory>${project.basedir}</directory>
             <outputDirectory>share/doc/kafka-connect-s3/</outputDirectory>
             <includes>
                 <include>version.txt</include>
                 <include>README*</include>
+                <include>LICENSE*</include>
+                <include>licenses.html</include>
+                <include>licenses/</include>
+                <include>notices/</include>
             </includes>
         </fileSet>
         <fileSet>
