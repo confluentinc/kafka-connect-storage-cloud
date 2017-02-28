@@ -164,13 +164,13 @@ single chunk of Kafka records. ::
   partitioner.class=io.confluent.connect.storage.partitioner.DefaultPartitioner
 
 These class settings are required to specify the storage interface (here S3), the output file format, currently
-`io.confluent.connect.s3.format.avro.AvroFormat` or `io.confluent.connect.s3.format.json.JsonFormat` and the partitioner
+``io.confluent.connect.s3.format.avro.AvroFormat`` or ``io.confluent.connect.s3.format.json.JsonFormat`` and the partitioner
 class along with its schema generator class. When using a format with no schema definition, it is sufficient to set the
 schema generator class to its default value. ::
 
   schema.compatibility=NONE
 
-Finally, schema evolution is disabled in this example by setting `schema.compatibility` to `NONE`. Schema evolution in
+Finally, schema evolution is disabled in this example by setting ``schema.compatibility`` to ``NONE``. Schema evolution in
 S3 connector is defined in the same way as in the HDFS connector
 `here <../../../connect-hdfs/docs/hdfs_connector.html#schema-evolution>`_
 
