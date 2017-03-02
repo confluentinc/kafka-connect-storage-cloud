@@ -16,7 +16,6 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
@@ -83,39 +82,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         "The S3 Bucket.",
                         group,
                         ++orderInGroup,
-                        Width.MEDIUM,
-                        "S3 Bucket");
-
-      CONFIG_DEF.define(PART_SIZE_CONFIG,
-                        Type.INT,
-                        PART_SIZE_DEFAULT,
-                        new PartRange(),
-                        Importance.HIGH,
-                        "The Part Size in S3 Multi-part Uploads.",
-                        group,
-                        ++orderInGroup,
-                        Width.MEDIUM,
-                        "S3 Part Size");
-
-      CONFIG_DEF.define(SSEA_CONFIG,
-                        Type.STRING,
-                        SSEA_DEFAULT,
-                        Importance.LOW,
-                        "The S3 Server Side Encryption Algorithm.",
-                        group,
-                        ++orderInGroup,
-                        Width.MEDIUM,
-                        "S3 Server Side Encryption Algorithm");
-
-      CONFIG_DEF.define(WAN_MODE_CONFIG,
-                        Type.BOOLEAN,
-                        WAN_MODE_DEFAULT,
-                        Importance.MEDIUM,
-                        "Use S3 accelerated endpoint.",
-                        group,
-                        ++orderInGroup,
                         Width.LONG,
-                        "S3 accelerated endpoint enabled.");
+                        "S3 Bucket");
 
       CONFIG_DEF.define(REGION_CONFIG,
                         Type.STRING,
@@ -129,6 +97,17 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         "AWS region",
                         new RegionRecommender());
 
+      CONFIG_DEF.define(PART_SIZE_CONFIG,
+                        Type.INT,
+                        PART_SIZE_DEFAULT,
+                        new PartRange(),
+                        Importance.HIGH,
+                        "The Part Size in S3 Multi-part Uploads.",
+                        group,
+                        ++orderInGroup,
+                        Width.LONG,
+                        "S3 Part Size");
+
       CONFIG_DEF.define(CREDENTIALS_PROVIDER_CLASS_CONFIG,
                         Type.CLASS,
                         CREDENTIALS_PROVIDER_CLASS_DEFAULT,
@@ -140,6 +119,26 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         ++orderInGroup,
                         Width.LONG,
                         "AWS Credentials Provider Class");
+
+      CONFIG_DEF.define(SSEA_CONFIG,
+                        Type.STRING,
+                        SSEA_DEFAULT,
+                        Importance.LOW,
+                        "The S3 Server Side Encryption Algorithm.",
+                        group,
+                        ++orderInGroup,
+                        Width.LONG,
+                        "S3 Server Side Encryption Algorithm");
+
+      CONFIG_DEF.define(WAN_MODE_CONFIG,
+                        Type.BOOLEAN,
+                        WAN_MODE_DEFAULT,
+                        Importance.MEDIUM,
+                        "Use S3 accelerated endpoint.",
+                        group,
+                        ++orderInGroup,
+                        Width.LONG,
+                        "S3 accelerated endpoint enabled");
     }
   }
 
@@ -285,4 +284,28 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       return "Any class implementing: " + AWSCredentialsProvider.class;
     }
   }
+
+  public static ConfigDef getConfig() {
+    Map<String, ConfigDef.ConfigKey> everything = new HashMap<>(CONFIG_DEF.configKeys());
+    everything.putAll(StorageCommonConfig.getConfig().configKeys());
+    everything.putAll(PartitionerConfig.getConfig().configKeys());
+
+    Set<String> blacklist = new HashSet<>();
+    blacklist.add(StorageSinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
+    blacklist.add(StorageSinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG);
+    blacklist.add(StorageSinkConnectorConfig.SHUTDOWN_TIMEOUT_CONFIG);
+
+    ConfigDef visible = new ConfigDef();
+    for (ConfigDef.ConfigKey key : everything.values()) {
+      if(!blacklist.contains(key.name)) {
+        visible.define(key);
+      }
+    }
+    return visible;
+  }
+
+  public static void main(String[] args) {
+    System.out.println(getConfig().toEnrichedRst());
+  }
+
 }
