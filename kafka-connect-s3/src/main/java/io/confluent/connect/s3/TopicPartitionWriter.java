@@ -26,8 +26,6 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.errors.SchemaProjectorException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,8 +41,8 @@ import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
+import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
-import io.confluent.connect.storage.util.DateTimeUtils;
 
 public class TopicPartitionWriter {
   private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriter.class);
@@ -61,10 +59,9 @@ public class TopicPartitionWriter {
   private int recordCount;
   private final int flushSize;
   private final long rotateIntervalMs;
-  private final long rotateScheduleIntervalMs;
-  private long nextScheduledRotate;
   private final RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private long currentOffset;
+  private String currentEncodedPartition;
   private Long offsetToCommit;
   private Long nextOffsetToCommit;
   private final Map<String, Long> startOffsets;
@@ -75,7 +72,6 @@ public class TopicPartitionWriter {
   private final String zeroPadOffsetFormat;
   private final String dirDelim;
   private final String fileDelim;
-  private final DateTimeZone timezone;
   private final Time time;
 
   public TopicPartitionWriter(TopicPartition tp,
@@ -102,8 +98,9 @@ public class TopicPartitionWriter {
 
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
-    rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
-    rotateScheduleIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG);
+    rotateIntervalMs = partitioner instanceof TimeBasedPartitioner ?
+                           ((TimeBasedPartitioner) partitioner).getPartitionDurationMs() :
+                           connectorConfig.getLong(PartitionerConfig.PARTITION_DURATION_MS_CONFIG);
     timeoutMs = connectorConfig.getLong(S3SinkConnectorConfig.RETRY_BACKOFF_CONFIG);
     compatibility = StorageSchemaCompatibility.getCompatibility(
         connectorConfig.getString(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG));
@@ -121,13 +118,6 @@ public class TopicPartitionWriter {
     extension = writerProvider.getExtension();
     zeroPadOffsetFormat = "%0" + connectorConfig.getInt(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG)
                               + "d";
-
-    timezone = rotateScheduleIntervalMs > 0 ?
-                   DateTimeZone.forID(connectorConfig.getString(PartitionerConfig.TIMEZONE_CONFIG)) :
-                   null;
-
-    // Initialize rotation timers
-    updateRotationTimers();
   }
 
   private enum State {
@@ -143,27 +133,12 @@ public class TopicPartitionWriter {
     }
   }
 
-  private void updateRotationTimers() {
-    long lastRotate = time.milliseconds();
-    if (log.isDebugEnabled() && rotateIntervalMs > 0) {
-      log.debug("Update last rotation timer. Next rotation for {} will be in {}ms", tp, rotateIntervalMs);
-    }
-    if (rotateScheduleIntervalMs > 0) {
-      nextScheduledRotate = DateTimeUtils.getNextTimeAdjustedByDay(lastRotate, rotateScheduleIntervalMs, timezone);
-      if (log.isDebugEnabled()) {
-        log.debug("Update scheduled rotation timer. Next rotation for {} will be at {}", tp, new DateTime(nextScheduledRotate).withZone(timezone).toString());
-      }
-    }
-  }
-
   @SuppressWarnings("fallthrough")
   public void write() {
     long now = time.milliseconds();
     if (failureTime > 0 && now - failureTime < timeoutMs) {
       return;
     }
-
-    updateRotationTimers();
 
     while (!buffer.isEmpty()) {
       try {
@@ -186,11 +161,15 @@ public class TopicPartitionWriter {
               currentSchemas.put(encodedPartition, valueSchema);
               nextOffsetToCommit = currentOffset;
               nextState();
+            } else if (rotateOnTime(encodedPartition)) {
+              nextOffsetToCommit = currentOffset;
+              nextState();
             } else {
+              currentEncodedPartition = encodedPartition;
               SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
               writeRecord(projectedRecord);
               buffer.poll();
-              if (shouldRotate(projectedRecord.timestamp())) {
+              if (rotateOnSize()) {
                 log.info("Starting commit and rotation for topic partition {} with start offset {}", tp, startOffsets);
                 nextOffsetToCommit = currentOffset + 1;
                 nextState();
@@ -200,7 +179,6 @@ public class TopicPartitionWriter {
               }
             }
           case SHOULD_ROTATE:
-            updateRotationTimers();
             commitFiles();
             nextState();
           case FILE_COMMITTED:
@@ -255,17 +233,19 @@ public class TopicPartitionWriter {
     this.state = state;
   }
 
-  private boolean shouldRotate(Long timestamp) {
-    boolean scheduledRotation = rotateScheduleIntervalMs > 0
-                                    && timestamp != null
-                                    && timestamp >= nextScheduledRotate;
+  private boolean rotateOnTime(String encodedPartition) {
+    boolean timeBasedRotation =
+        rotateIntervalMs > 0 && recordCount > 0 && !encodedPartition.equals(currentEncodedPartition);
+    log.trace("Should apply time-based rotation: (rotateInterval: {}, recordCount: {}, encodedPartition: {})? {}",
+              rotateIntervalMs, recordCount, encodedPartition, timeBasedRotation);
+    return timeBasedRotation;
+  }
+
+  private boolean rotateOnSize() {
     boolean messageSizeRotation = recordCount >= flushSize;
-
-    log.trace("Should rotate (count {} >= flush size {} and schedule interval {} next schedule {} timestamp {})? {}",
-              recordCount, flushSize, rotateScheduleIntervalMs, nextScheduledRotate, timestamp,
-              scheduledRotation || messageSizeRotation);
-
-    return scheduledRotation || messageSizeRotation;
+    log.trace("Should apply size-based rotation (count {} >= flush size {})? {}", recordCount, flushSize,
+              messageSizeRotation);
+    return messageSizeRotation;
   }
 
   private void pause() {
@@ -318,13 +298,12 @@ public class TopicPartitionWriter {
   private void writeRecord(SinkRecord record) {
     currentOffset = record.kafkaOffset();
 
-    String encodedPartition = partitioner.encodePartition(record);
-    if (!startOffsets.containsKey(encodedPartition)) {
-      log.trace("Setting writer's start offset for '{}' to {}", encodedPartition, currentOffset);
-      startOffsets.put(encodedPartition, currentOffset);
+    if (!startOffsets.containsKey(currentEncodedPartition)) {
+      log.trace("Setting writer's start offset for '{}' to {}", currentEncodedPartition, currentOffset);
+      startOffsets.put(currentEncodedPartition, currentOffset);
     }
 
-    RecordWriter writer = getWriter(record, encodedPartition);
+    RecordWriter writer = getWriter(record, currentEncodedPartition);
     writer.write(record);
     ++recordCount;
   }
