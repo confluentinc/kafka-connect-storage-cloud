@@ -147,8 +147,8 @@ The example settings are contained in ``etc/kafka-connect-s3/quickstart-s3.prope
   flush.size=3
 
 The first few settings are common to most connectors. ``topics`` specifies the topics we want to export data from, in
-this case ``s3_topic``. The property ``flush.size`` specifies the number of records per partition the connector needs to write before
-completing a multipart upload to S3. ::
+this case ``s3_topic``. The property ``flush.size`` specifies the number of records per partition the connector needs
+to write before completing a multipart upload to S3. ::
 
   s3.bucket.name=confluent-kafka-connect-s3-testing
   s3.part.size=5242880
