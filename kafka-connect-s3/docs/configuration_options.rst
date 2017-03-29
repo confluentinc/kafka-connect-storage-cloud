@@ -13,7 +13,7 @@ Connector
   * Importance: high
 
 ``flush.size``
-  Number of records written to store before invoking file commits.
+  Number of records written to store per partition before invoking file commits.
 
   * Type: int
   * Importance: high
