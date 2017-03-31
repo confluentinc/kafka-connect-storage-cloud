@@ -141,6 +141,9 @@
         </profile>
         <profile>
             <id>licenses-package</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
             <build>
                 <plugins>
                     <plugin>
@@ -197,8 +200,11 @@
                 </plugins>
             </build>
         </profile>
-            <profile>
+        <profile>
             <id>licenses-source</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
             <build>
                 <plugins>
                     <plugin>
