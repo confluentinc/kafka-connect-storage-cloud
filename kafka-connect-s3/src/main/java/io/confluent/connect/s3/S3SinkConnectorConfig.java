@@ -150,16 +150,16 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
               group,
               ++orderInGroup,
               Width.LONG,
-              "S3 Bucket");
+              "proxy host");
 
       CONFIG_DEF.define(S3_PROXY_PORT,
               Type.INT,
               Importance.HIGH,
-              "proxy host.",
+              "proxy port.",
               group,
               ++orderInGroup,
               Width.LONG,
-              "S3 Bucket");
+              "proxy port");
     }
   }
 
