@@ -30,6 +30,8 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -45,6 +47,7 @@ import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.ComposableConfig;
 import io.confluent.connect.storage.common.GenericRecommender;
 import io.confluent.connect.storage.common.StorageCommonConfig;
+import io.confluent.connect.storage.common.util.StringUtils;
 import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.partitioner.DailyPartitioner;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
@@ -88,6 +91,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG = "format.bytearray.separator";
   public static final String FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT = System.lineSeparator();
+
+  public static final String S3_PROXY_URL_CONFIG = "s3.proxy.url";
+  public static final String S3_PROXY_URL_DEFAULT = "";
 
   private final String name;
 
@@ -274,6 +280,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "Line separator ByteArrayFormat"
+      );
+
+      configDef.define(
+          S3_PROXY_URL_CONFIG,
+          Type.STRING,
+          S3_PROXY_URL_DEFAULT,
+          Importance.LOW,
+          "S3 Proxy settings encoded in URL syntax",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Proxy Settings"
       );
     }
     return configDef;
@@ -514,6 +532,41 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       }
     }
     return visible;
+  }
+
+  public static class ProxyConfig {
+    private final String protocol;
+    private final String host;
+    private final int port;
+    private final String user;
+    private final String pass;
+
+    public ProxyConfig(String settings) {
+      try {
+        URL url = new URL(settings);
+        protocol = url.getProtocol();
+        host = url.getHost();
+        port = url.getPort();
+        user = extractUser(url.getUserInfo());
+        pass = extractPass(url.getUserInfo());
+
+      } catch (MalformedURLException e) {
+        throw new ConfigException("msg");
+      }
+    }
+
+    public static String extractUser(String userInfo) {
+      return StringUtils.isBlank(userInfo) ? "" : userInfo.split(":")[0];
+    }
+
+    public static String extractPass(String userInfo) {
+      if (StringUtils.isBlank(userInfo)) {
+        return "";
+      }
+
+      String[] parts = userInfo.split(":", 2);
+      return parts.length == 2 ? parts[1] : "";
+    }
   }
 
   public static void main(String[] args) {
