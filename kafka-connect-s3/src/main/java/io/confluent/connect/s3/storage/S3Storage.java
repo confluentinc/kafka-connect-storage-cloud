@@ -32,8 +32,7 @@ import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.Storage;
 import io.confluent.connect.storage.common.util.StringUtils;
 
-import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.*;
 
 /**
  * S3 implementation of the storage interface for Connect sinks.
@@ -60,12 +59,14 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   }
 
   public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
+    String proxyHost = config.getString(S3_PROXY_HOST);
+    int proxyPort = config.getInt(S3_PROXY_PORT);
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
                                         .withAccelerateModeEnabled(config.getBoolean(WAN_MODE_CONFIG))
                                         .withPathStyleAccessEnabled(true)
                                         .withCredentials(config.getCredentialsProvider())
                                         .withClientConfiguration(
-                                            PredefinedClientConfigurations.defaultConfig()
+                                            PredefinedClientConfigurations.defaultConfig().withProxyHost(proxyHost).withProxyPort(proxyPort)
                                                 .withUserAgentPrefix(
                                                     String.format(VERSION_FORMAT, Version.getVersion())));
 

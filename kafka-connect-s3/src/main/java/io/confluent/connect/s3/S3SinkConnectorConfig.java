@@ -63,6 +63,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String REGION_CONFIG = "s3.region";
   public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
 
+  public static final String S3_PROXY_HOST = "s3.proxy.host";
+  public static final String S3_PROXY_PORT = "s3.proxy.port";
+
   private final String name;
 
   private final StorageCommonConfig commonConfig;
@@ -139,6 +142,24 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         ++orderInGroup,
                         Width.LONG,
                         "S3 accelerated endpoint enabled");
+
+      CONFIG_DEF.define(S3_PROXY_HOST,
+              Type.STRING,
+              Importance.HIGH,
+              "proxy host.",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "S3 Bucket");
+
+      CONFIG_DEF.define(S3_PROXY_PORT,
+              Type.INT,
+              Importance.HIGH,
+              "proxy host.",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "S3 Bucket");
     }
   }
 
