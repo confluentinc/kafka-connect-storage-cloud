@@ -62,7 +62,7 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
         final S3OutputStream s3out = storage.create(filename, true);
         final JsonGenerator writer = mapper.getFactory()
                                          .createGenerator(s3out)
-                                         .setRootValueSeparator(new SerializedString(LINE_SEPARATOR));
+                                         .setRootValueSeparator(null);
 
         @Override
         public void write(SinkRecord record) {
@@ -75,6 +75,7 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
               s3out.write(LINE_SEPARATOR_BYTES);
             } else {
               writer.writeObject(value);
+              writer.writeRaw(LINE_SEPARATOR);
             }
           } catch (IOException e) {
             throw new ConnectException(e);
