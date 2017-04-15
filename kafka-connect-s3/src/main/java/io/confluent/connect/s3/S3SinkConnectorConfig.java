@@ -51,7 +51,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String SSEA_DEFAULT = "";
 
   public static final String PART_SIZE_CONFIG = "s3.part.size";
-  public static final int PART_SIZE_DEFAULT = 100 * 1024 * 1024;
+  public static final int PART_SIZE_DEFAULT = 25 * 1024 * 1024;
 
   public static final String WAN_MODE_CONFIG = "s3.wan.mode";
   private static final boolean WAN_MODE_DEFAULT = false;
