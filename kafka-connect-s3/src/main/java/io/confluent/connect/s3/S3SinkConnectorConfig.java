@@ -65,6 +65,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String S3_PROXY_HOST = "s3.proxy.host";
   public static final String S3_PROXY_PORT = "s3.proxy.port";
+  public static final String S3_PROXY_HOST_DEFAULT = null;
+  public static final int S3_PROXY_PORT_DEFAULT = 0;
 
   private final String name;
 
@@ -145,21 +147,23 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
       CONFIG_DEF.define(S3_PROXY_HOST,
               Type.STRING,
-              Importance.HIGH,
-              "proxy host.",
+              S3_PROXY_HOST_DEFAULT,
+              Importance.LOW,
+              "Proxy Host Name for accessing S3",
               group,
               ++orderInGroup,
               Width.LONG,
-              "proxy host");
+              "S3 Proxy Host");
 
       CONFIG_DEF.define(S3_PROXY_PORT,
               Type.INT,
-              Importance.HIGH,
-              "proxy port.",
+              S3_PROXY_PORT_DEFAULT,
+              Importance.LOW,
+              "Proxy Port for accessing S3",
               group,
               ++orderInGroup,
-              Width.LONG,
-              "proxy port");
+              Width.SHORT,
+              "S3 Proxy Port");
     }
   }
 
