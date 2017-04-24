@@ -61,11 +61,11 @@
                 shipped with Confluent platform and other dependencies such as Hadoop and Avro.
                 This allows correctly setup of CLASSPATH in kafka-run-class.sh when running
                 Kafka Connect connectors. -->
-                <exclude>io.confluent:common-*</exclude>
-                <exclude>org.mortbay.jetty:*</exclude>
-                <exclude>com.sun.jersey:*</exclude>
-                <exclude>org.eclipse.jetty.aggregate:jetty-all</exclude>
-                <exclude>com.sun.jersey.contribs:jersey-guice</exclude>
+                <exclude>io.confluent:kafka-connect-storage-common</exclude>
+                <exclude>io.confluent:kafka-connect-storage-core</exclude>
+                <exclude>io.confluent:kafka-connect-storage-format</exclude>
+                <exclude>io.confluent:kafka-connect-storage-hive</exclude>
+                <exclude>io.confluent:kafka-connect-storage-partitioner</exclude>
             </excludes>
         </dependencySet>
     </dependencySets>
