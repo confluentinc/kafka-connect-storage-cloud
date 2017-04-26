@@ -67,7 +67,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
     ClientConfiguration clientConfiguration = PredefinedClientConfigurations.defaultConfig();
     clientConfiguration.withUserAgentPrefix(String.format(VERSION_FORMAT, Version.getVersion()));
-    if(proxyHost != null && !proxyHost.isEmpty()) {
+    if(StringUtils.isNotBlank(proxyHost)) {
       clientConfiguration.withProxyHost(proxyHost).withProxyPort(proxyPort);
     }
 

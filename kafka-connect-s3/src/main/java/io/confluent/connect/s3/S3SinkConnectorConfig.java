@@ -66,7 +66,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String S3_PROXY_HOST = "s3.proxy.host";
   public static final String S3_PROXY_PORT = "s3.proxy.port";
   public static final String S3_PROXY_HOST_DEFAULT = null;
-  public static final int S3_PROXY_PORT_DEFAULT = 0;
+  public static final int S3_PROXY_PORT_DEFAULT = -1;
 
   private final String name;
 
