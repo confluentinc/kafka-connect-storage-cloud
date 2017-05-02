@@ -64,7 +64,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
 
   public static final String AVRO_CODEC_CONFIG = "avro.codec";
-  public static final String AVRO_CODEC_DEFAULT = "deflate";
+  public static final String AVRO_CODEC_DEFAULT = "null";
 
   private final String name;
 
