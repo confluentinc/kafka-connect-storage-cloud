@@ -77,6 +77,7 @@ public class TopicPartitionWriter {
   private final String fileDelim;
   private final DateTimeZone timezone;
   private final Time time;
+  private final long lastRotate;
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
@@ -144,7 +145,7 @@ public class TopicPartitionWriter {
   }
 
   private void updateRotationTimers() {
-    long lastRotate = time.milliseconds();
+    lastRotate = time.milliseconds();
     if (log.isDebugEnabled() && rotateIntervalMs > 0) {
       log.debug("Update last rotation timer. Next rotation for {} will be in {}ms", tp, rotateIntervalMs);
     }
@@ -256,6 +257,7 @@ public class TopicPartitionWriter {
   }
 
   private boolean shouldRotate(Long timestamp) {
+    boolean periodicRotation = rotateIntervalMs > 0 && timestamp - lastRotate >= rotateIntervalMs;
     boolean scheduledRotation = rotateScheduleIntervalMs > 0
                                     && timestamp != null
                                     && timestamp >= nextScheduledRotate;
@@ -265,7 +267,7 @@ public class TopicPartitionWriter {
               recordCount, flushSize, rotateScheduleIntervalMs, nextScheduledRotate, timestamp,
               scheduledRotation || messageSizeRotation);
 
-    return scheduledRotation || messageSizeRotation;
+    return periodicRotation || scheduledRotation || messageSizeRotation;
   }
 
   private void pause() {
