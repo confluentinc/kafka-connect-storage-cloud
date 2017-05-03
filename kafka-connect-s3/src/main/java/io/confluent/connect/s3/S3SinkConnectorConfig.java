@@ -63,6 +63,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String REGION_CONFIG = "s3.region";
   public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
 
+  public static final String AVRO_CODEC_CONFIG = "avro.codec";
+  public static final String AVRO_CODEC_DEFAULT = "null";
+
   private final String name;
 
   private final StorageCommonConfig commonConfig;
@@ -139,6 +142,17 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         ++orderInGroup,
                         Width.LONG,
                         "S3 accelerated endpoint enabled");
+
+      CONFIG_DEF.define(AVRO_CODEC_CONFIG,
+                        Type.STRING,
+                        AVRO_CODEC_DEFAULT,
+                        Importance.LOW,
+                        "The Avro compression codec to be used for output files. Available values: null, deflate, "
+                         + "snappy and bzip2 (codec source is org.apache.avro.file.CodecFactory)",
+                        group,
+                        ++orderInGroup,
+                        Width.LONG,
+                        "Avro compression codec");
     }
   }
 
@@ -189,6 +203,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     } catch (IllegalAccessException | InstantiationException e) {
       throw new ConnectException("Invalid class for: " + S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG, e);
     }
+  }
+
+  public String getAvroCodec() {
+    return getString(AVRO_CODEC_CONFIG);
   }
 
   protected static String parseName(Map<String, String> props) {

@@ -77,6 +77,7 @@ public class TopicPartitionWriter {
   private final String fileDelim;
   private final DateTimeZone timezone;
   private final Time time;
+  private final S3SinkConnectorConfig connectorConfig;
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
@@ -94,6 +95,7 @@ public class TopicPartitionWriter {
                        S3SinkConnectorConfig connectorConfig,
                        SinkTaskContext context,
                        Time time) {
+    this.connectorConfig = connectorConfig;
     this.time = time;
     this.tp = tp;
     this.context = context;
@@ -283,7 +285,7 @@ public class TopicPartitionWriter {
       return writers.get(encodedPartition);
     }
     String commitFilename = getCommitFilename(encodedPartition);
-    RecordWriter writer = writerProvider.getRecordWriter(null, commitFilename);
+    RecordWriter writer = writerProvider.getRecordWriter(connectorConfig, commitFilename);
     writers.put(encodedPartition, writer);
     return writer;
   }
