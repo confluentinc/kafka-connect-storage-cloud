@@ -16,9 +16,12 @@
 
 package io.confluent.connect.s3;
 
+import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.sink.SinkConnector;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNotNull;
 
 public class S3SinkConnectorTest {
@@ -30,5 +33,10 @@ public class S3SinkConnectorTest {
     assertFalse(version.isEmpty());
   }
 
+  @Test
+  public void connectorType() {
+    Connector connector = new S3SinkConnector();
+    assertTrue(SinkConnector.class.isAssignableFrom(connector.getClass()));
+  }
 }
 
