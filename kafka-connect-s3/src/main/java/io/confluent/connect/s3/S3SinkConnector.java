@@ -17,8 +17,8 @@
 package io.confluent.connect.s3;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.sink.SinkConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +32,7 @@ import io.confluent.connect.s3.util.Version;
 /**
  * Connector class for Amazon Simple Storage Service (S3).
  */
-public class S3SinkConnector extends Connector {
+public class S3SinkConnector extends SinkConnector {
   private static final Logger log = LoggerFactory.getLogger(S3SinkConnector.class);
   private Map<String, String> configProps;
   private S3SinkConnectorConfig config;

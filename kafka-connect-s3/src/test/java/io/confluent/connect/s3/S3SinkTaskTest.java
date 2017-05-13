@@ -17,6 +17,7 @@
 package io.confluent.connect.s3;
 
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.sink.SinkTask;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.After;
@@ -65,6 +66,14 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
   public void tearDown() throws Exception {
     super.tearDown();
     localProps.clear();
+  }
+
+  @Test
+  public void testTaskType() throws Exception {
+    setUp();
+    replayAll();
+    task = new S3SinkTask();
+    SinkTask.class.isAssignableFrom(task.getClass());
   }
 
   @Test
