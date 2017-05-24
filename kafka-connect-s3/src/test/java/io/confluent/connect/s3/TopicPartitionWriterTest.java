@@ -220,9 +220,10 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     long timeBucketMs = TimeUnit.SECONDS.toMillis(5);
+    long partitionDurationMs = TimeUnit.MINUTES.toMillis(1);
     // Define the partitioner
     Partitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
-    parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, timeBucketMs);
+    parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, partitionDurationMs);
     parsedConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, TimeBasedSchemaGenerator.class);
     parsedConfig.put(
         PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH_'min'=mm_'sec'=ss");
@@ -273,11 +274,16 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   @Test
   public void testWriteRecordTimeBasedPartitionWallclockMocked() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.HOURS.toMillis(1))
+    );
     setUp();
 
     // Define the partitioner
     TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
-    parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.HOURS.toMillis(1));
+    parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
     parsedConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, TimeBasedSchemaGenerator.class);
     parsedConfig.put(
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockedWallclockTimestampExtractor.class.getName());
@@ -299,6 +305,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     long timestampFirst = time.milliseconds();
     topicPartitionWriter.write();
 
+    // 2 hours
     time.sleep(2 * 3600 * 1000);
 
     sinkRecords = createSinkRecords(records.subList(9, 18), key, schema, 9);
@@ -308,6 +315,15 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     long timestampLater = time.milliseconds();
     topicPartitionWriter.write();
+
+    // 1 hours and 1 ms, send another record to flush the pending ones.
+    time.sleep(3600 * 1000 + 1);
+
+    sinkRecords = createSinkRecords(records.subList(17, 18), key, schema, 1);
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+    topicPartitionWriter.write();
     topicPartitionWriter.close();
 
     String encodedPartitionFirst = getTimebasedEncodedPartition(timestampFirst);
@@ -315,25 +331,32 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC, encodedPartitionFirst);
     List<String> expectedFiles = new ArrayList<>();
-    for (int i : new int[]{0, 3, 6}) {
+    for (int i : new int[]{0}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
                                                   ZERO_PAD_FMT));
     }
 
     String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
-    for (int i : new int[]{9, 12, 15}) {
+    for (int i : new int[]{9}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
                                                   ZERO_PAD_FMT));
     }
-    verify(expectedFiles, 3, schema, records);
+    verify(expectedFiles, 9, schema, records);
   }
 
   @Test
   public void testWriteRecordTimeBasedPartitionRecordTimestampHours() throws Exception {
+    // Do not roll on size, only based on time.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.MINUTES.toMillis(1))
+    );
     setUp();
 
     // Define the partitioner
     Partitioner<FieldSchema> partitioner = new HourlyPartitioner<>();
+    parsedConfig.put(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG, TimeUnit.MINUTES.toMillis(1));
     parsedConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, TimeBasedSchemaGenerator.class);
     parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
     partitioner.configure(parsedConfig);
@@ -345,7 +368,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Schema schema = createSchema();
     List<Struct> records = createRecordBatches(schema, 3, 6);
     DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
-    long advanceMs = 1000;
+    // One record every 20 sec, puts 3 records every minute/rotate interval
+    long advanceMs = 20000;
     long timestampFirst = first.getMillis();
     Collection<SinkRecord> sinkRecords = createSinkRecordsWithTimestamp(records.subList(0, 9), key, schema, 0,
                                                                         timestampFirst, advanceMs);
@@ -371,7 +395,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     }
 
     String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
-    for (int i : new int[]{9, 12, 15}) {
+    // Records 15,16,17 won't be flushed until a record with a higher timestamp arrives.
+    for (int i : new int[]{9, 12}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
                                                   ZERO_PAD_FMT));
     }
@@ -380,6 +405,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   @Test
   public void testWriteRecordTimeBasedPartitionRecordTimestampDays() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.MINUTES.toMillis(1))
+    );
     setUp();
 
     // Define the partitioner
@@ -396,13 +426,87 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Schema schema = createSchema();
     List<Struct> records = createRecordBatches(schema, 3, 6);
     DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
-    long advanceMs = 1000;
+    // One record every 20 sec, puts 3 records every minute/rotate interval
+    long advanceMs = 20000;
     long timestampFirst = first.getMillis();
     Collection<SinkRecord> sinkRecords = createSinkRecordsWithTimestamp(records.subList(0, 9), key, schema, 0,
                                                                         timestampFirst, advanceMs);
     long timestampLater = first.plusHours(2).getMillis();
     sinkRecords.addAll(
         createSinkRecordsWithTimestamp(records.subList(9, 18), key, schema, 9, timestampLater, advanceMs));
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String encodedPartitionFirst = getTimebasedEncodedPartition(timestampFirst);
+    String encodedPartitionLater = getTimebasedEncodedPartition(timestampLater);
+
+    String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC, encodedPartitionFirst);
+    List<String> expectedFiles = new ArrayList<>();
+    for (int i : new int[]{0, 3, 6}) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
+                                                  ZERO_PAD_FMT));
+    }
+
+    String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
+    // Records 15,16,17 won't be flushed until a record with a higher timestamp arrives.
+    for (int i : new int[]{9, 12}) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
+                                                  ZERO_PAD_FMT));
+    }
+    verify(expectedFiles, 3, schema, records);
+  }
+
+  @Test
+  public void testWriteRecordTimeBasedPartitionFieldTimestampHours() throws Exception {
+    // Do not roll on size, only based on time.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.MINUTES.toMillis(1))
+    );
+    setUp();
+
+    // Define the partitioner
+    Partitioner<FieldSchema> partitioner = new HourlyPartitioner<>();
+    parsedConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, TimeBasedSchemaGenerator.class);
+    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "RecordField");
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
+
+    String key = "key";
+    Schema schema = createSchemaWithTimestampField();
+
+    DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
+    // One record every 20 sec, puts 3 records every minute/rotate interval
+    long advanceMs = 20000;
+    long timestampFirst = first.getMillis();
+    int size = 18;
+
+    ArrayList<Struct> records = new ArrayList<>(size);
+    for (int i = 0; i < size/2; ++i) {
+      records.add(createRecordWithTimestampField(schema, timestampFirst));
+      timestampFirst += advanceMs;
+    }
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records.subList(0, 9), key, schema);
+
+    long timestampLater = first.plusHours(2).getMillis();
+    for (int i = size/2; i < size; ++i) {
+      records.add(createRecordWithTimestampField(schema, timestampLater));
+      timestampLater += advanceMs;
+    }
+    sinkRecords.addAll(createSinkRecords(records.subList(9, 18), key, schema, 9));
+
+    // And one last record to flush the previous ones.
+    long timestampMuchLater = first.plusHours(6).getMillis();
+    Struct lastOne = createRecordWithTimestampField(schema, timestampMuchLater);
+    sinkRecords.addAll(createSinkRecords(Collections.singletonList(lastOne), key, schema, 19));
 
     for (SinkRecord record : sinkRecords) {
       topicPartitionWriter.buffer(record);
@@ -466,7 +570,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     verify(Collections.<String>emptyList(), -1, schema, records);
   }
 
-  // Create a batch of records with incremental numeric field values. Total number of records is given by 'size'.
   private Struct createRecord(Schema schema, int ibase, float fbase) {
     return new Struct(schema)
                .put("boolean", true)
@@ -498,12 +601,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   // Given a list of records, create a list of sink records with contiguous offsets.
-  private ArrayList<SinkRecord> createSinkRecords(List<Struct> records, String key, Schema schema) {
+  private List<SinkRecord> createSinkRecords(List<Struct> records, String key, Schema schema) {
     return createSinkRecords(records, key, schema, 0);
   }
 
   // Given a list of records, create a list of sink records with contiguous offsets.
-  private ArrayList<SinkRecord> createSinkRecords(List<Struct> records, String key, Schema schema, int startOffset) {
+  private List<SinkRecord> createSinkRecords(List<Struct> records, String key, Schema schema, int startOffset) {
     ArrayList<SinkRecord> sinkRecords = new ArrayList<>();
     for (int i = 0; i < records.size(); ++i) {
       sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(i),
@@ -513,8 +616,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   // Given a list of records, create a list of sink records with contiguous offsets.
-  private ArrayList<SinkRecord> createSinkRecordsWithTimestamp(List<Struct> records, String key, Schema schema,
-                                                               int startOffset, long startTime, long timeStep) {
+  private List<SinkRecord> createSinkRecordsWithTimestamp(List<Struct> records, String key, Schema schema,
+                                                          int startOffset, long startTime, long timeStep) {
     ArrayList<SinkRecord> sinkRecords = new ArrayList<>();
     for (int i = 0, offset = startOffset; i < records.size(); ++i, ++offset) {
       sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(i), offset,
