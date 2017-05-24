@@ -24,7 +24,6 @@ import org.junit.After;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.storage.StorageSinkTestBase;
@@ -56,8 +55,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     props.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, PartitionerConfig.PARTITIONER_CLASS_DEFAULT.getName());
     props.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, DefaultSchemaGenerator.class.getName());
     props.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG, "int");
-    props.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, String.valueOf(TimeUnit.HOURS.toMillis(1)));
-    props.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH_");
+    props.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH");
     props.put(PartitionerConfig.LOCALE_CONFIG, "en");
     props.put(PartitionerConfig.TIMEZONE_CONFIG, "America/Los_Angeles");
     props.put(HiveConfig.HIVE_CONF_DIR_CONFIG, "America/Los_Angeles");
