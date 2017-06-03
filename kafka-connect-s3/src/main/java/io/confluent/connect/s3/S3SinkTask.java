@@ -144,15 +144,15 @@ public class S3SinkTask extends SinkTask {
 
     Partitioner<FieldSchema> partitioner = partitionerClass.newInstance();
 
-    HashMap<String, Object> plainValues = new HashMap<>(config.plainValues());
-    HashMap<String, ?> originals = new HashMap<>(config.originals());
+    Map<String, Object> plainValues = new HashMap<>(config.plainValues());
+    Map<String, ?> originals = config.originals();
     for(String originalKey : originals.keySet()) {
       if(!plainValues.containsKey(originalKey)) {
         // pass any additional configs down to the partitioner so that custom partitioners can have their own configs
         plainValues.put(originalKey, originals.get(originalKey));
       }
     }
-    partitioner.configure(new HashMap<>(plainValues));
+    partitioner.configure(plainValues);
 
     return partitioner;
   }
