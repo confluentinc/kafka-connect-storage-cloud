@@ -146,7 +146,6 @@ public class S3SinkTask extends SinkTask {
 
     Map<String, Object> plainValues = new HashMap<>(config.plainValues());
     Map<String, ?> originals = config.originals();
-
     for (String originalKey : originals.keySet()) {
       if (!plainValues.containsKey(originalKey)) {
         // pass any additional configs down to the partitioner so that custom partitioners can have their own configs
