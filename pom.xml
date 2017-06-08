@@ -24,7 +24,7 @@
     <groupId>io.confluent</groupId>
     <artifactId>kafka-connect-storage-cloud</artifactId>
     <packaging>pom</packaging>
-    <version>3.3.0-SNAPSHOT</version>
+    <version>3.5.0-SNAPSHOT</version>
     <name>kafka-connect-storage-cloud</name>
     <organization>
         <name>Confluent, Inc.</name>
@@ -55,14 +55,14 @@
     </modules>
 
     <properties>
-        <confluent.version>3.3.0-SNAPSHOT</confluent.version>
-        <kafka.version>0.11.0.0-SNAPSHOT</kafka.version>
+        <confluent.version>3.5.0-SNAPSHOT</confluent.version>
+        <kafka.version>0.11.1.0-SNAPSHOT</kafka.version>
         <jackson.version>2.8.5</jackson.version>
         <junit.version>4.12</junit.version>
         <easymock.version>3.4</easymock.version>
         <powermock.version>1.6.6</powermock.version>
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
-        <licenses.version>3.3.0-SNAPSHOT</licenses.version>
+        <licenses.version>3.5.0-SNAPSHOT</licenses.version>
         <maven-assembly.version>2.6</maven-assembly.version>
     </properties>
 

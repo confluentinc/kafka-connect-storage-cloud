@@ -51,7 +51,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String SSEA_DEFAULT = "";
 
   public static final String PART_SIZE_CONFIG = "s3.part.size";
-  public static final int PART_SIZE_DEFAULT = 100 * 1024 * 1024;
+  public static final int PART_SIZE_DEFAULT = 25 * 1024 * 1024;
 
   public static final String WAN_MODE_CONFIG = "s3.wan.mode";
   private static final boolean WAN_MODE_DEFAULT = false;
@@ -62,6 +62,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String REGION_CONFIG = "s3.region";
   public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
+
+  public static final String AVRO_CODEC_CONFIG = "avro.codec";
+  public static final String AVRO_CODEC_DEFAULT = "null";
 
   public static final String S3_PROXY_HOST = "s3.proxy.host";
   public static final String S3_PROXY_PORT = "s3.proxy.port";
@@ -145,25 +148,36 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         Width.LONG,
                         "S3 accelerated endpoint enabled");
 
+      CONFIG_DEF.define(AVRO_CODEC_CONFIG,
+                        Type.STRING,
+                        AVRO_CODEC_DEFAULT,
+                        Importance.LOW,
+                        "The Avro compression codec to be used for output files. Available values: null, deflate, "
+                         + "snappy and bzip2 (codec source is org.apache.avro.file.CodecFactory)",
+                        group,
+                        ++orderInGroup,
+                        Width.LONG,
+                        "Avro compression codec");
+
       CONFIG_DEF.define(S3_PROXY_HOST,
-              Type.STRING,
-              S3_PROXY_HOST_DEFAULT,
-              Importance.LOW,
-              "Proxy Host Name for accessing S3",
-              group,
-              ++orderInGroup,
-              Width.LONG,
-              "S3 Proxy Host");
+                        Type.STRING,
+                        S3_PROXY_HOST_DEFAULT,
+                        Importance.LOW,
+                        "Proxy Host Name for accessing S3",
+                        group,
+                        ++orderInGroup,
+                        Width.LONG,
+                        "S3 Proxy Host");
 
       CONFIG_DEF.define(S3_PROXY_PORT,
-              Type.INT,
-              S3_PROXY_PORT_DEFAULT,
-              Importance.LOW,
-              "Proxy Port for accessing S3",
-              group,
-              ++orderInGroup,
-              Width.SHORT,
-              "S3 Proxy Port");
+                        Type.INT,
+                        S3_PROXY_PORT_DEFAULT,
+                        Importance.LOW,
+                        "Proxy Port for accessing S3",
+                        group,
+                        ++orderInGroup,
+                        Width.SHORT,
+                        "S3 Proxy Port");
     }
   }
 
@@ -214,6 +228,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     } catch (IllegalAccessException | InstantiationException e) {
       throw new ConnectException("Invalid class for: " + S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG, e);
     }
+  }
+
+  public String getAvroCodec() {
+    return getString(AVRO_CODEC_CONFIG);
   }
 
   protected static String parseName(Map<String, String> props) {

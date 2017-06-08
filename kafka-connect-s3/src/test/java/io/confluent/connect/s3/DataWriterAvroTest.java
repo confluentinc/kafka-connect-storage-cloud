@@ -18,6 +18,9 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import org.apache.avro.file.DataFileStream;
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.io.DatumReader;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -28,10 +31,12 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -108,6 +113,34 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     task.put(sinkRecords);
     task.close(context.assignment());
     task.stop();
+
+    long[] validOffsets = {0, 3, 6};
+    verify(sinkRecords, validOffsets);
+
+  }
+
+  @Test
+  public void testCompressFile() throws Exception {
+    String avroCodec = "snappy";
+    localProps.put(S3SinkConnectorConfig.AVRO_CODEC_CONFIG, avroCodec);
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+
+    List<SinkRecord> sinkRecords = createRecords(7);
+    // Perform write
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, "/", s3);
+    for(S3ObjectSummary summary: summaries){
+      InputStream in = s3.getObject(summary.getBucketName(), summary.getKey()).getObjectContent();
+      DatumReader<Object> reader = new GenericDatumReader<>();
+      DataFileStream<Object> streamReader = new DataFileStream<>(in, reader);
+      // make sure that produced Avro file has proper codec set
+      Assert.assertEquals(avroCodec, streamReader.getMetaString(S3SinkConnectorConfig.AVRO_CODEC_CONFIG));
+      streamReader.close();
+    }
 
     long[] validOffsets = {0, 3, 6};
     verify(sinkRecords, validOffsets);
