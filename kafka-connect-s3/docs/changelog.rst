@@ -3,6 +3,24 @@
 Changelog
 =========
 
+Version 3.3.0
+-------------
+
+S3 Connector
+~~~~~~~~~~~~~~
+
+* `PR-28 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/28>`_ - HOTFIX: Explicitly deactivate licensing profiles by default.
+* `PR-34 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/34>`_ - CC-524: Reduce the default s3.part.size to 25MB to avoid OOM with current default jvm heap size.
+* `PR-33 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/33>`_ - CC-513: Newline is not appended between records when using JsonFormat.
+* `PR-37 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/37>`_ - Enable compression of output Avro files.
+* `PR-38 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/38>`_ - CC-530: Exclude storage-common jars when packaging S3 connector.
+* `PR-19 <https://github.com/confluentinc/kafka-connect-storage-common/pull/19>`_ - Move to using io.confluent:common for deps.
+* `PR-22 <https://github.com/confluentinc/kafka-connect-storage-common/pull/22>`_ - HOTFIX: Import recent changes from the hdfs connector.
+* `PR-24 <https://github.com/confluentinc/kafka-connect-storage-common/pull/24>`_ - Convert - to _ in Hive table names.
+* `PR-25 <https://github.com/confluentinc/kafka-connect-storage-common/pull/25>`_ - Include causes with ConfigExceptions caused by catching other exceptions.
+* `PR-26 <https://github.com/confluentinc/kafka-connect-storage-common/pull/26>`_ - Add constructors to SchemaGenerators to support no parameters and a Map config.
+* `PR-29 <https://github.com/confluentinc/kafka-connect-storage-common/pull/29>`_ - Timestamp information should be copied to projected SinkRecord.
+
 Version 3.2.2
 -------------
 
