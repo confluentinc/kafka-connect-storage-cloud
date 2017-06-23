@@ -309,8 +309,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     everything.putAll(PartitionerConfig.getConfig().configKeys());
 
     Set<String> blacklist = new HashSet<>();
-    blacklist.add(StorageSinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
-    blacklist.add(StorageSinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG);
     blacklist.add(StorageSinkConnectorConfig.SHUTDOWN_TIMEOUT_CONFIG);
 
     ConfigDef visible = new ConfigDef();
