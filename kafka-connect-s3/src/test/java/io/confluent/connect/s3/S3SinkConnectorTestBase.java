@@ -54,7 +54,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     props.put(MockS3SinkConnectorConfig.TEST_PART_SIZE_CONFIG, "1024");
     props.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, PartitionerConfig.PARTITIONER_CLASS_DEFAULT.getName());
     props.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, DefaultSchemaGenerator.class.getName());
-    props.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG, "int");
+    props.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG, "int,boolean");
     props.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH");
     props.put(PartitionerConfig.LOCALE_CONFIG, "en");
     props.put(PartitionerConfig.TIMEZONE_CONFIG, "America/Los_Angeles");
@@ -91,6 +91,5 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
 
     return builder.build();
   }
-
 }
 
