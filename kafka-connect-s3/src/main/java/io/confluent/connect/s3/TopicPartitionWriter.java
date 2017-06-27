@@ -349,6 +349,11 @@ public class TopicPartitionWriter {
       return writers.get(encodedPartition);
     }
     String commitFilename = getCommitFilename(encodedPartition);
+    log.debug(
+        "Creating new writer encodedPartition='{}' filename='{}'",
+        encodedPartition,
+        commitFilename
+    );
     RecordWriter writer = writerProvider.getRecordWriter(connectorConfig, commitFilename);
     writers.put(encodedPartition, writer);
     return writer;
