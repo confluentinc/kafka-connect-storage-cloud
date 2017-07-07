@@ -54,7 +54,47 @@ In the current version, time-based partitioners, as opposed to default and field
 to partition data. A version of time-based partitioners based only on record timestamps that will guarantee exactly-once
 delivery to S3 will become soon available.
 
+Schema Evolution
+----------------
+The S3 connector supports schema evolution and reacts to schema changes of data according to the
+``schema.compatibility`` configuration. In this section, we will explain how the
+connector reacts to schema evolution under different values of ``schema.compatibility``. The
+``schema.compatibility`` can be set to ``NONE``, ``BACKWARD``, ``FORWARD`` and ``FULL``, which means
+NO compatibility, BACKWARD compatibility, FORWARD compatibility and FULL compatibility respectively.
 
+* **NO Compatibility**: By default, the ``schema.compatibility`` is set to ``NONE``. In this case,
+  the connector ensures that each file written to S3 has the proper schema. When the connector
+  observes a schema change in data, it commits the current set of files for the affected topic
+  partitions and writes the data with new schema in new files.
+
+* **BACKWARD Compatibility**: If a schema is evolved in a backward compatible way, we can always
+  use the latest schema to query all the data uniformly. For example, removing fields is backward
+  compatible change to a schema, since when we encounter records written with the old schema that
+  contain these fields we can just ignore them. Adding a field with a default value is also backward
+  compatible.
+
+  If ``BACKWARD`` is specified in the ``schema.compatibility``, the connector keeps track
+  of the latest schema used in writing data to S3, and if a data record with a schema version
+  larger than current latest schema arrives, the connector commits the current set of files
+  and writes the data record with new schema to new files. For data records arriving at a later time
+  with schema of an earlier version, the connector projects the data record to the latest schema
+  before writing to the same set of files in S3.
+
+* **FORWARD Compatibility**: If a schema is evolved in a forward compatible way, we can always
+  use the oldest schema to query all the data uniformly. Removing a field that had a default value
+  is forward compatible, since the old schema will use the default value when the field is missing.
+
+  If ``FORWARD`` is specified in the ``schema.compatibility``, the connector projects the data to
+  the oldest schema before writing to the same set of files in S3.
+
+* **Full Compatibility**: Full compatibility means that old data can be read with the new schema
+  and new data can also be read with the old schema.
+
+  If ``FULL`` is specified in the ``schema.compatibility``, the connector performs the same action
+  as ``BACKWARD``.
+
+Schema evolution in the S3 connector works in the same way as in the `HDFS connector <../../../connect-hdfs/docs/hdfs_connector.html#schema-evolution>`_.
+  
 Quickstart
 ----------
 In this Quickstart, we use the S3 connector to export data produced by the Avro console producer to S3.
@@ -170,7 +210,6 @@ schema generator class to its default value. ::
 
   schema.compatibility=NONE
 
-Finally, schema evolution is disabled in this example by setting ``schema.compatibility`` to ``NONE``. Schema evolution in
-S3 connector is defined in the same way as in the HDFS connector
-`here <../../../connect-hdfs/docs/hdfs_connector.html#schema-evolution>`_
+Finally, schema evolution is disabled in this example by setting ``schema.compatibility`` to ``NONE``, as explained above.
+
 
