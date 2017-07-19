@@ -35,6 +35,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import io.confluent.common.utils.SystemTime;
+import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.StorageFactory;
@@ -55,6 +57,7 @@ public class S3SinkTask extends SinkTask {
   private Partitioner<FieldSchema> partitioner;
   private Format<S3SinkConnectorConfig, String> format;
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
+  private final Time time;
 
   /**
    * No-arg constructor. Used by Connect framework.
@@ -63,17 +66,21 @@ public class S3SinkTask extends SinkTask {
     // no-arg constructor required by Connect framework.
     assignment = new HashSet<>();
     topicPartitionWriters = new HashMap<>();
+    time = new SystemTime();
   }
 
   // visible for testing.
   S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage,
-             Partitioner<FieldSchema> partitioner, Format<S3SinkConnectorConfig, String> format) throws Exception {
-    this();
+             Partitioner<FieldSchema> partitioner, Format<S3SinkConnectorConfig, String> format,
+             Time time) throws Exception {
+    this.assignment = new HashSet<>();
+    this.topicPartitionWriters = new HashMap<>();
     this.connectorConfig = connectorConfig;
     this.context = context;
     this.storage = storage;
     this.partitioner = partitioner;
     this.format = format;
+    this.time = time;
 
     url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
     writerProvider = this.format.getRecordWriterProvider();
@@ -120,7 +127,7 @@ public class S3SinkTask extends SinkTask {
     assignment.addAll(partitions);
     for (TopicPartition tp : assignment) {
       TopicPartitionWriter writer =
-          new TopicPartitionWriter(tp, storage, writerProvider, partitioner, connectorConfig, context);
+          new TopicPartitionWriter(tp, writerProvider, partitioner, connectorConfig, context, time);
       topicPartitionWriters.put(tp, writer);
     }
   }
