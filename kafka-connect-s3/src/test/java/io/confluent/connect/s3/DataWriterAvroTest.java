@@ -303,7 +303,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     time.sleep(SYSTEM.milliseconds());
 
     List<SinkRecord> sinkRecords = createRecordsWithTimestamp(
-        3,
+        4,
         0,
         Collections.singleton(new TopicPartition(TOPIC, PARTITION)),
         time
@@ -312,7 +312,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, time);
 
     // Perform write
-    task.put(sinkRecords);
+    task.put(sinkRecords.subList(0, 3));
 
     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = task.preCommit(null);
 
@@ -326,7 +326,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     long[] validOffsets2 = {3, -1};
 
     // Rotation is only based on rotate.interval.ms, so I need at least one record to trigger flush.
-    task.put(sinkRecords.subList(0, 1));
+    task.put(sinkRecords.subList(3, 4));
     offsetsToCommit = task.preCommit(null);
 
     verifyOffsets(offsetsToCommit, validOffsets2, context.assignment());
@@ -386,7 +386,8 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
 
     long[] validOffsets2 = {3, -1};
 
-    // Rotation is only based on rotate.interval.ms, so I need at least one record to trigger flush.
+    // Since rotation depends on scheduled intervals, flush will happen even when no new records
+    // are returned.
     task.put(Collections.<SinkRecord>emptyList());
     offsetsToCommit = task.preCommit(null);
 
