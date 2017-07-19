@@ -18,7 +18,6 @@ package io.confluent.connect.s3;
 
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
@@ -36,6 +35,8 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
 
+import io.confluent.common.utils.SystemTime;
+import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.RecordWriter;
@@ -84,6 +85,7 @@ public class TopicPartitionWriter {
   private final Time time;
   private DateTimeZone timeZone;
   private final S3SinkConnectorConfig connectorConfig;
+  private static final Time SYSTEM_TIME = new SystemTime();
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
@@ -91,7 +93,7 @@ public class TopicPartitionWriter {
                               Partitioner<FieldSchema> partitioner,
                               S3SinkConnectorConfig connectorConfig,
                               SinkTaskContext context) {
-    this(tp, writerProvider, partitioner, connectorConfig, context, Time.SYSTEM);
+    this(tp, writerProvider, partitioner, connectorConfig, context, SYSTEM_TIME);
   }
 
   // Visible for testing
@@ -185,11 +187,19 @@ public class TopicPartitionWriter {
 
             if (compatibility.shouldChangeSchema(record, null, currentValueSchema) && recordCount > 0) {
               // This branch is never true for the first record read by this TopicPartitionWriter
+              log.trace(
+                  "Incompatible change of schema detected for record '{}' with encoded partition "
+                      + "'{}' and current offset: '{}'",
+                  record,
+                  encodedPartition,
+                  currentOffset
+              );
               currentSchemas.put(encodedPartition, valueSchema);
               nextOffsetToCommit = currentOffset;
               nextState();
             } else if (rotateOnTime(encodedPartition, currentTimestamp, now)) {
               nextOffsetToCommit = currentOffset;
+              setNextScheduledRotation();
               nextState();
             } else {
               currentEncodedPartition = encodedPartition;
@@ -226,7 +236,8 @@ public class TopicPartitionWriter {
     if (buffer.isEmpty()) {
       // committing files after waiting for rotateIntervalMs time but less than flush.size records available
       if (recordCount > 0 && rotateOnTime(currentEncodedPartition, currentTimestamp, now)) {
-        log.info("committing files after waiting for rotateIntervalMs time but less than flush.size records available.");
+        log.info("Committing files after waiting for rotateIntervalMs time but less than flush.size records available.");
+        nextOffsetToCommit = currentOffset;
         setNextScheduledRotation();
 
         try {
@@ -286,11 +297,15 @@ public class TopicPartitionWriter {
     );
 
     log.trace(
-        "Should apply periodic time-based rotation: (recordCount: {}, rotateIntervalMs: {}, "
-            + "encodedPartition: {}, baseRecordTimestamp: {}, timestamp: {})? {}",
+        "Checking rotation on time with recordCount '{}' and encodedPartition '{}'",
         recordCount,
+        encodedPartition
+    );
+
+    log.trace(
+        "Should apply periodic time-based rotation (rotateIntervalMs: '{}', baseRecordTimestamp: "
+            + "'{}', timestamp: '{}')? {}",
         rotateIntervalMs,
-        encodedPartition,
         baseRecordTimestamp,
         recordTimestamp,
         periodicRotation
@@ -298,13 +313,12 @@ public class TopicPartitionWriter {
 
     boolean scheduledRotation = rotateScheduleIntervalMs > 0 && now >= nextScheduledRotation;
     log.trace(
-        "Should apply scheduled rotation: (recordCount: {}, rotateScheduleIntervalMs: {}, "
-            + "nextScheduledRotation: {}, baseRecordTimestamp: {}, timestamp: {})? {}",
-        recordCount,
+        "Should apply scheduled rotation: (rotateScheduleIntervalMs: '{}', nextScheduledRotation:"
+            + " '{}', now: '{}')? {}",
         rotateScheduleIntervalMs,
         nextScheduledRotation,
-        encodedPartition,
-        periodicRotation
+        now,
+        scheduledRotation
     );
     return periodicRotation || scheduledRotation;
   }
