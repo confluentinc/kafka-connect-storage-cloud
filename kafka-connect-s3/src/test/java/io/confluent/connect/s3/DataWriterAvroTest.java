@@ -132,7 +132,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     String avroCodec = "snappy";
     localProps.put(S3SinkConnectorConfig.AVRO_CODEC_CONFIG, avroCodec);
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
     List<SinkRecord> sinkRecords = createRecords(7);
     // Perform write
