@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import io.confluent.common.utils.MockTime;
+import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
@@ -455,6 +456,85 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
     // Records 15,16,17 won't be flushed until a record with a higher timestamp arrives.
     for (int i : new int[]{9, 12}) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
+                                                  ZERO_PAD_FMT));
+    }
+    verify(expectedFiles, 3, schema, records);
+  }
+
+  @Test
+  public void testWriteRecordTimeBasedPartitionWallclockMockedWithScheduleRotation()
+      throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.HOURS.toMillis(1))
+    );
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.MINUTES.toMillis(10))
+    );
+    setUp();
+
+    // Define the partitioner
+    TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
+    parsedConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, TimeBasedSchemaGenerator.class);
+    parsedConfig.put(
+        PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockedWallclockTimestampExtractor.class.getName());
+    partitioner.configure(parsedConfig);
+
+    MockTime time = ((MockedWallclockTimestampExtractor) partitioner.getTimestampExtractor()).time;
+
+    // Bring the clock to present.
+    time.sleep(SYSTEM.milliseconds());
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, writerProvider, partitioner, connectorConfig, context, time);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 6);
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records.subList(0, 3), key, schema);
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // No records written to S3
+    topicPartitionWriter.write();
+
+    // 10 minutes
+    time.sleep(11 * 60 * 1000);
+    long timestampFirst = time.milliseconds();
+    // Records are written due to scheduled rotation
+    topicPartitionWriter.write();
+
+    sinkRecords = createSinkRecords(records.subList(3, 6), key, schema, 3);
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // More records later
+    long timestampLater = time.milliseconds();
+    topicPartitionWriter.write();
+
+    time.sleep(11 * 60 * 1000);
+
+    // Again the records are written due to scheduled rotation
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String encodedPartitionFirst = getTimebasedEncodedPartition(timestampFirst);
+    String encodedPartitionLater = getTimebasedEncodedPartition(timestampLater);
+
+    String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC, encodedPartitionFirst);
+    List<String> expectedFiles = new ArrayList<>();
+    for (int i : new int[]{0}) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
+                                                  ZERO_PAD_FMT));
+    }
+
+    String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
+    for (int i : new int[]{3}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
                                                   ZERO_PAD_FMT));
     }
