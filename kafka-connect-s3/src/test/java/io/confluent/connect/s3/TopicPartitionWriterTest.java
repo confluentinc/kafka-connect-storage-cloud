@@ -39,7 +39,6 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import io.confluent.common.utils.MockTime;
-import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
