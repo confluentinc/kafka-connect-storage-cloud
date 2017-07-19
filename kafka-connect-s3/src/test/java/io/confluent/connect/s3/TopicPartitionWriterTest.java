@@ -502,7 +502,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // No records written to S3
     topicPartitionWriter.write();
 
-    // 10 minutes
+    // 11 minutes
     time.sleep(11 * 60 * 1000);
     long timestampFirst = time.milliseconds();
     // Records are written due to scheduled rotation
@@ -517,6 +517,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     long timestampLater = time.milliseconds();
     topicPartitionWriter.write();
 
+    // 11 minutes later, another scheduled rotation
     time.sleep(11 * 60 * 1000);
 
     // Again the records are written due to scheduled rotation
