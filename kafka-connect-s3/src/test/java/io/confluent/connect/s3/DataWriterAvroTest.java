@@ -201,7 +201,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   }
 
   @Test
-  public void testPreCommit() throws Exception {
+  public void testPreCommitOnSizeRotation() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "3");
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
@@ -240,6 +240,27 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     // Actual values are null, we set to negative for the verifier.
     long[] validOffsets4 = {9, -1};
     verifyOffsets(offsetsToCommit, validOffsets4, context.assignment());
+
+    task.close(context.assignment());
+    task.stop();
+  }
+
+  @Test
+  public void testPreCommitOnSchemaIncompatibilityRotation() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "2");
+    setUp();
+
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+    List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(2, 0);
+
+    // Perform write
+    task.put(sinkRecords);
+
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = task.preCommit(null);
+
+    long[] validOffsets = {1, -1};
+
+    verifyOffsets(offsetsToCommit, validOffsets, context.assignment());
 
     task.close(context.assignment());
     task.stop();
