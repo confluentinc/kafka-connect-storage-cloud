@@ -96,7 +96,7 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
   public void testWithSchema() throws Exception {
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
     List<SinkRecord> sinkRecords = createRecordsInterleaved(7 * context.assignment().size(), 0, context.assignment());
     task.put(sinkRecords);
@@ -111,7 +111,7 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
   public void testNoSchema() throws Exception {
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
     List<SinkRecord> sinkRecords = createJsonRecordsWithoutSchema(7 * context.assignment().size(), 0, context.assignment());
     task.put(sinkRecords);

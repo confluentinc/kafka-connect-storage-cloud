@@ -21,6 +21,7 @@ import com.amazonaws.services.s3.model.S3ObjectSummary;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.SchemaProjector;
@@ -41,15 +42,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
+import io.confluent.common.utils.MockTime;
+import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.avro.AvroUtils;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.hive.HiveConfig;
+import io.confluent.connect.storage.hive.schema.TimeBasedSchemaGenerator;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.Partitioner;
+import io.confluent.connect.storage.partitioner.PartitionerConfig;
+import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 
+import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -101,7 +109,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   @Test
   public void testWriteRecords() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
     List<SinkRecord> sinkRecords = createRecords(7);
     // Perform write
@@ -127,7 +135,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     // Accumulate rest of the records.
     sinkRecords.addAll(createRecords(5, 2));
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
     // Perform write
     task.put(sinkRecords);
     task.close(context.assignment());
@@ -142,7 +150,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10000");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
     List<SinkRecord> sinkRecords = createRecords(11000);
 
@@ -158,7 +166,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   @Test
   public void testWriteRecordsInMultiplePartitions() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
     List<SinkRecord> sinkRecords = createRecords(7, 0, context.assignment());
     // Perform write
@@ -173,7 +181,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   @Test
   public void testWriteInterleavedRecordsInMultiplePartitions() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
     List<SinkRecord> sinkRecords = createRecordsInterleaved(7 * context.assignment().size(), 0, context.assignment());
     // Perform write
@@ -188,7 +196,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   @Test
   public void testWriteInterleavedRecordsInMultiplePartitionsNonZeroInitialOffset() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
     List<SinkRecord> sinkRecords = createRecordsInterleaved(7 * context.assignment().size(), 9, context.assignment());
     // Perform write
@@ -204,7 +212,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   public void testPreCommitOnSizeRotation() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "3");
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
     List<SinkRecord> sinkRecords1 = createRecordsInterleaved(3 * context.assignment().size(), 0, context.assignment());
 
@@ -250,7 +258,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "2");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
     List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(2, 0);
 
     // Perform write
@@ -267,9 +275,131 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   }
 
   @Test
+  public void testPreCommitOnRotateTime() throws Exception {
+    // Do not roll on size, only based on time.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.HOURS.toMillis(1))
+    );
+    setUp();
+
+    // Define the partitioner
+    TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
+    parsedConfig.put(
+        PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG,
+        TimeBasedSchemaGenerator.class
+    );
+    parsedConfig.put(
+        PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+        TopicPartitionWriterTest.MockedWallclockTimestampExtractor.class.getName()
+    );
+    partitioner.configure(parsedConfig);
+
+    MockTime time = ((TopicPartitionWriterTest.MockedWallclockTimestampExtractor) partitioner
+        .getTimestampExtractor()).time;
+    // Bring the clock to present.
+    time.sleep(SYSTEM.milliseconds());
+
+    List<SinkRecord> sinkRecords = createRecordsWithTimestamp(
+        3,
+        0,
+        Collections.singleton(new TopicPartition(TOPIC, PARTITION)),
+        time
+    );
+
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, time);
+
+    // Perform write
+    task.put(sinkRecords);
+
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = task.preCommit(null);
+
+    long[] validOffsets1 = {-1, -1};
+
+    verifyOffsets(offsetsToCommit, validOffsets1, context.assignment());
+
+    // 2 hours
+    time.sleep(TimeUnit.HOURS.toMillis(2));
+
+    long[] validOffsets2 = {3, -1};
+
+    // Rotation is only based on rotate.interval.ms, so I need at least one record to trigger flush.
+    task.put(sinkRecords.subList(0, 1));
+    offsetsToCommit = task.preCommit(null);
+
+    verifyOffsets(offsetsToCommit, validOffsets2, context.assignment());
+
+    task.close(context.assignment());
+    task.stop();
+  }
+
+  @Test
+  public void testPreCommitOnRotateScheduleTime() throws Exception {
+    // Do not roll on size, only based on time.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.HOURS.toMillis(1))
+    );
+    setUp();
+
+    // Define the partitioner
+    TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
+    parsedConfig.put(
+        PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG,
+        TimeBasedSchemaGenerator.class
+    );
+    parsedConfig.put(
+        PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+        TopicPartitionWriterTest.MockedWallclockTimestampExtractor.class.getName()
+    );
+    partitioner.configure(parsedConfig);
+
+    MockTime time = ((TopicPartitionWriterTest.MockedWallclockTimestampExtractor) partitioner
+        .getTimestampExtractor()).time;
+    // Bring the clock to present.
+    time.sleep(SYSTEM.milliseconds());
+
+    List<SinkRecord> sinkRecords = createRecordsWithTimestamp(
+        3,
+        0,
+        Collections.singleton(new TopicPartition(TOPIC, PARTITION)),
+        time
+    );
+
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, time);
+
+    // Perform write
+    task.put(sinkRecords);
+
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = task.preCommit(null);
+
+    long[] validOffsets1 = {-1, -1};
+
+    verifyOffsets(offsetsToCommit, validOffsets1, context.assignment());
+
+    // 1 hour + 10 minutes
+    time.sleep(TimeUnit.HOURS.toMillis(1) + TimeUnit.MINUTES.toMillis(10));
+
+    long[] validOffsets2 = {3, -1};
+
+    // Rotation is only based on rotate.interval.ms, so I need at least one record to trigger flush.
+    task.put(Collections.<SinkRecord>emptyList());
+    offsetsToCommit = task.preCommit(null);
+
+    verifyOffsets(offsetsToCommit, validOffsets2, context.assignment());
+
+    task.close(context.assignment());
+    task.stop();
+  }
+
+  @Test
   public void testRebalance() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
     List<SinkRecord> sinkRecords = createRecordsInterleaved(7 * context.assignment().size(), 0, context.assignment());
     // Starts with TOPIC_PARTITION and TOPIC_PARTITION2
@@ -320,7 +450,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     localProps.put(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG, "BACKWARD");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
     List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(7, 0);
 
     // Perform write
@@ -337,7 +467,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "2");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
     List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(7, 0);
 
     // Perform write
@@ -355,7 +485,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     localProps.put(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG, "FORWARD");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
     // By excluding the first element we get a list starting with record having the new schema.
     List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(8, 0).subList(1, 8);
 
@@ -374,7 +504,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     localProps.put(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG, "BACKWARD");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
     List<SinkRecord> sinkRecords = createRecordsNoVersion(1, 0);
     sinkRecords.addAll(createRecordsWithAlteringSchemas(7, 0));
 
@@ -419,6 +549,35 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     for (TopicPartition tp : partitions) {
       for (long offset = startOffset; offset < startOffset + size; ++offset) {
         sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), Schema.STRING_SCHEMA, key, schema, record, offset));
+      }
+    }
+    return sinkRecords;
+  }
+
+  protected List<SinkRecord> createRecordsWithTimestamp(
+      int size,
+      long startOffset,
+      Set<TopicPartition> partitions,
+      Time time
+  ) {
+    String key = "key";
+    Schema schema = createSchema();
+    Struct record = createRecord(schema);
+
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    for (TopicPartition tp : partitions) {
+      for (long offset = startOffset; offset < startOffset + size; ++offset) {
+        sinkRecords.add(new SinkRecord(
+            TOPIC,
+            tp.partition(),
+            Schema.STRING_SCHEMA,
+            key,
+            schema,
+            record,
+            offset,
+            time.milliseconds(),
+            TimestampType.CREATE_TIME
+        ));
       }
     }
     return sinkRecords;

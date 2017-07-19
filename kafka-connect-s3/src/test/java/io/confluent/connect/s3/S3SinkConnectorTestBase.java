@@ -31,6 +31,8 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.Map;
 
+import io.confluent.common.utils.SystemTime;
+import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.storage.StorageSinkTestBase;
 import io.confluent.connect.storage.common.StorageCommonConfig;
@@ -46,6 +48,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
 
   protected static final String S3_TEST_URL = "http://127.0.0.1:8181";
   protected static final String S3_TEST_BUCKET_NAME = "kafka.bucket";
+  protected static final Time SYSTEM_TIME = new SystemTime();
 
   protected S3SinkConnectorConfig connectorConfig;
   protected String topicsDir;
