@@ -72,7 +72,6 @@ public class TopicPartitionWriter {
   private String currentEncodedPartition;
   private Long baseRecordTimestamp;
   private Long offsetToCommit;
-  private Long nextOffsetToCommit;
   private final RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private final Map<String, Long> startOffsets;
   private long timeoutMs;
@@ -195,10 +194,8 @@ public class TopicPartitionWriter {
                   currentOffset
               );
               currentSchemas.put(encodedPartition, valueSchema);
-              nextOffsetToCommit = currentOffset;
               nextState();
             } else if (rotateOnTime(encodedPartition, currentTimestamp, now)) {
-              nextOffsetToCommit = currentOffset;
               setNextScheduledRotation();
               nextState();
             } else {
@@ -208,7 +205,6 @@ public class TopicPartitionWriter {
               buffer.poll();
               if (rotateOnSize()) {
                 log.info("Starting commit and rotation for topic partition {} with start offset {}", tp, startOffsets);
-                nextOffsetToCommit = currentOffset + 1;
                 nextState();
                 // Fall through and try to rotate immediately
               } else {
@@ -237,7 +233,6 @@ public class TopicPartitionWriter {
       // committing files after waiting for rotateIntervalMs time but less than flush.size records available
       if (recordCount > 0 && rotateOnTime(currentEncodedPartition, currentTimestamp, now)) {
         log.info("Committing files after waiting for rotateIntervalMs time but less than flush.size records available.");
-        nextOffsetToCommit = currentOffset;
         setNextScheduledRotation();
 
         try {
@@ -418,7 +413,7 @@ public class TopicPartitionWriter {
       commitFile(entry.getKey());
       log.debug("Committed {} for {}", entry.getValue(), tp);
     }
-    offsetToCommit = nextOffsetToCommit;
+    offsetToCommit = currentOffset + 1;
     commitFiles.clear();
     currentSchemas.clear();
     recordCount = 0;
