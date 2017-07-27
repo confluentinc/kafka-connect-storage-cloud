@@ -183,12 +183,6 @@ Then start the S3 connector by loading its configuration with the following comm
      "tasks": []
    }
 
-.. tip::
-
-   This is equivalent to running::
-
-   $ confluent load s3-sink -d etc/kafka-connect-s3/quickstart-s3.properties
-
 To check that the connector started successfully view the Connect worker's log by running:
 
 .. sourcecode:: bash
