@@ -128,9 +128,6 @@ Every service will start in order, printing a message with its status:
     Starting connect
     connect is [UP]
 
-This Quickstart assumes that you started the required services with the default configurations; if you have different
-settings, you will need to adjust the commands to the actual configurations used.
-
 .. note:: You need to make sure the connector user has write access to the S3 bucket
    specified in ``s3.bucket.name`` and has deployed credentials
    `appropriately <http://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/credentials.html>`_.
