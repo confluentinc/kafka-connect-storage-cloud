@@ -99,10 +99,34 @@ Quickstart
 ----------
 In this Quickstart, we use the S3 connector to export data produced by the Avro console producer to S3.
 
-Before you begin, make sure that Zookeeper, Kafka and Schema Registry services are running. Instructions on how to
-start these services are available at the :ref:`Confluent Platform Quickstart<quickstart>`. You also need to create an
+Before you begin, you will need to create an
 S3 destination bucket in advance and grant the user or IAM role running the connector
 `write access <http://docs.aws.amazon.com/AmazonS3/latest/UG/EditingBucketPermissions.html>`_ to it.
+
+Next, start the services with one command using Confluent CLI:
+
+.. tip::
+
+   If not already in your PATH, add Confluent's ``bin`` directory by running: ``export PATH=<path-to-confluent>/bin:$PATH``
+
+.. sourcecode:: bash
+
+   $ confluent start
+
+Every service will start in order, printing a message with its status:
+
+.. sourcecode:: bash
+
+    Starting zookeeper
+    zookeeper is [UP]
+    Starting kafka
+    kafka is [UP]
+    Starting schema-registry
+    schema-registry is [UP]
+    Starting kafka-rest
+    kafka-rest is [UP]
+    Starting connect
+    connect is [UP]
 
 This Quickstart assumes that you started the required services with the default configurations; if you have different
 settings, you will need to adjust the commands to the actual configurations used.
@@ -111,12 +135,16 @@ settings, you will need to adjust the commands to the actual configurations used
    specified in ``s3.bucket.name`` and has deployed credentials
    `appropriately <http://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/credentials.html>`_.
 
-First, start the Avro console producer::
+To import a few records with a simple schema in Kafka, start the Avro console producer as follows:
+
+.. sourcecode:: bash
 
   $ ./bin/kafka-avro-console-producer --broker-list localhost:9092 --topic s3_topic \
   --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
 
-Then, in the console producer, type in::
+Then, in the console producer, type in:
+
+.. sourcecode:: bash
 
   {"f1": "value1"}
   {"f1": "value2"}
@@ -132,19 +160,55 @@ The nine records entered are published to the Kafka topic ``s3_topic`` in Avro f
 
 Before starting the connector, please make sure that the configurations in
 ``etc/kafka-connect-s3/quickstart-s3.properties`` are properly set to your configurations of S3, e.g. ``s3.bucket.name``
-points to your bucket, ``s3.region`` directs to your S3 region and ``flush.size=3`` for this example. Next, run the
-following command to start Kafka connect with the S3 connector::
+points to your bucket, ``s3.region`` directs to your S3 region and ``flush.size=3`` for this example.
+Then start the S3 connector by loading its configuration with the following command:
 
-  $ ./bin/connect-standalone etc/schema-registry/connect-avro-standalone.properties \
-  etc/kafka-connect-s3/quickstart-s3.properties
+.. sourcecode:: bash
 
-You should see that the process starts up, logs a few messages and then uploads data from Kafka
-to S3. Once the connector has ingested some records check that the data is available
-in S3, for instance by using AWS CLI::
+   $ confluent load s3-sink
+   {
+     "name": "s3-sink",
+     "config": {
+       "connector.class": "io.confluent.connect.s3.S3SinkConnector",
+       "tasks.max": "1",
+       "topics": "s3_topic",
+       "s3.region": "us-west-2",
+       "s3.bucket.name": "confluent-kafka-connect-s3-testing",
+       "s3.part.size": "5242880",
+       "flush.size": "3",
+       "storage.class": "io.confluent.connect.s3.storage.S3Storage",
+       "format.class": "io.confluent.connect.s3.format.avro.AvroFormat",
+       "schema.generator.class": "io.confluent.connect.storage.hive.schema.DefaultSchemaGenerator",
+       "partitioner.class": "io.confluent.connect.storage.partitioner.DefaultPartitioner",
+       "schema.compatibility": "NONE",
+       "name": "s3-sink"
+     },
+     "tasks": []
+   }
+
+.. tip::
+
+   This is equivalent to running::
+
+   $ confluent load s3-sink -d etc/kafka-connect-s3/quickstart-s3.properties
+
+To check that the connector started successfully view the Connect worker's log by running:
+
+.. sourcecode:: bash
+
+  $ confluent log connect
+
+Towards the end of the log you should see that the connector starts, logs a few messages, and then uploads
+data from Kafka to S3.
+Once the connector has ingested some records check that the data is available in S3, for instance by using AWS CLI:
+
+.. sourcecode:: bash
 
   $ aws s3api list-objects --bucket "your-bucket-name"
 
-You should see three objects with keys::
+You should see three objects with keys:
+
+.. sourcecode:: bash
 
   topics/s3_topic/partition=0/s3_topic+0+0000000000.avro
   topics/s3_topic/partition=0/s3_topic+0+0000000003.avro
@@ -152,17 +216,23 @@ You should see three objects with keys::
 
 Each file is encoded as ``<topic>+<kafkaPartition>+<startOffset>.<format>``.
 
-To verify the contents, first copy each file from S3 to your local filesystem, for instance by running::
+To verify the contents, first copy each file from S3 to your local filesystem, for instance by running:
+
+.. sourcecode:: bash
 
   $ aws s3 cp s3://<your-bucket>/topics/s3_topic/partition=0/s3_topic+0+0000000000.avro
 
-and use ``avro-tools-1.7.7.jar``
-(available in `Apache mirrors <http://mirror.metrocast.net/apache/avro/avro-1.7.7/java/avro-tools-1.7.7.jar>`_) to
-print the records::
+and use ``avro-tools-1.8.2.jar``
+(available in `Apache mirrors <http://mirror.metrocast.net/apache/avro/avro-1.8.2/java/avro-tools-1.8.2.jar>`_) to
+print the records:
 
-  $ java -jar avro-tools-1.7.7.jar tojson s3_topic+0+0000000000.avro
+.. sourcecode:: bash
 
-For the file above, you should see the following output::
+  $ java -jar avro-tools-1.8.2.jar tojson s3_topic+0+0000000000.avro
+
+For the file above, you should see the following output:
+
+.. sourcecode:: bash
 
   {"f1":"value1"}
   {"f1":"value2"}
@@ -170,6 +240,38 @@ For the file above, you should see the following output::
 
 with the rest of the records contained in the other two files.
 
+Finally, stop the Connect worker as well as all the rest of the Confluent services by running:
+
+.. sourcecode:: bash
+
+      $ confluent stop
+      Stopping connect
+      connect is [DOWN]
+      Stopping kafka-rest
+      kafka-rest is [DOWN]
+      Stopping schema-registry
+      schema-registry is [DOWN]
+      Stopping kafka
+      kafka is [DOWN]
+      Stopping zookeeper
+      zookeeper is [DOWN]
+
+or stop all the services and additionally wipe out any data generated during this quickstart by running:
+
+.. sourcecode:: bash
+
+      $ confluent destroy
+      Stopping connect
+      connect is [DOWN]
+      Stopping kafka-rest
+      kafka-rest is [DOWN]
+      Stopping schema-registry
+      schema-registry is [DOWN]
+      Stopping kafka
+      kafka is [DOWN]
+      Stopping zookeeper
+      zookeeper is [DOWN]
+      Deleting: /tmp/confluent.w1CpYsaI
 
 Configuration
 -------------
@@ -178,7 +280,9 @@ available configuration options of the S3 connector go to :ref:`Configuration Op
 
 Example
 ~~~~~~~
-The example settings are contained in ``etc/kafka-connect-s3/quickstart-s3.properties`` as follows::
+The example settings are contained in ``etc/kafka-connect-s3/quickstart-s3.properties`` as follows:
+
+.. sourcecode:: bash
 
   name=s3-sink
   connector.class=io.confluent.connect.s3.S3SinkConnector
@@ -188,7 +292,9 @@ The example settings are contained in ``etc/kafka-connect-s3/quickstart-s3.prope
 
 The first few settings are common to most connectors. ``topics`` specifies the topics we want to export data from, in
 this case ``s3_topic``. The property ``flush.size`` specifies the number of records per partition the connector needs
-to write before completing a multipart upload to S3. ::
+to write before completing a multipart upload to S3.
+
+.. sourcecode:: bash
 
   s3.bucket.name=confluent-kafka-connect-s3-testing
   s3.part.size=5242880
@@ -196,7 +302,9 @@ to write before completing a multipart upload to S3. ::
 The next settings are specific to Amazon S3. A mandatory setting is the name of your S3 bucket to host the exported
 Kafka records. Other useful settings are ``s3.region``, which you should set if you use a region other than the
 default, and ``s3.part.size`` to control the size of each part in the multipart uploads that will be used to upload a
-single chunk of Kafka records. ::
+single chunk of Kafka records.
+
+.. sourcecode:: bash
 
   storage.class=io.confluent.connect.s3.storage.S3Storage
   format.class=io.confluent.connect.s3.format.avro.AvroFormat
@@ -206,7 +314,9 @@ single chunk of Kafka records. ::
 These class settings are required to specify the storage interface (here S3), the output file format, currently
 ``io.confluent.connect.s3.format.avro.AvroFormat`` or ``io.confluent.connect.s3.format.json.JsonFormat`` and the partitioner
 class along with its schema generator class. When using a format with no schema definition, it is sufficient to set the
-schema generator class to its default value. ::
+schema generator class to its default value.
+
+.. sourcecode:: bash
 
   schema.compatibility=NONE
 
