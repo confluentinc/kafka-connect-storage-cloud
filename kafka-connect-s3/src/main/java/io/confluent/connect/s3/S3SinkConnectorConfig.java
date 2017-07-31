@@ -20,6 +20,11 @@ import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
+import io.confluent.connect.storage.common.ComposableConfig;
+import io.confluent.connect.storage.common.StorageCommonConfig;
+import io.confluent.connect.storage.hive.HiveConfig;
+import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -35,12 +40,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import io.confluent.connect.storage.StorageSinkConnectorConfig;
-import io.confluent.connect.storage.common.ComposableConfig;
-import io.confluent.connect.storage.common.StorageCommonConfig;
-import io.confluent.connect.storage.hive.HiveConfig;
-import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
@@ -65,6 +64,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String AVRO_CODEC_CONFIG = "avro.codec";
   public static final String AVRO_CODEC_DEFAULT = "null";
+
+  public static final String S3_RETRY_CONFIG = "s3.part.retry";
+  public static final boolean S3_RETRY_DEFAULT = false;
 
   private final String name;
 
@@ -153,6 +155,16 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         ++orderInGroup,
                         Width.LONG,
                         "Avro compression codec");
+
+      CONFIG_DEF.define(S3_RETRY_CONFIG,
+                        Type.BOOLEAN,
+                        S3_RETRY_DEFAULT,
+                        Importance.MEDIUM,
+                        "Retry S3 part upload in Multi-part uploads",
+                        group,
+                        ++orderInGroup,
+                        Width.LONG,
+                        "Retry S3 part upload");
     }
   }
 
@@ -207,6 +219,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public String getAvroCodec() {
     return getString(AVRO_CODEC_CONFIG);
+  }
+
+  public Boolean getS3Retry(){
+    return getBoolean(S3_RETRY_CONFIG);
   }
 
   protected static String parseName(Map<String, String> props) {

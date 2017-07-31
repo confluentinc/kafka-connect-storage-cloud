@@ -56,7 +56,7 @@
 
     <properties>
         <confluent.version>4.0.0-SNAPSHOT</confluent.version>
-        <kafka.version>1.0.0-SNAPSHOT</kafka.version>
+        <kafka.version>1.0.0-SNAPSHOT</kafka.version>.
         <jackson.version>2.8.5</jackson.version>
         <junit.version>4.12</junit.version>
         <easymock.version>3.4</easymock.version>
@@ -138,6 +138,12 @@
         <dependency>
             <groupId>org.powermock</groupId>
             <artifactId>powermock-api-easymock</artifactId>
+            <version>${powermock.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.powermock</groupId>
+            <artifactId>powermock-api-mockito</artifactId>
             <version>${powermock.version}</version>
             <scope>test</scope>
         </dependency>

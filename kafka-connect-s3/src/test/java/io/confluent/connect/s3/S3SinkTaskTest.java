@@ -16,6 +16,13 @@
 
 package io.confluent.connect.s3;
 
+import com.amazonaws.SdkClientException;
+import com.amazonaws.services.s3.model.UploadPartRequest;
+import com.amazonaws.services.s3.model.UploadPartResult;
+import io.confluent.connect.s3.format.avro.AvroUtils;
+import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.s3.util.FileUtils;
+import io.confluent.connect.storage.StorageFactory;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -25,7 +32,11 @@ import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 import org.powermock.api.easymock.PowerMock;
+import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
@@ -33,16 +44,11 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import java.io.ByteArrayInputStream;
 import java.util.List;
 import java.util.Map;
-
-import io.confluent.connect.s3.format.avro.AvroUtils;
-import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.s3.util.FileUtils;
-import io.confluent.connect.storage.StorageFactory;
-
-import static org.powermock.api.easymock.PowerMock.replayAll;
-import static org.powermock.api.easymock.PowerMock.verifyAll;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertTrue;
+import static org.powermock.api.easymock.PowerMock.replayAll;
+import static org.powermock.api.easymock.PowerMock.verifyAll;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({S3SinkTask.class, StorageFactory.class})
@@ -129,6 +135,42 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
   public void testWriteRecordsSpanningMultipleParts() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10000");
     setUp();
+
+    List<SinkRecord> sinkRecords = createRecords(11000);
+    replayAll();
+
+    task = new S3SinkTask();
+    task.initialize(context);
+    task.start(properties);
+    verifyAll();
+
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 10000};
+    verify(sinkRecords, validOffsets);
+  }
+
+  @Test
+  public void testWriteRecordsSpanningMultiplePartsWithRetry() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10000");
+    localProps.put(S3SinkConnectorConfig.S3_RETRY_CONFIG, "true");
+    setUp();
+
+    // From time to time fail S3 upload part method
+    final AtomicInteger count = new AtomicInteger();
+    PowerMockito.doAnswer(new Answer<UploadPartResult>() {
+      @Override
+      public UploadPartResult answer(InvocationOnMock invocationOnMock) throws Throwable {
+        // Let's fail sometimes. Magic number 20 is picked based on part size and number of records
+        if(count.getAndIncrement() % 20 == 0){
+          throw new SdkClientException("Boom!");
+        } else {
+          return (UploadPartResult)invocationOnMock.callRealMethod();
+        }
+      }
+    }).when(s3).uploadPart(Mockito.isA(UploadPartRequest.class));
 
     List<SinkRecord> sinkRecords = createRecords(11000);
     replayAll();

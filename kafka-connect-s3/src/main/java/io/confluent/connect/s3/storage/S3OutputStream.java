@@ -17,6 +17,7 @@
 package io.confluent.connect.s3.storage;
 
 import com.amazonaws.AmazonClientException;
+import com.amazonaws.SdkClientException;
 import com.amazonaws.event.ProgressEvent;
 import com.amazonaws.event.ProgressListener;
 import com.amazonaws.services.s3.AmazonS3;
@@ -26,6 +27,9 @@ import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PartETag;
 import com.amazonaws.services.s3.model.UploadPartRequest;
+import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.storage.common.util.StringUtils;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,9 +40,6 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
-
-import io.confluent.connect.s3.S3SinkConnectorConfig;
-import io.confluent.connect.storage.common.util.StringUtils;
 
 /**
  * Output stream enabling multi-part uploads of Kafka records.
@@ -56,6 +57,7 @@ public class S3OutputStream extends OutputStream {
   private boolean closed;
   private ByteBuffer buffer;
   private MultipartUpload multiPartUpload;
+  private boolean retry;
 
   public S3OutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
     this.s3 = s3;
@@ -64,6 +66,7 @@ public class S3OutputStream extends OutputStream {
     this.ssea = conf.getSSEA();
     this.partSize = conf.getPartSize();
     this.closed = false;
+    this.retry = conf.getS3Retry();
     this.buffer = ByteBuffer.allocate(this.partSize);
     this.progressListener = new ConnectProgressListener();
     this.multiPartUpload = null;
@@ -108,9 +111,17 @@ public class S3OutputStream extends OutputStream {
       log.debug("New multi-part upload for bucket '{}' key '{}'", bucket, key);
       multiPartUpload = newMultipartUpload();
     }
-
+    final int partSize = size;
     try {
-      multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), size);
+      if(retry) {
+        RetryWithExponentialBackoff.blocking(new Runnable() {
+          public void run() {
+            multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), partSize);
+          }
+        }, 5, "Part upload failed");
+      } else {
+        multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), partSize);
+      }
     } catch (Exception e) {
       // TODO: elaborate on the exception interpretation. We might be able to retry.
       if (multiPartUpload != null) {
@@ -164,7 +175,7 @@ public class S3OutputStream extends OutputStream {
     return meta;
   }
 
-  private MultipartUpload newMultipartUpload() throws IOException {
+  protected MultipartUpload newMultipartUpload() throws IOException {
     InitiateMultipartUploadRequest initRequest = new InitiateMultipartUploadRequest(bucket, key, newObjectMetadata());
     try {
       return new MultipartUpload(s3.initiateMultipartUpload(initRequest).getUploadId());
@@ -172,6 +183,60 @@ public class S3OutputStream extends OutputStream {
       // TODO: elaborate on the exception interpretation. If this is an AmazonServiceException,
       // there's more info to be extracted.
       throw new IOException("Unable to initiate MultipartUpload: " + e, e);
+    }
+  }
+
+  protected static class RetryWithExponentialBackoff {
+    private int count;
+    private int retries = 1;
+    private Throwable cause;
+    private String errorMsg;
+
+
+    private RetryWithExponentialBackoff(int count, String errorMsg){
+      this.count = count;
+      this.errorMsg = errorMsg;
+    }
+
+     /**
+      *
+      * @param runnable The method to run with retries
+      * @param count How many times to retry
+      * @param errorMsg Error message to show
+      * @return Returns either this instance or throws ConnectException if it failed more then given count
+      */
+    public static RetryWithExponentialBackoff blocking(Runnable runnable, int count, String errorMsg){
+      RetryWithExponentialBackoff retry = new RetryWithExponentialBackoff(count, errorMsg);
+      retry.execute(runnable);
+      return retry;
+    }
+
+    private RetryWithExponentialBackoff execute(Runnable runnable){
+      if(retries > count){
+        throw new ConnectException(String.format("Giving up after failing %d times", count), cause);
+      }
+      try {
+        runnable.run();
+      } catch(SdkClientException e){
+          cause = e;
+          log.error(errorMsg + ", attempt: "+retries, cause);
+          retries++;
+          try {
+            Thread.sleep(100*2^count);
+          } catch (InterruptedException e1) {
+            log.error("Interrupted while sleeping due to retry", e1);
+          }
+          execute(runnable);
+      }
+      return this;
+    }
+
+    protected int getRetries() {
+      return retries;
+    }
+
+    public Throwable getCause() {
+      return cause;
     }
   }
 
