@@ -18,6 +18,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import io.confluent.connect.storage.common.StorageCommonConfig;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -30,12 +31,7 @@ import org.junit.After;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 import io.confluent.common.utils.MockTime;
@@ -165,7 +161,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
-  public void testWriteRecordFieldPartitioner() throws Exception {
+  public void testWriteRecordMultipleFieldPartitioner() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "9");
     setUp();
 
@@ -190,10 +186,69 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     topicPartitionWriter.write();
     topicPartitionWriter.close();
 
-    String partitionField = (String) parsedConfig.get(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG);
-    String dirPrefix1 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(16));
-    String dirPrefix2 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(17));
-    String dirPrefix3 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(18));
+    List<String> partitionFields = (List<String>) parsedConfig.get(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG);
+    String dirPrefix1 = partitioner.generatePartitionedPath(TOPIC, partitionFields.get(0) + "=" + String.valueOf(16) +
+            properties.get(StorageCommonConfig.DIRECTORY_DELIM_CONFIG) + partitionFields.get(1) + "=true"
+    );
+    String dirPrefix2 = partitioner.generatePartitionedPath(TOPIC, partitionFields.get(0) + "=" + String.valueOf(17) +
+            properties.get(StorageCommonConfig.DIRECTORY_DELIM_CONFIG) + partitionFields.get(1) + "=true"
+    );
+    String dirPrefix3 = partitioner.generatePartitionedPath(TOPIC, partitionFields.get(0) + "=" + String.valueOf(18) +
+            properties.get(StorageCommonConfig.DIRECTORY_DELIM_CONFIG) + partitionFields.get(1) + "=true"
+    );
+
+    List<Struct> expectedRecords = new ArrayList<>();
+    int ibase = 16;
+    float fbase = 12.2f;
+    // The expected sequence of records is constructed taking into account that sorting of files occurs in verify
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 6; ++j) {
+        expectedRecords.add(createRecord(schema, ibase + i, fbase + i));
+      }
+    }
+
+    List<String> expectedFiles = new ArrayList<>();
+    for(int i = 0; i < 18; i += 9) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix2, TOPIC_PARTITION, i + 1, extension, ZERO_PAD_FMT));
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix3, TOPIC_PARTITION, i + 2, extension, ZERO_PAD_FMT));
+    }
+
+    verify(expectedFiles, 3, schema, expectedRecords);
+  }
+
+  @Test
+  public void testWriteRecordFieldPartitioner() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "9");
+    setUp();
+
+    // Define the partitioner
+    Partitioner<FieldSchema> partitioner = new FieldPartitioner<>();
+    parsedConfig.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG, Arrays.asList("int"));
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+            TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 6);
+
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+
+    List<String> partitionFields = (List<String>) parsedConfig.get(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG);
+    String dirPrefix1 = partitioner.generatePartitionedPath(TOPIC, partitionFields.get(0) + "=" + String.valueOf(16));
+    String dirPrefix2 = partitioner.generatePartitionedPath(TOPIC, partitionFields.get(0) + "=" + String.valueOf(17));
+    String dirPrefix3 = partitioner.generatePartitionedPath(TOPIC, partitionFields.get(0) + "=" + String.valueOf(18));
 
     List<Struct> expectedRecords = new ArrayList<>();
     int ibase = 16;
