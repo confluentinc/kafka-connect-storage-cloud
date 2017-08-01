@@ -155,7 +155,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
   @Test
   public void testWriteRecordsSpanningMultiplePartsWithRetry() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10000");
-    localProps.put(S3SinkConnectorConfig.S3_RETRY_CONFIG, "true");
+    localProps.put(S3SinkConnectorConfig.S3_RETRY_ATTEMPTS_CONFIG, "3");
     setUp();
 
     // From time to time fail S3 upload part method

@@ -19,7 +19,7 @@ public class RetryWithExponentialBackoffTest {
          }
       }, 3, "Error!");
       Assert.assertEquals(1, count.get());
-      Assert.assertEquals(1, retry.getRetries());
+      Assert.assertEquals(0, retry.getFailCount());
    }
 
    @Test
@@ -40,6 +40,31 @@ public class RetryWithExponentialBackoffTest {
       }
       Assert.assertTrue(failed);
       Assert.assertEquals(3, count.get());
+   }
+
+   @Test
+   public void testFailTwoTimes(){
+      final AtomicInteger count = new AtomicInteger();
+      S3OutputStream.RetryWithExponentialBackoff retry = S3OutputStream.RetryWithExponentialBackoff.blocking(new Runnable() {
+         @Override
+         public void run() {
+            count.incrementAndGet();
+            if(count.get() < 3){
+               throw new SdkClientException("Error!");
+            }
+         }
+      }, 3, "Error!");
+      Assert.assertEquals(2, retry.getFailCount());
+   }
+
+   @Test(expected = ConnectException.class)
+   public void testNoRetries(){
+      S3OutputStream.RetryWithExponentialBackoff.blocking(new Runnable() {
+         @Override
+         public void run() {
+            throw new SdkClientException("Boom!");
+         }
+      }, 0, "Error!");
    }
 
    @Test(expected = RuntimeException.class)

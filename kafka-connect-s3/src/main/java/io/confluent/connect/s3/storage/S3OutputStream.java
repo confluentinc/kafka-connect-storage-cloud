@@ -57,7 +57,7 @@ public class S3OutputStream extends OutputStream {
   private boolean closed;
   private ByteBuffer buffer;
   private MultipartUpload multiPartUpload;
-  private boolean retry;
+  private int retryAttempts;
 
   public S3OutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
     this.s3 = s3;
@@ -66,7 +66,7 @@ public class S3OutputStream extends OutputStream {
     this.ssea = conf.getSSEA();
     this.partSize = conf.getPartSize();
     this.closed = false;
-    this.retry = conf.getS3Retry();
+    this.retryAttempts = conf.getS3RetryAttempts();
     this.buffer = ByteBuffer.allocate(this.partSize);
     this.progressListener = new ConnectProgressListener();
     this.multiPartUpload = null;
@@ -113,15 +113,11 @@ public class S3OutputStream extends OutputStream {
     }
     final int partSize = size;
     try {
-      if(retry) {
-        RetryWithExponentialBackoff.blocking(new Runnable() {
-          public void run() {
-            multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), partSize);
-          }
-        }, 5, "Part upload failed");
-      } else {
-        multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), partSize);
-      }
+      RetryWithExponentialBackoff.blocking(new Runnable() {
+        public void run() {
+          multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), partSize);
+        }
+      }, retryAttempts, "Part upload failed");
     } catch (Exception e) {
       // TODO: elaborate on the exception interpretation. We might be able to retry.
       if (multiPartUpload != null) {
@@ -187,52 +183,56 @@ public class S3OutputStream extends OutputStream {
   }
 
   protected static class RetryWithExponentialBackoff {
-    private int count;
-    private int retries = 1;
+    private int failCount;
+    private int maxRetryAttempts;
     private Throwable cause;
     private String errorMsg;
 
 
-    private RetryWithExponentialBackoff(int count, String errorMsg){
-      this.count = count;
+    private RetryWithExponentialBackoff(int maxRetryAttempts, String errorMsg) {
+      this.maxRetryAttempts = maxRetryAttempts;
       this.errorMsg = errorMsg;
     }
 
      /**
       *
       * @param runnable The method to run with retries
-      * @param count How many times to retry
+      * @param retries How many times to retry
       * @param errorMsg Error message to show
       * @return Returns either this instance or throws ConnectException if it failed more then given count
       */
-    public static RetryWithExponentialBackoff blocking(Runnable runnable, int count, String errorMsg){
-      RetryWithExponentialBackoff retry = new RetryWithExponentialBackoff(count, errorMsg);
+    public static RetryWithExponentialBackoff blocking(Runnable runnable, int retries, String errorMsg) {
+      RetryWithExponentialBackoff retry = new RetryWithExponentialBackoff(retries, errorMsg);
       retry.execute(runnable);
       return retry;
     }
 
-    private RetryWithExponentialBackoff execute(Runnable runnable){
-      if(retries > count){
-        throw new ConnectException(String.format("Giving up after failing %d times", count), cause);
-      }
-      try {
-        runnable.run();
-      } catch(SdkClientException e){
-          cause = e;
-          log.error(errorMsg + ", attempt: "+retries, cause);
-          retries++;
+    private RetryWithExponentialBackoff execute(Runnable runnable) {
+      do {
+        if (failCount > 0) {
           try {
-            Thread.sleep(100*2^count);
-          } catch (InterruptedException e1) {
-            log.error("Interrupted while sleeping due to retry", e1);
+            Thread.sleep(100 * 2 ^ failCount);
+          } catch (InterruptedException e) {
+            log.error("Interrupted while sleeping due to retry", e);
           }
-          execute(runnable);
+        }
+        try {
+          runnable.run();
+          break;
+        } catch (SdkClientException e) {
+          failCount++;
+          cause = e;
+          log.error(errorMsg + ", attempt: " + failCount, cause);
+        }
+      } while (failCount < maxRetryAttempts);
+      if (failCount >= maxRetryAttempts) {
+        throw new ConnectException(String.format("Giving up after failing %d times", failCount), cause);
       }
       return this;
     }
 
-    protected int getRetries() {
-      return retries;
+    protected int getFailCount() {
+      return failCount;
     }
 
     public Throwable getCause() {
