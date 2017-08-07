@@ -321,10 +321,6 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
     parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
     parsedConfig.put(
-        PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG,
-        TimeBasedSchemaGenerator.class
-    );
-    parsedConfig.put(
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
         TopicPartitionWriterTest.MockedWallclockTimestampExtractor.class.getName()
     );
@@ -381,10 +377,6 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     // Define the partitioner
     TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
     parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
-    parsedConfig.put(
-        PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG,
-        TimeBasedSchemaGenerator.class
-    );
     parsedConfig.put(
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
         TopicPartitionWriterTest.MockedWallclockTimestampExtractor.class.getName()
