@@ -133,13 +133,7 @@ Partitioner
   * Type: class
   * Default: io.confluent.connect.storage.partitioner.DefaultPartitioner
   * Importance: high
-  * Dependents: ``partition.field.name``, ``partition.duration.ms``, ``path.format``, ``locale``, ``timezone``, ``schema.generator.class``
-
-``schema.generator.class``
-  The schema generator to use with partitioners.
-
-  * Type: class
-  * Importance: high
+  * Dependents: ``partition.field.name``, ``partition.duration.ms``, ``path.format``, ``locale``, ``timezone``
 
 ``partition.field.name``
   The name of the partitioning field when FieldPartitioner is used.
