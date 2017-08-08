@@ -16,13 +16,13 @@
 
 package io.confluent.connect.s3.storage;
 
+import com.amazonaws.ClientConfiguration;
 import com.amazonaws.PredefinedClientConfigurations;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ObjectListing;
-import com.amazonaws.services.s3.model.Region;
 import org.apache.avro.file.SeekableInput;
 
 import java.io.OutputStream;
@@ -34,6 +34,8 @@ import io.confluent.connect.storage.common.util.StringUtils;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_HOST;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_PORT;
 
 /**
  * S3 implementation of the storage interface for Connect sinks.
@@ -60,14 +62,20 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   }
 
   public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
+    String proxyHost = config.getString(S3_PROXY_HOST);
+    int proxyPort = config.getInt(S3_PROXY_PORT);
+
+    ClientConfiguration clientConfiguration = PredefinedClientConfigurations.defaultConfig();
+    clientConfiguration.withUserAgentPrefix(String.format(VERSION_FORMAT, Version.getVersion()));
+    if(StringUtils.isNotBlank(proxyHost)) {
+      clientConfiguration.withProxyHost(proxyHost).withProxyPort(proxyPort);
+    }
+
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
                                         .withAccelerateModeEnabled(config.getBoolean(WAN_MODE_CONFIG))
                                         .withPathStyleAccessEnabled(true)
                                         .withCredentials(config.getCredentialsProvider())
-                                        .withClientConfiguration(
-                                            PredefinedClientConfigurations.defaultConfig()
-                                                .withUserAgentPrefix(
-                                                    String.format(VERSION_FORMAT, Version.getVersion())));
+                                        .withClientConfiguration(clientConfiguration);
 
     if (StringUtils.isBlank(url)) {
       String region = config.getString(REGION_CONFIG);

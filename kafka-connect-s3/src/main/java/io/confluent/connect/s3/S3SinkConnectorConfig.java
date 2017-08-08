@@ -66,6 +66,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String AVRO_CODEC_CONFIG = "avro.codec";
   public static final String AVRO_CODEC_DEFAULT = "null";
 
+  public static final String S3_PROXY_HOST = "s3.proxy.host";
+  public static final String S3_PROXY_PORT = "s3.proxy.port";
+  public static final String S3_PROXY_HOST_DEFAULT = null;
+  public static final int S3_PROXY_PORT_DEFAULT = -1;
+
   private final String name;
 
   private final StorageCommonConfig commonConfig;
@@ -153,6 +158,26 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         ++orderInGroup,
                         Width.LONG,
                         "Avro compression codec");
+
+      CONFIG_DEF.define(S3_PROXY_HOST,
+                        Type.STRING,
+                        S3_PROXY_HOST_DEFAULT,
+                        Importance.LOW,
+                        "Proxy Host Name for accessing S3",
+                        group,
+                        ++orderInGroup,
+                        Width.LONG,
+                        "S3 Proxy Host");
+
+      CONFIG_DEF.define(S3_PROXY_PORT,
+                        Type.INT,
+                        S3_PROXY_PORT_DEFAULT,
+                        Importance.LOW,
+                        "Proxy Port for accessing S3",
+                        group,
+                        ++orderInGroup,
+                        Width.SHORT,
+                        "S3 Proxy Port");
     }
   }
 
