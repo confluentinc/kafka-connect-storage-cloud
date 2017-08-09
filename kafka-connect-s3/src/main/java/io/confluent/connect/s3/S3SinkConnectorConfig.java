@@ -65,8 +65,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String AVRO_CODEC_CONFIG = "avro.codec";
   public static final String AVRO_CODEC_DEFAULT = "null";
 
-  public static final String S3_RETRY_ATTEMPTS_CONFIG = "s3.retry.attempts";
-  public static final int S3_RETRY_ATTEMPTS_DEFAULT = 3;
+  public static final String S3_PART_RETRY_CONFIG = "s3.part.retries";
+  public static final int S3_PART_RETRY_DEFAULT = 3;
 
   private final String name;
 
@@ -156,15 +156,15 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         Width.LONG,
                         "Avro compression codec");
 
-      CONFIG_DEF.define(S3_RETRY_ATTEMPTS_CONFIG,
+      CONFIG_DEF.define(S3_PART_RETRY_CONFIG,
                         Type.INT,
-                        S3_RETRY_ATTEMPTS_DEFAULT,
+              S3_PART_RETRY_DEFAULT,
                         Importance.MEDIUM,
-                        "How many times to Retry S3 part upload in Multi-part uploads. Zero means no retries.",
+                        "Number of upload retries of a single S3 part. Zero means no retries.",
                         group,
                         ++orderInGroup,
                         Width.LONG,
-                        "How many times to retry S3 part upload");
+                        "S3 Part Upload Retries");
     }
   }
 
@@ -221,8 +221,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getString(AVRO_CODEC_CONFIG);
   }
 
-  public int getS3RetryAttempts() {
-    return getInt(S3_RETRY_ATTEMPTS_CONFIG);
+  public int getS3PartRetries() {
+    return getInt(S3_PART_RETRY_CONFIG);
   }
 
   protected static String parseName(Map<String, String> props) {

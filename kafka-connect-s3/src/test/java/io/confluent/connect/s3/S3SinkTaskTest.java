@@ -19,12 +19,15 @@ package io.confluent.connect.s3;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import com.amazonaws.services.s3.model.UploadPartResult;
+import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.format.avro.AvroUtils;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.StorageFactory;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
+import org.apache.avro.file.DataFileWriter;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.easymock.Capture;
@@ -42,6 +45,8 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -155,16 +160,19 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
   @Test
   public void testWriteRecordsSpanningMultiplePartsWithRetry() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10000");
-    localProps.put(S3SinkConnectorConfig.S3_RETRY_ATTEMPTS_CONFIG, "3");
+    localProps.put(S3SinkConnectorConfig.S3_PART_RETRY_CONFIG, "3");
     setUp();
+
+    List<SinkRecord> sinkRecords = createRecords(11000);
+    int totalBytes = calcByteSize(sinkRecords);
+    final int parts = totalBytes / connectorConfig.getPartSize();
 
     // From time to time fail S3 upload part method
     final AtomicInteger count = new AtomicInteger();
     PowerMockito.doAnswer(new Answer<UploadPartResult>() {
       @Override
       public UploadPartResult answer(InvocationOnMock invocationOnMock) throws Throwable {
-        // Let's fail sometimes. Magic number 20 is picked based on part size and number of records
-        if(count.getAndIncrement() % 20 == 0){
+        if(count.getAndIncrement() % parts == 0){
           throw new SdkClientException("Boom!");
         } else {
           return (UploadPartResult)invocationOnMock.callRealMethod();
@@ -172,7 +180,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
       }
     }).when(s3).uploadPart(Mockito.isA(UploadPartRequest.class));
 
-    List<SinkRecord> sinkRecords = createRecords(11000);
+
     replayAll();
 
     task = new S3SinkTask();
@@ -186,6 +194,21 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
 
     long[] validOffsets = {0, 10000};
     verify(sinkRecords, validOffsets);
+  }
+
+  private int calcByteSize(List<SinkRecord> sinkRecords) throws IOException {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    DataFileWriter<Object> writer = new DataFileWriter<>(new GenericDatumWriter<>());
+    AvroData avroData = new AvroData(1);
+    boolean writerInit = false;
+    for(SinkRecord sinkRecord: sinkRecords){
+      if(!writerInit){
+        writer.create(avroData.fromConnectSchema(sinkRecord.valueSchema()), baos);
+        writerInit = true;
+      }
+      writer.append(avroData.fromConnectData(sinkRecord.valueSchema(), sinkRecord.value()));
+    }
+    return baos.size();
   }
 
   @Test
