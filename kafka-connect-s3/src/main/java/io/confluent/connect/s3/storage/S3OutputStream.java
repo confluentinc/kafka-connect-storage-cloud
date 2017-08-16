@@ -170,7 +170,7 @@ public class S3OutputStream extends OutputStream {
     return meta;
   }
 
-  protected MultipartUpload newMultipartUpload() throws IOException {
+  private MultipartUpload newMultipartUpload() throws IOException {
     InitiateMultipartUploadRequest initRequest = new InitiateMultipartUploadRequest(bucket, key, newObjectMetadata());
     try {
       return new MultipartUpload(s3.initiateMultipartUpload(initRequest).getUploadId());
@@ -193,7 +193,7 @@ public class S3OutputStream extends OutputStream {
     int failCount = 0;
     Throwable cause = null;
     do {
-      if(failCount > 0 ){
+      if (failCount > 0) {
         try {
           Thread.sleep(200 << failCount);
         } catch (InterruptedException e) {

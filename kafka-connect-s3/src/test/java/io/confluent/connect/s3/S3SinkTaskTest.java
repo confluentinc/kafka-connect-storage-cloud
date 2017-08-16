@@ -160,7 +160,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
   @Test
   public void testWriteRecordsSpanningMultiplePartsWithRetry() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10000");
-    localProps.put(S3SinkConnectorConfig.S3_PART_RETRY_CONFIG, "3");
+    localProps.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "3");
     setUp();
 
     List<SinkRecord> sinkRecords = createRecords(11000);

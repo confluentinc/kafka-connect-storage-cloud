@@ -20,11 +20,6 @@ import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
-import io.confluent.connect.storage.StorageSinkConnectorConfig;
-import io.confluent.connect.storage.common.ComposableConfig;
-import io.confluent.connect.storage.common.StorageCommonConfig;
-import io.confluent.connect.storage.hive.HiveConfig;
-import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -40,6 +35,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
+import io.confluent.connect.storage.common.ComposableConfig;
+import io.confluent.connect.storage.common.StorageCommonConfig;
+import io.confluent.connect.storage.hive.HiveConfig;
+import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
@@ -65,8 +66,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String AVRO_CODEC_CONFIG = "avro.codec";
   public static final String AVRO_CODEC_DEFAULT = "null";
 
-  public static final String S3_PART_RETRY_CONFIG = "s3.part.retries";
-  public static final int S3_PART_RETRY_DEFAULT = 3;
+  public static final String S3_PART_RETRIES_CONFIG = "s3.part.retries";
+  public static final int S3_PART_RETRIES_DEFAULT = 3;
 
   private final String name;
 
@@ -156,9 +157,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         Width.LONG,
                         "Avro compression codec");
 
-      CONFIG_DEF.define(S3_PART_RETRY_CONFIG,
+      CONFIG_DEF.define(S3_PART_RETRIES_CONFIG,
                         Type.INT,
-              S3_PART_RETRY_DEFAULT,
+                        S3_PART_RETRIES_DEFAULT,
                         Importance.MEDIUM,
                         "Number of upload retries of a single S3 part. Zero means no retries.",
                         group,
@@ -222,7 +223,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   public int getS3PartRetries() {
-    return getInt(S3_PART_RETRY_CONFIG);
+    return getInt(S3_PART_RETRIES_CONFIG);
   }
 
   protected static String parseName(Map<String, String> props) {
