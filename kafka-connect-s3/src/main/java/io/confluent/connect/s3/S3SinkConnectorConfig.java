@@ -50,6 +50,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String SSEA_CONFIG = "s3.ssea.name";
   public static final String SSEA_DEFAULT = "";
 
+  public static final String COMPRESSION_TYPE_CONFIG = "s3.compression.type";
+  public static final String COMPRESSION_TYPE_DEFAULT = "none";
+
   public static final String PART_SIZE_CONFIG = "s3.part.size";
   public static final int PART_SIZE_DEFAULT = 25 * 1024 * 1024;
 
@@ -133,6 +136,16 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         Width.LONG,
                         "S3 Server Side Encryption Algorithm");
 
+      CONFIG_DEF.define(COMPRESSION_TYPE_CONFIG,
+                        Type.STRING,
+                        COMPRESSION_TYPE_DEFAULT,
+                        Importance.LOW,
+                        "Compression type for file written to S3.",
+                        group,
+                        ++orderInGroup,
+                        Width.LONG,
+                        "Compression type for file written to S3");
+
       CONFIG_DEF.define(WAN_MODE_CONFIG,
                         Type.BOOLEAN,
                         WAN_MODE_DEFAULT,
@@ -189,6 +202,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public String getSSEA() {
     return getString(SSEA_CONFIG);
+  }
+
+  public String getCompression() {
+    return getString(COMPRESSION_TYPE_CONFIG);
   }
 
   public int getPartSize() {
