@@ -17,6 +17,7 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.SdkClientException;
+import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import com.amazonaws.services.s3.model.UploadPartResult;
 import io.confluent.connect.avro.AvroData;
@@ -229,5 +230,16 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
           map.containsKey("custom.partitioner.config"));
     }
   }
+
+  @Test
+  public void testAclCannedConfig() throws Exception {
+    localProps.put(S3SinkConnectorConfig.ACL_CANNED_CONFIG, CannedAccessControlList.BucketOwnerFullControl.toString());
+    setUp();
+    replayAll();
+    task = new S3SinkTask();
+    task.initialize(context);
+    task.start(properties);
+  }
+
 }
 
