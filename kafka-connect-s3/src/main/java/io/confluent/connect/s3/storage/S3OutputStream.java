@@ -26,12 +26,15 @@ import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PartETag;
 import com.amazonaws.services.s3.model.UploadPartRequest;
+import org.apache.kafka.common.record.BufferSupplier;
+import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.connect.errors.DataException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -39,6 +42,7 @@ import java.util.List;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.COMPRESSION_TYPE_CONFIG;
 
 /**
  * Output stream enabling multi-part uploads of Kafka records.
@@ -51,6 +55,7 @@ public class S3OutputStream extends OutputStream {
   private final String bucket;
   private final String key;
   private final String ssea;
+  private final CompressionType compressionType;
   private final ProgressListener progressListener;
   private final int partSize;
   private boolean closed;
@@ -62,6 +67,7 @@ public class S3OutputStream extends OutputStream {
     this.bucket = conf.getBucketName();
     this.key = key;
     this.ssea = conf.getSSEA();
+    this.compressionType = CompressionType.forName(conf.getString(COMPRESSION_TYPE_CONFIG));
     this.partSize = conf.getPartSize();
     this.closed = false;
     this.buffer = ByteBuffer.allocate(this.partSize);
@@ -110,7 +116,9 @@ public class S3OutputStream extends OutputStream {
     }
 
     try {
-      multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), size);
+      InputStream inputStream = compressionType.wrapForInput(
+          buffer, RecordBatch.CURRENT_MAGIC_VALUE, BufferSupplier.NO_CACHING);
+      multiPartUpload.uploadPart(inputStream, size);
     } catch (Exception e) {
       // TODO: elaborate on the exception interpretation. We might be able to retry.
       if (multiPartUpload != null) {
@@ -185,7 +193,7 @@ public class S3OutputStream extends OutputStream {
       log.debug("Initiated multi-part upload for bucket '{}' key '{}' with id '{}'", bucket, key, uploadId);
     }
 
-    public void uploadPart(ByteArrayInputStream inputStream, int partSize) {
+    public void uploadPart(InputStream inputStream, int partSize) {
       int currentPartNumber = partETags.size() + 1;
       UploadPartRequest request = new UploadPartRequest()
                                             .withBucketName(bucket)
