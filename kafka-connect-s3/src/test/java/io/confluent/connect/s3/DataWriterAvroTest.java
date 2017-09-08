@@ -18,6 +18,8 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import io.confluent.common.utils.MockTime;
+import io.confluent.common.utils.Time;
 import org.apache.avro.file.DataFileStream;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.DatumReader;
@@ -34,6 +36,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
+import org.powermock.api.mockito.PowerMockito;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -49,8 +52,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import io.confluent.common.utils.MockTime;
-import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.avro.AvroUtils;
 import io.confluent.connect.s3.storage.S3Storage;
@@ -92,7 +93,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   public void setUp() throws Exception {
     super.setUp();
 
-    s3 = newS3Client(connectorConfig);
+    s3 = PowerMockito.spy(newS3Client(connectorConfig));
 
     storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
 
