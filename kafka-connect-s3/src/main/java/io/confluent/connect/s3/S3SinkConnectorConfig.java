@@ -64,6 +64,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String SSEA_CONFIG = "s3.ssea.name";
   public static final String SSEA_DEFAULT = "";
 
+  public static final String SSE_AWS_KMS_ID_CONFIG = "s3.sse.aws.kms.id";
+  public static final String SSE_AWS_KMS_ID_DEFAULT = "";
+
   public static final String PART_SIZE_CONFIG = "s3.part.size";
   public static final int PART_SIZE_DEFAULT = 25 * 1024 * 1024;
 
@@ -341,6 +344,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.LONG,
           "S3 Proxy Password"
       );
+
+      configDef.define(
+          SSE_AWS_KMS_ID_CONFIG,
+          Type.STRING,
+          SSE_AWS_KMS_ID_DEFAULT,
+          Importance.LOW,
+          "The S3 Server Side Encryption KMS custom id/alias name.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Server Side Encryption KMS custom id/alias name"
+      );
     }
     return configDef;
   }
@@ -381,6 +396,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public String getSsea() {
     return getString(SSEA_CONFIG);
+  }
+
+  public String getSseAwsKmsKeyId() {
+    return getString(SSE_AWS_KMS_ID_CONFIG);
   }
 
   public CannedAccessControlList getCannedAcl() {
