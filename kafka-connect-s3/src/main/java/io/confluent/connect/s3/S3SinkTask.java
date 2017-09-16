@@ -98,7 +98,12 @@ public class S3SinkTask extends SinkTask {
       Class<? extends S3Storage> storageClass =
           (Class<? extends S3Storage>)
               connectorConfig.getClass(StorageCommonConfig.STORAGE_CLASS_CONFIG);
-      storage = StorageFactory.createStorage(storageClass, S3SinkConnectorConfig.class, connectorConfig, url);
+      storage = StorageFactory.createStorage(
+          storageClass,
+          S3SinkConnectorConfig.class,
+          connectorConfig,
+          url
+      );
       if (!storage.bucketExists()) {
         throw new DataException("No-existent S3 bucket: " + connectorConfig.getBucketName());
       }
@@ -108,8 +113,8 @@ public class S3SinkTask extends SinkTask {
 
       open(context.assignment());
       log.info("Started S3 connector task with assigned partitions: {}", assignment);
-    } catch (ClassNotFoundException | IllegalAccessException | InstantiationException | InvocationTargetException
-                 | NoSuchMethodException e) {
+    } catch (ClassNotFoundException | IllegalAccessException | InstantiationException
+        | InvocationTargetException | NoSuchMethodException e) {
       throw new ConnectException("Reflection exception: ", e);
     } catch (AmazonClientException e) {
       throw new ConnectException(e);
@@ -123,21 +128,30 @@ public class S3SinkTask extends SinkTask {
 
   @Override
   public void open(Collection<TopicPartition> partitions) {
-    // assignment should be empty, either because this is the initial call or because it follows a call to "close".
+    // assignment should be empty, either because this is the initial call or because it follows
+    // a call to "close".
     assignment.addAll(partitions);
     for (TopicPartition tp : assignment) {
-      TopicPartitionWriter writer =
-          new TopicPartitionWriter(tp, writerProvider, partitioner, connectorConfig, context, time);
+      TopicPartitionWriter writer = new TopicPartitionWriter(
+          tp,
+          writerProvider,
+          partitioner,
+          connectorConfig,
+          context,
+          time
+      );
       topicPartitionWriters.put(tp, writer);
     }
   }
 
   @SuppressWarnings("unchecked")
-  private Format<S3SinkConnectorConfig, String> newFormat() throws ClassNotFoundException, IllegalAccessException,
-                                                                   InstantiationException, InvocationTargetException,
-                                                                   NoSuchMethodException {
+  private Format<S3SinkConnectorConfig, String> newFormat()
+      throws ClassNotFoundException, IllegalAccessException, InstantiationException,
+             InvocationTargetException, NoSuchMethodException {
     Class<Format<S3SinkConnectorConfig, String>> formatClass =
-        (Class<Format<S3SinkConnectorConfig, String>>) connectorConfig.getClass(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG);
+        (Class<Format<S3SinkConnectorConfig, String>>) connectorConfig.getClass(
+            S3SinkConnectorConfig.FORMAT_CLASS_CONFIG
+        );
     return formatClass.getConstructor(S3Storage.class).newInstance(storage);
   }
 
@@ -155,7 +169,8 @@ public class S3SinkTask extends SinkTask {
     Map<String, ?> originals = config.originals();
     for (String originalKey : originals.keySet()) {
       if (!plainValues.containsKey(originalKey)) {
-        // pass any additional configs down to the partitioner so that custom partitioners can have their own configs
+        // pass any additional configs down to the partitioner so that custom partitioners can
+        // have their own configs
         plainValues.put(originalKey, originals.get(originalKey));
       }
     }
@@ -187,7 +202,9 @@ public class S3SinkTask extends SinkTask {
   }
 
   @Override
-  public Map<TopicPartition, OffsetAndMetadata> preCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+  public Map<TopicPartition, OffsetAndMetadata> preCommit(
+      Map<TopicPartition, OffsetAndMetadata> offsets
+  ) {
     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
     for (TopicPartition tp : assignment) {
       Long offset = topicPartitionWriters.get(tp).getOffsetToCommitAndReset();

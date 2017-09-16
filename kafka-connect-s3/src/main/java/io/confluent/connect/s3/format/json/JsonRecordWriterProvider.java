@@ -70,7 +70,11 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
           try {
             Object value = record.value();
             if (value instanceof Struct) {
-              byte[] rawJson = converter.fromConnectData(record.topic(), record.valueSchema(), value);
+              byte[] rawJson = converter.fromConnectData(
+                  record.topic(),
+                  record.valueSchema(),
+                  value
+              );
               s3out.write(rawJson);
               s3out.write(LINE_SEPARATOR_BYTES);
             } else {
@@ -85,8 +89,8 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
         @Override
         public void commit() {
           try {
-            // Flush is required here, because closing the writer will close the underlying S3 output stream before
-            // committing any data to S3.
+            // Flush is required here, because closing the writer will close the underlying S3
+            // output stream before committing any data to S3.
             writer.flush();
             s3out.commit();
             writer.close();

@@ -37,8 +37,10 @@ public class JsonFormat implements Format<S3SinkConnectorConfig, String> {
     this.converter = new JsonConverter();
     Map<String, Object> converterConfig = new HashMap<>();
     converterConfig.put("schemas.enable", "false");
-    converterConfig.put("schemas.cache.size",
-                        String.valueOf(storage.conf().get(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG)));
+    converterConfig.put(
+        "schemas.cache.size",
+        String.valueOf(storage.conf().get(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG))
+    );
     this.converter.configure(converterConfig, false);
   }
 
@@ -54,7 +56,9 @@ public class JsonFormat implements Format<S3SinkConnectorConfig, String> {
 
   @Override
   public HiveFactory getHiveFactory() {
-    throw new UnsupportedOperationException("Hive integration is not currently supported in S3 Connector");
+    throw new UnsupportedOperationException(
+        "Hive integration is not currently supported in S3 Connector"
+    );
   }
 
 }
