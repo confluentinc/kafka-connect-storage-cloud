@@ -60,22 +60,26 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   }
 
   public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
+    String version = String.format(VERSION_FORMAT, Version.getVersion());
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
-                                        .withAccelerateModeEnabled(config.getBoolean(WAN_MODE_CONFIG))
+                                        .withAccelerateModeEnabled(
+                                            config.getBoolean(WAN_MODE_CONFIG)
+                                        )
                                         .withPathStyleAccessEnabled(true)
                                         .withCredentials(config.getCredentialsProvider())
                                         .withClientConfiguration(
                                             PredefinedClientConfigurations.defaultConfig()
-                                                .withUserAgentPrefix(
-                                                    String.format(VERSION_FORMAT, Version.getVersion())));
+                                                .withUserAgentPrefix(version));
 
     if (StringUtils.isBlank(url)) {
       String region = config.getString(REGION_CONFIG);
-      builder = "us-east-1".equals(region) ?
-                    builder.withRegion(Regions.US_EAST_1):
-                    builder.withRegion(region);
+      builder = "us-east-1".equals(region)
+                ? builder.withRegion(Regions.US_EAST_1)
+                : builder.withRegion(region);
     } else {
-      builder = builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(url, ""));
+      builder = builder.withEndpointConfiguration(
+          new AwsClientBuilder.EndpointConfiguration(url,"")
+      );
     }
 
     return builder.build();
@@ -89,55 +93,45 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     this.s3 = s3;
   }
 
-  /**
-   * {@inheritDoc}
-   *
-   * @throws SdkClientException
-   * @throws AmazonServiceException
-   */
   @Override
   public boolean exists(String name) {
     return StringUtils.isNotBlank(name) && s3.doesObjectExist(bucketName, name);
   }
 
-  /**
-   * {@inheritDoc}
-   *
-   * @throws SdkClientException
-   * @throws AmazonServiceException
-   */
   public boolean bucketExists() {
     return StringUtils.isNotBlank(bucketName) && s3.doesBucketExist(bucketName);
   }
 
-  /**
-   * {@inheritDoc}
-   *
-   * @throws SdkClientException
-   * @throws AmazonServiceException
-   */
   @Override
   public boolean create(String name) {
     throw new UnsupportedOperationException();
   }
 
-  /**
-   * {@inheritDoc}
-   * This method is not supported in S3 storage.
-   *
-   * @throws UnsupportedOperationException
-   */
+  @Override
+  public OutputStream create(String path, S3SinkConnectorConfig conf, boolean overwrite) {
+    return create(path, overwrite);
+  }
+
+  public S3OutputStream create(String path, boolean overwrite) {
+    if (!overwrite) {
+      throw new UnsupportedOperationException(
+          "Creating a file without overwriting is not currently supported in S3 Connector"
+      );
+    }
+
+    if (StringUtils.isBlank(path)) {
+      throw new IllegalArgumentException("Path can not be empty!");
+    }
+
+    // currently ignore what is passed as method argument.
+    return new S3OutputStream(path, this.conf, s3);
+  }
+
   @Override
   public OutputStream append(String filename) {
     throw new UnsupportedOperationException();
   }
 
-  /**
-   * {@inheritDoc}
-   *
-   * @throws SdkClientException
-   * @throws AmazonServiceException
-   */
   @Override
   public void delete(String name) {
     if (bucketName.equals(name)) {
@@ -149,25 +143,18 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     }
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
   public void close() {}
 
-  /**
-   * {@inheritDoc}
-   *
-   * @throws SdkClientException
-   * @throws AmazonServiceException
-   */
   @Override
   public ObjectListing list(String path) {
     return s3.listObjects(bucketName, path);
   }
 
   @Override
-  public S3SinkConnectorConfig conf() { return conf; }
+  public S3SinkConnectorConfig conf() {
+    return conf;
+  }
 
   @Override
   public String url() {
@@ -176,24 +163,8 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
   @Override
   public SeekableInput open(String path, S3SinkConnectorConfig conf) {
-    throw new UnsupportedOperationException("File reading is not currently supported in S3 Connector");
-  }
-
-  @Override
-  public OutputStream create(String path, S3SinkConnectorConfig conf, boolean overwrite) {
-    return create(path, overwrite);
-  }
-
-  public S3OutputStream create(String path, boolean overwrite) {
-    if (!overwrite) {
-      throw new UnsupportedOperationException("Creating a file without overwriting is not currently supported in S3 Connector");
-    }
-
-    if (StringUtils.isBlank(path)) {
-      throw new IllegalArgumentException("Path can not be empty!");
-    }
-
-    // currently ignore what is passed as method argument.
-    return new S3OutputStream(path, this.conf, s3);
+    throw new UnsupportedOperationException(
+        "File reading is not currently supported in S3 Connector"
+    );
   }
 }

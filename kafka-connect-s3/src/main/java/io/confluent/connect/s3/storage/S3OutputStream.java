@@ -44,7 +44,7 @@ import java.util.List;
 /**
  * Output stream enabling multi-part uploads of Kafka records.
  *
- * The implementation has borrowed the general structure of Hadoop's implementation.
+ * <p>The implementation has borrowed the general structure of Hadoop's implementation.
  */
 public class S3OutputStream extends OutputStream {
   private static final Logger log = LoggerFactory.getLogger(S3OutputStream.class);
@@ -63,7 +63,7 @@ public class S3OutputStream extends OutputStream {
     this.s3 = s3;
     this.bucket = conf.getBucketName();
     this.key = key;
-    this.ssea = conf.getSSEA();
+    this.ssea = conf.getSsea();
     this.partSize = conf.getPartSize();
     this.closed = false;
     this.retries = conf.getS3PartRetries();
@@ -85,7 +85,7 @@ public class S3OutputStream extends OutputStream {
   public void write(byte[] b, int off, int len) throws IOException {
     if (b == null) {
       throw new NullPointerException();
-    } else if (off < 0 || off > b.length || len < 0 || (off + len) > b.length || (off + len) < 0) {
+    } else if (outOfRange(off, b.length) || len < 0 || outOfRange(off + len, b.length)) {
       throw new IndexOutOfBoundsException();
     } else if (len == 0) {
       return;
@@ -99,6 +99,10 @@ public class S3OutputStream extends OutputStream {
     } else {
       buffer.put(b, off, len);
     }
+  }
+
+  private static boolean outOfRange(int off, int len) {
+    return off < 0 || off > len;
   }
 
   private void uploadPart() throws IOException {
@@ -129,7 +133,11 @@ public class S3OutputStream extends OutputStream {
 
   public void commit() throws IOException {
     if (closed) {
-      log.warn("Tried to commit data for bucket '{}' key '{}' on a closed stream. Ignoring.", bucket, key);
+      log.warn(
+          "Tried to commit data for bucket '{}' key '{}' on a closed stream. Ignoring.",
+          bucket,
+          key
+      );
       return;
     }
 
@@ -171,7 +179,11 @@ public class S3OutputStream extends OutputStream {
   }
 
   private MultipartUpload newMultipartUpload() throws IOException {
-    InitiateMultipartUploadRequest initRequest = new InitiateMultipartUploadRequest(bucket, key, newObjectMetadata());
+    InitiateMultipartUploadRequest initRequest = new InitiateMultipartUploadRequest(
+        bucket,
+        key,
+        newObjectMetadata()
+    );
     try {
       return new MultipartUpload(s3.initiateMultipartUpload(initRequest).getUploadId());
     } catch (AmazonClientException e) {
@@ -210,7 +222,10 @@ public class S3OutputStream extends OutputStream {
       }
     } while (failCount < maxRetries);
     if (failCount >= maxRetries) {
-      throw new ConnectException(String.format("Giving up after failing %d times", failCount), cause);
+      throw new ConnectException(
+          String.format("Giving up after failing %d times", failCount),
+          cause
+      );
     }
   }
 
@@ -221,7 +236,12 @@ public class S3OutputStream extends OutputStream {
     public MultipartUpload(String uploadId) {
       this.uploadId = uploadId;
       this.partETags = new ArrayList<>();
-      log.debug("Initiated multi-part upload for bucket '{}' key '{}' with id '{}'", bucket, key, uploadId);
+      log.debug(
+          "Initiated multi-part upload for bucket '{}' key '{}' with id '{}'",
+          bucket,
+          key,
+          uploadId
+      );
     }
 
     public void uploadPart(ByteArrayInputStream inputStream, int partSize) {
