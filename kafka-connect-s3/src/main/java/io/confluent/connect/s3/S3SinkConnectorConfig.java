@@ -116,8 +116,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         CREDENTIALS_PROVIDER_CLASS_DEFAULT,
                         new CredentialsProviderValidator(),
                         Importance.LOW,
-                        "Credentials provider or provider chain to use for authentication to AWS. By default the "
-                        + " connector uses 'DefaultAWSCredentialsProviderChain'.",
+                        "Credentials provider or provider chain to use for authentication to AWS"
+                        + ". By default the connector uses 'DefaultAWSCredentialsProviderChain'.",
                         group,
                         ++orderInGroup,
                         Width.LONG,
@@ -147,8 +147,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         Type.STRING,
                         AVRO_CODEC_DEFAULT,
                         Importance.LOW,
-                        "The Avro compression codec to be used for output files. Available values: null, deflate, "
-                         + "snappy and bzip2 (codec source is org.apache.avro.file.CodecFactory)",
+                        "The Avro compression codec to be used for output files. Available "
+                        + "values: null, deflate, snappy and bzip2 (codec source is "
+                        + "org.apache.avro.file.CodecFactory)",
                         group,
                         ++orderInGroup,
                         Width.LONG,
@@ -187,7 +188,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getString(S3_BUCKET_CONFIG);
   }
 
-  public String getSSEA() {
+  public String getSsea() {
     return getString(SSEA_CONFIG);
   }
 
@@ -201,7 +202,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       return ((Class<? extends AWSCredentialsProvider>)
                   getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
     } catch (IllegalAccessException | InstantiationException e) {
-      throw new ConnectException("Invalid class for: " + S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG, e);
+      throw new ConnectException(
+          "Invalid class for: " + S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
+          e
+      );
     }
   }
 
@@ -248,10 +252,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       }
       Number number = (Number) value;
       if (number.longValue() < min) {
-        throw new ConfigException(name, value, "Part size must be at least: " + min + " bytes (5MB)");
+        throw new ConfigException(
+            name,
+            value,
+            "Part size must be at least: " + min + " bytes (5MB)"
+        );
       }
       if (number.longValue() > max) {
-        throw new ConfigException(name, value, "Part size must be no more: " + Integer.MAX_VALUE + " bytes (~2GB)");
+        throw new ConfigException(
+            name,
+            value,
+            "Part size must be no more: " + Integer.MAX_VALUE + " bytes (~2GB)"
+        );
       }
     }
 
@@ -277,7 +289,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     public void ensureValid(String name, Object region) {
       String regionStr = ((String) region).toLowerCase().trim();
       if (RegionUtils.getRegion(regionStr) == null) {
-        throw new ConfigException(name, region, "Value must be one of: " + Utils.join(RegionUtils.getRegions(), ", "));
+        throw new ConfigException(
+            name,
+            region,
+            "Value must be one of: " + Utils.join(RegionUtils.getRegions(), ", ")
+        );
       }
     }
 
@@ -294,7 +310,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
               && AWSCredentialsProvider.class.isAssignableFrom((Class<?>) provider)) {
         return;
       }
-      throw new ConfigException(name, provider, "Class must extend: " + AWSCredentialsProvider.class);
+      throw new ConfigException(
+          name,
+          provider,
+          "Class must extend: " + AWSCredentialsProvider.class
+      );
     }
 
     @Override
@@ -313,7 +333,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
     ConfigDef visible = new ConfigDef();
     for (ConfigDef.ConfigKey key : everything.values()) {
-      if(!blacklist.contains(key.name)) {
+      if (!blacklist.contains(key.name)) {
         visible.define(key);
       }
     }
