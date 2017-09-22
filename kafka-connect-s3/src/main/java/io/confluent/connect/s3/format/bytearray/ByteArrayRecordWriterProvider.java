@@ -34,8 +34,7 @@ public class ByteArrayRecordWriterProvider implements RecordWriterProvider<S3Sin
 
   private static final Logger log = LoggerFactory.getLogger(ByteArrayRecordWriterProvider.class);
   private static final String EXTENSION = ".out";
-  private static final String LINE_SEPARATOR = System.lineSeparator();
-  private static final byte[] LINE_SEPARATOR_BYTES = LINE_SEPARATOR.getBytes();
+  private static final byte[] LINE_SEPARATOR_BYTES = System.lineSeparator().getBytes();
   private final S3Storage storage;
   private final ByteArrayConverter converter;
 

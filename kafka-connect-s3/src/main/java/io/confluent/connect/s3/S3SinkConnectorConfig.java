@@ -74,6 +74,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String S3_PART_RETRIES_CONFIG = "s3.part.retries";
   public static final int S3_PART_RETRIES_DEFAULT = 3;
 
+  public static final String FORMAT_BYTEARRAY_EXTENSION_CONFIG = "format.bytearray.extension";
+  public static final String FORMAT_BYTEARRAY_EXTENSION_DEFAULT = ".bin";
+
   private final String name;
 
   private final StorageCommonConfig commonConfig;
@@ -183,6 +186,16 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         ++orderInGroup,
                         Width.LONG,
                         "S3 Part Upload Retries");
+
+      CONFIG_DEF.define(FORMAT_BYTEARRAY_EXTENSION_CONFIG,
+          Type.STRING,
+          FORMAT_BYTEARRAY_EXTENSION_DEFAULT,
+          Importance.LOW,
+          "Output file extension for ByteArrayFormat. Defaults to '.bin'",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Output file extension for ByteArrayFormat");
     }
   }
 
@@ -248,6 +261,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public int getS3PartRetries() {
     return getInt(S3_PART_RETRIES_CONFIG);
+  }
+
+  public String getFormatBytearrayExtension() {
+    return getString(FORMAT_BYTEARRAY_EXTENSION_CONFIG);
   }
 
   protected static String parseName(Map<String, String> props) {

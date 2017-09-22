@@ -35,9 +35,6 @@ public class ByteArrayFormat implements Format<S3SinkConnectorConfig, String> {
     this.storage = storage;
     this.converter = new ByteArrayConverter();
     Map<String, Object> converterConfig = new HashMap<>();
-    converterConfig.put("schemas.enable", "false");
-    converterConfig.put("schemas.cache.size",
-        String.valueOf(storage.conf().get(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG)));
     this.converter.configure(converterConfig, false);
   }
 
