@@ -45,7 +45,7 @@ public class ByteArrayRecordWriterProvider implements RecordWriterProvider<S3Sin
 
   @Override
   public String getExtension() {
-    return EXTENSION;
+    return storage.conf().getByteArrayExtension();
   }
 
   @Override

@@ -50,7 +50,8 @@ public class ByteArrayFormat implements Format<S3SinkConnectorConfig, String> {
 
   @Override
   public HiveFactory getHiveFactory() {
-    throw new UnsupportedOperationException("Hive integration is not currently supported in S3 Connector");
+    throw new UnsupportedOperationException(
+        "Hive integration is not currently supported in S3 Connector");
   }
 
 }
