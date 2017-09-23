@@ -21,6 +21,7 @@ import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
+import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -76,6 +77,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String FORMAT_BYTEARRAY_EXTENSION_CONFIG = "format.bytearray.extension";
   public static final String FORMAT_BYTEARRAY_EXTENSION_DEFAULT = ".bin";
+
+  public static final String FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG = "format.bytearray.separator";
+  public static final String FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT =
+      StringEscapeUtils.escapeJava(System.lineSeparator());
 
   private final String name;
 
@@ -197,6 +202,20 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         ++orderInGroup,
                         Width.LONG,
                         "Output file extension for ByteArrayFormat");
+
+      CONFIG_DEF.define(FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG,
+                        Type.STRING,
+                        FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT,
+                        Importance.LOW,
+                        "String inserted between records for ByteArrayFormat. "
+                        + "Defaults to 'System.lineSeparator()' "
+                        + "and may contain escape sequences like '\\n'. "
+                        + "An input record that contains the line separator will look like "
+                        + "multiple records in the output S3 object.",
+                        group,
+                        ++orderInGroup,
+                        Width.LONG,
+                        "Line separator ByteArrayFormat");
     }
   }
 
@@ -266,6 +285,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public String getByteArrayExtension() {
     return getString(FORMAT_BYTEARRAY_EXTENSION_CONFIG);
+  }
+
+  public String getFormatByteArrayLineSeparator() {
+    String raw = getString(FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG);
+    return StringEscapeUtils.unescapeJava(raw);
   }
 
   protected static String parseName(Map<String, String> props) {

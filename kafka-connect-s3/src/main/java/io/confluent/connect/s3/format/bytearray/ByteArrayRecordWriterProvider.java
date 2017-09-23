@@ -29,23 +29,26 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 public class ByteArrayRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
 
   private static final Logger log = LoggerFactory.getLogger(ByteArrayRecordWriterProvider.class);
-  private static final String EXTENSION = ".out";
-  private static final byte[] LINE_SEPARATOR_BYTES = System.lineSeparator().getBytes();
   private final S3Storage storage;
   private final ByteArrayConverter converter;
+  private final String extension;
+  private final byte[] lineSeparatorBytes;
 
   ByteArrayRecordWriterProvider(S3Storage storage, ByteArrayConverter converter) {
     this.storage = storage;
     this.converter = converter;
+    this.extension = storage.conf().getByteArrayExtension();
+    this.lineSeparatorBytes = storage.conf().getFormatByteArrayLineSeparator().getBytes();
   }
 
   @Override
   public String getExtension() {
-    return storage.conf().getByteArrayExtension();
+    return extension;
   }
 
   @Override
@@ -60,7 +63,7 @@ public class ByteArrayRecordWriterProvider implements RecordWriterProvider<S3Sin
           byte[] bytes = converter.fromConnectData(
               record.topic(), record.valueSchema(), record.value());
           s3out.write(bytes);
-          s3out.write(LINE_SEPARATOR_BYTES);
+          s3out.write(lineSeparatorBytes);
         } catch (IOException | DataException e) {
           throw new ConnectException(e);
         }
