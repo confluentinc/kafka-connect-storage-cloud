@@ -21,7 +21,6 @@ import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
-import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -79,8 +78,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String FORMAT_BYTEARRAY_EXTENSION_DEFAULT = ".bin";
 
   public static final String FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG = "format.bytearray.separator";
-  public static final String FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT =
-      StringEscapeUtils.escapeJava(System.lineSeparator());
+  public static final String FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT = System.lineSeparator();
 
   private final String name;
 
@@ -205,7 +203,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
       CONFIG_DEF.define(FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG,
                         Type.STRING,
-                        FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT,
+                        // Because ConfigKey automatically trims strings, we cannot set
+                        // the default here and instead inject null;
+                        // the default is applied in getFormatByteArrayLineSeparator().
+                        null,
                         Importance.LOW,
                         "String inserted between records for ByteArrayFormat. "
                         + "Defaults to 'System.lineSeparator()' "
@@ -288,8 +289,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   public String getFormatByteArrayLineSeparator() {
-    String raw = getString(FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG);
-    return StringEscapeUtils.unescapeJava(raw);
+    // White space is significant for line separators, but ConfigKey trims it out,
+    // so we need to check the originals rather than using the normal machinery.
+    if (originalsStrings().containsKey(FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG)) {
+      return originalsStrings().get(FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG);
+    }
+    return FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT;
   }
 
   protected static String parseName(Map<String, String> props) {

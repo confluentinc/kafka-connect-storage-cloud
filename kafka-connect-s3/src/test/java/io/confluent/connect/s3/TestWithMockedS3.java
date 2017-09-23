@@ -26,7 +26,6 @@ import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.findify.s3mock.S3Mock;
-import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.After;
 import org.junit.Rule;
@@ -117,7 +116,7 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
         return readRecordsJson(bucketName, fileKey, s3);
       } else if (".bin".equals(extension)) {
         return readRecordsByteArray(bucketName, fileKey, s3,
-            StringEscapeUtils.unescapeJava(S3SinkConnectorConfig.FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT).getBytes());
+            S3SinkConnectorConfig.FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT.getBytes());
       } else if (".SEPARATORjson".equals(extension)) {
         return readRecordsByteArray(bucketName, fileKey, s3, "SEPARATOR".getBytes());
       } else {
