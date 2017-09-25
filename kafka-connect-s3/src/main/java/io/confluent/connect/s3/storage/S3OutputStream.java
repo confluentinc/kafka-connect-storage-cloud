@@ -22,6 +22,7 @@ import com.amazonaws.event.ProgressEvent;
 import com.amazonaws.event.ProgressListener;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
+import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
@@ -54,6 +55,7 @@ public class S3OutputStream extends OutputStream {
   private final String ssea;
   private final ProgressListener progressListener;
   private final int partSize;
+  private final CannedAccessControlList cannedAcl;
   private boolean closed;
   private ByteBuffer buffer;
   private MultipartUpload multiPartUpload;
@@ -65,6 +67,7 @@ public class S3OutputStream extends OutputStream {
     this.key = key;
     this.ssea = conf.getSsea();
     this.partSize = conf.getPartSize();
+    this.cannedAcl = conf.getCannedAcl();
     this.closed = false;
     this.retries = conf.getS3PartRetries();
     this.buffer = ByteBuffer.allocate(this.partSize);
@@ -183,7 +186,8 @@ public class S3OutputStream extends OutputStream {
         bucket,
         key,
         newObjectMetadata()
-    );
+    ).withCannedACL(cannedAcl);
+
     try {
       return new MultipartUpload(s3.initiateMultipartUpload(initRequest).getUploadId());
     } catch (AmazonClientException e) {

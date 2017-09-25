@@ -20,6 +20,7 @@ import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
+import com.amazonaws.services.s3.model.CannedAccessControlList;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -29,6 +30,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -62,6 +64,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String REGION_CONFIG = "s3.region";
   public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
+
+  public static final String ACL_CANNED_CONFIG = "s3.acl.canned";
+  public static final String ACL_CANNED_DEFAULT = null;
 
   public static final String AVRO_CODEC_CONFIG = "avro.codec";
   public static final String AVRO_CODEC_DEFAULT = "null";
@@ -136,6 +141,17 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         Width.LONG,
                         "S3 Server Side Encryption Algorithm");
 
+      CONFIG_DEF.define(ACL_CANNED_CONFIG,
+                        Type.STRING,
+                        ACL_CANNED_DEFAULT,
+                        new CannedAclValidator(),
+                        Importance.LOW,
+                        "An S3 canned ACL header value to apply when writing objects.",
+                        group,
+                        ++orderInGroup,
+                        Width.LONG,
+                        "S3 Canned ACL");
+
       CONFIG_DEF.define(WAN_MODE_CONFIG,
                         Type.BOOLEAN,
                         WAN_MODE_DEFAULT,
@@ -203,6 +219,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public String getSsea() {
     return getString(SSEA_CONFIG);
+  }
+
+  public CannedAccessControlList getCannedAcl() {
+    return CannedAclValidator.ACLS_BY_HEADER_VALUE.get(getString(ACL_CANNED_CONFIG));
   }
 
   public int getPartSize() {
@@ -317,6 +337,36 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     @Override
     public String toString() {
       return "[" + Utils.join(RegionUtils.getRegions(), ", ") + "]";
+    }
+  }
+
+  private static class CannedAclValidator implements ConfigDef.Validator {
+    public static final Map<String, CannedAccessControlList> ACLS_BY_HEADER_VALUE = new HashMap<>();
+    public static final String ALLOWED_VALUES;
+
+    static {
+      List<String> aclHeaderValues = new ArrayList<>();
+      for (CannedAccessControlList acl : CannedAccessControlList.values()) {
+        ACLS_BY_HEADER_VALUE.put(acl.toString(), acl);
+        aclHeaderValues.add(acl.toString());
+      }
+      ALLOWED_VALUES = Utils.join(aclHeaderValues, ", ");
+    }
+
+    @Override
+    public void ensureValid(String name, Object cannedAcl) {
+      if (cannedAcl == null) {
+        return;
+      }
+      String aclStr = ((String) cannedAcl).trim();
+      if (!ACLS_BY_HEADER_VALUE.containsKey(aclStr)) {
+        throw new ConfigException(name, cannedAcl, "Value must be one of: " + ALLOWED_VALUES);
+      }
+    }
+
+    @Override
+    public String toString() {
+      return "[" + ALLOWED_VALUES + "]";
     }
   }
 
