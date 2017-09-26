@@ -28,15 +28,14 @@ import org.apache.avro.file.SeekableInput;
 import java.io.OutputStream;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.util.S3ProxyConfig;
 import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.Storage;
 import io.confluent.connect.storage.common.util.StringUtils;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_HOST;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_PORT;
 
 /**
  * S3 implementation of the storage interface for Connect sinks.
@@ -67,7 +66,14 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
     ClientConfiguration clientConfiguration = PredefinedClientConfigurations.defaultConfig();
     clientConfiguration.withUserAgentPrefix(version);
-    String proxyUrl = config.getString(S3_PROXY_URL_CONFIG);
+    if (StringUtils.isNotBlank(config.getString(S3_PROXY_URL_CONFIG))) {
+      S3ProxyConfig proxyConfig = new S3ProxyConfig(config);
+      clientConfiguration.withProtocol(proxyConfig.protocol())
+          .withProxyHost(proxyConfig.host())
+          .withProxyPort(proxyConfig.port())
+          .withProxyUsername(proxyConfig.user())
+          .withProxyPassword(proxyConfig.pass());
+    }
 
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
                                         .withAccelerateModeEnabled(

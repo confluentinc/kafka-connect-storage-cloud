@@ -30,8 +30,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -47,7 +45,6 @@ import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.ComposableConfig;
 import io.confluent.connect.storage.common.GenericRecommender;
 import io.confluent.connect.storage.common.StorageCommonConfig;
-import io.confluent.connect.storage.common.util.StringUtils;
 import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.partitioner.DailyPartitioner;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
@@ -95,6 +92,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String S3_PROXY_URL_CONFIG = "s3.proxy.url";
   public static final String S3_PROXY_URL_DEFAULT = "";
 
+  public static final String S3_PROXY_USER_CONFIG = "s3.proxy.user";
+  public static final String S3_PROXY_USER_DEFAULT = null;
+
+  public static final String S3_PROXY_PASS_CONFIG = "s3.proxy.password";
+  public static final String S3_PROXY_PASS_DEFAULT = null;
+
   private final String name;
 
   private final StorageCommonConfig commonConfig;
@@ -133,6 +136,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     {
       final String group = "S3";
       int orderInGroup = 0;
+<<<<<<< HEAD
 
       configDef.define(
           S3_BUCKET_CONFIG,
@@ -292,6 +296,30 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "S3 Proxy Settings"
+      );
+
+      configDef.define(
+          S3_PROXY_USER_CONFIG,
+          Type.PASSWORD,
+          S3_PROXY_USER_DEFAULT,
+          Importance.LOW,
+          "S3 Proxy User",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Proxy User"
+      );
+
+      configDef.define(
+          S3_PROXY_PASS_CONFIG,
+          Type.PASSWORD,
+          S3_PROXY_PASS_DEFAULT,
+          Importance.LOW,
+          "S3 Proxy Password",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Proxy Password"
       );
     }
     return configDef;
@@ -532,41 +560,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       }
     }
     return visible;
-  }
-
-  public static class ProxyConfig {
-    private final String protocol;
-    private final String host;
-    private final int port;
-    private final String user;
-    private final String pass;
-
-    public ProxyConfig(String settings) {
-      try {
-        URL url = new URL(settings);
-        protocol = url.getProtocol();
-        host = url.getHost();
-        port = url.getPort();
-        user = extractUser(url.getUserInfo());
-        pass = extractPass(url.getUserInfo());
-
-      } catch (MalformedURLException e) {
-        throw new ConfigException("msg");
-      }
-    }
-
-    public static String extractUser(String userInfo) {
-      return StringUtils.isBlank(userInfo) ? "" : userInfo.split(":")[0];
-    }
-
-    public static String extractPass(String userInfo) {
-      if (StringUtils.isBlank(userInfo)) {
-        return "";
-      }
-
-      String[] parts = userInfo.split(":", 2);
-      return parts.length == 2 ? parts[1] : "";
-    }
   }
 
   public static void main(String[] args) {

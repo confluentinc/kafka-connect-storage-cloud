@@ -18,12 +18,18 @@ package io.confluent.connect.s3.util;
 
 import com.amazonaws.Protocol;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.types.Password;
 
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Locale;
 
+import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
+
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_PASS_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_USER_CONFIG;
 
 public class S3ProxyConfig {
   private final Protocol protocol;
@@ -32,16 +38,28 @@ public class S3ProxyConfig {
   private final String user;
   private final String pass;
 
-  public S3ProxyConfig(String settingsUrl) {
+  public S3ProxyConfig(S3SinkConnectorConfig config) {
     try {
-      URL url = new URL(settingsUrl);
+      URL url = new URL(config.getString(S3_PROXY_URL_CONFIG));
       protocol = extractProtocol(url.getProtocol());
       host = url.getHost();
       port = url.getPort();
-      user = extractUser(url.getUserInfo());
-      pass = extractPass(url.getUserInfo());
+      Password username = config.getPassword(S3_PROXY_USER_CONFIG);
+      user = StringUtils.isNotBlank(username.value())
+             ? username.value()
+             : extractUser(url.getUserInfo());
+      Password password = config.getPassword(S3_PROXY_PASS_CONFIG);
+      pass = StringUtils.isNotBlank(password.value())
+             ? password.value()
+             : extractPass(url.getUserInfo());
     } catch (MalformedURLException e) {
-      throw new ConfigException("msg");
+      throw new ConfigException(
+          "Invalid "
+              + S3_PROXY_URL_CONFIG
+              + " property: '"
+              + config.getString(S3_PROXY_URL_CONFIG)
+              + "'"
+      );
     }
   }
 
@@ -53,19 +71,19 @@ public class S3ProxyConfig {
   }
 
   public static String extractUser(String userInfo) {
-    return StringUtils.isBlank(userInfo) ? "" : userInfo.split(":")[0];
+    return StringUtils.isBlank(userInfo) ? null : userInfo.split(":")[0];
   }
 
   public static String extractPass(String userInfo) {
     if (StringUtils.isBlank(userInfo)) {
-      return "";
+      return null;
     }
 
     String[] parts = userInfo.split(":", 2);
-    return parts.length == 2 ? parts[1] : "";
+    return parts.length == 2 ? parts[1] : null;
   }
 
-  public String protocol() {
+  public Protocol protocol() {
     return protocol;
   }
 
