@@ -74,6 +74,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String S3_PART_RETRIES_CONFIG = "s3.part.retries";
   public static final int S3_PART_RETRIES_DEFAULT = 3;
 
+  public static final String FORMAT_BYTEARRAY_EXTENSION_CONFIG = "format.bytearray.extension";
+  public static final String FORMAT_BYTEARRAY_EXTENSION_DEFAULT = ".bin";
+
+  public static final String FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG = "format.bytearray.separator";
+  public static final String FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT = System.lineSeparator();
+
   private final String name;
 
   private final StorageCommonConfig commonConfig;
@@ -183,6 +189,34 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         ++orderInGroup,
                         Width.LONG,
                         "S3 Part Upload Retries");
+
+      CONFIG_DEF.define(FORMAT_BYTEARRAY_EXTENSION_CONFIG,
+                        Type.STRING,
+                        FORMAT_BYTEARRAY_EXTENSION_DEFAULT,
+                        Importance.LOW,
+                        String.format("Output file extension for ByteArrayFormat. Defaults to '%s'",
+                            FORMAT_BYTEARRAY_EXTENSION_DEFAULT),
+                        group,
+                        ++orderInGroup,
+                        Width.LONG,
+                        "Output file extension for ByteArrayFormat");
+
+      CONFIG_DEF.define(FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG,
+                        Type.STRING,
+                        // Because ConfigKey automatically trims strings, we cannot set
+                        // the default here and instead inject null;
+                        // the default is applied in getFormatByteArrayLineSeparator().
+                        null,
+                        Importance.LOW,
+                        "String inserted between records for ByteArrayFormat. "
+                        + "Defaults to 'System.lineSeparator()' "
+                        + "and may contain escape sequences like '\\n'. "
+                        + "An input record that contains the line separator will look like "
+                        + "multiple records in the output S3 object.",
+                        group,
+                        ++orderInGroup,
+                        Width.LONG,
+                        "Line separator ByteArrayFormat");
     }
   }
 
@@ -248,6 +282,19 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public int getS3PartRetries() {
     return getInt(S3_PART_RETRIES_CONFIG);
+  }
+
+  public String getByteArrayExtension() {
+    return getString(FORMAT_BYTEARRAY_EXTENSION_CONFIG);
+  }
+
+  public String getFormatByteArrayLineSeparator() {
+    // White space is significant for line separators, but ConfigKey trims it out,
+    // so we need to check the originals rather than using the normal machinery.
+    if (originalsStrings().containsKey(FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG)) {
+      return originalsStrings().get(FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG);
+    }
+    return FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT;
   }
 
   protected static String parseName(Map<String, String> props) {
