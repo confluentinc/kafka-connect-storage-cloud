@@ -41,6 +41,7 @@ import java.util.Set;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
+import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.ComposableConfig;
@@ -78,6 +79,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String ACL_CANNED_CONFIG = "s3.acl.canned";
   public static final String ACL_CANNED_DEFAULT = null;
+
+  public static final String COMPRESSION_TYPE_CONFIG = "s3.compression.type";
+  public static final String COMPRESSION_TYPE_DEFAULT = "none";
 
   public static final String S3_PART_RETRIES_CONFIG = "s3.part.retries";
   public static final int S3_PART_RETRIES_DEFAULT = 3;
@@ -228,6 +232,21 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "S3 accelerated endpoint enabled"
+      );
+
+      configDef.define(
+          COMPRESSION_TYPE_CONFIG,
+          Type.STRING,
+          COMPRESSION_TYPE_DEFAULT,
+          new CompressionTypeValidator(),
+          Importance.LOW,
+          "Compression type for file written to S3. "
+          + "Applied when using JsonFormat or ByteArrayFormat. "
+          + "Available values: none, gzip.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Compression type"
       );
 
       configDef.define(
@@ -385,6 +404,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     }
   }
 
+  public CompressionType getCompressionType() {
+    return CompressionType.forName(getString(COMPRESSION_TYPE_CONFIG));
+  }
+
   public int getS3PartRetries() {
     return getInt(S3_PART_RETRIES_CONFIG);
   }
@@ -489,6 +512,33 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     @Override
     public String toString() {
       return "[" + Utils.join(RegionUtils.getRegions(), ", ") + "]";
+    }
+  }
+
+  private static class CompressionTypeValidator implements ConfigDef.Validator {
+    public static final Map<String, CompressionType> TYPES_BY_NAME = new HashMap<>();
+    public static final String ALLOWED_VALUES;
+
+    static {
+      List<String> names = new ArrayList<>();
+      for (CompressionType compressionType : CompressionType.values()) {
+        TYPES_BY_NAME.put(compressionType.name, compressionType);
+        names.add(compressionType.name);
+      }
+      ALLOWED_VALUES = Utils.join(names, ", ");
+    }
+
+    @Override
+    public void ensureValid(String name, Object compressionType) {
+      String compressionTypeString = ((String) compressionType).trim();
+      if (!TYPES_BY_NAME.containsKey(compressionTypeString)) {
+        throw new ConfigException(name, compressionType, "Value must be one of: " + ALLOWED_VALUES);
+      }
+    }
+
+    @Override
+    public String toString() {
+      return "[" + ALLOWED_VALUES + "]";
     }
   }
 

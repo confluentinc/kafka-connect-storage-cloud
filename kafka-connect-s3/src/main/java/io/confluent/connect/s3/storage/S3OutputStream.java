@@ -60,6 +60,8 @@ public class S3OutputStream extends OutputStream {
   private ByteBuffer buffer;
   private MultipartUpload multiPartUpload;
   private final int retries;
+  private final CompressionType compressionType;
+  private volatile OutputStream compressionFilter;
 
   public S3OutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
     this.s3 = s3;
@@ -73,6 +75,7 @@ public class S3OutputStream extends OutputStream {
     this.buffer = ByteBuffer.allocate(this.partSize);
     this.progressListener = new ConnectProgressListener();
     this.multiPartUpload = null;
+    this.compressionType = conf.getCompressionType();
     log.debug("Create S3OutputStream for bucket '{}' key '{}'", bucket, key);
   }
 
@@ -145,6 +148,7 @@ public class S3OutputStream extends OutputStream {
     }
 
     try {
+      compressionType.finalize(compressionFilter);
       if (buffer.hasRemaining()) {
         uploadPart(buffer.position());
       }
@@ -278,6 +282,14 @@ public class S3OutputStream extends OutputStream {
         log.warn("Unable to abort multipart upload, you may need to purge uploaded parts: ", e);
       }
     }
+  }
+
+  public OutputStream wrapForCompression() {
+    if (compressionFilter == null) {
+      // Initialize compressionFilter the first time this method is called.
+      compressionFilter = compressionType.wrapForOutput(this);
+    }
+    return compressionFilter;
   }
 
   // Dummy listener for now, just logs the event progress.
