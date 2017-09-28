@@ -36,11 +36,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import io.confluent.connect.s3.format.avro.AvroFormat;
+import io.confluent.connect.s3.format.json.JsonFormat;
+import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.ComposableConfig;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.hive.HiveConfig;
+import io.confluent.connect.storage.partitioner.DailyPartitioner;
+import io.confluent.connect.storage.partitioner.DefaultPartitioner;
+import io.confluent.connect.storage.partitioner.FieldPartitioner;
+import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
+import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
@@ -154,6 +162,25 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
                         Width.LONG,
                         "Avro compression codec");
     }
+
+    FORMAT_CLASS_RECOMMENDER.addValidValues(
+        Arrays.<Object>asList(AvroFormat.class, JsonFormat.class)
+    );
+
+    StorageCommonConfig.STORAGE_CLASS_RECOMMENDER.addValidValues(
+        Arrays.<Object>asList(S3Storage.class)
+    );
+
+    PartitionerConfig.PARTITIONER_CLASS_RECOMMENDER.addValidValues(
+        Arrays.<Object>asList(
+            DefaultPartitioner.class,
+            HourlyPartitioner.class,
+            DailyPartitioner.class,
+            TimeBasedPartitioner.class,
+            FieldPartitioner.class
+        )
+    );
+
   }
 
   public S3SinkConnectorConfig(Map<String, String> props) {
