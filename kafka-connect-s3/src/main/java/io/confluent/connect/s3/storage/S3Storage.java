@@ -62,19 +62,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   }
 
   public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
-    String version = String.format(VERSION_FORMAT, Version.getVersion());
-
-    ClientConfiguration clientConfiguration = PredefinedClientConfigurations.defaultConfig();
-    clientConfiguration.withUserAgentPrefix(version);
-    if (StringUtils.isNotBlank(config.getString(S3_PROXY_URL_CONFIG))) {
-      S3ProxyConfig proxyConfig = new S3ProxyConfig(config);
-      clientConfiguration.withProtocol(proxyConfig.protocol())
-          .withProxyHost(proxyConfig.host())
-          .withProxyPort(proxyConfig.port())
-          .withProxyUsername(proxyConfig.user())
-          .withProxyPassword(proxyConfig.pass());
-    }
-
+    ClientConfiguration clientConfiguration = newClientConfiguration(config);
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
                                         .withAccelerateModeEnabled(
                                             config.getBoolean(WAN_MODE_CONFIG)
@@ -103,6 +91,24 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     this.conf = conf;
     this.bucketName = bucketName;
     this.s3 = s3;
+  }
+
+  // Visible for testing.
+  public ClientConfiguration newClientConfiguration(S3SinkConnectorConfig config) {
+    String version = String.format(VERSION_FORMAT, Version.getVersion());
+
+    ClientConfiguration clientConfiguration = PredefinedClientConfigurations.defaultConfig();
+    clientConfiguration.withUserAgentPrefix(version);
+    if (StringUtils.isNotBlank(config.getString(S3_PROXY_URL_CONFIG))) {
+      S3ProxyConfig proxyConfig = new S3ProxyConfig(config);
+      clientConfiguration.withProtocol(proxyConfig.protocol())
+          .withProxyHost(proxyConfig.host())
+          .withProxyPort(proxyConfig.port())
+          .withProxyUsername(proxyConfig.user())
+          .withProxyPassword(proxyConfig.pass());
+    }
+
+    return clientConfiguration;
   }
 
   @Override

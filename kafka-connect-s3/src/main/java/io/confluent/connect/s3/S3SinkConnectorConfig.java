@@ -27,6 +27,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 
@@ -93,10 +94,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String S3_PROXY_URL_DEFAULT = "";
 
   public static final String S3_PROXY_USER_CONFIG = "s3.proxy.user";
-  public static final String S3_PROXY_USER_DEFAULT = null;
+  public static final Password S3_PROXY_USER_DEFAULT = new Password(null);
 
   public static final String S3_PROXY_PASS_CONFIG = "s3.proxy.password";
-  public static final String S3_PROXY_PASS_DEFAULT = null;
+  public static final Password S3_PROXY_PASS_DEFAULT = new Password(null);
 
   private final String name;
 
@@ -136,7 +137,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     {
       final String group = "S3";
       int orderInGroup = 0;
-<<<<<<< HEAD
 
       configDef.define(
           S3_BUCKET_CONFIG,

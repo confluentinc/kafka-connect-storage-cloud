@@ -54,11 +54,9 @@ public class S3ProxyConfig {
              : extractPass(url.getUserInfo());
     } catch (MalformedURLException e) {
       throw new ConfigException(
-          "Invalid "
-              + S3_PROXY_URL_CONFIG
-              + " property: '"
-              + config.getString(S3_PROXY_URL_CONFIG)
-              + "'"
+          S3_PROXY_URL_CONFIG,
+          config.getString(S3_PROXY_URL_CONFIG),
+          e.toString()
       );
     }
   }
