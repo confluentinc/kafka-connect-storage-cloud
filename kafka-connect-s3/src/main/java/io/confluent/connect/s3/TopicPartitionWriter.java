@@ -16,6 +16,7 @@
 
 package io.confluent.connect.s3;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
@@ -434,7 +435,11 @@ public class TopicPartitionWriter {
   }
 
   private String fileKey(String topicsPrefix, String keyPrefix, String name) {
-    return topicsPrefix + dirDelim + keyPrefix + dirDelim + name;
+    String base = "";
+    if (StringUtils.isNotBlank(topicsPrefix) && !topicsPrefix.equals("/")) {
+      base = topicsPrefix + dirDelim;
+    }
+    return base + keyPrefix + dirDelim + name;
   }
 
   private String fileKeyToCommit(String dirPrefix, long startOffset) {
