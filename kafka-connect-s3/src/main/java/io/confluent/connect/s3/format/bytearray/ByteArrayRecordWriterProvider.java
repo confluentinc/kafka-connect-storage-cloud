@@ -29,7 +29,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Arrays;
 
 public class ByteArrayRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
 
