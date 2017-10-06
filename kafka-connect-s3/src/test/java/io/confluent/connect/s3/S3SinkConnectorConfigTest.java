@@ -83,15 +83,15 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
       if (val.value() instanceof Class) {
         switch (val.name()) {
           case StorageCommonConfig.STORAGE_CLASS_CONFIG:
-            assertEquals(val.recommendedValues(), expectedStorageClasses);
+            assertEquals(expectedStorageClasses, val.recommendedValues());
             break;
           case S3SinkConnectorConfig.FORMAT_CLASS_CONFIG:
             System.out.println(val.recommendedValues());
             System.out.println(expectedFormatClasses);
-            assertEquals(val.recommendedValues(), expectedFormatClasses);
+            assertEquals(expectedFormatClasses, val.recommendedValues());
             break;
           case PartitionerConfig.PARTITIONER_CLASS_CONFIG:
-            assertEquals(val.recommendedValues(), expectedPartitionerClasses);
+            assertEquals(expectedPartitionerClasses, val.recommendedValues());
             break;
         }
       }
