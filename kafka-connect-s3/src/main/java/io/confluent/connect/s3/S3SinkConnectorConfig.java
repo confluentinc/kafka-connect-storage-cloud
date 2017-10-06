@@ -111,7 +111,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static ConfigDef newConfigDef() {
     ConfigDef configDef = StorageSinkConnectorConfig.newConfigDef(
-        Collections.singletonList(FORMAT_CLASS_RECOMMENDER)
+        Collections.<ConfigDef.Recommender>singletonList(FORMAT_CLASS_RECOMMENDER)
     );
 
     {
@@ -161,8 +161,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           CREDENTIALS_PROVIDER_CLASS_DEFAULT,
           new CredentialsProviderValidator(),
           Importance.LOW,
-          "Credentials provider or provider chain to use for authentication to AWS. By default the "
-              + " connector uses 'DefaultAWSCredentialsProviderChain'.",
+          "Credentials provider or provider chain to use for authentication to AWS. By default "
+              + "the connector uses 'DefaultAWSCredentialsProviderChain'.",
           group,
           ++orderInGroup,
           Width.LONG,
@@ -198,9 +198,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Type.STRING,
           AVRO_CODEC_DEFAULT,
           Importance.LOW,
-          "The Avro compression codec to be used for output files. Available values: null, deflate, "
-
-              + "snappy and bzip2 (codec source is org.apache.avro.file.CodecFactory)",
+          "The Avro compression codec to be used for output files. Available values: null, "
+              + "deflate, snappy and bzip2 (codec source is org.apache.avro.file.CodecFactory)",
           group,
           ++orderInGroup,
           Width.LONG,
@@ -218,14 +217,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     super(configDef, props);
 
     ConfigDef storageCommonConfigDef = StorageCommonConfig.newConfigDef(
-        Collections.singletonList(STORAGE_CLASS_RECOMMENDER)
+        Collections.<ConfigDef.Recommender>singletonList(STORAGE_CLASS_RECOMMENDER)
     );
     commonConfig = new StorageCommonConfig(storageCommonConfigDef, originalsStrings());
 
     hiveConfig = new HiveConfig(originalsStrings());
 
     ConfigDef partitionerConfigDef = PartitionerConfig.newConfigDef(
-        Collections.singletonList(PARTITIONER_CLASS_RECOMMENDER)
+        Collections.<ConfigDef.Recommender>singletonList(PARTITIONER_CLASS_RECOMMENDER)
     );
     partitionerConfig = new PartitionerConfig(partitionerConfigDef, originalsStrings());
 
@@ -372,13 +371,13 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
     everything.putAll(
         StorageCommonConfig.newConfigDef(
-            Collections.singletonList(STORAGE_CLASS_RECOMMENDER)
+            Collections.<ConfigDef.Recommender>singletonList(STORAGE_CLASS_RECOMMENDER)
         ).configKeys()
     );
 
     everything.putAll(
         PartitionerConfig.newConfigDef(
-            Collections.singletonList(PARTITIONER_CLASS_RECOMMENDER)
+            Collections.<ConfigDef.Recommender>singletonList(PARTITIONER_CLASS_RECOMMENDER)
         ).configKeys()
     );
 
