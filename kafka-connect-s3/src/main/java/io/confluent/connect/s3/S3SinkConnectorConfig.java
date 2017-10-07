@@ -110,10 +110,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   public static ConfigDef newConfigDef() {
-    ConfigDef configDef = StorageSinkConnectorConfig.newConfigDef(
-        Collections.<ConfigDef.Recommender>singletonList(FORMAT_CLASS_RECOMMENDER)
-    );
-
+    ConfigDef configDef = StorageSinkConnectorConfig.newConfigDef(FORMAT_CLASS_RECOMMENDER);
     {
       final String group = "S3";
       int orderInGroup = 0;
@@ -215,17 +212,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   protected S3SinkConnectorConfig(ConfigDef configDef, Map<String, String> props) {
     super(configDef, props);
-
-    ConfigDef storageCommonConfigDef = StorageCommonConfig.newConfigDef(
-        Collections.<ConfigDef.Recommender>singletonList(STORAGE_CLASS_RECOMMENDER)
-    );
+    ConfigDef storageCommonConfigDef = StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER);
     commonConfig = new StorageCommonConfig(storageCommonConfigDef, originalsStrings());
-
     hiveConfig = new HiveConfig(originalsStrings());
-
-    ConfigDef partitionerConfigDef = PartitionerConfig.newConfigDef(
-        Collections.<ConfigDef.Recommender>singletonList(PARTITIONER_CLASS_RECOMMENDER)
-    );
+    ConfigDef partitionerConfigDef = PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER);
     partitionerConfig = new PartitionerConfig(partitionerConfigDef, originalsStrings());
 
     this.name = parseName(originalsStrings());
@@ -368,18 +358,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static ConfigDef getConfig() {
     Map<String, ConfigDef.ConfigKey> everything = new HashMap<>(newConfigDef().configKeys());
-
-    everything.putAll(
-        StorageCommonConfig.newConfigDef(
-            Collections.<ConfigDef.Recommender>singletonList(STORAGE_CLASS_RECOMMENDER)
-        ).configKeys()
-    );
-
-    everything.putAll(
-        PartitionerConfig.newConfigDef(
-            Collections.<ConfigDef.Recommender>singletonList(PARTITIONER_CLASS_RECOMMENDER)
-        ).configKeys()
-    );
+    everything.putAll(StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER).configKeys());
+    everything.putAll(PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER).configKeys());
 
     Set<String> blacklist = new HashSet<>();
     blacklist.add(StorageSinkConnectorConfig.SHUTDOWN_TIMEOUT_CONFIG);
