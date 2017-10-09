@@ -11,4 +11,9 @@
             files="(S3OutputStream|S3SinkConnectorConfig).java"
     />
 
+    <suppress
+            checks="MethodLength"
+            files="(S3SinkConnectorConfig).java"
+    />
+
 </suppressions>
