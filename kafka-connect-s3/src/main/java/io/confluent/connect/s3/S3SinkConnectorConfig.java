@@ -36,11 +36,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import io.confluent.connect.s3.format.avro.AvroFormat;
+import io.confluent.connect.s3.format.json.JsonFormat;
+import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.ComposableConfig;
+import io.confluent.connect.storage.common.GenericRecommender;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.hive.HiveConfig;
+import io.confluent.connect.storage.partitioner.DailyPartitioner;
+import io.confluent.connect.storage.partitioner.DefaultPartitioner;
+import io.confluent.connect.storage.partitioner.FieldPartitioner;
+import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
+import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
@@ -75,97 +84,139 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private final Map<String, ComposableConfig> propertyToConfig = new HashMap<>();
   private final Set<AbstractConfig> allConfigs = new HashSet<>();
 
+  private static final GenericRecommender STORAGE_CLASS_RECOMMENDER = new GenericRecommender();
+  private static final GenericRecommender FORMAT_CLASS_RECOMMENDER = new GenericRecommender();
+  private static final GenericRecommender PARTITIONER_CLASS_RECOMMENDER = new GenericRecommender();
+
   static {
+    STORAGE_CLASS_RECOMMENDER.addValidValues(
+        Arrays.<Object>asList(S3Storage.class)
+    );
+
+    FORMAT_CLASS_RECOMMENDER.addValidValues(
+        Arrays.<Object>asList(AvroFormat.class, JsonFormat.class)
+    );
+
+    PARTITIONER_CLASS_RECOMMENDER.addValidValues(
+        Arrays.<Object>asList(
+            DefaultPartitioner.class,
+            HourlyPartitioner.class,
+            DailyPartitioner.class,
+            TimeBasedPartitioner.class,
+            FieldPartitioner.class
+        )
+    );
+  }
+
+  public static ConfigDef newConfigDef() {
+    ConfigDef configDef = StorageSinkConnectorConfig.newConfigDef(FORMAT_CLASS_RECOMMENDER);
     {
       final String group = "S3";
       int orderInGroup = 0;
-      CONFIG_DEF.define(S3_BUCKET_CONFIG,
-                        Type.STRING,
-                        Importance.HIGH,
-                        "The S3 Bucket.",
-                        group,
-                        ++orderInGroup,
-                        Width.LONG,
-                        "S3 Bucket");
+      configDef.define(
+          S3_BUCKET_CONFIG,
+          Type.STRING,
+          Importance.HIGH,
+          "The S3 Bucket.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Bucket"
+      );
 
-      CONFIG_DEF.define(REGION_CONFIG,
-                        Type.STRING,
-                        REGION_DEFAULT,
-                        new RegionValidator(),
-                        Importance.MEDIUM,
-                        "The AWS region to be used the connector.",
-                        group,
-                        ++orderInGroup,
-                        Width.LONG,
-                        "AWS region",
-                        new RegionRecommender());
+      configDef.define(
+          REGION_CONFIG,
+          Type.STRING,
+          REGION_DEFAULT,
+          new RegionValidator(),
+          Importance.MEDIUM,
+          "The AWS region to be used the connector.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "AWS region",
+          new RegionRecommender()
+      );
 
-      CONFIG_DEF.define(PART_SIZE_CONFIG,
-                        Type.INT,
-                        PART_SIZE_DEFAULT,
-                        new PartRange(),
-                        Importance.HIGH,
-                        "The Part Size in S3 Multi-part Uploads.",
-                        group,
-                        ++orderInGroup,
-                        Width.LONG,
-                        "S3 Part Size");
+      configDef.define(
+          PART_SIZE_CONFIG,
+          Type.INT,
+          PART_SIZE_DEFAULT,
+          new PartRange(),
+          Importance.HIGH,
+          "The Part Size in S3 Multi-part Uploads.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Part Size"
+      );
 
-      CONFIG_DEF.define(CREDENTIALS_PROVIDER_CLASS_CONFIG,
-                        Type.CLASS,
-                        CREDENTIALS_PROVIDER_CLASS_DEFAULT,
-                        new CredentialsProviderValidator(),
-                        Importance.LOW,
-                        "Credentials provider or provider chain to use for authentication to AWS"
-                        + ". By default the connector uses 'DefaultAWSCredentialsProviderChain'.",
-                        group,
-                        ++orderInGroup,
-                        Width.LONG,
-                        "AWS Credentials Provider Class");
+      configDef.define(
+          CREDENTIALS_PROVIDER_CLASS_CONFIG,
+          Type.CLASS,
+          CREDENTIALS_PROVIDER_CLASS_DEFAULT,
+          new CredentialsProviderValidator(),
+          Importance.LOW,
+          "Credentials provider or provider chain to use for authentication to AWS. By default "
+              + "the connector uses 'DefaultAWSCredentialsProviderChain'.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "AWS Credentials Provider Class"
+      );
 
-      CONFIG_DEF.define(SSEA_CONFIG,
-                        Type.STRING,
-                        SSEA_DEFAULT,
-                        Importance.LOW,
-                        "The S3 Server Side Encryption Algorithm.",
-                        group,
-                        ++orderInGroup,
-                        Width.LONG,
-                        "S3 Server Side Encryption Algorithm");
+      configDef.define(
+          SSEA_CONFIG,
+          Type.STRING,
+          SSEA_DEFAULT,
+          Importance.LOW,
+          "The S3 Server Side Encryption Algorithm.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Server Side Encryption Algorithm"
+      );
 
-      CONFIG_DEF.define(WAN_MODE_CONFIG,
-                        Type.BOOLEAN,
-                        WAN_MODE_DEFAULT,
-                        Importance.MEDIUM,
-                        "Use S3 accelerated endpoint.",
-                        group,
-                        ++orderInGroup,
-                        Width.LONG,
-                        "S3 accelerated endpoint enabled");
+      configDef.define(
+          WAN_MODE_CONFIG,
+          Type.BOOLEAN,
+          WAN_MODE_DEFAULT,
+          Importance.MEDIUM,
+          "Use S3 accelerated endpoint.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 accelerated endpoint enabled"
+      );
 
-      CONFIG_DEF.define(AVRO_CODEC_CONFIG,
-                        Type.STRING,
-                        AVRO_CODEC_DEFAULT,
-                        Importance.LOW,
-                        "The Avro compression codec to be used for output files. Available "
-                        + "values: null, deflate, snappy and bzip2 (codec source is "
-                        + "org.apache.avro.file.CodecFactory)",
-                        group,
-                        ++orderInGroup,
-                        Width.LONG,
-                        "Avro compression codec");
+      configDef.define(
+          AVRO_CODEC_CONFIG,
+          Type.STRING,
+          AVRO_CODEC_DEFAULT,
+          Importance.LOW,
+          "The Avro compression codec to be used for output files. Available values: null, "
+              + "deflate, snappy and bzip2 (codec source is org.apache.avro.file.CodecFactory)",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Avro compression codec"
+      );
     }
+    return configDef;
   }
 
   public S3SinkConnectorConfig(Map<String, String> props) {
-    this(CONFIG_DEF, props);
+    this(newConfigDef(), props);
   }
 
   protected S3SinkConnectorConfig(ConfigDef configDef, Map<String, String> props) {
     super(configDef, props);
-    commonConfig = new StorageCommonConfig(originalsStrings());
+    ConfigDef storageCommonConfigDef = StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER);
+    commonConfig = new StorageCommonConfig(storageCommonConfigDef, originalsStrings());
     hiveConfig = new HiveConfig(originalsStrings());
-    partitionerConfig = new PartitionerConfig(originalsStrings());
+    ConfigDef partitionerConfigDef = PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER);
+    partitionerConfig = new PartitionerConfig(partitionerConfigDef, originalsStrings());
+
     this.name = parseName(originalsStrings());
     addToGlobal(hiveConfig);
     addToGlobal(partitionerConfig);
@@ -324,9 +375,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   public static ConfigDef getConfig() {
-    Map<String, ConfigDef.ConfigKey> everything = new HashMap<>(CONFIG_DEF.configKeys());
-    everything.putAll(StorageCommonConfig.getConfig().configKeys());
-    everything.putAll(PartitionerConfig.getConfig().configKeys());
+    Map<String, ConfigDef.ConfigKey> everything = new HashMap<>(newConfigDef().configKeys());
+    everything.putAll(StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER).configKeys());
+    everything.putAll(PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER).configKeys());
 
     Set<String> blacklist = new HashSet<>();
     blacklist.add(StorageSinkConnectorConfig.SHUTDOWN_TIMEOUT_CONFIG);
