@@ -9,8 +9,12 @@ Documentation for this connector can be found [here](http://docs.confluent.io/cu
 
 # Development
 
-To build a development version you'll need a recent version of Kafka. You can build
-*kafka-connect-storage-cloud* with Maven using the standard lifecycle phases.
+To build a development version you'll need a recent version of Kafka and you may
+also need to build several upstream Confluent projects from their `master` branches.
+See [the kafka-connect-storage-common FAQ](https://github.com/confluentinc/kafka-connect-storage-common/wiki/FAQ)
+for guidance on this process.
+
+You can build *kafka-connect-storage-cloud* with Maven using the standard lifecycle phases.
 
 
 # Contribute
