@@ -291,7 +291,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Type.STRING,
           S3_PROXY_URL_DEFAULT,
           Importance.LOW,
-          "S3 Proxy settings encoded in URL syntax",
+          "S3 Proxy settings encoded in URL syntax. This property is meant to be used only if you"
+              + " need to access S3 through a proxy.",
           group,
           ++orderInGroup,
           Width.LONG,
@@ -303,7 +304,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Type.STRING,
           S3_PROXY_USER_DEFAULT,
           Importance.LOW,
-          "S3 Proxy User",
+          "S3 Proxy User. This property is meant to be used only if you"
+              + " need to access S3 through a proxy. Using ``"
+              + S3_PROXY_USER_CONFIG
+              + "`` instead of embedding the username and password in ``"
+              + S3_PROXY_URL_CONFIG
+              + "`` allows the password to be hidden in the logs.",
           group,
           ++orderInGroup,
           Width.LONG,
@@ -315,7 +321,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Type.PASSWORD,
           S3_PROXY_PASS_DEFAULT,
           Importance.LOW,
-          "S3 Proxy Password",
+          "S3 Proxy Password. This property is meant to be used only if you"
+              + " need to access S3 through a proxy. Using ``"
+              + S3_PROXY_PASS_CONFIG
+              + "`` instead of embedding the username and password in ``"
+              + S3_PROXY_URL_CONFIG
+              + "`` allows the password to be hidden in the logs.",
           group,
           ++orderInGroup,
           Width.LONG,
