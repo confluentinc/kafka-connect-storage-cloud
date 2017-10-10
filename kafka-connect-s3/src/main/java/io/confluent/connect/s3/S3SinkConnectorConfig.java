@@ -94,7 +94,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String S3_PROXY_URL_DEFAULT = "";
 
   public static final String S3_PROXY_USER_CONFIG = "s3.proxy.user";
-  public static final Password S3_PROXY_USER_DEFAULT = new Password(null);
+  public static final String S3_PROXY_USER_DEFAULT = null;
 
   public static final String S3_PROXY_PASS_CONFIG = "s3.proxy.password";
   public static final Password S3_PROXY_PASS_DEFAULT = new Password(null);
@@ -300,7 +300,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
       configDef.define(
           S3_PROXY_USER_CONFIG,
-          Type.PASSWORD,
+          Type.STRING,
           S3_PROXY_USER_DEFAULT,
           Importance.LOW,
           "S3 Proxy User",

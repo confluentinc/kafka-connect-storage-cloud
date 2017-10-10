@@ -44,9 +44,9 @@ public class S3ProxyConfig {
       protocol = extractProtocol(url.getProtocol());
       host = url.getHost();
       port = url.getPort();
-      Password username = config.getPassword(S3_PROXY_USER_CONFIG);
-      user = StringUtils.isNotBlank(username.value())
-             ? username.value()
+      String username = config.getString(S3_PROXY_USER_CONFIG);
+      user = StringUtils.isNotBlank(username)
+             ? username
              : extractUser(url.getUserInfo());
       Password password = config.getPassword(S3_PROXY_PASS_CONFIG);
       pass = StringUtils.isNotBlank(password.value())
