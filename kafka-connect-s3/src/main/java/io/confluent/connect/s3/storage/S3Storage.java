@@ -16,6 +16,7 @@
 
 package io.confluent.connect.s3.storage;
 
+import com.amazonaws.ClientConfiguration;
 import com.amazonaws.PredefinedClientConfigurations;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.regions.Regions;
@@ -27,12 +28,14 @@ import org.apache.avro.file.SeekableInput;
 import java.io.OutputStream;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.util.S3ProxyConfig;
 import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.Storage;
 import io.confluent.connect.storage.common.util.StringUtils;
 
-import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
 
 /**
  * S3 implementation of the storage interface for Connect sinks.
@@ -59,16 +62,14 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   }
 
   public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
-    String version = String.format(VERSION_FORMAT, Version.getVersion());
+    ClientConfiguration clientConfiguration = newClientConfiguration(config);
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
                                         .withAccelerateModeEnabled(
                                             config.getBoolean(WAN_MODE_CONFIG)
                                         )
                                         .withPathStyleAccessEnabled(true)
                                         .withCredentials(config.getCredentialsProvider())
-                                        .withClientConfiguration(
-                                            PredefinedClientConfigurations.defaultConfig()
-                                                .withUserAgentPrefix(version));
+                                        .withClientConfiguration(clientConfiguration);
 
     if (StringUtils.isBlank(url)) {
       String region = config.getString(REGION_CONFIG);
@@ -90,6 +91,24 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     this.conf = conf;
     this.bucketName = bucketName;
     this.s3 = s3;
+  }
+
+  // Visible for testing.
+  public ClientConfiguration newClientConfiguration(S3SinkConnectorConfig config) {
+    String version = String.format(VERSION_FORMAT, Version.getVersion());
+
+    ClientConfiguration clientConfiguration = PredefinedClientConfigurations.defaultConfig();
+    clientConfiguration.withUserAgentPrefix(version);
+    if (StringUtils.isNotBlank(config.getString(S3_PROXY_URL_CONFIG))) {
+      S3ProxyConfig proxyConfig = new S3ProxyConfig(config);
+      clientConfiguration.withProtocol(proxyConfig.protocol())
+          .withProxyHost(proxyConfig.host())
+          .withProxyPort(proxyConfig.port())
+          .withProxyUsername(proxyConfig.user())
+          .withProxyPassword(proxyConfig.pass());
+    }
+
+    return clientConfiguration;
   }
 
   @Override
