@@ -16,19 +16,19 @@
 
 package io.confluent.connect.s3.util;
 
-import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.common.TopicPartition;
+
+import io.confluent.connect.storage.common.util.StringUtils;
 
 public class FileUtils {
   public static final String TEST_FILE_DELIM = "#";
   public static final String TEST_DIRECTORY_DELIM = "_";
 
   public static String fileKey(String topicsPrefix, String keyPrefix, String name) {
-    String base = "";
-    if (StringUtils.isNotBlank(topicsPrefix) && !topicsPrefix.equals("/")) {
-      base = topicsPrefix + TEST_DIRECTORY_DELIM;
-    }
-    return base + keyPrefix + TEST_DIRECTORY_DELIM + name;
+    String suffix = keyPrefix + TEST_DIRECTORY_DELIM + name;
+    return StringUtils.isNotBlank(topicsPrefix)
+            ? topicsPrefix + TEST_DIRECTORY_DELIM + suffix
+            : suffix;
   }
 
   public static String fileKeyToCommit(String topicsPrefix, String dirPrefix, TopicPartition tp, long startOffset,
