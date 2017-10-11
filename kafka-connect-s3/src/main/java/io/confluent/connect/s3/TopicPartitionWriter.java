@@ -437,8 +437,8 @@ public class TopicPartitionWriter {
   private String fileKey(String topicsPrefix, String keyPrefix, String name) {
     String suffix = keyPrefix + dirDelim + name;
     return StringUtils.isNotBlank(topicsPrefix)
-            ? topicsPrefix + dirDelim + suffix
-            : suffix;
+           ? topicsPrefix + dirDelim + suffix
+           : suffix;
   }
 
   private String fileKeyToCommit(String dirPrefix, long startOffset) {

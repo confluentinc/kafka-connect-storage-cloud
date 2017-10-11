@@ -27,8 +27,8 @@ public class FileUtils {
   public static String fileKey(String topicsPrefix, String keyPrefix, String name) {
     String suffix = keyPrefix + TEST_DIRECTORY_DELIM + name;
     return StringUtils.isNotBlank(topicsPrefix)
-            ? topicsPrefix + TEST_DIRECTORY_DELIM + suffix
-            : suffix;
+           ? topicsPrefix + TEST_DIRECTORY_DELIM + suffix
+           : suffix;
   }
 
   public static String fileKeyToCommit(String topicsPrefix, String dirPrefix, TopicPartition tp, long startOffset,
