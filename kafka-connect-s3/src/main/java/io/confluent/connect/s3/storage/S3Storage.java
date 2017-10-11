@@ -69,13 +69,15 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
                                                 .withUserAgentPrefix(
                                                     String.format(VERSION_FORMAT, Version.getVersion())));
 
+    String region = config.getString(REGION_CONFIG);
     if (StringUtils.isBlank(url)) {
-      String region = config.getString(REGION_CONFIG);
       builder = "us-east-1".equals(region) ?
                     builder.withRegion(Regions.US_EAST_1):
                     builder.withRegion(region);
     } else {
-      builder = builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(url, ""));
+      builder = builder.withEndpointConfiguration(
+          new AwsClientBuilder.EndpointConfiguration(url, region)
+      );
     }
 
     return builder.build();
