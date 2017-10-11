@@ -41,6 +41,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Output stream enabling multi-part uploads of Kafka records.
@@ -60,6 +61,7 @@ public class S3OutputStream extends OutputStream {
   private ByteBuffer buffer;
   private MultipartUpload multiPartUpload;
   private final int retries;
+  private final AtomicBoolean commitOnCloseEnabled = new AtomicBoolean(false);
 
   public S3OutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
     this.s3 = s3;
@@ -134,29 +136,14 @@ public class S3OutputStream extends OutputStream {
     }
   }
 
-  public void commit() throws IOException {
-    if (closed) {
-      log.warn(
-          "Tried to commit data for bucket '{}' key '{}' on a closed stream. Ignoring.",
-          bucket,
-          key
-      );
-      return;
-    }
-
-    try {
-      if (buffer.hasRemaining()) {
-        uploadPart(buffer.position());
-      }
-      multiPartUpload.complete();
-      log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
-    } catch (Exception e) {
-      log.error("Multipart upload failed to complete for bucket '{}' key '{}'", bucket, key);
-      throw new DataException("Multipart upload failed to complete.", e);
-    } finally {
-      buffer.clear();
-      multiPartUpload = null;
-      close();
+  /**
+   * Until this method is called, the close() method will abort the multiplart upload.
+   * Should be called immediately before closing this stream and any wrappers.
+   */
+  public void enableCommitOnClose() {
+    boolean enabled = commitOnCloseEnabled.compareAndSet(false, true);
+    if (!enabled) {
+      log.warn("The stream was already enabled to commit on close(). Ignoring.");
     }
   }
 
@@ -166,9 +153,26 @@ public class S3OutputStream extends OutputStream {
       return;
     }
     closed = true;
-    if (multiPartUpload != null) {
-      multiPartUpload.abort();
-      log.debug("Multipart upload aborted for bucket '{}' key '{}'.", bucket, key);
+
+    if (commitOnCloseEnabled.get()) {
+      try {
+        if (buffer.hasRemaining()) {
+          uploadPart(buffer.position());
+        }
+        multiPartUpload.complete();
+        log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
+      } catch (Exception e) {
+        log.error("Multipart upload failed to complete for bucket '{}' key '{}'", bucket, key);
+        throw new DataException("Multipart upload failed to complete.", e);
+      } finally {
+        buffer.clear();
+        multiPartUpload = null;
+      }
+    } else {
+      if (multiPartUpload != null) {
+        multiPartUpload.abort();
+        log.debug("Multipart upload aborted for bucket '{}' key '{}'.", bucket, key);
+      }
     }
     super.close();
   }
