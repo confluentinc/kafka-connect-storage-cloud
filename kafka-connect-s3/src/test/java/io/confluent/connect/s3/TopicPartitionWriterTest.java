@@ -43,6 +43,7 @@ import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.s3.util.TimeUtils;
+import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.hive.schema.TimeBasedSchemaGenerator;
@@ -642,6 +643,39 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     // Record size argument does not matter.
     verify(Collections.<String>emptyList(), -1, schema, records);
+  }
+
+  @Test
+  public void testWriteRecordDefaultWithEmptyTopicsDir() throws Exception {
+    localProps.put(StorageCommonConfig.TOPICS_DIR_CONFIG, "");
+    setUp();
+
+    // Define the partitioner
+    Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 3);
+
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
+    List<String> expectedFiles = new ArrayList<>();
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
+    verify(expectedFiles, 3, schema, records);
   }
 
   private Struct createRecord(Schema schema, int ibase, float fbase) {
