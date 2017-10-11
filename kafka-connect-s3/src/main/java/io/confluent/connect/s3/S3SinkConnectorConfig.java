@@ -27,6 +27,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 
@@ -88,6 +89,15 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG = "format.bytearray.separator";
   public static final String FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT = System.lineSeparator();
+
+  public static final String S3_PROXY_URL_CONFIG = "s3.proxy.url";
+  public static final String S3_PROXY_URL_DEFAULT = "";
+
+  public static final String S3_PROXY_USER_CONFIG = "s3.proxy.user";
+  public static final String S3_PROXY_USER_DEFAULT = null;
+
+  public static final String S3_PROXY_PASS_CONFIG = "s3.proxy.password";
+  public static final Password S3_PROXY_PASS_DEFAULT = new Password(null);
 
   private final String name;
 
@@ -274,6 +284,53 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "Line separator ByteArrayFormat"
+      );
+
+      configDef.define(
+          S3_PROXY_URL_CONFIG,
+          Type.STRING,
+          S3_PROXY_URL_DEFAULT,
+          Importance.LOW,
+          "S3 Proxy settings encoded in URL syntax. This property is meant to be used only if you"
+              + " need to access S3 through a proxy.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Proxy Settings"
+      );
+
+      configDef.define(
+          S3_PROXY_USER_CONFIG,
+          Type.STRING,
+          S3_PROXY_USER_DEFAULT,
+          Importance.LOW,
+          "S3 Proxy User. This property is meant to be used only if you"
+              + " need to access S3 through a proxy. Using ``"
+              + S3_PROXY_USER_CONFIG
+              + "`` instead of embedding the username and password in ``"
+              + S3_PROXY_URL_CONFIG
+              + "`` allows the password to be hidden in the logs.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Proxy User"
+      );
+
+      configDef.define(
+          S3_PROXY_PASS_CONFIG,
+          Type.PASSWORD,
+          S3_PROXY_PASS_DEFAULT,
+          Importance.LOW,
+          "S3 Proxy Password. This property is meant to be used only if you"
+              + " need to access S3 through a proxy. Using ``"
+              + S3_PROXY_PASS_CONFIG
+              + "`` instead of embedding the username and password in ``"
+              + S3_PROXY_URL_CONFIG
+              + "`` allows the password to be hidden in the logs.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Proxy Password"
       );
     }
     return configDef;
