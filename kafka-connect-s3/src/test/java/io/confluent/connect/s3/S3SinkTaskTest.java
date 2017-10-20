@@ -20,15 +20,9 @@ import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import com.amazonaws.services.s3.model.UploadPartResult;
-import io.confluent.connect.avro.AvroData;
-import io.confluent.connect.s3.format.avro.AvroUtils;
-import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.s3.util.FileUtils;
-import io.confluent.connect.storage.StorageFactory;
-import io.confluent.connect.storage.partitioner.DefaultPartitioner;
-import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.easymock.Capture;
@@ -48,9 +42,18 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import io.confluent.connect.avro.AvroData;
+import io.confluent.connect.s3.format.avro.AvroUtils;
+import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.s3.util.FileUtils;
+import io.confluent.connect.storage.StorageFactory;
+import io.confluent.connect.storage.partitioner.DefaultPartitioner;
+import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
 import static org.junit.Assert.assertTrue;
 import static org.powermock.api.easymock.PowerMock.replayAll;
@@ -103,6 +106,24 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     verifyAll();
 
     List<SinkRecord> sinkRecords = createRecords(7);
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 3, 6};
+    verify(sinkRecords, validOffsets);
+  }
+
+  @Test
+  public void testWriteRecordWithPrimitives() throws Exception {
+    setUp();
+    replayAll();
+    task = new S3SinkTask();
+    task.initialize(context);
+    task.start(properties);
+    verifyAll();
+
+    List<SinkRecord> sinkRecords = createRecordsWithPrimitive(7, 0, Collections.singleton(new TopicPartition (TOPIC, PARTITION)));
     task.put(sinkRecords);
     task.close(context.assignment());
     task.stop();
