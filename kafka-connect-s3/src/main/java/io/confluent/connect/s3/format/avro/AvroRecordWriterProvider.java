@@ -32,6 +32,7 @@ import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
+import io.confluent.kafka.serializers.NonRecordContainer;
 
 public class AvroRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
 
@@ -74,6 +75,11 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3SinkConn
         log.trace("Sink record: {}", record);
         Object value = avroData.fromConnectData(schema, record.value());
         try {
+          // AvroData wraps primitive types so their schema can be included. We need to unwrap
+          // NonRecordContainers to just their value to properly handle these types
+          if (value instanceof NonRecordContainer) {
+            value = ((NonRecordContainer) value).getValue();
+          }
           writer.append(value);
         } catch (IOException e) {
           throw new ConnectException(e);
