@@ -60,10 +60,9 @@ public class AvroUtils {
       // AvroData wraps primitive types so their schema can be included. We need to unwrap
       // NonRecordContainers to just their value to properly handle these types
       if (value instanceof NonRecordContainer) {
-        writer.append(((NonRecordContainer) value).getValue());
-      } else {
-        writer.append(value);
+        value = ((NonRecordContainer) value).getValue();
       }
+      writer.append(value);
     }
     writer.flush();
     return out.toByteArray();
