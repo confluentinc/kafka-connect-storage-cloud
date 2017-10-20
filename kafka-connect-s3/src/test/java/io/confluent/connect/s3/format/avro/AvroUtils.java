@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 import io.confluent.connect.avro.AvroData;
+import io.confluent.kafka.serializers.NonRecordContainer;
 
 public class AvroUtils {
 
@@ -56,6 +57,11 @@ public class AvroUtils {
         writer.create(avroSchema, out);
       }
       Object value = avroData.fromConnectData(schema, record.value());
+      // AvroData wraps primitive types so their schema can be included. We need to unwrap
+      // NonRecordContainers to just their value to properly handle these types
+      if (value instanceof NonRecordContainer) {
+        value = ((NonRecordContainer) value).getValue();
+      }
       writer.append(value);
     }
     writer.flush();
