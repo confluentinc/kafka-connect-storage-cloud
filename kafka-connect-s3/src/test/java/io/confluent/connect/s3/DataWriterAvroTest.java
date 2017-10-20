@@ -62,6 +62,7 @@ import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
+import io.confluent.kafka.serializers.NonRecordContainer;
 
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
@@ -581,6 +582,20 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     return sinkRecords;
   }
 
+  protected List<SinkRecord> createRecordsWithPrimitive(int size, long startOffset, Set<TopicPartition> partitions) {
+    String key = "key";
+    Schema schema = Schema.INT32_SCHEMA;
+    int record = 12;
+
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    for (TopicPartition tp : partitions) {
+      for (long offset = startOffset; offset < startOffset + size; ++offset) {
+        sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), Schema.STRING_SCHEMA, key, schema, record, offset));
+      }
+    }
+    return sinkRecords;
+  }
+
   protected List<SinkRecord> createRecordsWithTimestamp(
       int size,
       long startOffset,
@@ -722,7 +737,13 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
       Object expectedValue = SchemaProjector.project(expectedRecords.get(startIndex).valueSchema(),
                                                      expectedRecords.get(startIndex++).value(),
                                                      expectedSchema);
-      assertEquals(format.getAvroData().fromConnectData(expectedSchema, expectedValue), avroRecord);
+      Object value = format.getAvroData().fromConnectData(expectedSchema, expectedValue);
+      // AvroData wraps primitive types so their schema can be included. We need to unwrap
+      // NonRecordContainers to just their value to properly handle these types
+      if (value instanceof NonRecordContainer) {
+        value = ((NonRecordContainer) value).getValue();
+      }
+      assertEquals(value, avroRecord);
     }
   }
 
