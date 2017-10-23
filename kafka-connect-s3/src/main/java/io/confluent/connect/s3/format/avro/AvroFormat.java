@@ -17,6 +17,7 @@
 package io.confluent.connect.s3.format.avro;
 
 import io.confluent.connect.avro.AvroData;
+import io.confluent.connect.avro.AvroDataConfig;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.Format;
@@ -24,13 +25,20 @@ import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.format.SchemaFileReader;
 import io.confluent.connect.storage.hive.HiveFactory;
 
+import java.util.Map;
+
+import static io.confluent.connect.avro.AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG;
+
 public class AvroFormat implements Format<S3SinkConnectorConfig, String> {
   private final S3Storage storage;
   private final AvroData avroData;
 
   public AvroFormat(S3Storage storage) {
     this.storage = storage;
-    this.avroData = new AvroData(storage.conf().getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG));
+    Map<String, Object> avroDataProps = io.confluent.connect.avro.AvroDataConfig.baseConfigDef().parse(storage.conf().plainValues());
+    avroDataProps.put(SCHEMAS_CACHE_SIZE_CONFIG, storage.conf().getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG));
+    io.confluent.connect.avro.AvroDataConfig avroDataConfig = new AvroDataConfig(avroDataProps);
+    this.avroData = new AvroData(avroDataConfig);
   }
 
   @Override
