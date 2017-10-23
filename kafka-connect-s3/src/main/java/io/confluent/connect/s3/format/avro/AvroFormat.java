@@ -30,7 +30,7 @@ public class AvroFormat implements Format<S3SinkConnectorConfig, String> {
 
   public AvroFormat(S3Storage storage) {
     this.storage = storage;
-    this.avroData = new AvroData(storage.conf().getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG));
+    this.avroData = new AvroData(storage.conf().avroDataConfig());
   }
 
   @Override
