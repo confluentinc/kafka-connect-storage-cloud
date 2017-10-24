@@ -52,6 +52,8 @@ import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 
+import static io.confluent.connect.avro.AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG;
+
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   // S3 Group
@@ -263,6 +265,16 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public String getAvroCodec() {
     return getString(AVRO_CODEC_CONFIG);
+  }
+
+  public io.confluent.connect.avro.AvroDataConfig getAvroDataConfig() {
+    Map<String, Object> avroDataProps = io.confluent.connect.avro.AvroDataConfig.baseConfigDef()
+        .parse(plainValues());
+    avroDataProps.put(
+        SCHEMAS_CACHE_SIZE_CONFIG,
+        getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG)
+    );
+    return new io.confluent.connect.avro.AvroDataConfig(avroDataProps);
   }
 
   protected static String parseName(Map<String, String> props) {
