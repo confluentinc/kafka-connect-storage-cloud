@@ -3,6 +3,16 @@
 Changelog
 =========
 
+Version 3.3.1
+-------------
+
+* `PR-108 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/108>`_ - HOTFIX: Handle primitive types in AvroFormat
+* `PR-104 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/104>`_ - Fix new client creation to cater for URLs and region together
+* `PR-100 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/100>`_ - CC-1167: Add recommenders for class type properties
+* `PR-90 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/90>`_ - Add upstream project so build are triggered automatically
+* `PR-82 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/82>`_ - CC-872: Update default part.size number in S3 docs and more.
+* `PR-77 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/77>`_ - Update quickstart to use Confluent CLI.
+
 Version 3.3.0
 -------------
 
