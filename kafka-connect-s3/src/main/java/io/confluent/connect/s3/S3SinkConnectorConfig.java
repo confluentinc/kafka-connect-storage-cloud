@@ -36,7 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import io.confluent.connect.s3.format.avro.AvroDataConfig;
+import io.confluent.connect.storage.common.avro.ComposableAvroDataConfig;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.S3Storage;
@@ -83,7 +83,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private final StorageCommonConfig commonConfig;
   private final HiveConfig hiveConfig;
   private final PartitionerConfig partitionerConfig;
-  private final AvroDataConfig avroDataConfig;
+  private final ComposableAvroDataConfig avroDataConfig;
 
   private final Map<String, ComposableConfig> propertyToConfig = new HashMap<>();
   private final Set<AbstractConfig> allConfigs = new HashSet<>();
@@ -220,7 +220,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     hiveConfig = new HiveConfig(originalsStrings());
     ConfigDef partitionerConfigDef = PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER);
     partitionerConfig = new PartitionerConfig(partitionerConfigDef, originalsStrings());
-    avroDataConfig = new AvroDataConfig(originalsStrings());
+    avroDataConfig = new ComposableAvroDataConfig(originalsStrings());
 
     this.name = parseName(originalsStrings());
     addToGlobal(hiveConfig);
