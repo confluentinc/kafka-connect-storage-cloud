@@ -559,7 +559,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static ConfigDef getConfig() {
     Map<String, ConfigDef.ConfigKey> everything = new HashMap<>(newConfigDef().configKeys());
     everything.putAll(StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER).configKeys());
-    everything.putAll(PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER).configKeys());
+    everything.putAll(
+        PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER).configKeys()
+    );
 
     Set<String> blacklist = new HashSet<>();
     blacklist.add(StorageSinkConnectorConfig.SHUTDOWN_TIMEOUT_CONFIG);
