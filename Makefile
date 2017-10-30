@@ -66,9 +66,10 @@ export SKIP_TESTS
 all: install
 
 
+# In zip, -y is required to include symlinks that don't point to an existing destination.
 archive: install
 	rm -f $(CURDIR)/$(PACKAGE_NAME).tar.gz && cd $(DESTDIR) && tar -czf $(CURDIR)/$(PACKAGE_NAME).tar.gz $(PREFIX)
-	rm -f $(CURDIR)/$(PACKAGE_NAME).zip && cd $(DESTDIR) && zip -r $(CURDIR)/$(PACKAGE_NAME).zip $(PREFIX)
+	rm -f $(CURDIR)/$(PACKAGE_NAME).zip && cd $(DESTDIR) && zip -r -y $(CURDIR)/$(PACKAGE_NAME).zip $(PREFIX)
 
 apply-patches: $(wildcard patches/*)
 ifeq ($(APPLY_PATCHES),yes)
