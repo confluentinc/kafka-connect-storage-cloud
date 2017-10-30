@@ -44,6 +44,8 @@ import io.confluent.connect.storage.common.ComposableConfig;
 import io.confluent.connect.storage.common.GenericRecommender;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.hive.HiveConfig;
+import io.confluent.connect.storage.hive.schema.DefaultSchemaGenerator;
+import io.confluent.connect.storage.hive.schema.TimeBasedSchemaGenerator;
 import io.confluent.connect.storage.partitioner.DailyPartitioner;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.FieldPartitioner;
@@ -87,6 +89,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private static final GenericRecommender STORAGE_CLASS_RECOMMENDER = new GenericRecommender();
   private static final GenericRecommender FORMAT_CLASS_RECOMMENDER = new GenericRecommender();
   private static final GenericRecommender PARTITIONER_CLASS_RECOMMENDER = new GenericRecommender();
+  private static final GenericRecommender SCHEMA_GENERATOR_CLASS_RECOMMENDER =
+      new GenericRecommender();
 
   static {
     STORAGE_CLASS_RECOMMENDER.addValidValues(
@@ -106,6 +110,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
             FieldPartitioner.class
         )
     );
+
+    SCHEMA_GENERATOR_CLASS_RECOMMENDER.addValidValues(
+        Arrays.<Object>asList(
+            DefaultSchemaGenerator.class,
+            TimeBasedSchemaGenerator.class
+        )
+    );
+
   }
 
   public static ConfigDef newConfigDef() {
@@ -214,7 +226,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     ConfigDef storageCommonConfigDef = StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER);
     commonConfig = new StorageCommonConfig(storageCommonConfigDef, originalsStrings());
     hiveConfig = new HiveConfig(originalsStrings());
-    ConfigDef partitionerConfigDef = PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER);
+    ConfigDef partitionerConfigDef = PartitionerConfig.newConfigDef(
+        PARTITIONER_CLASS_RECOMMENDER,
+        SCHEMA_GENERATOR_CLASS_RECOMMENDER
+    );
     partitionerConfig = new PartitionerConfig(partitionerConfigDef, originalsStrings());
 
     this.name = parseName(originalsStrings());
@@ -358,7 +373,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static ConfigDef getConfig() {
     Map<String, ConfigDef.ConfigKey> everything = new HashMap<>(newConfigDef().configKeys());
     everything.putAll(StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER).configKeys());
-    everything.putAll(PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER).configKeys());
+    everything.putAll(
+        PartitionerConfig.newConfigDef(
+            PARTITIONER_CLASS_RECOMMENDER,
+            SCHEMA_GENERATOR_CLASS_RECOMMENDER
+        ).configKeys()
+    );
 
     Set<String> blacklist = new HashSet<>();
     blacklist.add(StorageSinkConnectorConfig.SHUTDOWN_TIMEOUT_CONFIG);
