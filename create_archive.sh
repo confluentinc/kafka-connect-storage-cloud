@@ -26,12 +26,20 @@ mkdir -p ${DESTDIR}${SYSCONFDIR}
 function copy_subpackage() {
     local SUBPACKAGE="$1"
     pushd "${SUBPACKAGE}/target/${SUBPACKAGE}-${VERSION}-package"
+
     find bin/ -type f | grep -v README[.]rpm | xargs -I XXX ${INSTALL_X} -o root -g root XXX ${DESTDIR}${PREFIX}/XXX
     find share/ -type f | grep -v README[.]rpm | xargs -I XXX ${INSTALL} -o root -g root XXX ${DESTDIR}${PREFIX}/XXX
     if [ -d etc/${PACKAGE_TITLE}/ ]; then
         pushd etc/${PACKAGE_TITLE}/
         find . -type f | grep -v README[.]rpm | xargs -I XXX ${INSTALL} -o root -g root XXX ${DESTDIR}${SYSCONFDIR}/XXX
         popd
+    fi
+
+    local major_version="$(echo ${VERSION} | cut -f 1 -d '.')"
+    if [[ ${major_version} -ge 4 ]]; then
+      pushd ${DESTDIR}${LIBPATH}
+      ln -s ../kafka-connect-storage-common storage-common
+      popd
     fi
     popd
 }
