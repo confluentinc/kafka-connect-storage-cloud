@@ -21,6 +21,7 @@ S3 Connector
 * `PR-78 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/78>`_ - Retry s3 part upload
 * `PR-80 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/80>`_ - HOTFIX: Remove refs to schema-generator config.
 * `PR-60 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/60>`_ - Add logging when creating a new RecordWriter
+* `PR-44 <https://github.com/confluentinc/kafka-connect-storage-common/pull/44>`_ - HOTFIX: Remove unused parameter in newConfigDef for PartitionerConfig.
 * `PR-41 <https://github.com/confluentinc/kafka-connect-storage-common/pull/41>`_ - HOTFIX: Update dependencies
 * `PR-40 <https://github.com/confluentinc/kafka-connect-storage-common/pull/40>`_ - HOTFIX: Make specific dependencies explicit.
 * `PR-37 <https://github.com/confluentinc/kafka-connect-storage-common/pull/37>`_ - Remove unused imports
