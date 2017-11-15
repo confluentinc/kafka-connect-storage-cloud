@@ -1,5 +1,7 @@
 package io.confluent.connect.s3.format.parquet;
 
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.format.avro.AvroRecordWriterProvider;
@@ -8,6 +10,7 @@ import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -26,21 +29,10 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
   private static final String EXTENSION = ".parquet";
   private final S3Storage storage;
   private final AvroData avroData;
-  private ParquetWriter<GenericRecord> parquetWriter = null;
 
   ParquetRecordWriterProvider(S3Storage storage, AvroData avroData) {
     this.storage = storage;
     this.avroData = avroData;
-  }
-
-  private ParquetWriter<GenericRecord> getParquetWriter(Path path, org.apache.avro.Schema avroSchema) throws IOException {
-    if(parquetWriter != null){
-      return parquetWriter;
-    }
-    int blockSize = 256 * 1024 * 1024;
-    int pageSize = 64 * 1024;
-    CompressionCodecName compressionCodecName = CompressionCodecName.SNAPPY;
-    return new AvroParquetWriter<>(path, avroSchema, compressionCodecName, blockSize, pageSize, true);
   }
 
   @Override
@@ -50,26 +42,44 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
 
   @Override
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
+//    String awsKey = System.getenv("AWS_ACCESS_KEY_ID");
+//    String awsSecret = System.getenv("AWS_SECRET_ACCESS_KEY");
+    AWSCredentials awsCredentials = DefaultAWSCredentialsProviderChain.getInstance().getCredentials();
+    Configuration hadoopConf = new Configuration();
+    hadoopConf.set("fs.s3a.access.key", awsCredentials.getAWSAccessKeyId());
+    hadoopConf.set("fs.s3a.secret.key", awsCredentials.getAWSSecretKey());
+
     // This is not meant to be a thread-safe writer!
     return new RecordWriter() {
+      int blockSize = 256 * 1024 * 1024;
+      int pageSize = 64 * 1024;
+      CompressionCodecName compressionCodecName = CompressionCodecName.SNAPPY;
       Schema schema = null;
-      S3OutputStream s3out;
+//      S3OutputStream s3out;
       org.apache.avro.Schema avroSchema;
-
-      Path path = new Path(filename);
+      String s3Path = "s3a://sailthru-ds-data/" + filename;
+      Path path = new Path(s3Path);
+      ParquetWriter<GenericRecord> parquetWriter = null;
 
       @Override
       public void write(SinkRecord record) {
         if (schema == null) {
           schema = record.valueSchema();
           log.info("Opening record writer for: {}", filename);
-          s3out = storage.create(filename, true);
+//          s3out = storage.create(filename, true);
           avroSchema = avroData.fromConnectSchema(schema);
+          try {
+            if(parquetWriter == null){
+              parquetWriter = new AvroParquetWriter<>(path, avroSchema, compressionCodecName, blockSize, pageSize, true);
+            }
+          } catch (IOException e) {
+            throw new ConnectException(e);
+          }
         }
         log.trace("Sink record: {}", record);
         Object value = avroData.fromConnectData(schema, record.value());
         try {
-          getParquetWriter(path, avroSchema).write((GenericRecord) value);
+          parquetWriter.write((GenericRecord) value);
         } catch (IOException e) {
           throw new ConnectException(e);
         }
@@ -77,19 +87,16 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
 
       @Override
       public void commit() {
-        try {
-          // Flush is required here, because closing the writer will close the underlying S3 output stream before
-          // committing any data to S3.
-          s3out.commit();
-        } catch (IOException e) {
-          throw new ConnectException(e);
-        }
+        // Flush is required here, because closing the writer will close the underlying S3 output stream before
+        // committing any data to S3.
+//          s3out.commit();
+        log.error("COMMITTING I GUESS?");
       }
 
       @Override
       public void close() {
         try {
-          getParquetWriter(path, avroSchema).close();
+          parquetWriter.close();
         } catch (IOException e) {
           throw new ConnectException(e);
         }
