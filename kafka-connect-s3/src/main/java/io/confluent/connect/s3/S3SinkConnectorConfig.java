@@ -133,8 +133,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   public static ConfigDef newConfigDef() {
-    ConfigDef configDef = StorageSinkConnectorConfig.newConfigDef(FORMAT_CLASS_RECOMMENDER,
-        AVRO_COMPRESSION_RECOMMENDER);
+    ConfigDef configDef = StorageSinkConnectorConfig.newConfigDef(
+        FORMAT_CLASS_RECOMMENDER,
+        AVRO_COMPRESSION_RECOMMENDER
+    );
     {
       final String group = "S3";
       int orderInGroup = 0;
