@@ -56,6 +56,7 @@ import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.avro.AvroUtils;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.hive.schema.TimeBasedSchemaGenerator;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
@@ -132,7 +133,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   @Test
   public void testCompressFile() throws Exception {
     String avroCodec = "snappy";
-    localProps.put(S3SinkConnectorConfig.AVRO_CODEC_CONFIG, avroCodec);
+    localProps.put(StorageSinkConnectorConfig.AVRO_CODEC_CONFIG, avroCodec);
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
@@ -148,7 +149,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
       DatumReader<Object> reader = new GenericDatumReader<>();
       DataFileStream<Object> streamReader = new DataFileStream<>(in, reader);
       // make sure that produced Avro file has proper codec set
-      Assert.assertEquals(avroCodec, streamReader.getMetaString(S3SinkConnectorConfig.AVRO_CODEC_CONFIG));
+      Assert.assertEquals(avroCodec, streamReader.getMetaString(StorageSinkConnectorConfig.AVRO_CODEC_CONFIG));
       streamReader.close();
     }
 
