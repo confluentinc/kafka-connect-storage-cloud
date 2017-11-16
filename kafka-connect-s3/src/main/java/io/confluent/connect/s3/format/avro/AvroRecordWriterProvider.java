@@ -83,6 +83,7 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3SinkConn
       @Override
       public void commit() {
         try {
+
           // Flush is required here, because closing the writer will close the underlying S3 output stream before
           // committing any data to S3.
           writer.flush();
