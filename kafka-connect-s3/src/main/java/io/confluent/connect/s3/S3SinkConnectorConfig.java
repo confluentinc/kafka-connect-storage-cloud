@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import io.confluent.connect.storage.common.avro.ComposableAvroDataConfig;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.S3Storage;
@@ -52,6 +53,8 @@ import io.confluent.connect.storage.partitioner.FieldPartitioner;
 import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
+
+import static io.confluent.connect.avro.AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG;
 
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
@@ -82,6 +85,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private final StorageCommonConfig commonConfig;
   private final HiveConfig hiveConfig;
   private final PartitionerConfig partitionerConfig;
+  private final ComposableAvroDataConfig avroDataConfig;
 
   private final Map<String, ComposableConfig> propertyToConfig = new HashMap<>();
   private final Set<AbstractConfig> allConfigs = new HashSet<>();
@@ -231,11 +235,13 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         SCHEMA_GENERATOR_CLASS_RECOMMENDER
     );
     partitionerConfig = new PartitionerConfig(partitionerConfigDef, originalsStrings());
+    avroDataConfig = new ComposableAvroDataConfig(originalsStrings());
 
     this.name = parseName(originalsStrings());
     addToGlobal(hiveConfig);
     addToGlobal(partitionerConfig);
     addToGlobal(commonConfig);
+    addToGlobal(avroDataConfig);
     addToGlobal(this);
   }
 
@@ -274,6 +280,16 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public String getAvroCodec() {
     return getString(AVRO_CODEC_CONFIG);
+  }
+
+  public io.confluent.connect.avro.AvroDataConfig getAvroDataConfig() {
+    Map<String, Object> avroDataProps = io.confluent.connect.avro.AvroDataConfig.baseConfigDef()
+        .parse(plainValues());
+    avroDataProps.put(
+        SCHEMAS_CACHE_SIZE_CONFIG,
+        getInt(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG)
+    );
+    return new io.confluent.connect.avro.AvroDataConfig(avroDataProps);
   }
 
   protected static String parseName(Map<String, String> props) {
