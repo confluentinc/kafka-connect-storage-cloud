@@ -9,6 +9,7 @@ import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.format.SchemaFileReader;
 import io.confluent.connect.storage.hive.HiveFactory;
 
+
 public class ParquetFormat implements Format<S3SinkConnectorConfig, String> {
   private final S3Storage storage;
   private final AvroData avroData;
