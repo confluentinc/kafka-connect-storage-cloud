@@ -17,6 +17,8 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
+import io.confluent.connect.common.TopicPartitionWriter;
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -55,8 +57,8 @@ public class S3SinkTask extends SinkTask {
   private final Set<TopicPartition> assignment;
   private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
   private Partitioner<FieldSchema> partitioner;
-  private Format<S3SinkConnectorConfig, String> format;
-  private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
+  private Format<StorageSinkConnectorConfig, String> format;
+  private RecordWriterProvider<StorageSinkConnectorConfig> writerProvider;
   private final Time time;
 
   /**
@@ -71,7 +73,8 @@ public class S3SinkTask extends SinkTask {
 
   // visible for testing.
   S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage,
-             Partitioner<FieldSchema> partitioner, Format<S3SinkConnectorConfig, String> format,
+             Partitioner<FieldSchema> partitioner,
+             Format<StorageSinkConnectorConfig, String> format,
              Time time) throws Exception {
     this.assignment = new HashSet<>();
     this.topicPartitionWriters = new HashMap<>();
@@ -134,23 +137,23 @@ public class S3SinkTask extends SinkTask {
     for (TopicPartition tp : assignment) {
       TopicPartitionWriter writer = new TopicPartitionWriter(
           tp,
+          // storage,
           writerProvider,
           partitioner,
           connectorConfig,
-          context,
-          time
+          context
       );
       topicPartitionWriters.put(tp, writer);
     }
   }
 
   @SuppressWarnings("unchecked")
-  private Format<S3SinkConnectorConfig, String> newFormat()
+  private Format<StorageSinkConnectorConfig, String> newFormat()
       throws ClassNotFoundException, IllegalAccessException, InstantiationException,
              InvocationTargetException, NoSuchMethodException {
-    Class<Format<S3SinkConnectorConfig, String>> formatClass =
-        (Class<Format<S3SinkConnectorConfig, String>>) connectorConfig.getClass(
-            S3SinkConnectorConfig.FORMAT_CLASS_CONFIG
+    Class<Format<StorageSinkConnectorConfig, String>> formatClass =
+        (Class<Format<StorageSinkConnectorConfig, String>>) connectorConfig.getClass(
+                StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG
         );
     return formatClass.getConstructor(S3Storage.class).newInstance(storage);
   }
@@ -246,7 +249,7 @@ public class S3SinkTask extends SinkTask {
   }
 
   // Visible for testing
-  Format<S3SinkConnectorConfig, String> getFormat() {
+  Format<StorageSinkConnectorConfig, String> getFormat() {
     return format;
   }
 }

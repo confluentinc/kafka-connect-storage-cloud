@@ -14,23 +14,10 @@
  * limitations under the License.
  */
 
-package io.confluent.connect.azblob;
+package io.confluent.connect.common;
 
-import io.confluent.common.utils.SystemTime;
-import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
-import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.storage.common.StorageCommonConfig;
-import io.confluent.connect.storage.common.util.StringUtils;
-import io.confluent.connect.storage.format.RecordWriter;
-import io.confluent.connect.storage.format.RecordWriterProvider;
-import io.confluent.connect.storage.hive.HiveConfig;
-import io.confluent.connect.storage.partitioner.Partitioner;
-import io.confluent.connect.storage.partitioner.PartitionerConfig;
-import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
-import io.confluent.connect.storage.partitioner.TimestampExtractor;
-import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
-import io.confluent.connect.storage.util.DateTimeUtils;
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
@@ -49,6 +36,20 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
+
+import io.confluent.common.utils.SystemTime;
+import io.confluent.common.utils.Time;
+import io.confluent.connect.storage.common.StorageCommonConfig;
+import io.confluent.connect.storage.common.util.StringUtils;
+import io.confluent.connect.storage.format.RecordWriter;
+import io.confluent.connect.storage.format.RecordWriterProvider;
+import io.confluent.connect.storage.hive.HiveConfig;
+import io.confluent.connect.storage.partitioner.Partitioner;
+import io.confluent.connect.storage.partitioner.PartitionerConfig;
+import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
+import io.confluent.connect.storage.partitioner.TimestampExtractor;
+import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
+import io.confluent.connect.storage.util.DateTimeUtils;
 
 public class TopicPartitionWriter {
   private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriter.class);
@@ -73,7 +74,7 @@ public class TopicPartitionWriter {
   private String currentEncodedPartition;
   private Long baseRecordTimestamp;
   private Long offsetToCommit;
-  private final RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
+  private final RecordWriterProvider<StorageSinkConnectorConfig> writerProvider;
   private final Map<String, Long> startOffsets;
   private long timeoutMs;
   private long failureTime;
@@ -84,23 +85,23 @@ public class TopicPartitionWriter {
   private final String fileDelim;
   private final Time time;
   private DateTimeZone timeZone;
-  private final S3SinkConnectorConfig connectorConfig;
+  private final StorageSinkConnectorConfig connectorConfig;
   private static final Time SYSTEM_TIME = new SystemTime();
 
   public TopicPartitionWriter(TopicPartition tp,
-                              S3Storage storage,
-                              RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
+                              // Storage storage,
+                              RecordWriterProvider<StorageSinkConnectorConfig> writerProvider,
                               Partitioner<FieldSchema> partitioner,
-                              S3SinkConnectorConfig connectorConfig,
+                              StorageSinkConnectorConfig connectorConfig,
                               SinkTaskContext context) {
     this(tp, writerProvider, partitioner, connectorConfig, context, SYSTEM_TIME);
   }
 
   // Visible for testing
   TopicPartitionWriter(TopicPartition tp,
-                       RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
+                       RecordWriterProvider<StorageSinkConnectorConfig> writerProvider,
                        Partitioner<FieldSchema> partitioner,
-                       S3SinkConnectorConfig connectorConfig,
+                       StorageSinkConnectorConfig connectorConfig,
                        SinkTaskContext context,
                        Time time) {
     this.connectorConfig = connectorConfig;
@@ -112,7 +113,7 @@ public class TopicPartitionWriter {
     this.timestampExtractor = partitioner instanceof TimeBasedPartitioner
                                   ? ((TimeBasedPartitioner) partitioner).getTimestampExtractor()
                                   : null;
-    flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
+    flushSize = connectorConfig.getInt(StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
     rotateScheduleIntervalMs =
@@ -120,7 +121,7 @@ public class TopicPartitionWriter {
     if (rotateScheduleIntervalMs > 0) {
       timeZone = DateTimeZone.forID(connectorConfig.getString(PartitionerConfig.TIMEZONE_CONFIG));
     }
-    timeoutMs = connectorConfig.getLong(S3SinkConnectorConfig.RETRY_BACKOFF_CONFIG);
+    timeoutMs = connectorConfig.getLong(StorageSinkConnectorConfig.RETRY_BACKOFF_CONFIG);
     compatibility = StorageSchemaCompatibility.getCompatibility(
         connectorConfig.getString(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG));
 

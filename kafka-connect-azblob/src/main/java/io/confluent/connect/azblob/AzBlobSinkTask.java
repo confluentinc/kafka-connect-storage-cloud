@@ -17,6 +17,8 @@
 package io.confluent.connect.azblob;
 
 import io.confluent.connect.azblob.storage.AzBlobStorage;
+import io.confluent.connect.common.TopicPartitionWriter;
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -38,7 +40,6 @@ import java.util.Set;
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
 import io.confluent.connect.azblob.util.Version;
-import io.confluent.connect.storage.StorageFactory;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
@@ -46,7 +47,6 @@ import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static jdk.nashorn.internal.objects.ArrayBufferView.buffer;
 
 public class AzBlobSinkTask extends SinkTask {
   private static final Logger log = LoggerFactory.getLogger(AzBlobSinkTask.class);
@@ -57,8 +57,8 @@ public class AzBlobSinkTask extends SinkTask {
   private final Set<TopicPartition> assignment;
   private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
   private Partitioner<FieldSchema> partitioner;
-  private Format<AzBlobSinkConnectorConfig, String> format;
-  private RecordWriterProvider<AzBlobSinkConnectorConfig> writerProvider;
+  private Format<StorageSinkConnectorConfig, String> format;
+  private RecordWriterProvider<StorageSinkConnectorConfig> writerProvider;
   private final Time time;
 
   /**
@@ -73,7 +73,7 @@ public class AzBlobSinkTask extends SinkTask {
 
   // visible for testing.
   AzBlobSinkTask(AzBlobSinkConnectorConfig connectorConfig, SinkTaskContext context, AzBlobStorage storage,
-                 Partitioner<FieldSchema> partitioner, Format<AzBlobSinkConnectorConfig, String> format,
+                 Partitioner<FieldSchema> partitioner, Format<StorageSinkConnectorConfig, String> format,
                  Time time) throws Exception {
     this.assignment = new HashSet<>();
     this.topicPartitionWriters = new HashMap<>();
@@ -133,21 +133,28 @@ public class AzBlobSinkTask extends SinkTask {
 
   @Override
   public void open(Collection<TopicPartition> partitions) {
-    // assignment should be empty, either because this is the initial call or because it follows a call to "close".
+    // assignment should be empty, either because this is the initial call or because it follows
+    // a call to "close".
     assignment.addAll(partitions);
     for (TopicPartition tp : assignment) {
-      TopicPartitionWriter writer =
-          new TopicPartitionWriter(tp, writerProvider, partitioner, connectorConfig, context, time);
+      TopicPartitionWriter writer = new TopicPartitionWriter(
+              tp,
+//              storage,
+              writerProvider,
+              partitioner,
+              connectorConfig,
+              context
+      );
       topicPartitionWriters.put(tp, writer);
     }
   }
 
   @SuppressWarnings("unchecked")
-  private Format<AzBlobSinkConnectorConfig, String> newFormat() throws ClassNotFoundException, IllegalAccessException,
+  private Format<StorageSinkConnectorConfig, String> newFormat() throws ClassNotFoundException, IllegalAccessException,
                                                                    InstantiationException, InvocationTargetException,
                                                                    NoSuchMethodException {
-    Class<Format<AzBlobSinkConnectorConfig, String>> formatClass =
-        (Class<Format<AzBlobSinkConnectorConfig, String>>) connectorConfig.getClass(AzBlobSinkConnectorConfig.FORMAT_CLASS_CONFIG);
+    Class<Format<StorageSinkConnectorConfig, String>> formatClass =
+        (Class<Format<StorageSinkConnectorConfig, String>>) connectorConfig.getClass(StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG);
     return formatClass.getConstructor(AzBlobStorage.class).newInstance(storage);
   }
 
@@ -245,7 +252,7 @@ public class AzBlobSinkTask extends SinkTask {
   }
 
   // Visible for testing
-  Format<AzBlobSinkConnectorConfig, String> getFormat() {
+  Format<StorageSinkConnectorConfig, String> getFormat() {
     return format;
   }
 }

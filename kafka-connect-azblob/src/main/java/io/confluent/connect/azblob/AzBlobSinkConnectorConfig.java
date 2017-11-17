@@ -153,10 +153,7 @@ public class AzBlobSinkConnectorConfig extends StorageSinkConnectorConfig {
     ConfigDef storageCommonConfigDef = StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER);
     commonConfig = new StorageCommonConfig(storageCommonConfigDef, originalsStrings());
     hiveConfig = new HiveConfig(originalsStrings());
-    ConfigDef partitionerConfigDef = PartitionerConfig.newConfigDef(
-        PARTITIONER_CLASS_RECOMMENDER,
-        SCHEMA_GENERATOR_CLASS_RECOMMENDER
-    );
+    ConfigDef partitionerConfigDef = PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER);
     partitionerConfig = new PartitionerConfig(partitionerConfigDef, originalsStrings());
 
     this.name = parseName(originalsStrings());
@@ -244,25 +241,25 @@ public class AzBlobSinkConnectorConfig extends StorageSinkConnectorConfig {
 
 
   public static ConfigDef getConfig() {
-    Map<String, ConfigDef.ConfigKey> everything = new HashMap<>(newConfigDef().configKeys());
-    everything.putAll(StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER).configKeys());
-    everything.putAll(
-        PartitionerConfig.newConfigDef(
-            PARTITIONER_CLASS_RECOMMENDER,
-            SCHEMA_GENERATOR_CLASS_RECOMMENDER
-        ).configKeys()
-    );
+    // Define the names of the configurations we're going to override
+    Set<String> skip = new HashSet<>();
+    skip.add(StorageSinkConnectorConfig.SHUTDOWN_TIMEOUT_CONFIG);
 
-    Set<String> blacklist = new HashSet<>();
-    blacklist.add(StorageSinkConnectorConfig.SHUTDOWN_TIMEOUT_CONFIG);
-
+    // Order added is important, so that group order is maintained
     ConfigDef visible = new ConfigDef();
-    for (ConfigDef.ConfigKey key : everything.values()) {
-      if(!blacklist.contains(key.name)) {
-        visible.define(key);
+    addAllConfigKeys(visible, newConfigDef(), skip);
+    addAllConfigKeys(visible, StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER), skip);
+    addAllConfigKeys(visible, PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER), skip);
+
+    return visible;
+  }
+
+  private static void addAllConfigKeys(ConfigDef container, ConfigDef other, Set<String> skip) {
+    for (ConfigDef.ConfigKey key : other.configKeys().values()) {
+      if (skip != null && !skip.contains(key.name)) {
+        container.define(key);
       }
     }
-    return visible;
   }
 
   public static void main(String[] args) {
