@@ -17,6 +17,8 @@
 package io.confluent.connect.azblob;
 
 import io.confluent.connect.azblob.storage.AzBlobStorage;
+import io.confluent.connect.s3.format.avro.AvroFormat;
+import io.confluent.connect.storage.common.ParentValueRecommender;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -67,6 +69,9 @@ public class AzBlobSinkConnectorConfig extends StorageSinkConnectorConfig {
   private static final GenericRecommender PARTITIONER_CLASS_RECOMMENDER = new GenericRecommender();
   private static final GenericRecommender SCHEMA_GENERATOR_CLASS_RECOMMENDER =
       new GenericRecommender();
+  private static final ParentValueRecommender AVRO_COMPRESSION_RECOMMENDER
+          = new ParentValueRecommender(FORMAT_CLASS_CONFIG, AvroFormat.class, AVRO_SUPPORTED_CODECS);
+
 
   static {
     STORAGE_CLASS_RECOMMENDER.addValidValues(
@@ -99,8 +104,11 @@ public class AzBlobSinkConnectorConfig extends StorageSinkConnectorConfig {
 
 
     public static ConfigDef newConfigDef() {
-    ConfigDef configDef = StorageSinkConnectorConfig.newConfigDef(FORMAT_CLASS_RECOMMENDER);
-    {
+      ConfigDef configDef = StorageSinkConnectorConfig.newConfigDef(
+              FORMAT_CLASS_RECOMMENDER,
+              AVRO_COMPRESSION_RECOMMENDER
+      );
+      {
       final String group = "AZ";
       int orderInGroup = 0;
 

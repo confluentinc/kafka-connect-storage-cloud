@@ -45,6 +45,7 @@ import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.ComposableConfig;
 import io.confluent.connect.storage.common.GenericRecommender;
+import io.confluent.connect.storage.common.ParentValueRecommender;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.partitioner.DailyPartitioner;
@@ -78,9 +79,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String ACL_CANNED_CONFIG = "s3.acl.canned";
   public static final String ACL_CANNED_DEFAULT = null;
 
-  public static final String AVRO_CODEC_CONFIG = "avro.codec";
-  public static final String AVRO_CODEC_DEFAULT = "null";
-
   public static final String S3_PART_RETRIES_CONFIG = "s3.part.retries";
   public static final int S3_PART_RETRIES_DEFAULT = 3;
 
@@ -111,6 +109,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private static final GenericRecommender STORAGE_CLASS_RECOMMENDER = new GenericRecommender();
   private static final GenericRecommender FORMAT_CLASS_RECOMMENDER = new GenericRecommender();
   private static final GenericRecommender PARTITIONER_CLASS_RECOMMENDER = new GenericRecommender();
+  private static final ParentValueRecommender AVRO_COMPRESSION_RECOMMENDER
+      = new ParentValueRecommender(FORMAT_CLASS_CONFIG, AvroFormat.class, AVRO_SUPPORTED_CODECS);
 
   static {
     STORAGE_CLASS_RECOMMENDER.addValidValues(
@@ -133,7 +133,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   public static ConfigDef newConfigDef() {
-    ConfigDef configDef = StorageSinkConnectorConfig.newConfigDef(FORMAT_CLASS_RECOMMENDER);
+    ConfigDef configDef = StorageSinkConnectorConfig.newConfigDef(
+        FORMAT_CLASS_RECOMMENDER,
+        AVRO_COMPRESSION_RECOMMENDER
+    );
     {
       final String group = "S3";
       int orderInGroup = 0;
@@ -225,19 +228,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "S3 accelerated endpoint enabled"
-      );
-
-      configDef.define(
-          AVRO_CODEC_CONFIG,
-          Type.STRING,
-          AVRO_CODEC_DEFAULT,
-          Importance.LOW,
-          "The Avro compression codec to be used for output files. Available values: null, "
-              + "deflate, snappy and bzip2 (codec source is org.apache.avro.file.CodecFactory)",
-          group,
-          ++orderInGroup,
-          Width.LONG,
-          "Avro compression codec"
       );
 
       configDef.define(
@@ -393,10 +383,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           e
       );
     }
-  }
-
-  public String getAvroCodec() {
-    return getString(AVRO_CODEC_CONFIG);
   }
 
   public int getS3PartRetries() {
