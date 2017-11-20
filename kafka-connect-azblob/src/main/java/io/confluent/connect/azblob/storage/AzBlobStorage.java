@@ -16,18 +16,17 @@
 
 package io.confluent.connect.azblob.storage;
 
-import com.microsoft.azure.storage.*;
+import com.microsoft.azure.storage.CloudStorageAccount;
+import com.microsoft.azure.storage.StorageException;
 import com.microsoft.azure.storage.blob.*;
-
+import io.confluent.connect.azblob.AzBlobSinkConnectorConfig;
+import io.confluent.connect.storage.Storage;
+import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.avro.file.SeekableInput;
 
 import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.security.InvalidKeyException;
-
-import io.confluent.connect.azblob.AzBlobSinkConnectorConfig;
-import io.confluent.connect.storage.Storage;
-import io.confluent.connect.storage.common.util.StringUtils;
 
 import static io.confluent.connect.storage.common.util.StringUtils.isNotBlank;
 
