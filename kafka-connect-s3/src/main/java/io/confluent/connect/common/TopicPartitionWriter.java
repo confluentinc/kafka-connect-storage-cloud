@@ -74,7 +74,7 @@ public class TopicPartitionWriter {
   private String currentEncodedPartition;
   private Long baseRecordTimestamp;
   private Long offsetToCommit;
-  private final RecordWriterProvider<StorageSinkConnectorConfig> writerProvider;
+  private final RecordWriterProvider<? extends StorageSinkConnectorConfig> writerProvider;
   private final Map<String, Long> startOffsets;
   private long timeoutMs;
   private long failureTime;
@@ -90,7 +90,7 @@ public class TopicPartitionWriter {
 
   public TopicPartitionWriter(TopicPartition tp,
                               // Storage storage,
-                              RecordWriterProvider<StorageSinkConnectorConfig> writerProvider,
+                              RecordWriterProvider<? extends StorageSinkConnectorConfig> writerProvider,
                               Partitioner<FieldSchema> partitioner,
                               StorageSinkConnectorConfig connectorConfig,
                               SinkTaskContext context) {
@@ -99,7 +99,7 @@ public class TopicPartitionWriter {
 
   // Visible for testing
   TopicPartitionWriter(TopicPartition tp,
-                       RecordWriterProvider<StorageSinkConnectorConfig> writerProvider,
+                       RecordWriterProvider<? extends StorageSinkConnectorConfig> writerProvider,
                        Partitioner<FieldSchema> partitioner,
                        StorageSinkConnectorConfig connectorConfig,
                        SinkTaskContext context,
