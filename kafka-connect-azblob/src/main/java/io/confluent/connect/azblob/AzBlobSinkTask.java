@@ -20,7 +20,7 @@ import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
 import io.confluent.connect.azblob.storage.AzBlobStorage;
 import io.confluent.connect.azblob.util.Version;
-import io.confluent.connect.common.TopicPartitionWriter;
+import io.confluent.connect.azblob.TopicPartitionWriter;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.Format;
@@ -52,8 +52,8 @@ public class AzBlobSinkTask extends SinkTask {
     private final Set<TopicPartition> assignment;
     private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
     private Partitioner<FieldSchema> partitioner;
-    private Format<StorageSinkConnectorConfig, String> format;
-    private RecordWriterProvider<StorageSinkConnectorConfig> writerProvider;
+    private Format<AzBlobSinkConnectorConfig, String> format;
+    private RecordWriterProvider<AzBlobSinkConnectorConfig> writerProvider;
     private final Time time;
 
     /**
@@ -68,7 +68,7 @@ public class AzBlobSinkTask extends SinkTask {
 
     // visible for testing.
     AzBlobSinkTask(AzBlobSinkConnectorConfig connectorConfig, SinkTaskContext context, AzBlobStorage storage,
-                   Partitioner<FieldSchema> partitioner, Format<StorageSinkConnectorConfig, String> format,
+                   Partitioner<FieldSchema> partitioner, Format<AzBlobSinkConnectorConfig, String> format,
                    Time time) throws Exception {
         this.assignment = new HashSet<>();
         this.topicPartitionWriters = new HashMap<>();
@@ -134,7 +134,6 @@ public class AzBlobSinkTask extends SinkTask {
         for (TopicPartition tp : assignment) {
             TopicPartitionWriter writer = new TopicPartitionWriter(
                     tp,
-//              storage,
                     writerProvider,
                     partitioner,
                     connectorConfig,
@@ -145,11 +144,11 @@ public class AzBlobSinkTask extends SinkTask {
     }
 
     @SuppressWarnings("unchecked")
-    private Format<StorageSinkConnectorConfig, String> newFormat() throws ClassNotFoundException, IllegalAccessException,
+    private Format<AzBlobSinkConnectorConfig, String> newFormat() throws ClassNotFoundException, IllegalAccessException,
             InstantiationException, InvocationTargetException,
             NoSuchMethodException {
-        Class<Format<StorageSinkConnectorConfig, String>> formatClass =
-                (Class<Format<StorageSinkConnectorConfig, String>>) connectorConfig.getClass(StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG);
+        Class<Format<AzBlobSinkConnectorConfig, String>> formatClass =
+                (Class<Format<AzBlobSinkConnectorConfig, String>>) connectorConfig.getClass(AzBlobSinkConnectorConfig.FORMAT_CLASS_CONFIG);
         return formatClass.getConstructor(AzBlobStorage.class).newInstance(storage);
     }
 
@@ -247,7 +246,7 @@ public class AzBlobSinkTask extends SinkTask {
     }
 
     // Visible for testing
-    Format<StorageSinkConnectorConfig, String> getFormat() {
+    Format<AzBlobSinkConnectorConfig, String> getFormat() {
         return format;
     }
 }

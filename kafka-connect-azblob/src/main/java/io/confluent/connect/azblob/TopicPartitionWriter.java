@@ -14,10 +14,21 @@
  * limitations under the License.
  */
 
-package io.confluent.connect.common;
+package io.confluent.connect.azblob;
 
-import io.confluent.connect.s3.S3SinkConnectorConfig;
-import io.confluent.connect.storage.StorageSinkConnectorConfig;
+import io.confluent.common.utils.SystemTime;
+import io.confluent.common.utils.Time;
+import io.confluent.connect.storage.common.StorageCommonConfig;
+import io.confluent.connect.storage.common.util.StringUtils;
+import io.confluent.connect.storage.format.RecordWriter;
+import io.confluent.connect.storage.format.RecordWriterProvider;
+import io.confluent.connect.storage.hive.HiveConfig;
+import io.confluent.connect.storage.partitioner.Partitioner;
+import io.confluent.connect.storage.partitioner.PartitionerConfig;
+import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
+import io.confluent.connect.storage.partitioner.TimestampExtractor;
+import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
+import io.confluent.connect.storage.util.DateTimeUtils;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
@@ -36,20 +47,6 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
-
-import io.confluent.common.utils.SystemTime;
-import io.confluent.common.utils.Time;
-import io.confluent.connect.storage.common.StorageCommonConfig;
-import io.confluent.connect.storage.common.util.StringUtils;
-import io.confluent.connect.storage.format.RecordWriter;
-import io.confluent.connect.storage.format.RecordWriterProvider;
-import io.confluent.connect.storage.hive.HiveConfig;
-import io.confluent.connect.storage.partitioner.Partitioner;
-import io.confluent.connect.storage.partitioner.PartitionerConfig;
-import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
-import io.confluent.connect.storage.partitioner.TimestampExtractor;
-import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
-import io.confluent.connect.storage.util.DateTimeUtils;
 
 public class TopicPartitionWriter {
   private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriter.class);
@@ -74,7 +71,7 @@ public class TopicPartitionWriter {
   private String currentEncodedPartition;
   private Long baseRecordTimestamp;
   private Long offsetToCommit;
-  private final RecordWriterProvider<? extends StorageSinkConnectorConfig> writerProvider;
+  private final RecordWriterProvider<AzBlobSinkConnectorConfig> writerProvider;
   private final Map<String, Long> startOffsets;
   private long timeoutMs;
   private long failureTime;
@@ -85,23 +82,22 @@ public class TopicPartitionWriter {
   private final String fileDelim;
   private final Time time;
   private DateTimeZone timeZone;
-  private final StorageSinkConnectorConfig connectorConfig;
+  private final AzBlobSinkConnectorConfig connectorConfig;
   private static final Time SYSTEM_TIME = new SystemTime();
 
   public TopicPartitionWriter(TopicPartition tp,
-                              // Storage storage,
-                              RecordWriterProvider<? extends StorageSinkConnectorConfig> writerProvider,
+                              RecordWriterProvider<AzBlobSinkConnectorConfig> writerProvider,
                               Partitioner<FieldSchema> partitioner,
-                              StorageSinkConnectorConfig connectorConfig,
+                              AzBlobSinkConnectorConfig connectorConfig,
                               SinkTaskContext context) {
     this(tp, writerProvider, partitioner, connectorConfig, context, SYSTEM_TIME);
   }
 
   // Visible for testing
   TopicPartitionWriter(TopicPartition tp,
-                       RecordWriterProvider<? extends StorageSinkConnectorConfig> writerProvider,
+                       RecordWriterProvider<AzBlobSinkConnectorConfig> writerProvider,
                        Partitioner<FieldSchema> partitioner,
-                       StorageSinkConnectorConfig connectorConfig,
+                       AzBlobSinkConnectorConfig connectorConfig,
                        SinkTaskContext context,
                        Time time) {
     this.connectorConfig = connectorConfig;
@@ -113,15 +109,15 @@ public class TopicPartitionWriter {
     this.timestampExtractor = partitioner instanceof TimeBasedPartitioner
                                   ? ((TimeBasedPartitioner) partitioner).getTimestampExtractor()
                                   : null;
-    flushSize = connectorConfig.getInt(StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG);
+    flushSize = connectorConfig.getInt(AzBlobSinkConnectorConfig.FLUSH_SIZE_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
-    rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
+    rotateIntervalMs = connectorConfig.getLong(AzBlobSinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
     rotateScheduleIntervalMs =
-        connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG);
+        connectorConfig.getLong(AzBlobSinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG);
     if (rotateScheduleIntervalMs > 0) {
       timeZone = DateTimeZone.forID(connectorConfig.getString(PartitionerConfig.TIMEZONE_CONFIG));
     }
-    timeoutMs = connectorConfig.getLong(StorageSinkConnectorConfig.RETRY_BACKOFF_CONFIG);
+    timeoutMs = connectorConfig.getLong(AzBlobSinkConnectorConfig.RETRY_BACKOFF_CONFIG);
     compatibility = StorageSchemaCompatibility.getCompatibility(
         connectorConfig.getString(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG));
 
@@ -137,7 +133,7 @@ public class TopicPartitionWriter {
     fileDelim = connectorConfig.getString(StorageCommonConfig.FILE_DELIM_CONFIG);
     extension = writerProvider.getExtension();
     zeroPadOffsetFormat = "%0"
-        + connectorConfig.getInt(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG)
+        + connectorConfig.getInt(AzBlobSinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG)
         + "d";
 
     // Initialize scheduled rotation timer if applicable
