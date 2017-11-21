@@ -50,7 +50,7 @@ public class AzBlobSinkTaskIT extends StorageSinkTestBase {
         super.setUp();
 
         connProps = new HashMap<String, String>();
-        connProps.put(AzBlobSinkConnectorConfig.AZ_STORAGEACCOUNT_CONNECTION_STRING, "DefaultEndpointsProtocol=https;AccountName=ecsbdpsandboxsa;AccountKey=ye32nrBsemg99n4xuEXeXce1znnPGHH37Omp+kYRP3j6AW8AUWaDX+opqc5xstsW767H1PzlzD8ZQ6Eisq2gbA==;EndpointSuffix=core.windows.net");
+        connProps.put(AzBlobSinkConnectorConfig.AZ_STORAGEACCOUNT_CONNECTION_STRING, Secrets.connectionString);
         connProps.put(AzBlobSinkConnectorConfig.AZ_STORAGE_CONTAINER_NAME, "mycontainer");
         connProps.put("format.class", "io.confluent.connect.azblob.format.avro.AvroFormat");
         connProps.put("storage.class", "io.confluent.connect.azblob.storage.AzBlobStorage");
@@ -67,20 +67,10 @@ public class AzBlobSinkTaskIT extends StorageSinkTestBase {
 
     @Test
     public void put() throws Exception {
-//        AzBlobSinkConnectorConfig connectorConfig = new AzBlobSinkConnectorConfig(connProps);
-//        SinkTaskContext context;
-//        AzBlobStorage storage = new AzBlobStorage(connectorConfig);
-//                Partitioner<FieldSchema> partitioner;
-//                 Format<AzBlobSinkConnectorConfig, String> format;
-//                Time time = new SystemTime();
-//
-//        AzBlobSinkTask task = new AzBlobSinkTask(connectorConfig, context, storage, partitioner, format, time);
-//        task.initialize(mock(SinkTaskContext.class));
-
         AzBlobSinkTask task = new AzBlobSinkTask();
         task.initialize(getContext());
+        System.out.print(connProps);
         task.start(connProps);
-
 
         final Struct struct = new Struct(SCHEMA)
                 .put("firstName", "Alex")
@@ -103,8 +93,6 @@ public class AzBlobSinkTaskIT extends StorageSinkTestBase {
         records.add(new SinkRecord(topic, 12, null, null, SCHEMA, struct, 4));
 
         task.put(records);
-
-
     }
 
 }
