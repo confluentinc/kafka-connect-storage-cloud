@@ -57,6 +57,7 @@
 
     <modules>
         <module>kafka-connect-s3</module>
+        <module>kafka-connect-gcs</module>
     </modules>
 
     <properties>
