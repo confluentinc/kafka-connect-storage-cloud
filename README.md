@@ -13,8 +13,8 @@ Documentation for this connector can be found [here](http://docs.confluent.io/cu
 
 Configuration parameters:
 
-*azblob.storageaccount.connectionstring=<connection string>
-*azblob.containername=<container name>
+- azblob.storageaccount.connectionstring=<connection string>
+- azblob.containername=<container name>
 
 
 # Development
