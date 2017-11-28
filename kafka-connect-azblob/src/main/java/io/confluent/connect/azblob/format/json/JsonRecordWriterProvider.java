@@ -34,77 +34,78 @@ import java.io.IOException;
 
 public class JsonRecordWriterProvider implements RecordWriterProvider<AzBlobSinkConnectorConfig> {
 
-    private static final Logger log = LoggerFactory.getLogger(JsonRecordWriterProvider.class);
-    private static final String EXTENSION = ".json";
-    private static final String LINE_SEPARATOR = System.lineSeparator();
-    private static final byte[] LINE_SEPARATOR_BYTES = LINE_SEPARATOR.getBytes();
-    private final AzBlobStorage storage;
-    private final ObjectMapper mapper;
-    private final JsonConverter converter;
+  private static final Logger log = LoggerFactory.getLogger(JsonRecordWriterProvider.class);
+  private static final String EXTENSION = ".json";
+  private static final String LINE_SEPARATOR = System.lineSeparator();
+  private static final byte[] LINE_SEPARATOR_BYTES = LINE_SEPARATOR.getBytes();
+  private final AzBlobStorage storage;
+  private final ObjectMapper mapper;
+  private final JsonConverter converter;
 
-    JsonRecordWriterProvider(AzBlobStorage storage, JsonConverter converter) {
-        this.storage = storage;
-        this.mapper = new ObjectMapper();
-        this.converter = converter;
-    }
+  JsonRecordWriterProvider(AzBlobStorage storage, JsonConverter converter) {
+    this.storage = storage;
+    this.mapper = new ObjectMapper();
+    this.converter = converter;
+  }
 
-    @Override
-    public String getExtension() {
-        return EXTENSION;
-    }
+  @Override
+  public String getExtension() {
+    return EXTENSION;
+  }
 
-    @Override
-    public RecordWriter getRecordWriter(final AzBlobSinkConnectorConfig conf, final String filename) {
-        try {
-            return new RecordWriter() {
-                final BlobOutputStream azBlobOutputStream = storage.create(filename, true);
-                final JsonGenerator writer = mapper.getFactory()
-                        .createGenerator(azBlobOutputStream)
-                        .setRootValueSeparator(null);
+  @Override
+  public RecordWriter getRecordWriter(final AzBlobSinkConnectorConfig conf, final String filename) {
+    try {
+      return new RecordWriter() {
+        final BlobOutputStream azBlobOutputStream = storage.create(filename, true);
+        final JsonGenerator writer = mapper.getFactory()
+            .createGenerator(azBlobOutputStream)
+            .setRootValueSeparator(null);
 
-                @Override
-                public void write(SinkRecord record) {
-                    log.trace("Sink record: {}", record);
-                    try {
-                        Object value = record.value();
-                        if (value instanceof Struct) {
-                            byte[] rawJson = converter.fromConnectData(record.topic(), record.valueSchema(), value);
-                            azBlobOutputStream.write(rawJson);
-                            azBlobOutputStream.write(LINE_SEPARATOR_BYTES);
-                        } else {
-                            writer.writeObject(value);
-                            writer.writeRaw(LINE_SEPARATOR);
-                        }
-                    } catch (IOException e) {
-                        throw new ConnectException(e);
-                    }
-                }
-
-                @Override
-                public void commit() {
-                    log.debug("Committing");
-                    try {
-                        // Flush is required here, because closing the writer will close the underlying AZ output stream before
-                        // committing any data to AZ.
-                        writer.flush();
-                        writer.close();
-                    } catch (IOException e) {
-                        throw new ConnectException(e);
-                    }
-                }
-
-                @Override
-                public void close() {
-                    log.debug("Closing writer");
-                    try {
-                        writer.close();
-                    } catch (IOException e) {
-                        throw new ConnectException(e);
-                    }
-                }
-            };
-        } catch (IOException e) {
+        @Override
+        public void write(SinkRecord record) {
+          log.trace("Sink record: {}", record);
+          try {
+            Object value = record.value();
+            if (value instanceof Struct) {
+              byte[] rawJson = converter
+                  .fromConnectData(record.topic(), record.valueSchema(), value);
+              azBlobOutputStream.write(rawJson);
+              azBlobOutputStream.write(LINE_SEPARATOR_BYTES);
+            } else {
+              writer.writeObject(value);
+              writer.writeRaw(LINE_SEPARATOR);
+            }
+          } catch (IOException e) {
             throw new ConnectException(e);
+          }
         }
+
+        @Override
+        public void commit() {
+          log.debug("Committing");
+          try {
+            // Flush is required here, because closing the writer will close the underlying AZ
+            // output stream before committing any data to AZ.
+            writer.flush();
+            writer.close();
+          } catch (IOException e) {
+            throw new ConnectException(e);
+          }
+        }
+
+        @Override
+        public void close() {
+          log.debug("Closing writer");
+          try {
+            writer.close();
+          } catch (IOException e) {
+            throw new ConnectException(e);
+          }
+        }
+      };
+    } catch (IOException e) {
+      throw new ConnectException(e);
     }
+  }
 }

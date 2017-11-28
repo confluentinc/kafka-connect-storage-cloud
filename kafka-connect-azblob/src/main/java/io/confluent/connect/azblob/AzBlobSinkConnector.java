@@ -32,57 +32,57 @@ import java.util.Map;
  * Connector class for Azure Blob Storage.
  */
 public class AzBlobSinkConnector extends SinkConnector {
-    private static final Logger log = LoggerFactory.getLogger(AzBlobSinkConnector.class);
-    private Map<String, String> configProps;
-    private AzBlobSinkConnectorConfig config;
+  private static final Logger log = LoggerFactory.getLogger(AzBlobSinkConnector.class);
+  private Map<String, String> configProps;
+  private AzBlobSinkConnectorConfig config;
 
-    /**
-     * No-arg constructor. It is instantiated by Connect framework.
-     */
-    public AzBlobSinkConnector() {
-        // no-arg constructor required by Connect framework.
-    }
+  /**
+   * No-arg constructor. It is instantiated by Connect framework.
+   */
+  public AzBlobSinkConnector() {
+    // no-arg constructor required by Connect framework.
+  }
 
-    // Visible for testing.
-    AzBlobSinkConnector(AzBlobSinkConnectorConfig config) {
-        this.config = config;
-    }
+  // Visible for testing.
+  AzBlobSinkConnector(AzBlobSinkConnectorConfig config) {
+    this.config = config;
+  }
 
-    @Override
-    public String version() {
-        return Version.getVersion();
-    }
+  @Override
+  public String version() {
+    return Version.getVersion();
+  }
 
-    @Override
-    public void start(Map<String, String> props) {
-        configProps = new HashMap<>(props);
-        config = new AzBlobSinkConnectorConfig(props);
-        log.info("Starting AZ Blob connector {}", config.getName());
-    }
+  @Override
+  public void start(Map<String, String> props) {
+    configProps = new HashMap<>(props);
+    config = new AzBlobSinkConnectorConfig(props);
+    log.info("Starting AZ Blob connector {}", config.getName());
+  }
 
-    @Override
-    public Class<? extends Task> taskClass() {
-        return AzBlobSinkTask.class;
-    }
+  @Override
+  public Class<? extends Task> taskClass() {
+    return AzBlobSinkTask.class;
+  }
 
-    @Override
-    public List<Map<String, String>> taskConfigs(int maxTasks) {
-        Map<String, String> taskProps = new HashMap<>(configProps);
-        List<Map<String, String>> taskConfigs = new ArrayList<>(maxTasks);
-        for (int i = 0; i < maxTasks; ++i) {
-            taskConfigs.add(taskProps);
-        }
-        return taskConfigs;
+  @Override
+  public List<Map<String, String>> taskConfigs(int maxTasks) {
+    Map<String, String> taskProps = new HashMap<>(configProps);
+    List<Map<String, String>> taskConfigs = new ArrayList<>(maxTasks);
+    for (int i = 0; i < maxTasks; ++i) {
+      taskConfigs.add(taskProps);
     }
+    return taskConfigs;
+  }
 
-    @Override
-    public void stop() {
-        log.info("Shutting down AZ Blob connector {}", config.getName());
-    }
+  @Override
+  public void stop() {
+    log.info("Shutting down AZ Blob connector {}", config.getName());
+  }
 
-    @Override
-    public ConfigDef config() {
-        return AzBlobSinkConnectorConfig.getConfig();
-    }
+  @Override
+  public ConfigDef config() {
+    return AzBlobSinkConnectorConfig.getConfig();
+  }
 
 }

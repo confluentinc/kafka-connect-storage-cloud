@@ -30,7 +30,8 @@ public class AvroFormat implements Format<AzBlobSinkConnectorConfig, String> {
 
   public AvroFormat(AzBlobStorage storage) {
     this.storage = storage;
-    this.avroData = new AvroData(storage.conf().getInt(AzBlobSinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG));
+    this.avroData = new AvroData(
+        storage.conf().getInt(AzBlobSinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG));
   }
 
   @Override
@@ -45,7 +46,8 @@ public class AvroFormat implements Format<AzBlobSinkConnectorConfig, String> {
 
   @Override
   public HiveFactory getHiveFactory() {
-    throw new UnsupportedOperationException("Hive integration is not currently supported in blob Connector");
+    throw new UnsupportedOperationException(
+        "Hive integration is not currently supported in blob Connector");
   }
 
   public AvroData getAvroData() {

@@ -107,8 +107,8 @@ public class TopicPartitionWriter {
     this.writerProvider = writerProvider;
     this.partitioner = partitioner;
     this.timestampExtractor = partitioner instanceof TimeBasedPartitioner
-                                  ? ((TimeBasedPartitioner) partitioner).getTimestampExtractor()
-                                  : null;
+        ? ((TimeBasedPartitioner) partitioner).getTimestampExtractor()
+        : null;
     flushSize = connectorConfig.getInt(AzBlobSinkConnectorConfig.FLUSH_SIZE_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     rotateIntervalMs = connectorConfig.getLong(AzBlobSinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
@@ -221,6 +221,7 @@ public class TopicPartitionWriter {
 
   /**
    * Check if we should rotate the file (schema change, time-based).
+   *
    * @returns true if rotation is being performed, false otherwise
    */
   private boolean checkRotationOrAppend(
@@ -235,7 +236,7 @@ public class TopicPartitionWriter {
       // This branch is never true for the first record read by this TopicPartitionWriter
       log.trace(
           "Incompatible change of schema detected for record '{}' with encoded partition "
-          + "'{}' and current offset: '{}'",
+              + "'{}' and current offset: '{}'",
           record,
           encodedPartition,
           currentOffset
@@ -276,7 +277,7 @@ public class TopicPartitionWriter {
       if (recordCount > 0 && rotateOnTime(currentEncodedPartition, currentTimestamp, now)) {
         log.info(
             "Committing files after waiting for rotateIntervalMs time but less than flush.size "
-            + "records available."
+                + "records available."
         );
         setNextScheduledRotation();
 
@@ -434,17 +435,17 @@ public class TopicPartitionWriter {
   private String fileKey(String topicsPrefix, String keyPrefix, String name) {
     String suffix = keyPrefix + dirDelim + name;
     return StringUtils.isNotBlank(topicsPrefix)
-           ? topicsPrefix + dirDelim + suffix
-           : suffix;
+        ? topicsPrefix + dirDelim + suffix
+        : suffix;
   }
 
   private String fileKeyToCommit(String dirPrefix, long startOffset) {
     String name = tp.topic()
-                      + fileDelim
-                      + tp.partition()
-                      + fileDelim
-                      + String.format(zeroPadOffsetFormat, startOffset)
-                      + extension;
+        + fileDelim
+        + tp.partition()
+        + fileDelim
+        + String.format(zeroPadOffsetFormat, startOffset)
+        + extension;
     return fileKey(topicsDir, dirPrefix, name);
   }
 

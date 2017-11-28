@@ -18,8 +18,6 @@ package io.confluent.connect.azblob.format.bytearray;
 
 import io.confluent.connect.azblob.AzBlobSinkConnectorConfig;
 import io.confluent.connect.azblob.storage.AzBlobStorage;
-import io.confluent.connect.s3.S3SinkConnectorConfig;
-import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.format.SchemaFileReader;

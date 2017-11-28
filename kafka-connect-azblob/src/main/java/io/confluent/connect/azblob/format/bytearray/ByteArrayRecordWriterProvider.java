@@ -19,9 +19,6 @@ package io.confluent.connect.azblob.format.bytearray;
 import com.microsoft.azure.storage.blob.BlobOutputStream;
 import io.confluent.connect.azblob.AzBlobSinkConnectorConfig;
 import io.confluent.connect.azblob.storage.AzBlobStorage;
-import io.confluent.connect.s3.S3SinkConnectorConfig;
-import io.confluent.connect.s3.storage.S3OutputStream;
-import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import org.apache.kafka.connect.converters.ByteArrayConverter;
@@ -33,7 +30,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
-public class ByteArrayRecordWriterProvider implements RecordWriterProvider<AzBlobSinkConnectorConfig> {
+public class ByteArrayRecordWriterProvider implements
+    RecordWriterProvider<AzBlobSinkConnectorConfig> {
 
   private static final Logger log = LoggerFactory.getLogger(ByteArrayRecordWriterProvider.class);
   private final AzBlobStorage storage;

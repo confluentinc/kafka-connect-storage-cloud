@@ -18,7 +18,6 @@ package io.confluent.connect.azblob.format.parquet;
 
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.azblob.AzBlobSinkConnectorConfig;
-import io.confluent.connect.azblob.format.avro.AvroRecordWriterProvider;
 import io.confluent.connect.azblob.storage.AzBlobStorage;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
@@ -32,7 +31,7 @@ public class ParquetFormat implements Format<AzBlobSinkConnectorConfig, String> 
   public ParquetFormat(AzBlobStorage storage) {
     this.storage = storage;
     this.avroData = new AvroData(
-            storage.conf().getInt(AzBlobSinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG)
+        storage.conf().getInt(AzBlobSinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG)
     );
   }
 
@@ -48,7 +47,8 @@ public class ParquetFormat implements Format<AzBlobSinkConnectorConfig, String> 
 
   @Override
   public HiveFactory getHiveFactory() {
-    throw new UnsupportedOperationException("Hive integration is not currently supported in blob Connector");
+    throw new UnsupportedOperationException(
+        "Hive integration is not currently supported in blob Connector");
   }
 
 }
