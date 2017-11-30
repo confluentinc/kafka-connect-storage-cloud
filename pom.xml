@@ -57,7 +57,7 @@
 
     <modules>
         <module>kafka-connect-s3</module>
-        <module>kafka-connect-azblob</module>
+        <module>kafka-connect-azure</module>
     </modules>
 
     <properties>
