@@ -9,6 +9,14 @@ designed to be used to copy data between Kafka and public cloud stores, such as 
 
 Documentation for this connector can be found [here](http://docs.confluent.io/current/connect/connect-storage-cloud/kafka-connect-s3/docs/index.html).
 
+## Kafka Connect Sink Connector for Azure Blob Storage
+
+Configuration parameters:
+
+- azblob.storageaccount.connectionstring=<connection string>
+- azblob.containername=<container name>
+
+
 # Development
 
 To build a development version you'll need a recent version of Kafka 

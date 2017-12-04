@@ -57,6 +57,7 @@
 
     <modules>
         <module>kafka-connect-s3</module>
+        <module>kafka-connect-azure</module>
     </modules>
 
     <properties>
@@ -182,7 +183,27 @@
                       <argLine>@{argLine} -Djava.awt.headless=true -XX:MaxPermSize=512m</argLine>
                       <reuseForks>false</reuseForks>
                       <forkCount>1</forkCount>
+                      <excludes>
+                          <exclude>**/*IT.java</exclude>
+                      </excludes>
                   </configuration>
+                  <executions>
+                      <execution>
+                          <id>integration-test</id>
+                          <goals>
+                              <goal>test</goal>
+                          </goals>
+                          <phase>integration-test</phase>
+                          <configuration>
+                              <excludes>
+                                  <exclude>none</exclude>
+                              </excludes>
+                              <includes>
+                                  <include>**/*IT.java</include>
+                              </includes>
+                          </configuration>
+                      </execution>
+                  </executions>
               </plugin>
               <plugin>
                   <groupId>org.apache.maven.plugins</groupId>
