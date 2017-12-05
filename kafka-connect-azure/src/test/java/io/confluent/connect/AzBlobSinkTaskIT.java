@@ -5,6 +5,7 @@ import io.confluent.common.utils.SystemTime;
 import io.confluent.connect.azblob.AzBlobSinkConnectorConfig;
 import io.confluent.connect.azblob.AzBlobSinkTask;
 import io.confluent.connect.azblob.storage.AzBlobStorage;
+import io.confluent.connect.storage.StorageSinkTestBase;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.partitioner.Partitioner;
@@ -68,7 +69,7 @@ public class AzBlobSinkTaskIT extends StorageSinkTestBase {
     @Test
     public void put() throws Exception {
         AzBlobSinkTask task = new AzBlobSinkTask();
-        task.initialize(getContext());
+        task.initialize(context);
         System.out.print(connProps);
         task.start(connProps);
 
