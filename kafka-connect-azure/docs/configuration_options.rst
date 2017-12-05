@@ -1,4 +1,4 @@
-.. _s3_configuration_options:
+.. _azure_configuration_options:
 
 Configuration Options
 ---------------------
@@ -54,52 +54,21 @@ Connector
   * Valid Values: [0,...]
   * Importance: low
 
-S3
+Azure
 ^^
 
-``s3.bucket.name``
-  The S3 Bucket.
+``azblob.storageaccount.connectionstring``
+  The connection string for the Azure Storage Account.
 
   * Type: string
   * Importance: high
 
-``s3.region``
-  The AWS region to be used the connector.
+``azblob.containername``
+  The name of the container within the Azure Storage Account where the files are to written.
 
   * Type: string
-  * Default: us-west-2
-  * Valid Values: [us-gov-west-1, ap-northeast-1, ap-northeast-2, ap-south-1, ap-southeast-1, ap-southeast-2, ca-central-1, eu-central-1, eu-west-1, eu-west-2, sa-east-1, us-east-1, us-east-2, us-west-1, us-west-2, cn-north-1]
-  * Importance: medium
-
-``s3.part.size``
-  The Part Size in S3 Multi-part Uploads.
-
-  * Type: int
-  * Default: 26214400
-  * Valid Values: [5242880,...,2147483647]
   * Importance: high
 
-``s3.credentials.provider.class``
-  Credentials provider or provider chain to use for authentication to AWS. By default the  connector uses 'DefaultAWSCredentialsProviderChain'.
-
-  * Type: class
-  * Default: com.amazonaws.auth.DefaultAWSCredentialsProviderChain
-  * Valid Values: Any class implementing: interface com.amazonaws.auth.AWSCredentialsProvider
-  * Importance: low
-
-``s3.ssea.name``
-  The S3 Server Side Encryption Algorithm.
-
-  * Type: string
-  * Default: ""
-  * Importance: low
-
-``s3.wan.mode``
-  Use S3 accelerated endpoint.
-
-  * Type: boolean
-  * Default: false
-  * Importance: medium
 
 ``avro.codec``
   The Avro compression codec to be used for output files. Available values: null, deflate, snappy and bzip2 (codec source is org.apache.avro.file.CodecFactory)

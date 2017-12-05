@@ -17,7 +17,7 @@
 package io.confluent.connect.azblob;
 
 import io.confluent.connect.azblob.storage.AzBlobStorage;
-import io.confluent.connect.s3.format.avro.AvroFormat;
+import io.confluent.connect.azblob.format.avro.AvroFormat;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.ComposableConfig;
 import io.confluent.connect.storage.common.GenericRecommender;
@@ -180,7 +180,7 @@ public class AzBlobSinkConnectorConfig extends StorageSinkConnectorConfig {
               + "Defaults to 'System.lineSeparator()' "
               + "and may contain escape sequences like '\\n'. "
               + "An input record that contains the line separator will look like "
-              + "multiple records in the output S3 object.",
+              + "multiple records in the output Azure blob object.",
           group,
           ++orderInGroup,
           Width.LONG,

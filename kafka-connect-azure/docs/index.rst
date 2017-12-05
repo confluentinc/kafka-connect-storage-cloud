@@ -1,6 +1,6 @@
-.. _connect_s3:
+.. _connect_azure:
 
-Confluent S3 Connector
+Confluent Azure Connector
 ======================
 
 Contents:
@@ -8,6 +8,6 @@ Contents:
 .. toctree::
    :maxdepth: 3
 
-   s3_connector
+   azure_connector
    configuration_options
    changelog
