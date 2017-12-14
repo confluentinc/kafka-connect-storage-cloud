@@ -37,6 +37,7 @@ import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
+import io.confluent.connect.avro.AvroDataConfig;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -99,6 +100,15 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
         }
       }
     }
+  }
+
+  @Test
+  public void testAvroDataConfigSupported() throws Exception {
+    properties.put(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, "true");
+    properties.put(AvroDataConfig.CONNECT_META_DATA_CONFIG, "false");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(true, connectorConfig.get(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG));
+    assertEquals(false, connectorConfig.get(AvroDataConfig.CONNECT_META_DATA_CONFIG));
   }
 
   @Test
