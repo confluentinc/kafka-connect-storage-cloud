@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 public class ByteArrayRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
 
@@ -42,7 +43,9 @@ public class ByteArrayRecordWriterProvider implements RecordWriterProvider<S3Sin
     this.storage = storage;
     this.converter = converter;
     this.extension = storage.conf().getByteArrayExtension();
-    this.lineSeparatorBytes = storage.conf().getFormatByteArrayLineSeparator().getBytes();
+    this.lineSeparatorBytes = storage.conf()
+        .getFormatByteArrayLineSeparator()
+        .getBytes(StandardCharsets.UTF_8);
   }
 
   @Override
