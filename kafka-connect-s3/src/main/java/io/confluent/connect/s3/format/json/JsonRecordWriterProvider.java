@@ -26,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.storage.S3OutputStream;
@@ -38,7 +39,8 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
   private static final Logger log = LoggerFactory.getLogger(JsonRecordWriterProvider.class);
   private static final String EXTENSION = ".json";
   private static final String LINE_SEPARATOR = System.lineSeparator();
-  private static final byte[] LINE_SEPARATOR_BYTES = LINE_SEPARATOR.getBytes();
+  private static final byte[] LINE_SEPARATOR_BYTES
+      = LINE_SEPARATOR.getBytes(StandardCharsets.UTF_8);
   private final S3Storage storage;
   private final ObjectMapper mapper;
   private final JsonConverter converter;
