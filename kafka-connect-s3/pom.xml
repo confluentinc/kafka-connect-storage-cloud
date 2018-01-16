@@ -125,14 +125,14 @@
                             <goal>kafka-connect</goal>
                         </goals>
                         <configuration>
+                            <attach>true</attach>
                             <excludes>
-                                <exclude>io.confluent:kafka-connect-storage-common</exclude>
-                                <exclude>io.confluent:kafka-connect-storage-core</exclude>
-                                <exclude>io.confluent:kafka-connect-storage-format</exclude>
-                                <exclude>io.confluent:kafka-connect-storage-hive</exclude>
-                                <exclude>io.confluent:kafka-connect-storage-partitioner</exclude>
+                                <exclude>org.mortbay.jetty:*</exclude>
+                                <exclude>com.sun.jersey:*</exclude>
+                                <exclude>org.eclipse.jetty.aggregate:jetty-all</exclude>
+                                <exclude>com.sun.jersey.contribs:jersey-guice</exclude>
+                                <exclude>org.apache.kafka:kafka-clients</exclude>
                             </excludes>
-                            <attach>false</attach>
                         </configuration>
                     </execution>
                 </executions>
