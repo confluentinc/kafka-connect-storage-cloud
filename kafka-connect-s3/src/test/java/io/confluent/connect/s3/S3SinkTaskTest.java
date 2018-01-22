@@ -43,8 +43,10 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.confluent.connect.avro.AvroData;
@@ -112,6 +114,28 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
 
     long[] validOffsets = {0, 3, 6};
     verify(sinkRecords, validOffsets);
+  }
+
+  @Test
+  public void testWriteRecordWithModifiedTopicName() throws Exception {
+    setUp();
+    replayAll();
+    task = new S3SinkTask();
+    Set<TopicPartition> modifiedAssignment = new HashSet<>();
+    for (TopicPartition tp : context.assignment()) {
+      modifiedAssignment.add(new TopicPartition(tp.topic() + "-modified", tp.partition()));
+    }
+    task.initialize(context);
+    task.start(properties);
+    verifyAll();
+
+    List<SinkRecord> sinkRecords = createRecords(7, 0, modifiedAssignment);
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 3, 6};
+    verify(sinkRecords, validOffsets, modifiedAssignment);
   }
 
   @Test
