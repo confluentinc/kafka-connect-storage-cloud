@@ -126,12 +126,12 @@
                         </goals>
                         <configuration>
                             <attach>true</attach>
+                            <owner>confluentinc</owner>
                             <excludes>
                                 <exclude>org.mortbay.jetty:*</exclude>
                                 <exclude>com.sun.jersey:*</exclude>
                                 <exclude>org.eclipse.jetty.aggregate:jetty-all</exclude>
                                 <exclude>com.sun.jersey.contribs:jersey-guice</exclude>
-                                <exclude>org.apache.kafka:kafka-clients</exclude>
                             </excludes>
                         </configuration>
                     </execution>
