@@ -94,7 +94,7 @@ public class S3OutputStream extends OutputStream {
       return;
     }
 
-    if (buffer.remaining() < len) {
+    if (buffer.remaining() <= len) {
       int firstPart = buffer.remaining();
       buffer.put(b, off, firstPart);
       uploadPart();
