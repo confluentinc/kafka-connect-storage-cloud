@@ -115,6 +115,15 @@ public class TopicPartitionWriter {
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
+    if (rotateIntervalMs > 0 && timestampExtractor == null) {
+      log.warn(
+          "Property '{}' is set to '{}ms' but partitioner is not an instance of '{}'. This property"
+              + " is ignored.",
+          S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+          rotateIntervalMs,
+          TimeBasedPartitioner.class.getName()
+      );
+    }
     rotateScheduleIntervalMs =
         connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG);
     if (rotateScheduleIntervalMs > 0) {
@@ -334,6 +343,7 @@ public class TopicPartitionWriter {
     }
     // rotateIntervalMs > 0 implies timestampExtractor != null
     boolean periodicRotation = rotateIntervalMs > 0
+        && timestampExtractor != null
         && (
         recordTimestamp - baseRecordTimestamp >= rotateIntervalMs
             || !encodedPartition.equals(currentEncodedPartition)
