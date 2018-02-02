@@ -677,6 +677,40 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
+  public void testRotateIntervalIsIgnoredWhenUsedWithNoTimeBasedPartitioner() throws Exception {
+    // Setting size-based rollup to 10 but will produce fewer records. Commit should not happen.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.MINUTES.toMillis(1))
+    );
+    setUp();
+
+    // Define the partitioner
+    Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 3);
+
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    // Record size argument does not matter.
+    verify(Collections.<String>emptyList(), -1, schema, records);
+  }
+
+  @Test
   public void testWriteRecordDefaultWithEmptyTopicsDir() throws Exception {
     localProps.put(StorageCommonConfig.TOPICS_DIR_CONFIG, "");
     setUp();
