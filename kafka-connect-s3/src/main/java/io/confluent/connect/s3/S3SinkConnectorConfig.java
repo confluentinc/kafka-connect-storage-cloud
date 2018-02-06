@@ -21,6 +21,7 @@ import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
+import com.amazonaws.services.s3.model.SSEAlgorithm;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -35,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -200,16 +202,39 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "AWS Credentials Provider Class"
       );
 
+      List<String> validSsea = new ArrayList<>(SSEAlgorithm.values().length + 1);
+      validSsea.add("");
+      for (SSEAlgorithm algo : SSEAlgorithm.values()) {
+        validSsea.add(algo.toString());
+      }
       configDef.define(
           SSEA_CONFIG,
           Type.STRING,
           SSEA_DEFAULT,
+          ConfigDef.ValidString.in(validSsea.toArray(new String[validSsea.size()])),
           Importance.LOW,
           "The S3 Server Side Encryption Algorithm.",
           group,
           ++orderInGroup,
           Width.LONG,
-          "S3 Server Side Encryption Algorithm"
+          "S3 Server Side Encryption Algorithm",
+          new SseAlgorithmRecommender()
+      );
+
+      configDef.define(
+          SSE_AWS_KMS_ID_CONFIG,
+          Type.STRING,
+          SSE_AWS_KMS_ID_DEFAULT,
+          Importance.LOW,
+          "The name of the AWS Key Management Service (AWS-KMS) key to be used for server side "
+              + "encryption of the S3 objects. No encryption is used when no key is provided, but"
+              + " it is enabled when '" + SSEAlgorithm.KMS + "' is specified as encryption "
+              + "algorithm with a valid key name.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Server Side Encryption Key",
+          new SseAwsKmsRecommender()
       );
 
       configDef.define(
@@ -345,17 +370,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "S3 Proxy Password"
       );
 
-      configDef.define(
-          SSE_AWS_KMS_ID_CONFIG,
-          Type.STRING,
-          SSE_AWS_KMS_ID_DEFAULT,
-          Importance.LOW,
-          "The S3 Server Side Encryption KMS custom id/alias name.",
-          group,
-          ++orderInGroup,
-          Width.LONG,
-          "S3 Server Side Encryption KMS custom id/alias name"
-      );
     }
     return configDef;
   }
@@ -608,6 +622,35 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     @Override
     public String toString() {
       return "Any class implementing: " + AWSCredentialsProvider.class;
+    }
+  }
+
+  private static class SseAlgorithmRecommender implements ConfigDef.Recommender {
+    @Override
+    public List<Object> validValues(String name, Map<String, Object> connectorConfigs) {
+      List<SSEAlgorithm> list = Arrays.asList(SSEAlgorithm.values());
+      return new ArrayList<Object>(list);
+    }
+
+    @Override
+    public boolean visible(String name, Map<String, Object> connectorConfigs) {
+      return true;
+    }
+  }
+
+  public static class SseAwsKmsRecommender implements ConfigDef.Recommender {
+    public SseAwsKmsRecommender() {
+    }
+
+    @Override
+    public List<Object> validValues(String name, Map<String, Object> connectorConfigs) {
+      return new LinkedList<>();
+    }
+
+    @Override
+    public boolean visible(String name, Map<String, Object> connectorConfigs) {
+      return SSEAlgorithm.KMS.toString()
+          .equalsIgnoreCase((String) connectorConfigs.get(SSEA_CONFIG));
     }
   }
 
