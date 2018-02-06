@@ -27,6 +27,7 @@ import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PartETag;
+import com.amazonaws.services.s3.model.SSEAlgorithm;
 import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
@@ -54,7 +55,7 @@ public class S3OutputStream extends OutputStream {
   private final String bucket;
   private final String key;
   private final String ssea;
-  private final String awsKmsKeyId;
+  private final String sseAwsKmsKeyId;
   private final ProgressListener progressListener;
   private final int partSize;
   private final CannedAccessControlList cannedAcl;
@@ -70,7 +71,7 @@ public class S3OutputStream extends OutputStream {
     this.bucket = conf.getBucketName();
     this.key = key;
     this.ssea = conf.getSsea();
-    this.awsKmsKeyId = conf.getSseAwsKmsKeyId();
+    this.sseAwsKmsKeyId = conf.getSseAwsKmsKeyId();
     this.partSize = conf.getPartSize();
     this.cannedAcl = conf.getCannedAcl();
     this.closed = false;
@@ -195,8 +196,9 @@ public class S3OutputStream extends OutputStream {
         newObjectMetadata()
     ).withCannedACL(cannedAcl);
 
-    if (ssea.equals("aws:kms") && StringUtils.isNotBlank(awsKmsKeyId)) {
-      initRequest.setSSEAwsKeyManagementParams(new SSEAwsKeyManagementParams(awsKmsKeyId));
+    if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
+        && StringUtils.isNotBlank(sseAwsKmsKeyId)) {
+      initRequest.setSSEAwsKeyManagementParams(new SSEAwsKeyManagementParams(sseAwsKmsKeyId));
     }
 
     try {
