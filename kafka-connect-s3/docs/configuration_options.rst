@@ -39,6 +39,20 @@ Connector
   * Default: 1000
   * Importance: low
 
+``enhanced.avro.schema.support``
+  Enable enhanced avro schema support in AvroConverter: Enum symbol preservation and Package Name awareness
+
+  * Type: boolean
+  * Default: false
+  * Importance: low
+
+``connect.meta.data``
+  Allow connect converter to add its meta data to the output schema
+
+  * Type: boolean
+  * Default: true
+  * Importance: low
+
 ``retry.backoff.ms``
   The retry backoff in milliseconds. This config is used to notify Kafka connect to retry delivering a message batch or performing recovery in case of transient exceptions.
 
@@ -52,6 +66,14 @@ Connector
   * Type: int
   * Default: 10
   * Valid Values: [0,...]
+  * Importance: low
+
+``avro.codec``
+  The Avro compression codec to be used for output  files. Available values: null, deflate, snappy and bzip2 (CodecSource is org.apache.avro.file.CodecFactory)
+
+  * Type: string
+  * Default: null
+  * Valid Values: [null, deflate, snappy, bzip2]
   * Importance: low
 
 S3
@@ -92,6 +114,14 @@ S3
 
   * Type: string
   * Default: ""
+  * Valid Values: [AES256, aws:kms, ]
+  * Importance: low
+
+``s3.sse.aws.kms.id``
+  The name of the AWS Key Management Service (AWS-KMS) key to be used for server side encryption of the S3 objects. No encryption is used when no key is provided, but it is enabled when 'aws:kms' is specified as encryption algorithm with a valid key name.
+
+  * Type: string
+  * Default: ""
   * Importance: low
 
 ``s3.acl.canned``
@@ -108,13 +138,6 @@ S3
   * Type: boolean
   * Default: false
   * Importance: medium
-
-``avro.codec``
-  The Avro compression codec to be used for output files. Available values: null, deflate, snappy and bzip2 (codec source is org.apache.avro.file.CodecFactory)
-
-  * Type: string
-  * Default: null
-  * Importance: low
 
 ``s3.part.retries``
   Number of upload retries of a single S3 part. Zero means no retries.
