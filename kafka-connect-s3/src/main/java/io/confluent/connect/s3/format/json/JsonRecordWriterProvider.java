@@ -26,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
@@ -53,7 +54,7 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
 
   @Override
   public String getExtension() {
-    return EXTENSION;
+    return EXTENSION + storage.conf().getCompressionType().extension;
   }
 
   @Override
@@ -61,8 +62,9 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
     try {
       return new RecordWriter() {
         final S3OutputStream s3out = storage.create(filename, true);
+        final OutputStream s3outWrapper = s3out.wrapForCompression();
         final JsonGenerator writer = mapper.getFactory()
-                                         .createGenerator(s3out)
+                                         .createGenerator(s3outWrapper)
                                          .setRootValueSeparator(null);
 
         @Override
@@ -76,8 +78,8 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
                   record.valueSchema(),
                   value
               );
-              s3out.write(rawJson);
-              s3out.write(LINE_SEPARATOR_BYTES);
+              s3outWrapper.write(rawJson);
+              s3outWrapper.write(LINE_SEPARATOR_BYTES);
             } else {
               writer.writeObject(value);
               writer.writeRaw(LINE_SEPARATOR);
@@ -94,7 +96,7 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
             // output stream before committing any data to S3.
             writer.flush();
             s3out.commit();
-            writer.close();
+            s3outWrapper.close();
           } catch (IOException e) {
             throw new ConnectException(e);
           }
