@@ -66,8 +66,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String SSEA_CONFIG = "s3.ssea.name";
   public static final String SSEA_DEFAULT = "";
 
-  public static final String SSE_AWS_KMS_ID_CONFIG = "s3.sse.aws.kms.id";
-  public static final String SSE_AWS_KMS_ID_DEFAULT = "";
+  public static final String SSE_KMS_KEY_ID_CONFIG = "s3.sse.kms.key.id";
+  public static final String SSE_KMS_KEY_ID_DEFAULT = "";
 
   public static final String PART_SIZE_CONFIG = "s3.part.size";
   public static final int PART_SIZE_DEFAULT = 25 * 1024 * 1024;
@@ -222,9 +222,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       );
 
       configDef.define(
-          SSE_AWS_KMS_ID_CONFIG,
+          SSE_KMS_KEY_ID_CONFIG,
           Type.STRING,
-          SSE_AWS_KMS_ID_DEFAULT,
+          SSE_KMS_KEY_ID_DEFAULT,
           Importance.LOW,
           "The name of the AWS Key Management Service (AWS-KMS) key to be used for server side "
               + "encryption of the S3 objects. No encryption is used when no key is provided, but"
@@ -234,7 +234,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "S3 Server Side Encryption Key",
-          new SseAwsKmsRecommender()
+          new SseKmsKeyIdRecommender()
       );
 
       configDef.define(
@@ -412,8 +412,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getString(SSEA_CONFIG);
   }
 
-  public String getSseAwsKmsKeyId() {
-    return getString(SSE_AWS_KMS_ID_CONFIG);
+  public String getSseKmsKeyId() {
+    return getString(SSE_KMS_KEY_ID_CONFIG);
   }
 
   public CannedAccessControlList getCannedAcl() {
@@ -638,8 +638,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     }
   }
 
-  public static class SseAwsKmsRecommender implements ConfigDef.Recommender {
-    public SseAwsKmsRecommender() {
+  public static class SseKmsKeyIdRecommender implements ConfigDef.Recommender {
+    public SseKmsKeyIdRecommender() {
     }
 
     @Override
