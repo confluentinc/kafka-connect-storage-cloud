@@ -7,7 +7,7 @@ Connector
 ^^^^^^^^^
 
 ``format.class``
-  The format class to use when writing data to the store.
+  The format class to use when writing data to the store. 
 
   * Type: class
   * Importance: high
@@ -114,10 +114,10 @@ S3
 
   * Type: string
   * Default: ""
-  * Valid Values: [AES256, aws:kms, ]
+  * Valid Values: [, AES256, aws:kms]
   * Importance: low
 
-``s3.sse.aws.kms.id``
+``s3.sse.kms.key.id``
   The name of the AWS Key Management Service (AWS-KMS) key to be used for server side encryption of the S3 objects. No encryption is used when no key is provided, but it is enabled when 'aws:kms' is specified as encryption algorithm with a valid key name.
 
   * Type: string
@@ -138,6 +138,14 @@ S3
   * Type: boolean
   * Default: false
   * Importance: medium
+
+``s3.compression.type``
+  Compression type for file written to S3. Applied when using JsonFormat or ByteArrayFormat. Available values: none, gzip.
+
+  * Type: string
+  * Default: none
+  * Valid Values: [none, gzip]
+  * Importance: low
 
 ``s3.part.retries``
   Number of upload retries of a single S3 part. Zero means no retries.
@@ -232,7 +240,7 @@ Partitioner
 ``partition.field.name``
   The name of the partitioning field when FieldPartitioner is used.
 
-  * Type: string
+  * Type: list
   * Default: ""
   * Importance: medium
 
@@ -277,4 +285,3 @@ Partitioner
   * Type: string
   * Default: timestamp
   * Importance: medium
-
