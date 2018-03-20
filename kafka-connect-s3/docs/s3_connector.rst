@@ -115,18 +115,9 @@ Next, start the services with one command using Confluent CLI:
 
 Every service will start in order, printing a message with its status:
 
-.. sourcecode:: bash
-
-    Starting zookeeper
-    zookeeper is [UP]
-    Starting kafka
-    kafka is [UP]
-    Starting schema-registry
-    schema-registry is [UP]
-    Starting kafka-rest
-    kafka-rest is [UP]
-    Starting connect
-    connect is [UP]
+.. include:: ../../../../includes/installation.rst
+    :start-line: 83
+    :end-line: 100
 
 .. note:: You need to make sure the connector user has write access to the S3 bucket
    specified in ``s3.bucket.name`` and has deployed credentials
@@ -236,33 +227,24 @@ Finally, stop the Connect worker as well as all the rest of the Confluent servic
 .. sourcecode:: bash
 
       $ confluent stop
-      Stopping connect
-      connect is [DOWN]
-      Stopping kafka-rest
-      kafka-rest is [DOWN]
-      Stopping schema-registry
-      schema-registry is [DOWN]
-      Stopping kafka
-      kafka is [DOWN]
-      Stopping zookeeper
-      zookeeper is [DOWN]
+
+Your output should resemble:
+
+.. include:: ../../../../includes/installation.rst
+    :start-line: 102
+    :end-line: 118
 
 or stop all the services and additionally wipe out any data generated during this quickstart by running:
 
 .. sourcecode:: bash
 
       $ confluent destroy
-      Stopping connect
-      connect is [DOWN]
-      Stopping kafka-rest
-      kafka-rest is [DOWN]
-      Stopping schema-registry
-      schema-registry is [DOWN]
-      Stopping kafka
-      kafka is [DOWN]
-      Stopping zookeeper
-      zookeeper is [DOWN]
-      Deleting: /tmp/confluent.w1CpYsaI
+
+Your output should resemble:
+
+.. include:: ../../../../includes/installation.rst
+    :start-line: 102
+    :end-line: 119
 
 Configuration
 -------------
