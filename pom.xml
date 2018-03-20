@@ -61,7 +61,6 @@
 
     <properties>
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
-        <jackson.version>2.9.4</jackson.version>
         <licenses.version>5.0.0-SNAPSHOT</licenses.version>
         <maven-assembly.version>2.6</maven-assembly.version>
     </properties>
