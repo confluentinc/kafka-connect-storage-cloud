@@ -407,12 +407,16 @@ public class TopicPartitionWriter {
 
   private void pause() {
     log.trace("Pausing writer for topic-partition '{}'", tp);
-    context.pause(tp);
+    if (context.assignment().contains(tp)) {
+      context.pause(tp);
+    }
   }
 
   private void resume() {
     log.trace("Resuming writer for topic-partition '{}'", tp);
-    context.resume(tp);
+    if (context.assignment().contains(tp)) {
+      context.resume(tp);
+    }
   }
 
   private RecordWriter getWriter(SinkRecord record, String encodedPartition)

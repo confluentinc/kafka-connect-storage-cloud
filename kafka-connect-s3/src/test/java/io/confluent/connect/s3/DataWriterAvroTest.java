@@ -616,7 +616,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     List<SinkRecord> sinkRecords = new ArrayList<>();
     for (TopicPartition tp : partitions) {
       for (long offset = startOffset; offset < startOffset + size; ++offset) {
-        sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), Schema.STRING_SCHEMA, key, schema, record, offset));
+        sinkRecords.add(new SinkRecord(tp.topic(), tp.partition(), Schema.STRING_SCHEMA, key, schema, record, offset));
       }
     }
     return sinkRecords;

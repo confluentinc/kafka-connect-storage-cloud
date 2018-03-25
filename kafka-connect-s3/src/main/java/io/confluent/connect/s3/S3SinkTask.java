@@ -185,15 +185,31 @@ public class S3SinkTask extends SinkTask {
       String topic = record.topic();
       int partition = record.kafkaPartition();
       TopicPartition tp = new TopicPartition(topic, partition);
-      topicPartitionWriters.get(tp).buffer(record);
+      getOrCreateTopicPartitionWriter(tp).buffer(record);
     }
     if (log.isDebugEnabled()) {
       log.debug("Read {} records from Kafka", records.size());
     }
 
-    for (TopicPartition tp : assignment) {
-      topicPartitionWriters.get(tp).write();
+    for (TopicPartitionWriter writer : topicPartitionWriters.values()) {
+      writer.write();
     }
+  }
+
+  private TopicPartitionWriter getOrCreateTopicPartitionWriter(TopicPartition tp) {
+    TopicPartitionWriter writer = topicPartitionWriters.get(tp);
+    if (writer == null) {
+      writer = new TopicPartitionWriter(
+          tp,
+          writerProvider,
+          partitioner,
+          connectorConfig,
+          context,
+          time
+      );
+      topicPartitionWriters.put(tp, writer);
+    }
+    return writer;
   }
 
   @Override
@@ -206,8 +222,10 @@ public class S3SinkTask extends SinkTask {
       Map<TopicPartition, OffsetAndMetadata> offsets
   ) {
     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
-    for (TopicPartition tp : assignment) {
-      Long offset = topicPartitionWriters.get(tp).getOffsetToCommitAndReset();
+    for (Map.Entry<TopicPartition, TopicPartitionWriter> entry : topicPartitionWriters.entrySet()) {
+      TopicPartition tp = entry.getKey();
+      TopicPartitionWriter writer = entry.getValue();
+      Long offset = writer.getOffsetToCommitAndReset();
       if (offset != null) {
         log.trace("Forwarding to framework request to commit offset: {} for {}", offset, tp);
         offsetsToCommit.put(tp, new OffsetAndMetadata(offset));
@@ -218,9 +236,11 @@ public class S3SinkTask extends SinkTask {
 
   @Override
   public void close(Collection<TopicPartition> partitions) {
-    for (TopicPartition tp : assignment) {
+    for (Map.Entry<TopicPartition, TopicPartitionWriter> entry : topicPartitionWriters.entrySet()) {
+      TopicPartition tp = entry.getKey();
+      TopicPartitionWriter writer = entry.getValue();
       try {
-        topicPartitionWriters.get(tp).close();
+        writer.close();
       } catch (ConnectException e) {
         log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
       }
