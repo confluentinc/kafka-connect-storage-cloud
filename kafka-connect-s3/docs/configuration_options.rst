@@ -109,6 +109,14 @@ S3
   * Valid Values: Any class implementing: interface com.amazonaws.auth.AWSCredentialsProvider
   * Importance: low
 
+``s3.credentials.provider.configs.``
+  The properties that begin with this prefix will be used to configure a class, specified by
+  ``s3.credentials.provider.class`` if it implements org.apache.kafka.common.Configurable.
+
+  * Type: set<object>
+  * Importance: low
+
+
 ``s3.ssea.name``
   The S3 Server Side Encryption Algorithm.
 

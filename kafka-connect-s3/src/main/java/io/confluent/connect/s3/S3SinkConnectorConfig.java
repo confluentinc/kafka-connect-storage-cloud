@@ -22,6 +22,7 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -57,8 +58,11 @@ import io.confluent.connect.storage.partitioner.FieldPartitioner;
 import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
+  private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorConfig.class);
 
   // S3 Group
   public static final String S3_BUCKET_CONFIG = "s3.bucket.name";
@@ -78,6 +82,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String CREDENTIALS_PROVIDER_CLASS_CONFIG = "s3.credentials.provider.class";
   public static final Class<? extends AWSCredentialsProvider> CREDENTIALS_PROVIDER_CLASS_DEFAULT =
       DefaultAWSCredentialsProviderChain.class;
+  public static final String CREDENTIALS_PROVIDER_CONFIG_PREFIX =
+      "s3.credentials.provider.configs.";
 
   public static final String REGION_CONFIG = "s3.region";
   public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
@@ -427,8 +433,23 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   @SuppressWarnings("unchecked")
   public AWSCredentialsProvider getCredentialsProvider() {
     try {
-      return ((Class<? extends AWSCredentialsProvider>)
-                  getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
+      AWSCredentialsProvider provider = ((Class<? extends AWSCredentialsProvider>)
+          getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
+
+      if (provider instanceof Configurable) {
+        Map<String, Object> configs = originalsWithPrefix(CREDENTIALS_PROVIDER_CONFIG_PREFIX,
+            false);
+        if (configs.size() == 0) {
+          log.warn(
+              "{} is a configurable credentials provider, "
+                  + "but no configs with prefix {} has been provided",
+              provider.getClass().getSimpleName(),
+              CREDENTIALS_PROVIDER_CONFIG_PREFIX);
+        }
+        ((Configurable) provider).configure(configs);
+      }
+
+      return provider;
     } catch (IllegalAccessException | InstantiationException e) {
       throw new ConnectException(
           "Invalid class for: " + S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,

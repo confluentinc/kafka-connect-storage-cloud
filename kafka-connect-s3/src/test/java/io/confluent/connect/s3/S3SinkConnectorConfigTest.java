@@ -16,7 +16,10 @@
 
 package io.confluent.connect.s3;
 
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.AWSCredentialsProvider;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.Before;
@@ -225,6 +228,62 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
           assertTrue(val.visible());
           break;
       }
+    }
+  }
+
+  @Test
+  public void testConfigurableCredentialProvider() {
+    final String ACCESS_KEY_NAME = "access.key";
+    final String SECRET_KEY_NAME = "secret.key";
+    final String ACCESS_KEY_VALUE = "AKIAAAAAKKKKIIIIAAAA";
+    final String SECRET_KEY_VALUE = "WhoIsJohnGalt?";
+
+    properties.put(
+        S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
+        FakeAWSCredentialsProvider.class.getName()
+    );
+    String configPrefix = S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
+    properties.put(configPrefix.concat(ACCESS_KEY_NAME), ACCESS_KEY_VALUE);
+    properties.put(configPrefix.concat(SECRET_KEY_NAME), SECRET_KEY_VALUE);
+    connectorConfig = new S3SinkConnectorConfig(properties);
+
+    AWSCredentialsProvider credentialsProvider = connectorConfig.getCredentialsProvider();
+
+    assertEquals(ACCESS_KEY_VALUE, credentialsProvider.getCredentials().getAWSAccessKeyId());
+    assertEquals(SECRET_KEY_VALUE, credentialsProvider.getCredentials().getAWSSecretKey());
+
+  }
+
+  static class FakeAWSCredentialsProvider implements AWSCredentialsProvider, Configurable {
+    private AWSCredentials credentials;
+
+    @Override
+    public AWSCredentials getCredentials() {
+      return credentials;
+    }
+
+    @Override
+    public void refresh() {
+      throw new UnsupportedOperationException(
+          "Refresh is not supported for this credentials provider");
+    }
+
+    @Override
+    public void configure(final Map<String, ?> configs) {
+
+      credentials = new AWSCredentials() {
+        @Override
+        public String getAWSAccessKeyId() {
+          return (String) configs
+              .get(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX.concat("access.key"));
+        }
+
+        @Override
+        public String getAWSSecretKey() {
+          return (String) configs
+              .get(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX.concat("secret.key"));
+        }
+      };
     }
   }
 }
