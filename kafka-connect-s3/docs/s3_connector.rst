@@ -122,6 +122,8 @@ Every service will start in order, printing a message with its status:
 .. note:: You need to make sure the connector user has write access to the S3 bucket
    specified in ``s3.bucket.name`` and has deployed credentials
    `appropriately <http://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/credentials.html>`_.
+   You can also pass additional properties to credential provider, please refer to the
+   `Configurable credential provider`_ section.
 
 To import a few records with a simple schema in Kafka, start the Avro console producer as follows:
 
@@ -251,15 +253,16 @@ Configuration
 This section gives example configurations that cover common scenarios. For detailed description of all the
 available configuration options of the S3 connector go to :ref:`Configuration Options<s3_configuration_options>`
 
-Custom credential provider
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Configurable credential provider
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Some use cases require more fine-grained credentials configuration for AWS so that each connector
 could have its own credentials.
 
-To use configurable credential provider, `s3.credentials.provider.class` should be a class which
-implements both `com.amazonaws.auth.AWSCredentialsProvider` and `org.apache.kafka.common.Configurable` interfaces.
+To use configurable credential provider, ``s3.credentials.provider.class`` should be a class which
+implements both ``com.amazonaws.auth.AWSCredentialsProvider`` and ``org.apache.kafka.common
+.Configurable`` interfaces.
 
-A subset of properties, starting from `s3.credentials.provider.` (with stripped out prefix)
+A subset of properties, starting from ``s3.credentials.provider.`` (with stripped out prefix)
 will be passed to an instance of a credential provider.
 
 Here is a non-thread safe reference implementation of configurable credential provider:
