@@ -58,11 +58,8 @@ import io.confluent.connect.storage.partitioner.FieldPartitioner;
 import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
-  private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorConfig.class);
 
   // S3 Group
   public static final String S3_BUCKET_CONFIG = "s3.bucket.name";
@@ -82,8 +79,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String CREDENTIALS_PROVIDER_CLASS_CONFIG = "s3.credentials.provider.class";
   public static final Class<? extends AWSCredentialsProvider> CREDENTIALS_PROVIDER_CLASS_DEFAULT =
       DefaultAWSCredentialsProviderChain.class;
-  public static final String CREDENTIALS_PROVIDER_CONFIG_PREFIX =
-      "s3.credentials.provider.configs.";
+  /**
+   * The properties that begin with this prefix will be used to configure a class, specified by
+   * {@code s3.credentials.provider.class} if it implements {@link Configurable}.
+   */
+  public static final String CREDENTIALS_PROVIDER_CONFIG_PREFIX = "s3.credentials.provider.";
 
   public static final String REGION_CONFIG = "s3.region";
   public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
@@ -437,15 +437,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
 
       if (provider instanceof Configurable) {
-        Map<String, Object> configs = originalsWithPrefix(CREDENTIALS_PROVIDER_CONFIG_PREFIX,
-            false);
-        if (configs.size() == 0) {
-          log.warn(
-              "{} is a configurable credentials provider, "
-                  + "but no configs with prefix {} has been provided",
-              provider.getClass().getSimpleName(),
-              CREDENTIALS_PROVIDER_CONFIG_PREFIX);
-        }
+        Map<String, Object> configs = originalsWithPrefix(CREDENTIALS_PROVIDER_CONFIG_PREFIX);
+        configs.remove(CREDENTIALS_PROVIDER_CLASS_CONFIG.substring(
+            CREDENTIALS_PROVIDER_CONFIG_PREFIX.length(),
+            CREDENTIALS_PROVIDER_CLASS_CONFIG.length()
+        ));
         ((Configurable) provider).configure(configs);
       }
 

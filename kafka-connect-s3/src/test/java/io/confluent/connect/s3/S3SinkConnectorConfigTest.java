@@ -18,12 +18,16 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.util.Arrays;
 import java.util.List;
@@ -48,6 +52,13 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 
 public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
+
+  private static final String ACCESS_KEY_NAME = "access.key";
+  private static final String SECRET_KEY_NAME = "secret.key";
+  private static final String CONFIGS_NUM_KEY_NAME = "configs.num";
+
+  @Rule
+  public ExpectedException thrown = ExpectedException.none();
 
   @Before
   @Override
@@ -118,81 +129,25 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   public void testVisibilityForPartitionerClassDependentConfigs() throws Exception {
     properties.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, DefaultPartitioner.class.getName());
     List<ConfigValue> values = S3SinkConnectorConfig.getConfig().validate(properties);
-    for (ConfigValue val : values) {
-      switch (val.name()) {
-        case PartitionerConfig.PARTITION_FIELD_NAME_CONFIG:
-        case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
-        case PartitionerConfig.PATH_FORMAT_CONFIG:
-        case PartitionerConfig.LOCALE_CONFIG:
-        case PartitionerConfig.TIMEZONE_CONFIG:
-          assertFalse(val.visible());
-          break;
-      }
-    }
+    assertDefaultPartitionerVisibility(values);
 
     properties.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, FieldPartitioner.class.getName());
-    values = S3SinkConnectorConfig.getConfig().validate(properties);
-    for (ConfigValue val : values) {
-      switch (val.name()) {
-        case PartitionerConfig.PARTITION_FIELD_NAME_CONFIG:
-          assertTrue(val.visible());
-          break;
-        case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
-        case PartitionerConfig.PATH_FORMAT_CONFIG:
-        case PartitionerConfig.LOCALE_CONFIG:
-        case PartitionerConfig.TIMEZONE_CONFIG:
-          assertFalse(val.visible());
-          break;
-      }
-    }
+    assertFieldPartitionerVisibility();
 
     properties.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, DailyPartitioner.class.getName());
     values = S3SinkConnectorConfig.getConfig().validate(properties);
-    for (ConfigValue val : values) {
-      switch (val.name()) {
-        case PartitionerConfig.PARTITION_FIELD_NAME_CONFIG:
-        case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
-        case PartitionerConfig.PATH_FORMAT_CONFIG:
-          assertFalse(val.visible());
-          break;
-        case PartitionerConfig.LOCALE_CONFIG:
-        case PartitionerConfig.TIMEZONE_CONFIG:
-          assertTrue(val.visible());
-          break;
-      }
-    }
+    assertTimeBasedPartitionerVisibility(values);
 
     properties.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, HourlyPartitioner.class.getName());
     values = S3SinkConnectorConfig.getConfig().validate(properties);
-    for (ConfigValue val : values) {
-      switch (val.name()) {
-        case PartitionerConfig.PARTITION_FIELD_NAME_CONFIG:
-        case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
-        case PartitionerConfig.PATH_FORMAT_CONFIG:
-          assertFalse(val.visible());
-          break;
-        case PartitionerConfig.LOCALE_CONFIG:
-        case PartitionerConfig.TIMEZONE_CONFIG:
-          assertTrue(val.visible());
-          break;
-      }
-    }
+    assertTimeBasedPartitionerVisibility(values);
 
     properties.put(
         PartitionerConfig.PARTITIONER_CLASS_CONFIG,
         TimeBasedPartitioner.class.getName()
     );
     values = S3SinkConnectorConfig.getConfig().validate(properties);
-    for (ConfigValue val : values) {
-      switch (val.name()) {
-        case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
-        case PartitionerConfig.PATH_FORMAT_CONFIG:
-        case PartitionerConfig.LOCALE_CONFIG:
-        case PartitionerConfig.TIMEZONE_CONFIG:
-          assertTrue(val.visible());
-          break;
-      }
-    }
+    assertNullPartitionerVisibility(values);
 
     Partitioner<?> klass = new Partitioner<FieldSchema>() {
       @Override
@@ -219,6 +174,96 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
         klass.getClass().getName()
     );
     values = S3SinkConnectorConfig.getConfig().validate(properties);
+    assertNullPartitionerVisibility(values);
+  }
+
+  @Test
+  public void testConfigurableCredentialProvider() {
+    final String ACCESS_KEY_VALUE = "AKIAAAAAKKKKIIIIAAAA";
+    final String SECRET_KEY_VALUE = "WhoIsJohnGalt?";
+
+    properties.put(
+        S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
+        DummyAssertiveCredentialsProvider.class.getName()
+    );
+    String configPrefix = S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
+    properties.put(configPrefix.concat(ACCESS_KEY_NAME), ACCESS_KEY_VALUE);
+    properties.put(configPrefix.concat(SECRET_KEY_NAME), SECRET_KEY_VALUE);
+    properties.put(configPrefix.concat(CONFIGS_NUM_KEY_NAME), "3");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+
+    AWSCredentialsProvider credentialsProvider = connectorConfig.getCredentialsProvider();
+
+    assertEquals(ACCESS_KEY_VALUE, credentialsProvider.getCredentials().getAWSAccessKeyId());
+    assertEquals(SECRET_KEY_VALUE, credentialsProvider.getCredentials().getAWSSecretKey());
+  }
+
+  @Test
+  public void testConfigurableCredentialProviderMissingConfigs() {
+
+    thrown.expect(ConfigException.class);
+    thrown.expectMessage("are mandatory configuration properties");
+
+    String configPrefix = S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
+    properties.put(
+        S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
+        DummyAssertiveCredentialsProvider.class.getName()
+    );
+    properties.put(configPrefix.concat(CONFIGS_NUM_KEY_NAME), "2");
+
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    connectorConfig.getCredentialsProvider();
+  }
+
+  private void assertDefaultPartitionerVisibility(List<ConfigValue> values) {
+    for (ConfigValue val : values) {
+      switch (val.name()) {
+        case PartitionerConfig.PARTITION_FIELD_NAME_CONFIG:
+        case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
+        case PartitionerConfig.PATH_FORMAT_CONFIG:
+        case PartitionerConfig.LOCALE_CONFIG:
+        case PartitionerConfig.TIMEZONE_CONFIG:
+          assertFalse(val.visible());
+          break;
+      }
+    }
+  }
+
+  private void assertFieldPartitionerVisibility() {
+    List<ConfigValue> values;
+    values = S3SinkConnectorConfig.getConfig().validate(properties);
+    for (ConfigValue val : values) {
+      switch (val.name()) {
+        case PartitionerConfig.PARTITION_FIELD_NAME_CONFIG:
+          assertTrue(val.visible());
+          break;
+        case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
+        case PartitionerConfig.PATH_FORMAT_CONFIG:
+        case PartitionerConfig.LOCALE_CONFIG:
+        case PartitionerConfig.TIMEZONE_CONFIG:
+          assertFalse(val.visible());
+          break;
+      }
+    }
+  }
+
+  private void assertTimeBasedPartitionerVisibility(List<ConfigValue> values) {
+    for (ConfigValue val : values) {
+      switch (val.name()) {
+        case PartitionerConfig.PARTITION_FIELD_NAME_CONFIG:
+        case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
+        case PartitionerConfig.PATH_FORMAT_CONFIG:
+          assertFalse(val.visible());
+          break;
+        case PartitionerConfig.LOCALE_CONFIG:
+        case PartitionerConfig.TIMEZONE_CONFIG:
+          assertTrue(val.visible());
+          break;
+      }
+    }
+  }
+
+  private void assertNullPartitionerVisibility(List<ConfigValue> values) {
     for (ConfigValue val : values) {
       switch (val.name()) {
         case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
@@ -231,30 +276,8 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     }
   }
 
-  @Test
-  public void testConfigurableCredentialProvider() {
-    final String ACCESS_KEY_NAME = "access.key";
-    final String SECRET_KEY_NAME = "secret.key";
-    final String ACCESS_KEY_VALUE = "AKIAAAAAKKKKIIIIAAAA";
-    final String SECRET_KEY_VALUE = "WhoIsJohnGalt?";
+  static class DummyAssertiveCredentialsProvider implements AWSCredentialsProvider, Configurable {
 
-    properties.put(
-        S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
-        FakeAWSCredentialsProvider.class.getName()
-    );
-    String configPrefix = S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
-    properties.put(configPrefix.concat(ACCESS_KEY_NAME), ACCESS_KEY_VALUE);
-    properties.put(configPrefix.concat(SECRET_KEY_NAME), SECRET_KEY_VALUE);
-    connectorConfig = new S3SinkConnectorConfig(properties);
-
-    AWSCredentialsProvider credentialsProvider = connectorConfig.getCredentialsProvider();
-
-    assertEquals(ACCESS_KEY_VALUE, credentialsProvider.getCredentials().getAWSAccessKeyId());
-    assertEquals(SECRET_KEY_VALUE, credentialsProvider.getCredentials().getAWSSecretKey());
-
-  }
-
-  static class FakeAWSCredentialsProvider implements AWSCredentialsProvider, Configurable {
     private AWSCredentials credentials;
 
     @Override
@@ -265,25 +288,32 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     @Override
     public void refresh() {
       throw new UnsupportedOperationException(
-          "Refresh is not supported for this credentials provider");
+          "Refresh is not supported for this credentials provider"
+      );
     }
 
     @Override
     public void configure(final Map<String, ?> configs) {
 
-      credentials = new AWSCredentials() {
-        @Override
-        public String getAWSAccessKeyId() {
-          return (String) configs
-              .get(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX.concat("access.key"));
-        }
+      final String accessKeyId = (String) configs.get(ACCESS_KEY_NAME);
+      final String secretKey = (String) configs.get(SECRET_KEY_NAME);
+      final Integer configsNum = Integer.valueOf((String) configs.get(CONFIGS_NUM_KEY_NAME));
 
-        @Override
-        public String getAWSSecretKey() {
-          return (String) configs
-              .get(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX.concat("secret.key"));
-        }
-      };
+      validateConfigs(configs);
+
+      assertEquals(configsNum.intValue(), configs.size());
+
+      credentials = new BasicAWSCredentials(accessKeyId, secretKey);
+    }
+
+    private void validateConfigs(Map<String, ?> configs) {
+
+      if (!configs.containsKey(ACCESS_KEY_NAME) ||
+          !configs.containsKey(SECRET_KEY_NAME)) {
+        throw new ConfigException(String.format("%s and %s are mandatory configuration properties",
+            ACCESS_KEY_NAME, SECRET_KEY_NAME
+        ));
+      }
     }
   }
 }
