@@ -333,7 +333,7 @@ you can use the ``s3.part.size`` to control the size of each of these continuous
 upload Kafka records into a single S3 object. The part size affects throughput and
 latency, as an S3 object is visible/available only after all parts are uploaded.
 The ``s3.compression.type`` specifies that we want the S3 connector to compress our S3 objects
-using GZIP compression, adding the ``.gzip`` extension to any files (see below).
+using GZIP compression, adding the ``.gz`` extension to any files (see below).
 
 So far this example configuration is relatively typical of most S3 connectors.
 Now lets define that we should read the raw message values and write them in
@@ -382,4 +382,4 @@ an opaque binary value, we cannot extract timestamps from fields using the ``Rec
 option.
 
 The S3 connector configuration outlined above results in newline-delimited gzipped objects in S3
-with ``.bin.gzip``.
+with ``.bin.gz``.
