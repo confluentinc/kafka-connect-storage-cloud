@@ -16,11 +16,8 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -52,10 +49,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 
 public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
-
-  private static final String ACCESS_KEY_NAME = "access.key";
-  private static final String SECRET_KEY_NAME = "secret.key";
-  private static final String CONFIGS_NUM_KEY_NAME = "configs.num";
 
   @Rule
   public ExpectedException thrown = ExpectedException.none();
@@ -187,9 +180,18 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
         DummyAssertiveCredentialsProvider.class.getName()
     );
     String configPrefix = S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
-    properties.put(configPrefix.concat(ACCESS_KEY_NAME), ACCESS_KEY_VALUE);
-    properties.put(configPrefix.concat(SECRET_KEY_NAME), SECRET_KEY_VALUE);
-    properties.put(configPrefix.concat(CONFIGS_NUM_KEY_NAME), "3");
+    properties.put(
+        configPrefix.concat(DummyAssertiveCredentialsProvider.ACCESS_KEY_NAME),
+        ACCESS_KEY_VALUE
+    );
+    properties.put(
+        configPrefix.concat(DummyAssertiveCredentialsProvider.SECRET_KEY_NAME),
+        SECRET_KEY_VALUE
+    );
+    properties.put(
+        configPrefix.concat(DummyAssertiveCredentialsProvider.CONFIGS_NUM_KEY_NAME),
+        "3"
+    );
     connectorConfig = new S3SinkConnectorConfig(properties);
 
     AWSCredentialsProvider credentialsProvider = connectorConfig.getCredentialsProvider();
@@ -209,7 +211,10 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
         S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
         DummyAssertiveCredentialsProvider.class.getName()
     );
-    properties.put(configPrefix.concat(CONFIGS_NUM_KEY_NAME), "2");
+    properties.put(
+        configPrefix.concat(DummyAssertiveCredentialsProvider.CONFIGS_NUM_KEY_NAME),
+        "2"
+    );
 
     connectorConfig = new S3SinkConnectorConfig(properties);
     connectorConfig.getCredentialsProvider();
@@ -276,45 +281,5 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     }
   }
 
-  static class DummyAssertiveCredentialsProvider implements AWSCredentialsProvider, Configurable {
-
-    private AWSCredentials credentials;
-
-    @Override
-    public AWSCredentials getCredentials() {
-      return credentials;
-    }
-
-    @Override
-    public void refresh() {
-      throw new UnsupportedOperationException(
-          "Refresh is not supported for this credentials provider"
-      );
-    }
-
-    @Override
-    public void configure(final Map<String, ?> configs) {
-
-      final String accessKeyId = (String) configs.get(ACCESS_KEY_NAME);
-      final String secretKey = (String) configs.get(SECRET_KEY_NAME);
-      final Integer configsNum = Integer.valueOf((String) configs.get(CONFIGS_NUM_KEY_NAME));
-
-      validateConfigs(configs);
-
-      assertEquals(configsNum.intValue(), configs.size());
-
-      credentials = new BasicAWSCredentials(accessKeyId, secretKey);
-    }
-
-    private void validateConfigs(Map<String, ?> configs) {
-
-      if (!configs.containsKey(ACCESS_KEY_NAME) ||
-          !configs.containsKey(SECRET_KEY_NAME)) {
-        throw new ConfigException(String.format("%s and %s are mandatory configuration properties",
-            ACCESS_KEY_NAME, SECRET_KEY_NAME
-        ));
-      }
-    }
-  }
 }
 
