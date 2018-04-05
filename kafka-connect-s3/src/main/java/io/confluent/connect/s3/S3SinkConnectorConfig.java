@@ -83,7 +83,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
    * The properties that begin with this prefix will be used to configure a class, specified by
    * {@code s3.credentials.provider.class} if it implements {@link Configurable}.
    */
-  public static final String CREDENTIALS_PROVIDER_CONFIG_PREFIX = "s3.credentials.provider.";
+  public static final String CREDENTIALS_PROVIDER_CONFIG_PREFIX =
+      CREDENTIALS_PROVIDER_CLASS_CONFIG.substring(
+          0,
+          CREDENTIALS_PROVIDER_CLASS_CONFIG.lastIndexOf(".") + 1
+      );
 
   public static final String REGION_CONFIG = "s3.region";
   public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();

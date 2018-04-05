@@ -122,8 +122,8 @@ Every service will start in order, printing a message with its status:
 .. note:: You need to make sure the connector user has write access to the S3 bucket
    specified in ``s3.bucket.name`` and has deployed credentials
    `appropriately <http://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/credentials.html>`_.
-   You can also pass additional properties to credential provider, please refer to the
-   `Configurable credential provider`_ section.
+   You can also pass additional properties to credentials provider, please refer to the
+   `Configurable credentials provider`_ section.
 
 To import a few records with a simple schema in Kafka, start the Avro console producer as follows:
 
@@ -253,82 +253,16 @@ Configuration
 This section gives example configurations that cover common scenarios. For detailed description of all the
 available configuration options of the S3 connector go to :ref:`Configuration Options<s3_configuration_options>`
 
-Configurable credential provider
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Configurable credentials provider
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Some use cases require more fine-grained credentials configuration for AWS so that each connector
 could have its own credentials.
 
-To use configurable credential provider, ``s3.credentials.provider.class`` should be a class which
-implements both ``com.amazonaws.auth.AWSCredentialsProvider`` and ``org.apache.kafka.common
-.Configurable`` interfaces.
-
-A subset of properties, starting from ``s3.credentials.provider.`` (with stripped out prefix)
-will be passed to an instance of a credential provider.
-
-Here is a non-thread safe reference implementation of configurable credential provider:
-
-.. sourcecode:: java
-
-    package com.example;
-
-    import com.amazonaws.auth.AWSCredentials;
-    import com.amazonaws.auth.AWSCredentialsProvider;
-    import com.amazonaws.auth.BasicAWSCredentials;
-    import org.apache.kafka.common.Configurable;
-    import org.apache.kafka.common.config.ConfigException;
-    import java.util.Map;
-
-    public class ConfigurableCredentialsProvider implements AWSCredentialsProvider, Configurable {
-
-      private static final String ACCESS_KEY_NAME = "key";
-      private static final String SECRET_KEY_NAME = "secret";
-      private AWSCredentials credentials;
-      private boolean configured = false;
-
-      @Override
-      public AWSCredentials getCredentials() {
-        if (configured) {
-          return credentials;
-        } else {
-          throw new IllegalStateException("Credential provider is not configured");
-        }
-      }
-
-      @Override
-      public void refresh() {}
-
-      @Override
-      public void configure(final Map<String, ?> configs) {
-
-        final String accessKeyId = (String) configs.get(ACCESS_KEY_NAME);
-        final String secretKey = (String) configs.get(SECRET_KEY_NAME);
-
-        validateConfigs(configs);
-
-        credentials = new BasicAWSCredentials(accessKeyId, secretKey);
-        configured = true;
-      }
-
-      private void validateConfigs(Map<String, ?> configs) {
-
-        if (!configs.containsKey(ACCESS_KEY_NAME)
-            || !configs.containsKey(SECRET_KEY_NAME)) {
-          throw new ConfigException(String.format("%s and %s are mandatory configuration properties",
-              ACCESS_KEY_NAME, SECRET_KEY_NAME
-          ));
-        }
-      }
-    }
-
-with following configurations:
-
-.. sourcecode:: bash
-
-
-  s3.credentials.provider.class=com.example.ConfigurableCredentialsProvider
-  s3.credentials.provider.key=YOUR_ACCESS_KEY_ID
-  s3.credentials.provider.secret=YOUR_SECRET_ACCESS_KEY
-
+To use a configurable credentials provider, set the ``s3.credentials.provider.class``
+to the name of a class that implements both the ``com.amazonaws.auth.AWSCredentialsProvider``
+and ``org.apache.kafka.common.Configurable`` interfaces.
+Then as needed, supply additional properties required by that provider by prefixing them
+with ``s3.credentials.provider.``. These will all be passed to the credentials provider during configuration.
 
 Example
 ~~~~~~~
