@@ -352,7 +352,8 @@ deserializing the message values and instead give the connector the message valu
 binary form. We use the ``format.class`` setting to instruct the S3 connector to write these
 binary message values as-is into S3 objects. By default the message values written to the same S3
 object will be separated by a newline character sequence, but you can control this with the
-``format.bytearray.separator`` setting. Also, by default the files written to S3 will have an
+``format.bytearray.separator`` setting, and you may want to consider this if your messages might
+contain newlines. Also, by default the files written to S3 will have an
 extension of ``.bin`` (before compression, if enabled), or you can use the
 ``format.bytearray.extension`` setting to change the pre-compression filename extension.
 
