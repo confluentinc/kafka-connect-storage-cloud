@@ -343,9 +343,12 @@ Next we need to configure the particulars of Amazon S3:
   s3.part.size=5242880
 
 The ``s3.bucket.name`` is mandatory and names your S3 bucket where the exported Kafka records
-should be written. Other useful settings are ``s3.region``, which you should set if you use a
-region other than the default, and ``s3.part.size`` to control the size of each part in the
-multipart uploads that will be used to upload a single chunk of Kafka records.
+should be written. Another useful setting is ``s3.region`` that you should set if you use a
+region other than the default. And since the S3 connector uses
+`multi-part uploads <https://docs.aws.amazon.com/AmazonS3/latest/dev/mpuoverview.html>`_,
+you can use the ``s3.part.size`` to control the size of each of these continuous parts used to
+upload Kafka records into a single S3 object. The part size affects throughput and
+latency, as an S3 object is visible/available only after all parts are uploaded.
 
 So far this example configuration is relatively typical of most S3 connectors.
 Now lets define that we should read the raw message values and write them in
