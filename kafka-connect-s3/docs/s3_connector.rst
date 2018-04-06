@@ -263,10 +263,6 @@ to the name of a class that implements both the ``com.amazonaws.auth.AWSCredenti
 and ``org.apache.kafka.common.Configurable`` interfaces.
 Then as needed, supply additional properties required by that provider by prefixing them
 with ``s3.credentials.provider.``. These will all be passed to the credentials provider during configuration.
-As an example, you can refer to the class, used in unit-tests:
-`DummyAssertiveCredentialsProvider <https://github.com/
-confluentinc/kafka-connect-storage-cloud/blob/master/kafka-connect-s3/src/test/java/io/confluent
-/connect/s3/DummyAssertiveCredentialsProvider.java>`_.
 
 Basic Example
 ~~~~~~~~~~~~~
