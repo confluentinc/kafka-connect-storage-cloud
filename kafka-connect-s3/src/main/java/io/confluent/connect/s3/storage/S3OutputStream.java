@@ -60,7 +60,6 @@ public class S3OutputStream extends OutputStream {
   private boolean closed;
   private ByteBuffer buffer;
   private MultipartUpload multiPartUpload;
-  private final int retries;
   private final CompressionType compressionType;
   private volatile OutputStream compressionFilter;
 
@@ -73,7 +72,6 @@ public class S3OutputStream extends OutputStream {
     this.partSize = conf.getPartSize();
     this.cannedAcl = conf.getCannedAcl();
     this.closed = false;
-    this.retries = conf.getS3PartRetries();
     this.buffer = ByteBuffer.allocate(this.partSize);
     this.progressListener = new ConnectProgressListener();
     this.multiPartUpload = null;

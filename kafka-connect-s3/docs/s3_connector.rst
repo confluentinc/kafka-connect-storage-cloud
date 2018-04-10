@@ -97,18 +97,70 @@ Schema evolution in the S3 connector works in the same way as in the `HDFS conne
   
 Automatic Retries
 -----------------
-Users' environments might experience network partitioning, reach AWS throttling limits etc.
-In order to have a robust system it makes sense to have a retry policy, however, it's important
-to avoid a thundering herd problem.
-The S3 connector uses retry policy, predefined by ``com.amazonaws.retry.PredefinedRetryPolicies.SDKDefaultRetryCondition``
-and ``com.amazonaws.retry.PredefinedBackoffStrategies.FullJitterBackoffStrategy`` provided by AWS SDK.
+The S3 connector may experience problems writing to the S3 bucket, such as during network partitions, interruptions, or even AWS throttling limits. In many cases, the connector will retry the request a number of times before failing. To prevent from further overloading the network or S3 service, the connector uses an exponential backoff technique to give the network and/or service time to recover. The technique adds randomness, called jitter, to the calculated backoff times to prevent a thundering herd, where large numbers of requests from many tasks are submitted concurrently and overwhelm the service. Randomness spreads out the retries from many tasks and should reduce the overall time required to complete all outstanding requests compared to simple exponential backoff. The goal is to spread out the requests to S3 as much as possible.
 
-To calculate a maximum delay time before a next attempt, following formula ``${retry.backoff
-.ms} * 2 ^ (retry-1)`` is used.
+The delay for retries is dependent upon the connector's ``s3.retry.backoff.ms`` configuration
+property. The actual delay is randomized, but the maximum delay can be calculated as a function
+of the number of retry attempts with ``${s3.retry.backoff.ms} * 2 ^ (retry-1)``, where ``retry``
+is the number of attempts taken so far in the current iteration. In order to keep the maximum delay within a reasonable duration, it is capped at 24 hours.
 
-In order to keep maximum delay within a reasonable duration, it's capped by 24 hours.
-Base delay of exponential retry backoff time can be configured by ``retry.backoff.ms`` and
-number of retries - by ``s3.part.retries``.
+The maximum number of retry attempts is dictated by the ``s3.part.retries`` S3 connector configuration property, which defaults
+to 3 attempts. The backoff time, which is the amount of time to wait before retrying, is a function of the
+retry attempt number and the initial backoff time specified in the ``s3.retry.backoff.ms``
+connector configuration
+property, which defaults to 500 milliseconds. For example, the following table shows the possible wait times
+before submitting each of the 3 retry attempts:
+
+.. table:: Range of backoff times for each retry using the default configuration
+   :widths: auto
+
+   =====  =====================  =====================  ==============================================
+   Retry  Minimum Backoff (sec)  Maximum Backoff (sec)  Total Potential Delay from First Attempt (sec)
+   =====  =====================  =====================  ==============================================
+     1         0.0                      0.5                              0.5
+     2         0.0                      1.0                              1.5
+     3         0.0                      2.0                              3.5
+   =====  =====================  =====================  ==============================================
+
+Increasing the maximum number of retries adds more backoff:
+
+.. table:: Range of backoff times for additional retries
+   :widths: auto
+
+   =====  =====================  =====================  ==============================================
+   Retry  Minimum Backoff (sec)  Maximum Backoff (sec)  Total Potential Delay from First Attempt (sec)
+   =====  =====================  =====================  ==============================================
+     4         0.0                      4.0                              7.5
+     5         0.0                      8.0                             15.5
+     6         0.0                     16.0                             31.5
+     7         0.0                     32.0                             63.5
+     8         0.0                     64.0                            127.5
+     9         0.0                    128.0                            256.5
+    10         0.0                    256.0                            511.5
+   =====  =====================  =====================  ==============================================
+
+At some point, maximum backoff time will reach saturation and will be capped at 24 hours.
+From the example below, all attempts starting with 19 will have maximum backoff time as 24 hours:
+
+.. table:: Range of backoff times when reaching the cap of 24 hours
+   :widths: auto
+
+   =====  =====================  =====================  ==============================================
+   Retry  Minimum Backoff (sec)  Maximum Backoff (sec)  Total Potential Delay from First Attempt (sec)
+   =====  =====================  =====================  ==============================================
+    17         0.0                  32768.0                           65535.5
+    18         0.0                  65536.0                           131071.5
+    19         0.0                  86400.0                           217471.5
+    20         0.0                  86400.0                           303871.5
+    21         0.0                  86400.0                           390271.5
+    22         0.0                  86400.0                           476671.5
+    23         0.0                  86400.0                           563071.5
+   =====  =====================  =====================  ==============================================
+
+It's not advised to set ``s3.part.retries`` too high since making more attempts after reaching a cap of 24 hours isn't practical.
+You can adjust both the ``s3.part.retries`` and ``s3.retry.backoff.ms`` connector configuration
+properties to achieve
+the desired backoff and retry characteristics.
 
 Quickstart
 ----------
