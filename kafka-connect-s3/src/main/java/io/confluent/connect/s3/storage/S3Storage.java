@@ -104,15 +104,15 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
     ClientConfiguration clientConfiguration = PredefinedClientConfigurations.defaultConfig();
     clientConfiguration.withUserAgentPrefix(version);
+    RetryPolicy fullJitterPolicy = newRetryPolicy(config);
+    clientConfiguration.withRetryPolicy(fullJitterPolicy);
     if (StringUtils.isNotBlank(config.getString(S3_PROXY_URL_CONFIG))) {
       S3ProxyConfig proxyConfig = new S3ProxyConfig(config);
-      RetryPolicy fullJitterPolicy = newRetryPolicy(config);
       clientConfiguration.withProtocol(proxyConfig.protocol())
           .withProxyHost(proxyConfig.host())
           .withProxyPort(proxyConfig.port())
           .withProxyUsername(proxyConfig.user())
-          .withProxyPassword(proxyConfig.pass())
-          .withRetryPolicy(fullJitterPolicy);
+          .withProxyPassword(proxyConfig.pass());
     }
 
     return clientConfiguration;
