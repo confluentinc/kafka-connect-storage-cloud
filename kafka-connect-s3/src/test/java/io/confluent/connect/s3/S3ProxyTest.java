@@ -16,9 +16,14 @@
 
 package io.confluent.connect.s3;
 
+import com.amazonaws.AmazonClientException;
+import com.amazonaws.AmazonServiceException;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.Protocol;
-import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.retry.PredefinedBackoffStrategies;
+import com.amazonaws.retry.PredefinedRetryPolicies;
+import com.amazonaws.retry.RetryPolicy;
+import org.apache.http.HttpStatus;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.After;
 import org.junit.Before;
@@ -32,7 +37,12 @@ import java.util.Map;
 
 import io.confluent.connect.s3.storage.S3Storage;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.MAX_RETRIES;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.MAX_RETRY_TIME_MS;
+import static io.confluent.connect.storage.StorageSinkConnectorConfig.RETRY_BACKOFF_CONFIG;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class S3ProxyTest extends S3SinkConnectorTestBase {
 
@@ -40,7 +50,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   public ExpectedException thrown = ExpectedException.none();
 
   protected S3Storage storage;
-  protected AmazonS3 s3;
   protected ClientConfiguration clientConfig;
   protected Map<String, String> localProps = new HashMap<>();
 
@@ -253,5 +262,117 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
     assertEquals(8080, clientConfig.getProxyPort());
     assertEquals("realuser", clientConfig.getProxyUsername());
     assertEquals("realpass", clientConfig.getProxyPassword());
+  }
+
+  @Test
+  public void testRetryPolicy() throws Exception {
+    setUp();
+    RetryPolicy retryPolicy = storage.newRetryPolicy(connectorConfig);
+    assertTrue(retryPolicy.getRetryCondition() instanceof PredefinedRetryPolicies
+        .SDKDefaultRetryCondition);
+    assertTrue(retryPolicy.getBackoffStrategy() instanceof PredefinedBackoffStrategies
+        .FullJitterBackoffStrategy);
+  }
+
+  @Test
+  public void testRetryPolicyNonRetriable() throws Exception {
+    setUp();
+    RetryPolicy retryPolicy = storage.newRetryPolicy(connectorConfig);
+    AmazonClientException e = new AmazonClientException("Non-retriable exception");
+    assertFalse(retryPolicy.getRetryCondition().shouldRetry(null, e, 1));
+  }
+
+  @Test
+  public void testRetryPolicyRetriableServiceException() throws Exception {
+    setUp();
+    RetryPolicy retryPolicy = storage.newRetryPolicy(connectorConfig);
+    AmazonServiceException e = new AmazonServiceException("Retriable exception");
+    e.setStatusCode(HttpStatus.SC_INTERNAL_SERVER_ERROR);
+    assertTrue(retryPolicy.getRetryCondition().shouldRetry(null, e, 1));
+  }
+
+  @Test
+  public void testRetryPolicyNonRetriableServiceException() throws Exception {
+    setUp();
+    RetryPolicy retryPolicy = storage.newRetryPolicy(connectorConfig);
+    AmazonServiceException e = new AmazonServiceException("Non-retriable exception");
+    e.setStatusCode(HttpStatus.SC_METHOD_NOT_ALLOWED);
+    assertFalse(retryPolicy.getRetryCondition().shouldRetry(null, e, 1));
+  }
+
+  @Test
+  public void testRetryPolicyRetriableThrottlingException() throws Exception {
+    setUp();
+    RetryPolicy retryPolicy = storage.newRetryPolicy(connectorConfig);
+    AmazonServiceException e = new AmazonServiceException("Retriable exception");
+    e.setErrorCode("TooManyRequestsException");
+    assertTrue(retryPolicy.getRetryCondition().shouldRetry(null, e, 1));
+  }
+
+  @Test
+  public void testRetryPolicyRetriableSkewException() throws Exception {
+    setUp();
+    RetryPolicy retryPolicy = storage.newRetryPolicy(connectorConfig);
+    AmazonServiceException e = new AmazonServiceException("Retriable exception");
+    e.setErrorCode("RequestExpired");
+    assertTrue(retryPolicy.getRetryCondition().shouldRetry(null, e, 1));
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testRetryPolicyNegativeDelay() throws Exception {
+    localProps.put(RETRY_BACKOFF_CONFIG, "-100");
+    setUp();
+    storage.newRetryPolicy(connectorConfig);
+  }
+
+  @Test
+  public void testRetryPolicyDelayRanges() throws Exception {
+    assertComputeRetryInRange(10, 10L);
+    assertComputeRetryInRange(10, 100L);
+    assertComputeRetryInRange(10, 1000L);
+    assertComputeRetryInRange(MAX_RETRIES + 1, 1000L);
+    assertComputeRetryInRange(100, MAX_RETRY_TIME_MS + 1);
+    assertComputeRetryInRange(MAX_RETRIES + 1, MAX_RETRY_TIME_MS + 1);
+  }
+
+  /**
+   * Calculates exponential delay, capped by
+   * {@link com.amazonaws.retry.PredefinedBackoffStrategies#MAX_RETRIES} number of retries
+   * and {@link io.confluent.connect.s3.S3SinkConnectorConfig#MAX_RETRY_TIME_MS} total delay time
+   * in ms
+   * @param retriesAttempted
+   * @param baseDelay
+   * @return
+   * @see PredefinedBackoffStrategies#calculateExponentialDelay(int, int, int)
+   */
+  private int calculateExponentialDelay(
+      int retriesAttempted, long baseDelay
+  ) {
+    int retries = Math.min(retriesAttempted, MAX_RETRIES);
+    return (int) Math.min((1L << retries) * baseDelay, MAX_RETRY_TIME_MS);
+  }
+
+  private void assertComputeRetryInRange(
+      int retryAttempts,
+      long retryBackoffMs
+  ) throws Exception {
+
+    localProps.put(RETRY_BACKOFF_CONFIG, String.valueOf(retryBackoffMs));
+    setUp();
+    RetryPolicy retryPolicy = storage.newRetryPolicy(connectorConfig);
+    RetryPolicy.BackoffStrategy backoffStrategy = retryPolicy.getBackoffStrategy();
+
+    for (int i = 0; i != 20; ++i) {
+      for (int retries = 0; retries <= retryAttempts; ++retries) {
+        long maxResult = calculateExponentialDelay(retries, retryBackoffMs);
+        long result = backoffStrategy.delayBeforeNextRetry(null, null, retries);
+        if (retryBackoffMs < 0) {
+          assertEquals(0, result);
+        } else {
+          assertTrue(result >= 0L);
+          assertTrue(result <= maxResult);
+        }
+      }
+    }
   }
 }

@@ -95,6 +95,21 @@ NO compatibility, BACKWARD compatibility, FORWARD compatibility and FULL compati
 
 Schema evolution in the S3 connector works in the same way as in the `HDFS connector <../../../connect-hdfs/docs/hdfs_connector.html#schema-evolution>`_.
   
+Automatic Retries
+-----------------
+Users' environments might experience network partitioning, reach AWS throttling limits etc.
+In order to have a robust system it makes sense to have a retry policy, however, it's important
+to avoid a thundering herd problem.
+The S3 connector uses retry policy, predefined by ``com.amazonaws.retry.PredefinedRetryPolicies.SDKDefaultRetryCondition``
+and ``com.amazonaws.retry.PredefinedBackoffStrategies.FullJitterBackoffStrategy`` provided by AWS SDK.
+
+To calculate a maximum delay time before a next attempt, following formula ``${retry.backoff
+.ms} * 2 ^ (retry-1)`` is used.
+
+In order to keep maximum delay within a reasonable duration, it's capped by 24 hours.
+Base delay of exponential retry backoff time can be configured by ``retry.backoff.ms`` and
+number of retries - by ``s3.part.retries``.
+
 Quickstart
 ----------
 In this Quickstart, we use the S3 connector to export data produced by the Avro console producer to S3.

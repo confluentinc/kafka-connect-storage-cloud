@@ -20,6 +20,9 @@ import com.amazonaws.ClientConfiguration;
 import com.amazonaws.PredefinedClientConfigurations;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.regions.Regions;
+import com.amazonaws.retry.PredefinedBackoffStrategies;
+import com.amazonaws.retry.PredefinedRetryPolicies;
+import com.amazonaws.retry.RetryPolicy;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ObjectListing;
@@ -33,9 +36,11 @@ import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.Storage;
 import io.confluent.connect.storage.common.util.StringUtils;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.MAX_RETRY_TIME_MS;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
+import static io.confluent.connect.storage.StorageSinkConnectorConfig.RETRY_BACKOFF_CONFIG;
 
 /**
  * S3 implementation of the storage interface for Connect sinks.
@@ -101,14 +106,43 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     clientConfiguration.withUserAgentPrefix(version);
     if (StringUtils.isNotBlank(config.getString(S3_PROXY_URL_CONFIG))) {
       S3ProxyConfig proxyConfig = new S3ProxyConfig(config);
+      RetryPolicy fullJitterPolicy = newRetryPolicy(config);
       clientConfiguration.withProtocol(proxyConfig.protocol())
           .withProxyHost(proxyConfig.host())
           .withProxyPort(proxyConfig.port())
           .withProxyUsername(proxyConfig.user())
-          .withProxyPassword(proxyConfig.pass());
+          .withProxyPassword(proxyConfig.pass())
+          .withRetryPolicy(fullJitterPolicy);
     }
 
     return clientConfiguration;
+  }
+
+
+  /**
+   * Creates a retry policy, based on full jitter backoff strategy
+   * and default retry condition.
+   *
+   * @param config the S3 configuration.
+   * @return retry policy
+   * @see com.amazonaws.retry.PredefinedRetryPolicies.SDKDefaultRetryCondition
+   * @see PredefinedBackoffStrategies.FullJitterBackoffStrategy
+   */
+  public RetryPolicy newRetryPolicy(S3SinkConnectorConfig config) {
+
+    PredefinedBackoffStrategies.FullJitterBackoffStrategy backoffStrategy = new
+        PredefinedBackoffStrategies.FullJitterBackoffStrategy(
+        config.getLong(RETRY_BACKOFF_CONFIG).intValue(),
+        MAX_RETRY_TIME_MS
+    );
+
+    RetryPolicy retryPolicy = new RetryPolicy(
+        PredefinedRetryPolicies.DEFAULT_RETRY_CONDITION,
+        backoffStrategy,
+        conf.getS3PartRetries(),
+        false
+    );
+    return retryPolicy;
   }
 
   @Override

@@ -40,6 +40,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
@@ -105,6 +106,15 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String S3_PROXY_PASS_CONFIG = "s3.proxy.password";
   public static final Password S3_PROXY_PASS_DEFAULT = new Password(null);
+
+  /**
+   * An arbitrary absolute maximum practical retry time.
+   */
+  public static final int MAX_RETRY_TIME_MS = (int) TimeUnit.HOURS.toMillis(24);
+  /**
+   * Maximum retry limit.
+   **/
+  public static final int MAX_RETRIES = 30;
 
   private final String name;
 
