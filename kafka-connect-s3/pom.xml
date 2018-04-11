@@ -150,6 +150,8 @@
                                 <tag>aws</tag>
                             </tags>
 
+                            <confluentControlCenterIntegration>true</confluentControlCenterIntegration>
+
                             <requirements>
                                 <requirement>AWS S3 bucket with write permissions</requirement>
                             </requirements>
