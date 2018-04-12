@@ -21,3 +21,5 @@ Then run the monitoring script in the background:
 
 If you install the [browser extensions](http://livereload.com/) then everything should update every time any files are
 saved without any manual steps on your part.
+
+You can navigate docs in your browser [here](http://127.0.0.1:5500/_build/html/).
