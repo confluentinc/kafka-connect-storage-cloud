@@ -17,6 +17,7 @@
 package io.confluent.connect.s3;
 
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.Before;
@@ -226,6 +227,20 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
           break;
       }
     }
+  }
+
+  @Test(expected = ConfigException.class)
+  public void testS3PartRetriesNegative() {
+    properties.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "-1");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    connectorConfig.getInt(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG);
+  }
+
+  @Test(expected = ConfigException.class)
+  public void testS3RetryBackoffNegative() {
+    properties.put(S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG, "-1");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    connectorConfig.getLong(S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG);
   }
 }
 

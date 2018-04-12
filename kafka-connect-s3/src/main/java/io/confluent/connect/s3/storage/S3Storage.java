@@ -68,11 +68,10 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
   /**
    * Creates and configures S3 client.
-   * This method currently configures the AWS client retry policy to use full jitter.
    * @param config the S3 configuration.
    * @return S3 client
    */
-  public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
+  protected AmazonS3 newS3Client(S3SinkConnectorConfig config) {
     ClientConfiguration clientConfiguration = newClientConfiguration(config);
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
                                         .withAccelerateModeEnabled(
@@ -104,14 +103,18 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     this.s3 = s3;
   }
 
-  // Visible for testing.
-  public ClientConfiguration newClientConfiguration(S3SinkConnectorConfig config) {
+  /**
+   * Creates S3 client's configuration.
+   * This method currently configures the AWS client retry policy to use full jitter.
+   * @param config the S3 configuration.
+   * @return S3 client's configuration
+   */
+  protected ClientConfiguration newClientConfiguration(S3SinkConnectorConfig config) {
     String version = String.format(VERSION_FORMAT, Version.getVersion());
 
     ClientConfiguration clientConfiguration = PredefinedClientConfigurations.defaultConfig();
-    clientConfiguration.withUserAgentPrefix(version);
-    RetryPolicy fullJitterRetryPolicy = newFullJitterRetryPolicy(config);
-    clientConfiguration.withRetryPolicy(fullJitterRetryPolicy);
+    clientConfiguration.withUserAgentPrefix(version)
+        .withRetryPolicy(newFullJitterRetryPolicy(config));
     if (StringUtils.isNotBlank(config.getString(S3_PROXY_URL_CONFIG))) {
       S3ProxyConfig proxyConfig = new S3ProxyConfig(config);
       clientConfiguration.withProtocol(proxyConfig.protocol())
@@ -134,7 +137,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
    * @see com.amazonaws.retry.PredefinedRetryPolicies.SDKDefaultRetryCondition
    * @see PredefinedBackoffStrategies.FullJitterBackoffStrategy
    */
-  public RetryPolicy newFullJitterRetryPolicy(S3SinkConnectorConfig config) {
+  protected RetryPolicy newFullJitterRetryPolicy(S3SinkConnectorConfig config) {
 
     PredefinedBackoffStrategies.FullJitterBackoffStrategy backoffStrategy = new
         PredefinedBackoffStrategies.FullJitterBackoffStrategy(

@@ -20,9 +20,12 @@ import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.Protocol;
+import com.amazonaws.http.AmazonHttpClient;
+import com.amazonaws.http.settings.HttpClientSettings;
 import com.amazonaws.retry.PredefinedBackoffStrategies;
 import com.amazonaws.retry.PredefinedRetryPolicies;
 import com.amazonaws.retry.RetryPolicy;
+import com.amazonaws.services.s3.AmazonS3;
 import org.apache.http.HttpStatus;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.After;
@@ -30,13 +33,12 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.mockito.Matchers;
+import org.powermock.reflect.Whitebox;
 
 import java.util.HashMap;
 import java.util.Map;
 
 import io.confluent.connect.s3.storage.S3Storage;
-
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_MAX_TIME_MS;
@@ -58,6 +60,7 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   protected S3Storage storage;
   protected ClientConfiguration clientConfig;
   protected Map<String, String> localProps = new HashMap<>();
+  protected RetryPolicy retryPolicy;
 
   @Override
   protected Map<String, String> createProps() {
@@ -69,7 +72,18 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   @Before
   public void setUp() throws Exception {
     super.setUp();
-    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, null);
+    storage = new S3Storage(connectorConfig, url);
+    AmazonS3 s3 = Whitebox.getInternalState(storage, "s3");
+    AmazonHttpClient amazonHttpClient = Whitebox.getInternalState(s3, "client");
+    HttpClientSettings httpClientSettings = Whitebox.getInternalState(
+        amazonHttpClient,
+        "httpClientSettings"
+    );
+    clientConfig = Whitebox.getInternalState(
+        httpClientSettings,
+        "config"
+    );
+    retryPolicy = clientConfig.getRetryPolicy();
   }
 
   @After
@@ -82,7 +96,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   @Test
   public void testNoProxy() throws Exception {
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
     assertEquals(Protocol.HTTPS, clientConfig.getProtocol());
     assertEquals(null, clientConfig.getProxyHost());
     assertEquals(-1, clientConfig.getProxyPort());
@@ -93,26 +106,23 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   @Test
   public void testNoProtocolThrowsException() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "localhost");
-    setUp();
     thrown.expect(ConfigException.class);
-    thrown.expectMessage(Matchers.contains("no protocol: localhost"));
-    clientConfig = storage.newClientConfiguration(connectorConfig);
+    thrown.expectMessage("no protocol: localhost");
+    setUp();
   }
 
   @Test
   public void testUnknownProtocolThrowsException() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "unknown://localhost");
-    setUp();
     thrown.expect(ConfigException.class);
-    thrown.expectMessage(Matchers.contains("unknown protocol: localhost"));
-    clientConfig = storage.newClientConfiguration(connectorConfig);
+    thrown.expectMessage("unknown protocol: unknown");
+    setUp();
   }
 
   @Test
   public void testProtocolOnly() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
     assertEquals(Protocol.HTTP, clientConfig.getProtocol());
     assertEquals("", clientConfig.getProxyHost());
     assertEquals(-1, clientConfig.getProxyPort());
@@ -124,7 +134,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   public void testProtocolHostOnly() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://localhost");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
     assertEquals(Protocol.HTTP, clientConfig.getProtocol());
     assertEquals("localhost", clientConfig.getProxyHost());
     assertEquals(-1, clientConfig.getProxyPort());
@@ -136,7 +145,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   public void testProtocolIpOnly() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://127.0.0.1");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
     assertEquals(Protocol.HTTP, clientConfig.getProtocol());
     assertEquals("127.0.0.1", clientConfig.getProxyHost());
     assertEquals(-1, clientConfig.getProxyPort());
@@ -148,7 +156,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   public void testUnknownHostOnly() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://255.255.255.255");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
     assertEquals(Protocol.HTTP, clientConfig.getProtocol());
     assertEquals("255.255.255.255", clientConfig.getProxyHost());
     assertEquals(-1, clientConfig.getProxyPort());
@@ -160,7 +167,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   public void testProtocolPort() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://:8080");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
     assertEquals(Protocol.HTTP, clientConfig.getProtocol());
     assertEquals("", clientConfig.getProxyHost());
     assertEquals(8080, clientConfig.getProxyPort());
@@ -172,7 +178,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   public void testProtocolHostPort() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://localhost:8080");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
     assertEquals(Protocol.HTTP, clientConfig.getProtocol());
     assertEquals("localhost", clientConfig.getProxyHost());
     assertEquals(8080, clientConfig.getProxyPort());
@@ -184,7 +189,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   public void testProtocolHostPortAndPath() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://localhost:8080/current");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
     assertEquals(Protocol.HTTP, clientConfig.getProtocol());
     assertEquals("localhost", clientConfig.getProxyHost());
     assertEquals(8080, clientConfig.getProxyPort());
@@ -196,7 +200,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   public void testProtocolHostPortUserOnUrlNoPass() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://user@localhost:8080");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
     assertEquals(Protocol.HTTP, clientConfig.getProtocol());
     assertEquals("localhost", clientConfig.getProxyHost());
     assertEquals(8080, clientConfig.getProxyPort());
@@ -208,7 +211,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   public void testProtocolHostPortUserOnUrlEmptyPass() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://user:@localhost:8080");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
     assertEquals(Protocol.HTTP, clientConfig.getProtocol());
     assertEquals("localhost", clientConfig.getProxyHost());
     assertEquals(8080, clientConfig.getProxyPort());
@@ -220,7 +222,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   public void testProtocolHostPortUserPassOnUrl() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://user:pass@localhost:8080");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
     assertEquals(Protocol.HTTP, clientConfig.getProtocol());
     assertEquals("localhost", clientConfig.getProxyHost());
     assertEquals(8080, clientConfig.getProxyPort());
@@ -234,7 +235,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_USER_CONFIG, "realuser");
     localProps.put(S3SinkConnectorConfig.S3_PROXY_PASS_CONFIG, "realpass");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
     assertEquals(Protocol.HTTP, clientConfig.getProtocol());
     assertEquals("localhost", clientConfig.getProxyHost());
     assertEquals(8080, clientConfig.getProxyPort());
@@ -248,7 +248,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_USER_CONFIG, "realuser");
     localProps.put(S3SinkConnectorConfig.S3_PROXY_PASS_CONFIG, "realpass");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
     assertEquals(Protocol.HTTP, clientConfig.getProtocol());
     assertEquals("localhost", clientConfig.getProxyHost());
     assertEquals(8080, clientConfig.getProxyPort());
@@ -262,7 +261,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_USER_CONFIG, "realuser");
     localProps.put(S3SinkConnectorConfig.S3_PROXY_PASS_CONFIG, "realpass");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
     assertEquals(Protocol.HTTPS, clientConfig.getProtocol());
     assertEquals("localhost", clientConfig.getProxyHost());
     assertEquals(8080, clientConfig.getProxyPort());
@@ -273,7 +271,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   @Test
   public void testRetryPolicy() throws Exception {
     setUp();
-    RetryPolicy retryPolicy = storage.newFullJitterRetryPolicy(connectorConfig);
     assertTrue(retryPolicy.getRetryCondition() instanceof PredefinedRetryPolicies
         .SDKDefaultRetryCondition);
     assertTrue(retryPolicy.getBackoffStrategy() instanceof PredefinedBackoffStrategies
@@ -283,7 +280,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   @Test
   public void testRetryPolicyNonRetriable() throws Exception {
     setUp();
-    RetryPolicy retryPolicy = storage.newFullJitterRetryPolicy(connectorConfig);
     AmazonClientException e = new AmazonClientException("Non-retriable exception");
     assertFalse(retryPolicy.getRetryCondition().shouldRetry(null, e, 1));
   }
@@ -291,7 +287,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   @Test
   public void testRetryPolicyRetriableServiceException() throws Exception {
     setUp();
-    RetryPolicy retryPolicy = storage.newFullJitterRetryPolicy(connectorConfig);
     AmazonServiceException e = new AmazonServiceException("Retriable exception");
     e.setStatusCode(HttpStatus.SC_INTERNAL_SERVER_ERROR);
     assertTrue(retryPolicy.getRetryCondition().shouldRetry(null, e, 1));
@@ -300,7 +295,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   @Test
   public void testRetryPolicyNonRetriableServiceException() throws Exception {
     setUp();
-    RetryPolicy retryPolicy = storage.newFullJitterRetryPolicy(connectorConfig);
     AmazonServiceException e = new AmazonServiceException("Non-retriable exception");
     e.setStatusCode(HttpStatus.SC_METHOD_NOT_ALLOWED);
     assertFalse(retryPolicy.getRetryCondition().shouldRetry(null, e, 1));
@@ -309,7 +303,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   @Test
   public void testRetryPolicyRetriableThrottlingException() throws Exception {
     setUp();
-    RetryPolicy retryPolicy = storage.newFullJitterRetryPolicy(connectorConfig);
     AmazonServiceException e = new AmazonServiceException("Retriable exception");
     e.setErrorCode("TooManyRequestsException");
     assertTrue(retryPolicy.getRetryCondition().shouldRetry(null, e, 1));
@@ -318,17 +311,15 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   @Test
   public void testRetryPolicyRetriableSkewException() throws Exception {
     setUp();
-    RetryPolicy retryPolicy = storage.newFullJitterRetryPolicy(connectorConfig);
     AmazonServiceException e = new AmazonServiceException("Retriable exception");
     e.setErrorCode("RequestExpired");
     assertTrue(retryPolicy.getRetryCondition().shouldRetry(null, e, 1));
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test(expected = ConfigException.class)
   public void testRetryPolicyNegativeDelay() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG, "-100");
     setUp();
-    storage.newFullJitterRetryPolicy(connectorConfig);
   }
 
   @Test
@@ -365,7 +356,6 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
 
     localProps.put(S3_RETRY_BACKOFF_CONFIG, String.valueOf(retryBackoffMs));
     setUp();
-    RetryPolicy retryPolicy = storage.newFullJitterRetryPolicy(connectorConfig);
     RetryPolicy.BackoffStrategy backoffStrategy = retryPolicy.getBackoffStrategy();
 
     for (int i = 0; i != 20; ++i) {

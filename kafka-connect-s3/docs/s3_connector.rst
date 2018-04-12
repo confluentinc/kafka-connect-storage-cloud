@@ -97,18 +97,25 @@ Schema evolution in the S3 connector works in the same way as in the `HDFS conne
   
 Automatic Retries
 -----------------
-The S3 connector may experience problems writing to the S3 bucket, such as during network partitions, interruptions, or even AWS throttling limits. In many cases, the connector will retry the request a number of times before failing. To prevent from further overloading the network or S3 service, the connector uses an exponential backoff technique to give the network and/or service time to recover. The technique adds randomness, called jitter, to the calculated backoff times to prevent a thundering herd, where large numbers of requests from many tasks are submitted concurrently and overwhelm the service. Randomness spreads out the retries from many tasks and should reduce the overall time required to complete all outstanding requests compared to simple exponential backoff. The goal is to spread out the requests to S3 as much as possible.
+The S3 connector may experience problems writing to the S3 bucket, such as during network partitions,
+interruptions, or even AWS throttling limits. In many cases,
+the connector will retry the request a number of times before failing.
+To prevent from further overloading the network or S3 service,
+the connector uses an exponential backoff technique to give the network and/or service time to recover.
+The technique adds randomness, called jitter, to the calculated backoff times to prevent a thundering herd,
+where large numbers of requests from many tasks are submitted concurrently and overwhelm the service.
+Randomness spreads out the retries from many tasks and should reduce the overall time required
+to complete all outstanding requests compared to simple exponential backoff.
+The goal is to spread out the requests to S3 as much as possible.
 
-The delay for retries is dependent upon the connector's ``s3.retry.backoff.ms`` configuration
-property. The actual delay is randomized, but the maximum delay can be calculated as a function
-of the number of retry attempts with ``${s3.retry.backoff.ms} * 2 ^ (retry-1)``, where ``retry``
-is the number of attempts taken so far in the current iteration. In order to keep the maximum delay within a reasonable duration, it is capped at 24 hours.
-
-The maximum number of retry attempts is dictated by the ``s3.part.retries`` S3 connector configuration property, which defaults
-to 3 attempts. The backoff time, which is the amount of time to wait before retrying, is a function of the
-retry attempt number and the initial backoff time specified in the ``s3.retry.backoff.ms``
-connector configuration
-property, which defaults to 500 milliseconds. For example, the following table shows the possible wait times
+The maximum number of retry attempts is dictated by the ``s3.part.retries`` S3 connector
+configuration property,
+which defaults to 3 attempts. The delay for retries is dependent upon the connector's ``s3.retry.backoff.ms``
+configuration property, which defaults to 500 milliseconds. The actual delay is randomized,
+but the maximum delay can be calculated as a function of the number of retry attempts with ``${s3.retry.backoff.ms} * 2 ^ (retry-1)``,
+where ``retry`` is the number of attempts taken so far in the current iteration.
+In order to keep the maximum delay within a reasonable duration, it is capped at 24 hours.
+For example, the following table shows the possible wait times
 before submitting each of the 3 retry attempts:
 
 .. table:: Range of backoff times for each retry using the default configuration

@@ -59,6 +59,8 @@ import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   // S3 Group
@@ -290,6 +292,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           S3_PART_RETRIES_CONFIG,
           Type.INT,
           S3_PART_RETRIES_DEFAULT,
+          atLeast(0),
           Importance.MEDIUM,
           "Maximum number of retry attempts for failed requests. Zero means no retries. "
               + "An actual number of attempts is determined by the S3 client based on multiple "
@@ -306,10 +309,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           S3_RETRY_BACKOFF_CONFIG,
           Type.LONG,
           S3_RETRY_BACKOFF_DEFAULT,
+          atLeast(0L),
           Importance.LOW,
           "How long to wait in milliseconds before attempting the first retry "
               + "of a failed S3 request. Upon a failure, this connector may wait up to twice as "
-              + "long as the previous wait, up to the maximum number of retries."
+              + "long as the previous wait, up to the maximum number of retries. "
               + "This avoids retrying in a tight loop under failure scenarios.",
           group,
           ++orderInGroup,
