@@ -18,17 +18,12 @@ package io.confluent.connect.s3.storage;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.http.AmazonHttpClient;
-import com.amazonaws.http.settings.HttpClientSettings;
 import com.amazonaws.retry.PredefinedBackoffStrategies;
 import com.amazonaws.retry.PredefinedRetryPolicies;
 import com.amazonaws.retry.RetryPolicy;
-import com.amazonaws.services.s3.AmazonS3;
 import org.apache.http.HttpStatus;
 import org.junit.Before;
 import org.junit.Test;
-import org.powermock.reflect.Whitebox;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -50,7 +45,6 @@ public class S3StorageTest extends S3SinkConnectorTestBase {
 
   protected RetryPolicy retryPolicy;
   protected Map<String, String> localProps = new HashMap<>();
-  protected ClientConfiguration clientConfig;
   protected S3Storage storage;
 
   @Override
@@ -64,17 +58,7 @@ public class S3StorageTest extends S3SinkConnectorTestBase {
   public void setUp() throws Exception {
     super.setUp();
     storage = new S3Storage(connectorConfig, url);
-    AmazonS3 s3 = Whitebox.getInternalState(storage, "s3");
-    AmazonHttpClient amazonHttpClient = Whitebox.getInternalState(s3, "client");
-    HttpClientSettings httpClientSettings = Whitebox.getInternalState(
-        amazonHttpClient,
-        "httpClientSettings"
-    );
-    clientConfig = Whitebox.getInternalState(
-        httpClientSettings,
-        "config"
-    );
-    retryPolicy = clientConfig.getRetryPolicy();
+    retryPolicy = storage.newFullJitterRetryPolicy(connectorConfig);
   }
 
   @Test

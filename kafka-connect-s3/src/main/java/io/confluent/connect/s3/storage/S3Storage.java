@@ -111,7 +111,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
    * @param config the S3 configuration.
    * @return S3 client's configuration
    */
-  public ClientConfiguration newClientConfiguration(S3SinkConnectorConfig config) {
+  protected ClientConfiguration newClientConfiguration(S3SinkConnectorConfig config) {
     String version = String.format(VERSION_FORMAT, Version.getVersion());
 
     ClientConfiguration clientConfiguration = PredefinedClientConfigurations.defaultConfig();

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.connect.s3;
+package io.confluent.connect.s3.storage;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.Protocol;
@@ -30,7 +30,8 @@ import org.mockito.Matchers;
 import java.util.HashMap;
 import java.util.Map;
 
-import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.S3SinkConnectorTestBase;
 
 import static org.junit.Assert.assertEquals;
 
