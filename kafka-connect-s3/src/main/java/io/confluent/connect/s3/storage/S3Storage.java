@@ -39,7 +39,7 @@ import io.confluent.connect.storage.common.util.StringUtils;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_MAX_TIME_MS;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_MAX_BACKOFF_TIME_MS;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
 
 /**
@@ -68,6 +68,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
   /**
    * Creates and configures S3 client.
+   *
    * @param config the S3 configuration.
    * @return S3 client
    */
@@ -106,10 +107,11 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   /**
    * Creates S3 client's configuration.
    * This method currently configures the AWS client retry policy to use full jitter.
+   *
    * @param config the S3 configuration.
    * @return S3 client's configuration
    */
-  protected ClientConfiguration newClientConfiguration(S3SinkConnectorConfig config) {
+  public ClientConfiguration newClientConfiguration(S3SinkConnectorConfig config) {
     String version = String.format(VERSION_FORMAT, Version.getVersion());
 
     ClientConfiguration clientConfiguration = PredefinedClientConfigurations.defaultConfig();
@@ -139,11 +141,11 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
    */
   protected RetryPolicy newFullJitterRetryPolicy(S3SinkConnectorConfig config) {
 
-    PredefinedBackoffStrategies.FullJitterBackoffStrategy backoffStrategy = new
-        PredefinedBackoffStrategies.FullJitterBackoffStrategy(
-        config.getLong(S3_RETRY_BACKOFF_CONFIG).intValue(),
-        S3_RETRY_MAX_TIME_MS
-    );
+    PredefinedBackoffStrategies.FullJitterBackoffStrategy backoffStrategy =
+        new PredefinedBackoffStrategies.FullJitterBackoffStrategy(
+            config.getLong(S3_RETRY_BACKOFF_CONFIG).intValue(),
+            S3_RETRY_MAX_BACKOFF_TIME_MS
+        );
 
     RetryPolicy retryPolicy = new RetryPolicy(
         PredefinedRetryPolicies.DEFAULT_RETRY_CONDITION,

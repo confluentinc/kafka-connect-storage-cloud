@@ -120,12 +120,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final Password S3_PROXY_PASS_DEFAULT = new Password(null);
 
   /**
-   * An arbitrary absolute maximum practical retry time.
+   * Maximum back-off time when retrying failed requests.
    */
-  public static final int S3_RETRY_MAX_TIME_MS = (int) TimeUnit.HOURS.toMillis(24);
+  public static final int S3_RETRY_MAX_BACKOFF_TIME_MS = (int) TimeUnit.HOURS.toMillis(24);
 
   public static final String S3_RETRY_BACKOFF_CONFIG = "s3.retry.backoff.ms";
-  public static final int S3_RETRY_BACKOFF_DEFAULT = 500;
+  public static final int S3_RETRY_BACKOFF_DEFAULT = 200;
 
   private final String name;
 
@@ -305,10 +305,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           atLeast(0),
           Importance.MEDIUM,
           "Maximum number of retry attempts for failed requests. Zero means no retries. "
-              + "An actual number of attempts is determined by the S3 client based on multiple "
+              + "The actual number of attempts is determined by the S3 client based on multiple "
               + "factors, including, but not limited to - "
               + "the value of this parameter, type of exception occurred, "
-              + "a number of attempts to retry failed request(s) etc.",
+              + "throttling settings of the underlying S3 client, etc.",
           group,
           ++orderInGroup,
           Width.LONG,
