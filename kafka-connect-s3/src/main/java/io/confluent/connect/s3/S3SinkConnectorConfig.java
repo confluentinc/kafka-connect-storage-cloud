@@ -41,6 +41,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
@@ -58,6 +59,8 @@ import io.confluent.connect.storage.partitioner.FieldPartitioner;
 import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
+
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
@@ -115,6 +118,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String S3_PROXY_PASS_CONFIG = "s3.proxy.password";
   public static final Password S3_PROXY_PASS_DEFAULT = new Password(null);
+
+  /**
+   * Maximum back-off time when retrying failed requests.
+   */
+  public static final int S3_RETRY_MAX_BACKOFF_TIME_MS = (int) TimeUnit.HOURS.toMillis(24);
+
+  public static final String S3_RETRY_BACKOFF_CONFIG = "s3.retry.backoff.ms";
+  public static final int S3_RETRY_BACKOFF_DEFAULT = 200;
 
   private final String name;
 
@@ -291,12 +302,33 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           S3_PART_RETRIES_CONFIG,
           Type.INT,
           S3_PART_RETRIES_DEFAULT,
+          atLeast(0),
           Importance.MEDIUM,
-          "Number of upload retries of a single S3 part. Zero means no retries.",
+          "Maximum number of retry attempts for failed requests. Zero means no retries. "
+              + "The actual number of attempts is determined by the S3 client based on multiple "
+              + "factors, including, but not limited to - "
+              + "the value of this parameter, type of exception occurred, "
+              + "throttling settings of the underlying S3 client, etc.",
           group,
           ++orderInGroup,
           Width.LONG,
           "S3 Part Upload Retries"
+      );
+
+      configDef.define(
+          S3_RETRY_BACKOFF_CONFIG,
+          Type.LONG,
+          S3_RETRY_BACKOFF_DEFAULT,
+          atLeast(0L),
+          Importance.LOW,
+          "How long to wait in milliseconds before attempting the first retry "
+              + "of a failed S3 request. Upon a failure, this connector may wait up to twice as "
+              + "long as the previous wait, up to the maximum number of retries. "
+              + "This avoids retrying in a tight loop under failure scenarios.",
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Retry Backoff (ms)"
       );
 
       configDef.define(

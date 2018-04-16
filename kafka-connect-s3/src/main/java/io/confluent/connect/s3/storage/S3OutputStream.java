@@ -17,7 +17,6 @@
 package io.confluent.connect.s3.storage;
 
 import com.amazonaws.AmazonClientException;
-import com.amazonaws.SdkClientException;
 import com.amazonaws.event.ProgressEvent;
 import com.amazonaws.event.ProgressListener;
 import com.amazonaws.services.s3.AmazonS3;
@@ -32,7 +31,6 @@ import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,7 +60,6 @@ public class S3OutputStream extends OutputStream {
   private boolean closed;
   private ByteBuffer buffer;
   private MultipartUpload multiPartUpload;
-  private final int retries;
   private final CompressionType compressionType;
   private volatile OutputStream compressionFilter;
 
@@ -75,7 +72,6 @@ public class S3OutputStream extends OutputStream {
     this.partSize = conf.getPartSize();
     this.cannedAcl = conf.getCannedAcl();
     this.closed = false;
-    this.retries = conf.getS3PartRetries();
     this.buffer = ByteBuffer.allocate(this.partSize);
     this.progressListener = new ConnectProgressListener();
     this.multiPartUpload = null;
@@ -126,13 +122,8 @@ public class S3OutputStream extends OutputStream {
       multiPartUpload = newMultipartUpload();
     }
     try {
-      retry(new Runnable() {
-        public void run() {
-          multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), size);
-        }
-      }, retries, "Part upload failed");
+      multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), size);
     } catch (Exception e) {
-      // TODO: elaborate on the exception interpretation. We might be able to retry.
       if (multiPartUpload != null) {
         multiPartUpload.abort();
         log.debug("Multipart upload aborted for bucket '{}' key '{}'.", bucket, key);
@@ -207,42 +198,6 @@ public class S3OutputStream extends OutputStream {
       // TODO: elaborate on the exception interpretation. If this is an AmazonServiceException,
       // there's more info to be extracted.
       throw new IOException("Unable to initiate MultipartUpload: " + e, e);
-    }
-  }
-
-  /**
-   * Retries given runnable only in the case of com.amazonaws.SdkClientException
-   *
-   * @param runnable The method to run with retries
-   * @param maxRetries How many times to retry
-   * @param errorMsg Error message to show
-   * @throws ConnectException if it failed more then maxRetries
-   */
-  protected static void retry(Runnable runnable, int maxRetries, String errorMsg) {
-    int failCount = 0;
-    Throwable cause = null;
-    do {
-      if (failCount > 0) {
-        try {
-          Thread.sleep(200 << failCount);
-        } catch (InterruptedException e) {
-          log.error("Interrupted while sleeping due to retry", e);
-        }
-      }
-      try {
-        runnable.run();
-        break;
-      } catch (SdkClientException e) {
-        failCount++;
-        cause = e;
-        log.error(errorMsg + ", attempt: " + failCount, cause);
-      }
-    } while (failCount < maxRetries);
-    if (failCount >= maxRetries) {
-      throw new ConnectException(
-          String.format("Giving up after failing %d times", failCount),
-          cause
-      );
     }
   }
 

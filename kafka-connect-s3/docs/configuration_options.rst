@@ -148,11 +148,21 @@ S3
   * Importance: low
 
 ``s3.part.retries``
-  Number of upload retries of a single S3 part. Zero means no retries.
+  Maximum number of retry attempts for failed requests. Zero means no retries. The actual number
+  of attempts is determined by the S3 client based on multiple factors, including, but not
+  limited to - the value of this parameter, type of exception occurred,
+  throttling settings of the underlying S3 client, etc.
 
   * Type: int
   * Default: 3
   * Importance: medium
+
+``s3.retry.backoff.ms``
+  How long to wait in milliseconds before attempting the first retry of a failed S3 request. Upon a failure, this connector may wait up to twice as long as the previous wait, up to the maximum number of retries. This avoids retrying in a tight loop under failure scenarios.
+
+  * Type: long
+  * Default: 200
+  * Importance: low
 
 ``format.bytearray.extension``
   Output file extension for ByteArrayFormat. Defaults to '.bin'

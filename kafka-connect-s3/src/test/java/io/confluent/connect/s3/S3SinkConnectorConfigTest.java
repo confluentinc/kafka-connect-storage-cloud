@@ -60,7 +60,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   }
 
   @Test
-  public void testStorageClass() throws Exception {
+  public void testStorageClass() {
     // No real test case yet
     connectorConfig = new S3SinkConnectorConfig(properties);
     assertEquals(
@@ -70,14 +70,14 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   }
 
   @Test
-  public void testUndefinedURL() throws Exception {
+  public void testUndefinedURL() {
     properties.remove(StorageCommonConfig.STORE_URL_CONFIG);
     connectorConfig = new S3SinkConnectorConfig(properties);
     assertNull(connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG));
   }
 
   @Test
-  public void testRecommendedValues() throws Exception {
+  public void testRecommendedValues() {
     List<Object> expectedStorageClasses = Arrays.<Object>asList(S3Storage.class);
     List<Object> expectedFormatClasses = Arrays.<Object>asList(
         AvroFormat.class,
@@ -110,7 +110,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   }
 
   @Test
-  public void testAvroDataConfigSupported() throws Exception {
+  public void testAvroDataConfigSupported() {
     properties.put(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, "true");
     properties.put(AvroDataConfig.CONNECT_META_DATA_CONFIG, "false");
     connectorConfig = new S3SinkConnectorConfig(properties);
@@ -119,7 +119,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   }
 
   @Test
-  public void testVisibilityForPartitionerClassDependentConfigs() throws Exception {
+  public void testVisibilityForPartitionerClassDependentConfigs() {
     properties.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, DefaultPartitioner.class.getName());
     List<ConfigValue> values = S3SinkConnectorConfig.getConfig().validate(properties);
     assertDefaultPartitionerVisibility(values);
@@ -280,6 +280,18 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
       }
     }
   }
+  @Test(expected = ConfigException.class)
+  public void testS3PartRetriesNegative() {
+    properties.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "-1");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    connectorConfig.getInt(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG);
+  }
 
+  @Test(expected = ConfigException.class)
+  public void testS3RetryBackoffNegative() {
+    properties.put(S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG, "-1");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    connectorConfig.getLong(S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG);
+  }
 }
 

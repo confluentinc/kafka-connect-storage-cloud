@@ -20,6 +20,9 @@ import com.amazonaws.ClientConfiguration;
 import com.amazonaws.PredefinedClientConfigurations;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.regions.Regions;
+import com.amazonaws.retry.PredefinedBackoffStrategies;
+import com.amazonaws.retry.PredefinedRetryPolicies;
+import com.amazonaws.retry.RetryPolicy;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ObjectListing;
@@ -35,6 +38,8 @@ import io.confluent.connect.storage.common.util.StringUtils;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_MAX_BACKOFF_TIME_MS;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
 
 /**
@@ -61,6 +66,13 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     this.s3 = newS3Client(conf);
   }
 
+  /**
+   * Creates and configures S3 client.
+   * Visible for testing.
+   *
+   * @param config the S3 configuration.
+   * @return S3 client
+   */
   public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
     ClientConfiguration clientConfiguration = newClientConfiguration(config);
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
@@ -93,12 +105,20 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     this.s3 = s3;
   }
 
-  // Visible for testing.
+  /**
+   * Creates S3 client's configuration.
+   * This method currently configures the AWS client retry policy to use full jitter.
+   * Visible for testing.
+   *
+   * @param config the S3 configuration.
+   * @return S3 client's configuration
+   */
   public ClientConfiguration newClientConfiguration(S3SinkConnectorConfig config) {
     String version = String.format(VERSION_FORMAT, Version.getVersion());
 
     ClientConfiguration clientConfiguration = PredefinedClientConfigurations.defaultConfig();
-    clientConfiguration.withUserAgentPrefix(version);
+    clientConfiguration.withUserAgentPrefix(version)
+        .withRetryPolicy(newFullJitterRetryPolicy(config));
     if (StringUtils.isNotBlank(config.getString(S3_PROXY_URL_CONFIG))) {
       S3ProxyConfig proxyConfig = new S3ProxyConfig(config);
       clientConfiguration.withProtocol(proxyConfig.protocol())
@@ -109,6 +129,34 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     }
 
     return clientConfiguration;
+  }
+
+
+  /**
+   * Creates a retry policy, based on full jitter backoff strategy
+   * and default retry condition.
+   * Visible for testing.
+   *
+   * @param config the S3 configuration.
+   * @return retry policy
+   * @see com.amazonaws.retry.PredefinedRetryPolicies.SDKDefaultRetryCondition
+   * @see PredefinedBackoffStrategies.FullJitterBackoffStrategy
+   */
+  protected RetryPolicy newFullJitterRetryPolicy(S3SinkConnectorConfig config) {
+
+    PredefinedBackoffStrategies.FullJitterBackoffStrategy backoffStrategy =
+        new PredefinedBackoffStrategies.FullJitterBackoffStrategy(
+            config.getLong(S3_RETRY_BACKOFF_CONFIG).intValue(),
+            S3_RETRY_MAX_BACKOFF_TIME_MS
+        );
+
+    RetryPolicy retryPolicy = new RetryPolicy(
+        PredefinedRetryPolicies.DEFAULT_RETRY_CONDITION,
+        backoffStrategy,
+        conf.getS3PartRetries(),
+        false
+    );
+    return retryPolicy;
   }
 
   @Override
