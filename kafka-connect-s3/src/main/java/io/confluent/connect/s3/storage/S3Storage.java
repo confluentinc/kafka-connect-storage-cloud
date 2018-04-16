@@ -68,6 +68,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
   /**
    * Creates and configures S3 client.
+   * Visible for testing.
    *
    * @param config the S3 configuration.
    * @return S3 client
@@ -107,6 +108,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   /**
    * Creates S3 client's configuration.
    * This method currently configures the AWS client retry policy to use full jitter.
+   * Visible for testing.
    *
    * @param config the S3 configuration.
    * @return S3 client's configuration
@@ -133,6 +135,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   /**
    * Creates a retry policy, based on full jitter backoff strategy
    * and default retry condition.
+   * Visible for testing.
    *
    * @param config the S3 configuration.
    * @return retry policy
