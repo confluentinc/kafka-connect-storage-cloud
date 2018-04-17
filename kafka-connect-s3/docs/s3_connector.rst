@@ -269,8 +269,8 @@ Configuration
 This section gives example configurations that cover common scenarios. For detailed description of all the
 available configuration options of the S3 connector go to :ref:`Configuration Options<s3_configuration_options>`
 
-Example
-~~~~~~~
+Basic Example
+~~~~~~~~~~~~~
 The example settings are contained in ``etc/kafka-connect-s3/quickstart-s3.properties`` as follows:
 
 .. sourcecode:: bash
@@ -314,3 +314,83 @@ schema generator class to its default value.
 Finally, schema evolution is disabled in this example by setting ``schema.compatibility`` to ``NONE``, as explained above.
 
 
+Write raw message values into S3
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+It is possible to use the S3 connector to write out the unmodified original message values into
+newline-separated files in S3. We accomplish this by telling Connect to not deserialize any of the
+messages, and by configuring the S3 connector to store the message values in a binary format in S3.
+
+The first part of our S3 connector is similar to other examples:
+
+.. sourcecode:: bash
+
+  name=s3-raw-sink
+  connector.class=io.confluent.connect.s3.S3SinkConnector
+  tasks.max=1
+  topics=s3_topic
+  flush.size=3
+
+The ``topics`` setting specifies the topics we want to export data from, in this case ``s3_topic``.
+The property ``flush.size`` specifies the number of records per partition the connector needs
+to write before completing a multipart upload to S3.
+
+Next we need to configure the particulars of Amazon S3:
+
+.. sourcecode:: bash
+
+  s3.bucket.name=confluent-kafka-connect-s3-testing
+  s3.region=us-west-2
+  s3.part.size=5242880
+
+The ``s3.bucket.name`` is mandatory and names your S3 bucket where the exported Kafka records
+should be written. Another useful setting is ``s3.region`` that you should set if you use a
+region other than the default. And since the S3 connector uses
+`multi-part uploads <https://docs.aws.amazon.com/AmazonS3/latest/dev/mpuoverview.html>`_,
+you can use the ``s3.part.size`` to control the size of each of these continuous parts used to
+upload Kafka records into a single S3 object. The part size affects throughput and
+latency, as an S3 object is visible/available only after all parts are uploaded.
+
+So far this example configuration is relatively typical of most S3 connectors.
+Now lets define that we should read the raw message values and write them in
+binary format:
+
+.. sourcecode:: bash
+
+  value.converter=org.apache.kafka.connect.converters.ByteArrayConverter
+  format.class=io.confluent.connect.s3.format.bytearray.ByteArrayFormat
+  storage.class=io.confluent.connect.s3.storage.S3Storage
+  schema.compatibility=NONE
+
+The ``value.converter`` setting overrides for our connector the default that is in the Connect
+worker configuration, and we use the ``ByteArrayConverter`` to instruct Connect to skip
+deserializing the message values and instead give the connector the message values in their raw
+binary form. We use the ``format.class`` setting to instruct the S3 connector to write these
+binary message values as-is into S3 objects. By default the message values written to the same S3
+object will be separated by a newline character sequence, but you can control this with the
+``format.bytearray.separator`` setting. Also, by default the files written to S3 will have an
+extension of ``.bin``, or you can use the ``format.bytearray.extension`` setting to change this.
+
+Next we need to decide how we want to partition the consumed messages in S3 objects. We have a few
+options, including the default partitioner that preserves the same partitions as in Kafka:
+
+.. sourcecode:: bash
+
+  partitioner.class=io.confluent.connect.storage.partitioner.DefaultPartitioner
+
+Or, we could instead partition by the timestamp of the Kafka messages:
+
+.. sourcecode:: bash
+
+  partitioner.class=io.confluent.connect.storage.partitioner.TimeBasedPartitioner
+  timestamp.extract=Record
+
+or the timestamp that the S3 connector processes each message:
+
+.. sourcecode:: bash
+
+  partitioner.class=io.confluent.connect.storage.partitioner.TimeBasedPartitioner
+  timestamp.extract=Wallclock
+
+Custom partitioners are always an option, too. Just be aware that since the record value is
+an opaque binary value, we cannot extract timestamps from fields using the ``RecordField``
+option.
