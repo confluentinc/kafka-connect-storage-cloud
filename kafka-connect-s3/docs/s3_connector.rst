@@ -115,9 +115,9 @@ Next, start the services with one command using Confluent CLI:
 
 Every service will start in order, printing a message with its status:
 
-.. include:: ../../../../includes/installation.rst
-    :start-line: 83
-    :end-line: 100
+.. include:: ../../../../includes/cli.rst
+    :start-line: 19
+    :end-line: 36
 
 .. note:: You need to make sure the connector user has write access to the S3 bucket
    specified in ``s3.bucket.name`` and has deployed credentials
@@ -230,9 +230,9 @@ Finally, stop the Connect worker as well as all the rest of the Confluent servic
 
 Your output should resemble:
 
-.. include:: ../../../../includes/installation.rst
-    :start-line: 102
-    :end-line: 118
+.. include:: ../../../../includes/cli.rst
+    :start-line: 55
+    :end-line: 71
 
 or stop all the services and additionally wipe out any data generated during this quickstart by running:
 
@@ -242,9 +242,9 @@ or stop all the services and additionally wipe out any data generated during thi
 
 Your output should resemble:
 
-.. include:: ../../../../includes/installation.rst
-    :start-line: 102
-    :end-line: 119
+.. include:: ../../../../includes/cli.rst
+    :start-line: 55
+    :end-line: 72
 
 Configuration
 -------------
