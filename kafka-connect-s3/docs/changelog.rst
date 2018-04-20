@@ -3,6 +3,20 @@
 Changelog
 =========
 
+Version 4.0.1
+-------------
+
+S3 Connector
+~~~~~~~~~~~~~~
+
+* `PR-148 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/148>`_ - Rely on jackson.version from common pom instead of defining it ourselves
+* `PR-149 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/149>`_ - Bump Jackson version
+* `PR-140 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/140>`_ - Fix for BufferOverflowException in S3OutputStream
+* `PR-138 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/138>`_ - CC-1490: NPE when rotate.interval.ms is set but partitioner is not instance of TimeBasedPartitioner
+* `PR-132 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/132>`_ - CC-1214: Import all the AvroData configs to storage sink connectors
+* `PR-55 <https://github.com/confluentinc/kafka-connect-storage-common/pull/55>`_ - CC-1489: NPE on records with null timestamp.
+* `PR-45 <https://github.com/confluentinc/kafka-connect-storage-common/pull/45>`_ - HOTFIX: Consider all the properties in AvroDataConfig.
+
 Version 4.0.0
 -------------
 
