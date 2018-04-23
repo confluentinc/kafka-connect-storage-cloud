@@ -357,10 +357,11 @@ public class TopicPartitionWriter {
 
     log.trace(
         "Should apply periodic time-based rotation (rotateIntervalMs: '{}', baseRecordTimestamp: "
-            + "'{}', timestamp: '{}')? {}",
+            + "'{}', timestamp: '{}', currentEncodedPartition: '{}')? {}",
         rotateIntervalMs,
         baseRecordTimestamp,
         recordTimestamp,
+        currentEncodedPartition,
         periodicRotation
     );
 
