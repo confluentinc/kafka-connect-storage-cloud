@@ -182,6 +182,7 @@ public class S3SinkTask extends SinkTask {
   @Override
   public void put(Collection<SinkRecord> records) throws ConnectException {
     for (SinkRecord record : records) {
+      log.trace("Received record: {}", record);
       String topic = record.topic();
       int partition = record.kafkaPartition();
       TopicPartition tp = new TopicPartition(topic, partition);
