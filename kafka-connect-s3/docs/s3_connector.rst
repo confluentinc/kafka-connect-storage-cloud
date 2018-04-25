@@ -410,6 +410,7 @@ Next we need to configure the particulars of Amazon S3:
   s3.bucket.name=confluent-kafka-connect-s3-testing
   s3.region=us-west-2
   s3.part.size=5242880
+  s3.compression.type=gzip
 
 The ``s3.bucket.name`` is mandatory and names your S3 bucket where the exported Kafka records
 should be written. Another useful setting is ``s3.region`` that you should set if you use a
@@ -418,6 +419,8 @@ region other than the default. And since the S3 connector uses
 you can use the ``s3.part.size`` to control the size of each of these continuous parts used to
 upload Kafka records into a single S3 object. The part size affects throughput and
 latency, as an S3 object is visible/available only after all parts are uploaded.
+The ``s3.compression.type`` specifies that we want the S3 connector to compress our S3 objects
+using GZIP compression, adding the ``.gz`` extension to any files (see below).
 
 So far this example configuration is relatively typical of most S3 connectors.
 Now lets define that we should read the raw message values and write them in
@@ -436,8 +439,10 @@ deserializing the message values and instead give the connector the message valu
 binary form. We use the ``format.class`` setting to instruct the S3 connector to write these
 binary message values as-is into S3 objects. By default the message values written to the same S3
 object will be separated by a newline character sequence, but you can control this with the
-``format.bytearray.separator`` setting. Also, by default the files written to S3 will have an
-extension of ``.bin``, or you can use the ``format.bytearray.extension`` setting to change this.
+``format.bytearray.separator`` setting, and you may want to consider this if your messages might
+contain newlines. Also, by default the files written to S3 will have an
+extension of ``.bin`` (before compression, if enabled), or you can use the
+``format.bytearray.extension`` setting to change the pre-compression filename extension.
 
 Next we need to decide how we want to partition the consumed messages in S3 objects. We have a few
 options, including the default partitioner that preserves the same partitions as in Kafka:
@@ -463,3 +468,6 @@ or the timestamp that the S3 connector processes each message:
 Custom partitioners are always an option, too. Just be aware that since the record value is
 an opaque binary value, we cannot extract timestamps from fields using the ``RecordField``
 option.
+
+The S3 connector configuration outlined above results in newline-delimited gzipped objects in S3
+with ``.bin.gz``.
