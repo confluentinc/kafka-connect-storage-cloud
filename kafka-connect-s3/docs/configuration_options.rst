@@ -1,7 +1,7 @@
 .. _s3_configuration_options:
 
-Configuration Options
----------------------
+S3 Connector Configuration Options
+----------------------------------
 
 Connector
 ^^^^^^^^^
