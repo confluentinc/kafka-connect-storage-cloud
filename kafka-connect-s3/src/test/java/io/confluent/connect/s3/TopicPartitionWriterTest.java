@@ -191,6 +191,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     topicPartitionWriter.write();
     topicPartitionWriter.close();
 
+    @SuppressWarnings("unchecked")
     List<String> partitionFields = (List<String>) parsedConfig.get(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG);
     String partitionField = partitionFields.get(0);
     String dirPrefix1 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(16));
