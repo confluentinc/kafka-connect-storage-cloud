@@ -70,6 +70,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String SSEA_CONFIG = "s3.ssea.name";
   public static final String SSEA_DEFAULT = "";
 
+  public static final String SSE_KEY = "s3.sse.key";
+  public static final String SSE_KEY_DEFAULT = "";
+
   public static final String SSE_KMS_KEY_ID_CONFIG = "s3.sse.kms.key.id";
   public static final String SSE_KMS_KEY_ID_DEFAULT = "";
 
@@ -240,6 +243,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.LONG,
           "S3 Server Side Encryption Algorithm",
           new SseAlgorithmRecommender()
+      );
+
+      configDef.define(
+          SSE_KEY,
+          Type.STRING,
+          SSE_KEY_DEFAULT,
+          Importance.LOW,
+          "The S3 Server Side Encryption Customer Key.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Server Side Encryption Customer Key"
       );
 
       configDef.define(
@@ -452,6 +467,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public String getSsea() {
     return getString(SSEA_CONFIG);
+  }
+
+  public String getSseKey() {
+    return getString(SSE_KEY);
   }
 
   public String getSseKmsKeyId() {
