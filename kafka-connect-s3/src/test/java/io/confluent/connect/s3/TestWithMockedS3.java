@@ -25,6 +25,7 @@ import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import io.confluent.connect.s3.format.parquet.ParquetUtils;
 import io.findify.s3mock.S3Mock;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.After;
@@ -51,132 +52,140 @@ import io.confluent.connect.storage.common.StorageCommonConfig;
 
 public class TestWithMockedS3 extends S3SinkConnectorTestBase {
 
-  private static final Logger log = LoggerFactory.getLogger(TestWithMockedS3.class);
+    private static final Logger log = LoggerFactory.getLogger(TestWithMockedS3.class);
 
-  protected S3Mock s3mock;
-  protected String port;
-  @Rule
-  public TemporaryFolder s3mockRoot = new TemporaryFolder();
+    protected S3Mock s3mock;
+    protected String port;
+    @Rule
+    public TemporaryFolder s3mockRoot = new TemporaryFolder();
 
-  @Override
-  protected Map<String, String> createProps() {
-    Map<String, String> props = super.createProps();
-    props.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, "_");
-    props.put(StorageCommonConfig.FILE_DELIM_CONFIG, "#");
-    return props;
-  }
-
-  //@Before
-  @Override
-  public void setUp() throws Exception {
-    super.setUp();
-    port = url.substring(url.lastIndexOf(":") + 1);
-    File s3mockDir = s3mockRoot.newFolder("s3-tests-" + UUID.randomUUID().toString());
-    System.out.println("Create folder: " + s3mockDir.getCanonicalPath());
-    s3mock = S3Mock.create(Integer.parseInt(port), s3mockDir.getCanonicalPath());
-    s3mock.start();
-  }
-
-  @After
-  @Override
-  public void tearDown() throws Exception {
-    super.tearDown();
-    s3mock.stop();
-  }
-
-  public static List<S3ObjectSummary> listObjects(String bucket, String prefix, AmazonS3 s3) {
-    List<S3ObjectSummary> objects = new ArrayList<>();
-    ObjectListing listing;
-
-    try {
-      if (prefix == null) {
-        listing = s3.listObjects(bucket);
-      } else {
-        listing = s3.listObjects(bucket, prefix);
-      }
-
-      objects.addAll(listing.getObjectSummaries());
-      while (listing.isTruncated()) {
-        listing = s3.listNextBatchOfObjects(listing);
-        objects.addAll(listing.getObjectSummaries());
-      }
-    } catch (AmazonS3Exception e) {
-     log.warn("listObjects for bucket '{}' prefix '{}' returned error code: {}", bucket, prefix, e.getStatusCode());
+    @Override
+    protected Map<String, String> createProps() {
+        Map<String, String> props = super.createProps();
+        props.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, "_");
+        props.put(StorageCommonConfig.FILE_DELIM_CONFIG, "#");
+        return props;
     }
 
-    return objects;
-  }
+    //@Before
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
+        port = url.substring(url.lastIndexOf(":") + 1);
+        File s3mockDir = s3mockRoot.newFolder("s3-tests-" + UUID.randomUUID().toString());
+        System.out.println("Create folder: " + s3mockDir.getCanonicalPath());
+        s3mock = S3Mock.create(Integer.parseInt(port), s3mockDir.getCanonicalPath());
+        s3mock.start();
+    }
 
-  public static Collection<Object> readRecords(String topicsDir, String directory, TopicPartition tp, long startOffset,
-                                               String extension, String zeroPadFormat, String bucketName, AmazonS3 s3) throws IOException {
-      String fileKey = FileUtils.fileKeyToCommit(topicsDir, directory, tp, startOffset,
-          extension, zeroPadFormat);
-      CompressionType compressionType = CompressionType.NONE;
-      if (extension.endsWith(".gz")) {
-        compressionType = CompressionType.GZIP;
-      }
-      if (".avro".equals(extension)) {
-        return readRecordsAvro(bucketName, fileKey, s3);
-      } else if (extension.startsWith(".json")) {
-        return readRecordsJson(bucketName, fileKey, s3, compressionType);
-      } else if (extension.startsWith(".bin")) {
-        return readRecordsByteArray(bucketName, fileKey, s3, compressionType,
-            S3SinkConnectorConfig.FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT.getBytes());
-      } else if (extension.startsWith(".customExtensionForTest")) {
-        return readRecordsByteArray(bucketName, fileKey, s3, compressionType,
-            "SEPARATOR".getBytes());
-      } else {
-        throw new IllegalArgumentException("Unknown extension: " + extension);
-      }
-  }
+    @After
+    @Override
+    public void tearDown() throws Exception {
+        super.tearDown();
+        s3mock.stop();
+    }
 
-  public static Collection<Object> readRecordsAvro(String bucketName, String fileKey, AmazonS3 s3) throws IOException {
-      log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
-      InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
+    public static List<S3ObjectSummary> listObjects(String bucket, String prefix, AmazonS3 s3) {
+        List<S3ObjectSummary> objects = new ArrayList<>();
+        ObjectListing listing;
 
-      return AvroUtils.getRecords(in);
-  }
+        try {
+            if (prefix == null) {
+                listing = s3.listObjects(bucket);
+            } else {
+                listing = s3.listObjects(bucket, prefix);
+            }
 
-  public static Collection<Object> readRecordsJson(String bucketName, String fileKey, AmazonS3 s3,
-                                                   CompressionType compressionType) throws IOException {
-      log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
-      InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
+            objects.addAll(listing.getObjectSummaries());
+            while (listing.isTruncated()) {
+                listing = s3.listNextBatchOfObjects(listing);
+                objects.addAll(listing.getObjectSummaries());
+            }
+        } catch (AmazonS3Exception e) {
+            log.warn("listObjects for bucket '{}' prefix '{}' returned error code: {}", bucket, prefix, e.getStatusCode());
+        }
 
-      return JsonUtils.getRecords(compressionType.wrapForInput(in));
-  }
+        return objects;
+    }
 
-  public static Collection<Object> readRecordsByteArray(String bucketName, String fileKey, AmazonS3 s3,
-                                                        CompressionType compressionType, byte[] lineSeparatorBytes) throws IOException {
-      log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
-      InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
+    public static Collection<Object> readRecords(String topicsDir, String directory, TopicPartition tp, long startOffset,
+                                                 String extension, String zeroPadFormat, String bucketName, AmazonS3 s3) throws IOException {
+        String fileKey = FileUtils.fileKeyToCommit(topicsDir, directory, tp, startOffset,
+                extension, zeroPadFormat);
+        CompressionType compressionType = CompressionType.NONE;
+        if (extension.endsWith(".gz")) {
+            compressionType = CompressionType.GZIP;
+        }
+        if (".avro".equals(extension)) {
+            return readRecordsAvro(bucketName, fileKey, s3);
+        } else if (extension.startsWith(".json")) {
+            return readRecordsJson(bucketName, fileKey, s3, compressionType);
+        } else if (extension.startsWith(".bin")) {
+            return readRecordsByteArray(bucketName, fileKey, s3, compressionType,
+                    S3SinkConnectorConfig.FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT.getBytes());
+        } else if (extension.endsWith(".parquet")) {
+            return readRecordsParquet(bucketName, fileKey, s3);
+        } else if (extension.startsWith(".customExtensionForTest")) {
+            return readRecordsByteArray(bucketName, fileKey, s3, compressionType,
+                    "SEPARATOR".getBytes());
+        } else {
+            throw new IllegalArgumentException("Unknown extension: " + extension);
+        }
+    }
 
-      return ByteArrayUtils.getRecords(compressionType.wrapForInput(in), lineSeparatorBytes);
-  }
+    public static Collection<Object> readRecordsAvro(String bucketName, String fileKey, AmazonS3 s3) throws IOException {
+        log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
+        InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
 
-  @Override
-  public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
-    final AWSCredentialsProvider provider = new AWSCredentialsProvider() {
-      private final AnonymousAWSCredentials credentials = new AnonymousAWSCredentials();
-      @Override
-      public AWSCredentials getCredentials() {
-        return credentials;
-      }
+        return AvroUtils.getRecords(in);
+    }
 
-      @Override
-      public void refresh() {
-      }
-    };
+    public static Collection<Object> readRecordsJson(String bucketName, String fileKey, AmazonS3 s3,
+                                                     CompressionType compressionType) throws IOException {
+        log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
+        InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
 
-    AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
-               .withAccelerateModeEnabled(config.getBoolean(S3SinkConnectorConfig.WAN_MODE_CONFIG))
-               .withPathStyleAccessEnabled(true)
-               .withCredentials(provider);
+        return JsonUtils.getRecords(compressionType.wrapForInput(in));
+    }
 
-    builder = url == null ?
-                  builder.withRegion(config.getString(S3SinkConnectorConfig.REGION_CONFIG)) :
-                  builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(url, ""));
+    public static Collection<Object> readRecordsByteArray(String bucketName, String fileKey, AmazonS3 s3,
+                                                          CompressionType compressionType, byte[] lineSeparatorBytes) throws IOException {
+        log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
+        InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
 
-    return builder.build();
-  }
+        return ByteArrayUtils.getRecords(compressionType.wrapForInput(in), lineSeparatorBytes);
+    }
+
+    public static Collection<Object> readRecordsParquet(String bucketName, String fileKey, AmazonS3 s3) throws IOException {
+        log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
+        InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
+        return ParquetUtils.getRecords(in, fileKey);
+    }
+
+    @Override
+    public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
+        final AWSCredentialsProvider provider = new AWSCredentialsProvider() {
+            private final AnonymousAWSCredentials credentials = new AnonymousAWSCredentials();
+            @Override
+            public AWSCredentials getCredentials() {
+                return credentials;
+            }
+
+            @Override
+            public void refresh() {
+            }
+        };
+
+        AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
+                .withAccelerateModeEnabled(config.getBoolean(S3SinkConnectorConfig.WAN_MODE_CONFIG))
+                .withPathStyleAccessEnabled(true)
+                .withCredentials(provider);
+
+        builder = url == null ?
+                builder.withRegion(config.getString(S3SinkConnectorConfig.REGION_CONFIG)) :
+                builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(url, ""));
+
+        return builder.build();
+    }
 
 }

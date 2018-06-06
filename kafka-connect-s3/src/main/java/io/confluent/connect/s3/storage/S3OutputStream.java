@@ -32,6 +32,7 @@ import com.amazonaws.services.s3.model.UploadPartRequest;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.parquet.io.PositionOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,9 +48,11 @@ import java.util.List;
  *
  * <p>The implementation has borrowed the general structure of Hadoop's implementation.
  */
-public class S3OutputStream extends OutputStream {
+public class S3OutputStream extends PositionOutputStream {
+
   private static final Logger log = LoggerFactory.getLogger(S3OutputStream.class);
   private final AmazonS3 s3;
+  private final S3SinkConnectorConfig connectorConfig;
   private final String bucket;
   private final String key;
   private final String ssea;
@@ -62,9 +65,11 @@ public class S3OutputStream extends OutputStream {
   private MultipartUpload multiPartUpload;
   private final CompressionType compressionType;
   private volatile OutputStream compressionFilter;
+  private Long position;
 
   public S3OutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
     this.s3 = s3;
+    this.connectorConfig = conf;
     this.bucket = conf.getBucketName();
     this.key = key;
     this.ssea = conf.getSsea();
@@ -76,6 +81,7 @@ public class S3OutputStream extends OutputStream {
     this.progressListener = new ConnectProgressListener();
     this.multiPartUpload = null;
     this.compressionType = conf.getCompressionType();
+    this.position = 0L;
     log.debug("Create S3OutputStream for bucket '{}' key '{}'", bucket, key);
   }
 
@@ -85,6 +91,7 @@ public class S3OutputStream extends OutputStream {
     if (!buffer.hasRemaining()) {
       uploadPart();
     }
+    position++;
   }
 
   @Override
@@ -96,15 +103,17 @@ public class S3OutputStream extends OutputStream {
     } else if (len == 0) {
       return;
     }
-
     if (buffer.remaining() <= len) {
       int firstPart = buffer.remaining();
       buffer.put(b, off, firstPart);
+      position += firstPart;
       uploadPart();
       write(b, off + firstPart, len - firstPart);
     } else {
       buffer.put(b, off, len);
+      position += len;
     }
+
   }
 
   private static boolean outOfRange(int off, int len) {
@@ -135,9 +144,9 @@ public class S3OutputStream extends OutputStream {
   public void commit() throws IOException {
     if (closed) {
       log.warn(
-          "Tried to commit data for bucket '{}' key '{}' on a closed stream. Ignoring.",
-          bucket,
-          key
+              "Tried to commit data for bucket '{}' key '{}' on a closed stream. Ignoring.",
+              bucket,
+              key
       );
       return;
     }
@@ -182,13 +191,13 @@ public class S3OutputStream extends OutputStream {
 
   private MultipartUpload newMultipartUpload() throws IOException {
     InitiateMultipartUploadRequest initRequest = new InitiateMultipartUploadRequest(
-        bucket,
-        key,
-        newObjectMetadata()
+            bucket,
+            key,
+            newObjectMetadata()
     ).withCannedACL(cannedAcl);
 
     if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
-        && StringUtils.isNotBlank(sseKmsKeyId)) {
+            && StringUtils.isNotBlank(sseKmsKeyId)) {
       initRequest.setSSEAwsKeyManagementParams(new SSEAwsKeyManagementParams(sseKmsKeyId));
     }
 
@@ -209,23 +218,23 @@ public class S3OutputStream extends OutputStream {
       this.uploadId = uploadId;
       this.partETags = new ArrayList<>();
       log.debug(
-          "Initiated multi-part upload for bucket '{}' key '{}' with id '{}'",
-          bucket,
-          key,
-          uploadId
+              "Initiated multi-part upload for bucket '{}' key '{}' with id '{}'",
+              bucket,
+              key,
+              uploadId
       );
     }
 
     public void uploadPart(ByteArrayInputStream inputStream, int partSize) {
       int currentPartNumber = partETags.size() + 1;
       UploadPartRequest request = new UploadPartRequest()
-                                            .withBucketName(bucket)
-                                            .withKey(key)
-                                            .withUploadId(uploadId)
-                                            .withInputStream(inputStream)
-                                            .withPartNumber(currentPartNumber)
-                                            .withPartSize(partSize)
-                                            .withGeneralProgressListener(progressListener);
+              .withBucketName(bucket)
+              .withKey(key)
+              .withUploadId(uploadId)
+              .withInputStream(inputStream)
+              .withPartNumber(currentPartNumber)
+              .withPartSize(partSize)
+              .withGeneralProgressListener(progressListener);
       log.debug("Uploading part {} for id '{}'", currentPartNumber, uploadId);
       partETags.add(s3.uploadPart(request).getPartETag());
     }
@@ -233,7 +242,7 @@ public class S3OutputStream extends OutputStream {
     public void complete() {
       log.debug("Completing multi-part upload for key '{}', id '{}'", key, uploadId);
       CompleteMultipartUploadRequest completeRequest =
-          new CompleteMultipartUploadRequest(bucket, key, uploadId, partETags);
+              new CompleteMultipartUploadRequest(bucket, key, uploadId, partETags);
       s3.completeMultipartUpload(completeRequest);
     }
 
@@ -261,5 +270,21 @@ public class S3OutputStream extends OutputStream {
     public void progressChanged(ProgressEvent progressEvent) {
       log.debug("Progress event: " + progressEvent);
     }
+  }
+
+  public long getPos() {
+    return position;
+  }
+
+  public String getKey() {
+    return key;
+  }
+
+  public AmazonS3 getS3() {
+    return s3;
+  }
+
+  public S3SinkConnectorConfig getConnectorConfig() {
+    return connectorConfig;
   }
 }
