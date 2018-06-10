@@ -55,6 +55,7 @@ public class S3OutputStream extends OutputStream {
   private final String key;
   private final String ssea;
   private final String sseKey;
+  private SSECustomerKey sseCustomerKey;
   private final String sseKmsKeyId;
   private final ProgressListener progressListener;
   private final int partSize;
@@ -71,6 +72,7 @@ public class S3OutputStream extends OutputStream {
     this.key = key;
     this.ssea = conf.getSsea();
     this.sseKey = conf.getSseKey();
+    this.sseCustomerKey = null;
     this.sseKmsKeyId = conf.getSseKmsKeyId();
     this.partSize = conf.getPartSize();
     this.cannedAcl = conf.getCannedAcl();
@@ -191,7 +193,8 @@ public class S3OutputStream extends OutputStream {
     ).withCannedACL(cannedAcl);
 
     if (StringUtils.isNotBlank(ssea) && StringUtils.isNotBlank(sseKey)) {
-      initRequest.setSSECustomerKey(new SSECustomerKey(sseKey));
+      sseCustomerKey = new SSECustomerKey(sseKey);
+      initRequest.setSSECustomerKey(sseCustomerKey);
     } else if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
         && StringUtils.isNotBlank(sseKmsKeyId)) {
       initRequest.setSSEAwsKeyManagementParams(new SSEAwsKeyManagementParams(sseKmsKeyId));
@@ -227,6 +230,7 @@ public class S3OutputStream extends OutputStream {
                                             .withBucketName(bucket)
                                             .withKey(key)
                                             .withUploadId(uploadId)
+                                            .withSSECustomerKey(sseCustomerKey)
                                             .withInputStream(inputStream)
                                             .withPartNumber(currentPartNumber)
                                             .withPartSize(partSize)
