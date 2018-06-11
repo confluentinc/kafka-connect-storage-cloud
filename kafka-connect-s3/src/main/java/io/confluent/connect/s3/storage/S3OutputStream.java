@@ -192,7 +192,8 @@ public class S3OutputStream extends OutputStream {
         newObjectMetadata()
     ).withCannedACL(cannedAcl);
 
-    if (StringUtils.isNotBlank(ssea) && StringUtils.isNotBlank(sseKey)) {
+    if (SSEAlgorithm.AES256.toString().equalsIgnoreCase(ssea)
+        && StringUtils.isNotBlank(sseKey)) {
       sseCustomerKey = new SSECustomerKey(sseKey);
       initRequest.setSSECustomerKey(sseCustomerKey);
     } else if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
