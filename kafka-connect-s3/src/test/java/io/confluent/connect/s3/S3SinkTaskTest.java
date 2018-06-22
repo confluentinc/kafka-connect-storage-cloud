@@ -48,7 +48,7 @@ import static org.powermock.api.easymock.PowerMock.verifyAll;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({S3SinkTask.class, StorageFactory.class})
-@PowerMockIgnore({"io.findify.s3mock.*", "akka.*", "javax.*", "org.xml.*"})
+@PowerMockIgnore({"io.findify.s3mock.*", "akka.*", "javax.*", "org.xml.*", "com.sun.org.apache.xerces.*"})
 public class S3SinkTaskTest extends DataWriterAvroTest {
 
   private static final String ZERO_PAD_FMT = "%010d";
