@@ -2,5 +2,5 @@
 common {
   slackChannel = '#connect-eng'
   upstreamProjects = 'confluentinc/kafka-connect-storage-common'
-  nodeLabel = 'openjdk8-xenial'
+  nodeLabel = 'docker-oraclejdk7-jessie'
 }
