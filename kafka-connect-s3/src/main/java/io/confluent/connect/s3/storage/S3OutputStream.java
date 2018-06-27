@@ -55,7 +55,7 @@ public class S3OutputStream extends OutputStream {
   private final String key;
   private final String ssea;
   private final String sseCustomerKeyConf;
-  private SSECustomerKey sseCustomerKey;
+  private final SSECustomerKey sseCustomerKey;
   private final String sseKmsKeyId;
   private final ProgressListener progressListener;
   private final int partSize;
@@ -72,7 +72,9 @@ public class S3OutputStream extends OutputStream {
     this.key = key;
     this.ssea = conf.getSsea();
     this.sseCustomerKeyConf = conf.getSseCustomerKey();
-    this.sseCustomerKey = null;
+    this.sseCustomerKey = (SSEAlgorithm.AES256.toString().equalsIgnoreCase(ssea)
+        && StringUtils.isNotBlank(sseCustomerKeyConf))
+      ? new SSECustomerKey(sseCustomerKeyConf) : null;
     this.sseKmsKeyId = conf.getSseKmsKeyId();
     this.partSize = conf.getPartSize();
     this.cannedAcl = conf.getCannedAcl();
@@ -192,13 +194,11 @@ public class S3OutputStream extends OutputStream {
         newObjectMetadata()
     ).withCannedACL(cannedAcl);
 
-    if (SSEAlgorithm.AES256.toString().equalsIgnoreCase(ssea)
-        && StringUtils.isNotBlank(sseCustomerKeyConf)) {
-      sseCustomerKey = new SSECustomerKey(sseCustomerKeyConf);
-      initRequest.setSSECustomerKey(sseCustomerKey);
-    } else if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
+    if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
         && StringUtils.isNotBlank(sseKmsKeyId)) {
       initRequest.setSSEAwsKeyManagementParams(new SSEAwsKeyManagementParams(sseKmsKeyId));
+    } else if (sseCustomerKey != null) {
+      initRequest.setSSECustomerKey(sseCustomerKey);
     }
 
     try {
