@@ -71,7 +71,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String SSEA_DEFAULT = "";
 
   public static final String SSE_CUSTOMER_KEY = "s3.sse.customer.key";
-  public static final String SSE_CUSTOMER_KEY_DEFAULT = "";
+  public static final Password SSE_CUSTOMER_KEY_DEFAULT = new Password(null);
 
   public static final String SSE_KMS_KEY_ID_CONFIG = "s3.sse.kms.key.id";
   public static final String SSE_KMS_KEY_ID_DEFAULT = "";
@@ -470,7 +470,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   public String getSseCustomerKey() {
-    return getString(SSE_CUSTOMER_KEY);
+    return getPassword(SSE_CUSTOMER_KEY).value();
   }
 
   public String getSseKmsKeyId() {
