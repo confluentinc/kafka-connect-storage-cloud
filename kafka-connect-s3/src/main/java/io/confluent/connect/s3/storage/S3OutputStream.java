@@ -54,7 +54,6 @@ public class S3OutputStream extends OutputStream {
   private final String bucket;
   private final String key;
   private final String ssea;
-  private final String sseCustomerKeyConfig;
   private final SSECustomerKey sseCustomerKey;
   private final String sseKmsKeyId;
   private final ProgressListener progressListener;
@@ -71,7 +70,7 @@ public class S3OutputStream extends OutputStream {
     this.bucket = conf.getBucketName();
     this.key = key;
     this.ssea = conf.getSsea();
-    this.sseCustomerKeyConfig = conf.getSseCustomerKey();
+    final String sseCustomerKeyConfig = conf.getSseCustomerKey();
     this.sseCustomerKey = (SSEAlgorithm.AES256.toString().equalsIgnoreCase(ssea)
         && StringUtils.isNotBlank(sseCustomerKeyConfig))
       ? new SSECustomerKey(sseCustomerKeyConfig) : null;
