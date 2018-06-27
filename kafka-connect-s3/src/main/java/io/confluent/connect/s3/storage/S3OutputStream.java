@@ -27,6 +27,7 @@ import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PartETag;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
+import com.amazonaws.services.s3.model.SSECustomerKey;
 import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
@@ -53,6 +54,7 @@ public class S3OutputStream extends OutputStream {
   private final String bucket;
   private final String key;
   private final String ssea;
+  private final SSECustomerKey sseCustomerKey;
   private final String sseKmsKeyId;
   private final ProgressListener progressListener;
   private final int partSize;
@@ -68,6 +70,10 @@ public class S3OutputStream extends OutputStream {
     this.bucket = conf.getBucketName();
     this.key = key;
     this.ssea = conf.getSsea();
+    final String sseCustomerKeyConfig = conf.getSseCustomerKey();
+    this.sseCustomerKey = (SSEAlgorithm.AES256.toString().equalsIgnoreCase(ssea)
+        && StringUtils.isNotBlank(sseCustomerKeyConfig))
+      ? new SSECustomerKey(sseCustomerKeyConfig) : null;
     this.sseKmsKeyId = conf.getSseKmsKeyId();
     this.partSize = conf.getPartSize();
     this.cannedAcl = conf.getCannedAcl();
@@ -190,6 +196,8 @@ public class S3OutputStream extends OutputStream {
     if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
         && StringUtils.isNotBlank(sseKmsKeyId)) {
       initRequest.setSSEAwsKeyManagementParams(new SSEAwsKeyManagementParams(sseKmsKeyId));
+    } else if (sseCustomerKey != null) {
+      initRequest.setSSECustomerKey(sseCustomerKey);
     }
 
     try {
@@ -222,6 +230,7 @@ public class S3OutputStream extends OutputStream {
                                             .withBucketName(bucket)
                                             .withKey(key)
                                             .withUploadId(uploadId)
+                                            .withSSECustomerKey(sseCustomerKey)
                                             .withInputStream(inputStream)
                                             .withPartNumber(currentPartNumber)
                                             .withPartSize(partSize)
