@@ -250,11 +250,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Type.STRING,
           SSE_KEY_DEFAULT,
           Importance.LOW,
-          "The S3 Server Side Encryption Customer (provided) Key.",
+          "The S3 Server Side Encryption Customer-Provided Key (SSE-C).",
           group,
           ++orderInGroup,
           Width.LONG,
-          "S3 Server Side Encryption Customer (provided) Key"
+          "S3 Server Side Encryption Customer-Provided Key (SSE-C)"
       );
 
       configDef.define(
