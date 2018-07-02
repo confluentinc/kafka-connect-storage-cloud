@@ -117,6 +117,13 @@ S3
   * Valid Values: [, AES256, aws:kms]
   * Importance: low
 
+``s3.sse.customer.key``
+  The S3 Server Side Encryption Customer-Provided Key (SSE-C).
+
+  * Type: password
+  * Default: [hidden]
+  * Importance: low
+
 ``s3.sse.kms.key.id``
   The name of the AWS Key Management Service (AWS-KMS) key to be used for server side encryption of the S3 objects. No encryption is used when no key is provided, but it is enabled when 'aws:kms' is specified as encryption algorithm with a valid key name.
 
@@ -155,6 +162,7 @@ S3
 
   * Type: int
   * Default: 3
+  * Valid Values: [0,...]
   * Importance: medium
 
 ``s3.retry.backoff.ms``
@@ -162,6 +170,7 @@ S3
 
   * Type: long
   * Default: 200
+  * Valid Values: [0,...]
   * Importance: low
 
 ``format.bytearray.extension``
@@ -295,3 +304,4 @@ Partitioner
   * Type: string
   * Default: timestamp
   * Importance: medium
+
