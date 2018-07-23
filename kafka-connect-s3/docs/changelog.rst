@@ -3,6 +3,14 @@
 Changelog
 =========
 
+Version 4.1.2
+-------------
+
+S3 Connector
+~~~~~~~~~~~~~~
+
+No changes
+
 Version 4.1.1
 -------------
 
@@ -39,6 +47,7 @@ S3 Connector
 * `PR-46 <https://github.com/confluentinc/kafka-connect-storage-common/pull/46>`_ - CC-1299: Create AVRO_CODEC ConfigKey
 
 Version 4.0.1
+-------------
 
 S3 Connector
 ~~~~~~~~~~~~~~
