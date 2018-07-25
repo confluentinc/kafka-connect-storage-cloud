@@ -3,6 +3,16 @@
 Changelog
 =========
 
+Version 5.0.0
+-------------
+
+* `PR-181 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/181>`_ - MINOR: Update config options to include SSE-C
+* `PR-173 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/173>`_ - Extend the existing SSE support to enable Customer (provided) Keys SSE-C
+* `PR-171 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/171>`_ - MINOR: Remove MaxPermSize since we dropped support for Java 7
+* `PR-160 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/160>`_ - CC-1793. Used full jitter backoff strategy from AWS SDK.
+* `PR-156 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/156>`_ - CC-1497. Added logic for passing a subset of configs down to configurable credentials provider
+* `PR-63 <https://github.com/confluentinc/kafka-connect-storage-common/pull/63>`_ - DataUtils::getField returns field
+
 Version 4.1.2
 -------------
 
