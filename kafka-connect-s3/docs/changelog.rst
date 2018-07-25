@@ -3,6 +3,14 @@
 Changelog
 =========
 
+Version 4.1.1
+-------------
+
+S3 Connector
+~~~~~~~~~~~~~~
+
+* `PR-155 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/155>`_ - CC-918: Update build to generate plugin package
+* `PR-159 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/159>`_ - CC-1791: Added compression options to raw value example
 
 Version 4.1.0
 -------------
