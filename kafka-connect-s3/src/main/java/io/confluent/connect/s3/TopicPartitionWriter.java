@@ -64,6 +64,7 @@ public class TopicPartitionWriter {
   private final SinkTaskContext context;
   private int recordCount;
   private final int flushSize;
+  private final boolean appendLateData;
   private final long rotateIntervalMs;
   private final long rotateScheduleIntervalMs;
   private long nextScheduledRotation;
@@ -113,6 +114,9 @@ public class TopicPartitionWriter {
                                   : null;
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
+    appendLateData = connectorConfig.getBoolean(
+        S3SinkConnectorConfig.APPEND_LATE_DATA
+    );
     rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
     if (rotateIntervalMs > 0 && timestampExtractor == null) {
       log.warn(
@@ -208,7 +212,9 @@ public class TopicPartitionWriter {
               setNextScheduledRotation();
               nextState();
             } else {
-              currentEncodedPartition = encodedPartition;
+              if (!appendLateData || currentEncodedPartition == null) {
+                currentEncodedPartition = encodedPartition;
+              }
               SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
               writeRecord(projectedRecord);
               buffer.poll();
@@ -293,13 +299,10 @@ public class TopicPartitionWriter {
     if (recordCount <= 0) {
       return false;
     }
-    // rotateIntervalMs > 0 implies timestampExtractor != null
-    boolean periodicRotation = rotateIntervalMs > 0
-        && timestampExtractor != null
-        && (
-        recordTimestamp - baseRecordTimestamp >= rotateIntervalMs
-            || !encodedPartition.equals(currentEncodedPartition)
-    );
+    boolean periodicRotationIsConfiged = rotateIntervalMs > 0 && timestampExtractor != null;
+    boolean newPartition = !appendLateData && !encodedPartition.equals(currentEncodedPartition);
+    boolean periodicRotation = periodicRotationIsConfiged &&
+        (recordTimestamp - baseRecordTimestamp >= rotateIntervalMs || newPartition);
 
     log.trace(
         "Checking rotation on time with recordCount '{}' and encodedPartition '{}'",
