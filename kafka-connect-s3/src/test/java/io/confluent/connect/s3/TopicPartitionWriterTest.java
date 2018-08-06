@@ -39,6 +39,7 @@ import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.s3.util.TimeUtils;
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.hive.schema.TimeBasedSchemaGenerator;
@@ -650,7 +651,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         String.valueOf(TimeUnit.MINUTES.toMillis(1))
     );
     localProps.put(
-        S3SinkConnectorConfig.APPEND_LATE_DATA,
+        StorageSinkConnectorConfig.APPEND_LATE_DATA,
         String.valueOf(true)
     );
     setUp();
@@ -714,7 +715,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         String.valueOf(TimeUnit.MINUTES.toMillis(1))
     );
     localProps.put(
-        S3SinkConnectorConfig.APPEND_LATE_DATA,
+        StorageSinkConnectorConfig.APPEND_LATE_DATA,
         String.valueOf(false)
     );
     setUp();
