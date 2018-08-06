@@ -658,6 +658,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     // Define the partitioner
     Partitioner<FieldSchema> partitioner = new HourlyPartitioner<>();
+    parsedConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, TimeBasedSchemaGenerator.class);
     parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "RecordField");
     partitioner.configure(parsedConfig);
 
@@ -723,6 +724,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Define the partitioner
     Partitioner<FieldSchema> partitioner = new HourlyPartitioner<>();
     parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "RecordField");
+    parsedConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, TimeBasedSchemaGenerator.class);
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
@@ -800,6 +802,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Define the partitioner
     Partitioner<FieldSchema> partitioner = new HourlyPartitioner<>();
     parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "RecordField");
+    parsedConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, TimeBasedSchemaGenerator.class);
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
