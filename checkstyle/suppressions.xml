@@ -8,7 +8,7 @@
     <!-- Intentionally high coupling to pull together config classes -->
     <suppress
             checks="ClassDataAbstractionCoupling"
-            files="(S3OutputStream|S3SinkConnectorConfig).java"
+            files="(S3OutputStream|S3SinkConnectorConfig|GcsOutputStream|GcsSinkConnectorConfig).java"
     />
 
     <suppress
