@@ -31,6 +31,10 @@ import org.junit.After;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -686,7 +690,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     records.add(createRecordWithTimestampField(schema, tminus20));
 
     // 120 sec: This should flush
-    long tplus120 = timeStampNow + TimeUnit.SECONDS.toMillis(120);;
+    long tplus120 = timeStampNow + TimeUnit.SECONDS.toMillis(120);
     records.add(createRecordWithTimestampField(schema, tplus120));
 
     Collection<SinkRecord> sinkRecords = createSinkRecords(records.subList(0, size), key, schema);
@@ -876,7 +880,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String key = "key";
     Schema schema = createSchema();
     List<Struct> records = createRecordBatches(schema, 3, 3);
-TimeUnit.SECONDS.toMillis(20);
+
     Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
 
     for (SinkRecord record : sinkRecords) {
