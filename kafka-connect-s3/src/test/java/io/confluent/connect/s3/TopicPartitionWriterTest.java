@@ -32,8 +32,9 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +45,7 @@ import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.s3.util.TimeUtils;
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.hive.schema.TimeBasedSchemaGenerator;
@@ -108,7 +110,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
 
     String key = "key";
     Schema schema = createSchema();
@@ -141,7 +143,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
 
     String key = "key";
     Schema schema = createSchema();
@@ -207,7 +209,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     }
 
     List<String> expectedFiles = new ArrayList<>();
-    for(int i = 0; i < 18; i += 9) {
+    for (int i = 0; i < 18; i += 9) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix2, TOPIC_PARTITION, i + 1, extension, ZERO_PAD_FMT));
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix3, TOPIC_PARTITION, i + 2, extension, ZERO_PAD_FMT));
@@ -262,13 +264,13 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<String> expectedFiles = new ArrayList<>();
     for (int i : new int[]{0, 3, 6}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
-                                                  ZERO_PAD_FMT));
+          ZERO_PAD_FMT));
     }
 
     String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
     for (int i : new int[]{9, 12, 15}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
-                                                  ZERO_PAD_FMT));
+          ZERO_PAD_FMT));
     }
     verify(expectedFiles, 3, schema, records);
   }
@@ -334,13 +336,13 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<String> expectedFiles = new ArrayList<>();
     for (int i : new int[]{0}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
-                                                  ZERO_PAD_FMT));
+          ZERO_PAD_FMT));
     }
 
     String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
     for (int i : new int[]{9}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
-                                                  ZERO_PAD_FMT));
+          ZERO_PAD_FMT));
     }
     verify(expectedFiles, 9, schema, records);
   }
@@ -370,10 +372,10 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<Struct> records = createRecordBatches(schema, 3, 6);
     DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
     // One record every 20 sec, puts 3 records every minute/rotate interval
-    long advanceMs = 20000;
+    long advanceMs = TimeUnit.SECONDS.toMillis(20);
     long timestampFirst = first.getMillis();
     Collection<SinkRecord> sinkRecords = createSinkRecordsWithTimestamp(records.subList(0, 9), key, schema, 0,
-                                                                        timestampFirst, advanceMs);
+        timestampFirst, advanceMs);
     long timestampLater = first.plusHours(2).getMillis();
     sinkRecords.addAll(
         createSinkRecordsWithTimestamp(records.subList(9, 18), key, schema, 9, timestampLater, advanceMs));
@@ -392,14 +394,14 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<String> expectedFiles = new ArrayList<>();
     for (int i : new int[]{0, 3, 6}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
-                                                  ZERO_PAD_FMT));
+          ZERO_PAD_FMT));
     }
 
     String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
     // Records 15,16,17 won't be flushed until a record with a higher timestamp arrives.
     for (int i : new int[]{9, 12}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
-                                                  ZERO_PAD_FMT));
+          ZERO_PAD_FMT));
     }
     verify(expectedFiles, 3, schema, records);
   }
@@ -428,10 +430,10 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<Struct> records = createRecordBatches(schema, 3, 6);
     DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
     // One record every 20 sec, puts 3 records every minute/rotate interval
-    long advanceMs = 20000;
+    long advanceMs = TimeUnit.SECONDS.toMillis(20);
     long timestampFirst = first.getMillis();
     Collection<SinkRecord> sinkRecords = createSinkRecordsWithTimestamp(records.subList(0, 9), key, schema, 0,
-                                                                        timestampFirst, advanceMs);
+        timestampFirst, advanceMs);
     long timestampLater = first.plusHours(2).getMillis();
     sinkRecords.addAll(
         createSinkRecordsWithTimestamp(records.subList(9, 18), key, schema, 9, timestampLater, advanceMs));
@@ -450,14 +452,14 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<String> expectedFiles = new ArrayList<>();
     for (int i : new int[]{0, 3, 6}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
-                                                  ZERO_PAD_FMT));
+          ZERO_PAD_FMT));
     }
 
     String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
     // Records 15,16,17 won't be flushed until a record with a higher timestamp arrives.
     for (int i : new int[]{9, 12}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
-                                                  ZERO_PAD_FMT));
+          ZERO_PAD_FMT));
     }
     verify(expectedFiles, 3, schema, records);
   }
@@ -563,13 +565,13 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<String> expectedFiles = new ArrayList<>();
     for (int i : new int[]{0}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
-                                                  ZERO_PAD_FMT));
+          ZERO_PAD_FMT));
     }
 
     String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
     for (int i : new int[]{3}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
-                                                  ZERO_PAD_FMT));
+          ZERO_PAD_FMT));
     }
     verify(expectedFiles, 3, schema, records);
   }
@@ -591,26 +593,27 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context
+    );
 
     String key = "key";
     Schema schema = createSchemaWithTimestampField();
 
     DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
     // One record every 20 sec, puts 3 records every minute/rotate interval
-    long advanceMs = 20000;
+    long advanceMs = TimeUnit.SECONDS.toMillis(20);
     long timestampFirst = first.getMillis();
     int size = 18;
 
     ArrayList<Struct> records = new ArrayList<>(size);
-    for (int i = 0; i < size/2; ++i) {
+    for (int i = 0; i < size / 2; ++i) {
       records.add(createRecordWithTimestampField(schema, timestampFirst));
       timestampFirst += advanceMs;
     }
     Collection<SinkRecord> sinkRecords = createSinkRecords(records.subList(0, 9), key, schema);
 
     long timestampLater = first.plusHours(2).getMillis();
-    for (int i = size/2; i < size; ++i) {
+    for (int i = size / 2; i < size; ++i) {
       records.add(createRecordWithTimestampField(schema, timestampLater));
       timestampLater += advanceMs;
     }
@@ -635,15 +638,224 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<String> expectedFiles = new ArrayList<>();
     for (int i : new int[]{0, 3, 6}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
-                                                  ZERO_PAD_FMT));
+          ZERO_PAD_FMT));
     }
 
     String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
     for (int i : new int[]{9, 12, 15}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
-                                                  ZERO_PAD_FMT));
+          ZERO_PAD_FMT));
     }
     verify(expectedFiles, 3, schema, records);
+  }
+
+  @Test
+  public void testLateDataAppendsCurrentPartitionRotation() throws Exception {
+    // Do not roll on size, only based on time.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.MINUTES.toMillis(1))
+    );
+    localProps.put(
+        StorageSinkConnectorConfig.APPEND_LATE_DATA,
+        String.valueOf(true)
+    );
+    setUp();
+
+    // Define the partitioner
+    Partitioner<FieldSchema> partitioner = new HourlyPartitioner<>();
+    parsedConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, TimeBasedSchemaGenerator.class);
+    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "RecordField");
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
+
+    String key = "key";
+    Schema schema = createSchemaWithTimestampField();
+
+    DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
+    // One record every 20 sec, puts 3 records every minute/rotate interval
+    long advanceMs = TimeUnit.SECONDS.toMillis(20);
+    long timeStampNow = first.getMillis();
+    int size = 3;
+
+    ArrayList<Struct> records = new ArrayList<>(size);
+    // 0 sec
+    records.add(createRecordWithTimestampField(schema, timeStampNow));
+
+    // -20 sec
+    long tminus20 = timeStampNow - advanceMs;
+    records.add(createRecordWithTimestampField(schema, tminus20));
+
+    // 120 sec: This should flush
+    long tplus120 = timeStampNow + TimeUnit.SECONDS.toMillis(120);
+    records.add(createRecordWithTimestampField(schema, tplus120));
+
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records.subList(0, size), key, schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    List<String> expectedFiles = new ArrayList<>();
+    // APPEND_LATE expects one rollup since we append late records to currently open
+    String encodedPartition = getTimebasedEncodedPartition(timeStampNow);
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, encodedPartition);
+    expectedFiles.add(FileUtils.fileKeyToCommit(
+        topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT
+    ));
+
+    verify(expectedFiles, 2, schema, records);
+  }
+
+  @Test
+  public void testLateDataPartitionRotationRollSmallFile() throws Exception {
+    // Do not roll on size, only based on time.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.MINUTES.toMillis(1))
+    );
+    localProps.put(
+        StorageSinkConnectorConfig.APPEND_LATE_DATA,
+        String.valueOf(false)
+    );
+    setUp();
+
+    // Define the partitioner
+    Partitioner<FieldSchema> partitioner = new HourlyPartitioner<>();
+    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "RecordField");
+    parsedConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, TimeBasedSchemaGenerator.class);
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
+
+    String key = "key";
+    Schema schema = createSchemaWithTimestampField();
+
+    DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
+    // One record every 20 sec, puts 3 records every minute/rotate interval
+    long advanceMs = TimeUnit.SECONDS.toMillis(20);
+    long timeStampNow = first.getMillis();
+    int size = 3;
+
+    ArrayList<Struct> records = new ArrayList<>(size);
+    // 0 sec
+    records.add(createRecordWithTimestampField(schema, timeStampNow));
+
+    // -20 sec
+    long tminus20 = timeStampNow - advanceMs;
+    records.add(createRecordWithTimestampField(schema, tminus20));
+
+    // 120 sec: This should flush
+    long tplus120 = timeStampNow + TimeUnit.SECONDS.toMillis(120);
+    records.add(createRecordWithTimestampField(schema, tplus120));
+
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records.subList(0, size), key, schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    List<String> expectedFiles = new ArrayList<>();
+    // Record at 0 sec
+    String encodedPartition = getTimebasedEncodedPartition(timeStampNow);
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, encodedPartition);
+    expectedFiles.add(FileUtils.fileKeyToCommit(
+        topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT
+    ));
+    // Record at -20 sec
+    String earlyEncodedPartition = getTimebasedEncodedPartition(tminus20);
+    String earlyDirPrefix = partitioner.generatePartitionedPath(TOPIC, earlyEncodedPartition);
+    expectedFiles.add(FileUtils.fileKeyToCommit(
+        topicsDir, earlyDirPrefix, TOPIC_PARTITION, 1, extension, ZERO_PAD_FMT
+    ));
+
+    Collections.sort(records, new Comparator<Struct>() {
+      @Override
+      public int compare(Struct o1, Struct o2) {
+        return Long.compare((long) o1.get("timestamp"), (long) o2.get("timestamp"));
+      }
+    });
+
+    verify(expectedFiles, 1, schema, records);
+  }
+
+  @Test
+  public void testWriteRecordTimeBasedPartitionFieldTimestampHoursWithLateRecords() throws Exception {
+    // Do not roll on size, only based on time.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.MINUTES.toMillis(1))
+    );
+    setUp();
+
+    // Define the partitioner
+    Partitioner<FieldSchema> partitioner = new HourlyPartitioner<>();
+    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "RecordField");
+    parsedConfig.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, TimeBasedSchemaGenerator.class);
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
+
+    String key = "key";
+    Schema schema = createSchemaWithTimestampField();
+
+    DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
+    // One record every 20 sec, puts 3 records every minute/rotate interval
+    long advanceMs = TimeUnit.SECONDS.toMillis(20);
+    long timestampNow = first.getMillis();
+    int size = 5;
+
+    ArrayList<Struct> records = new ArrayList<>(size);
+    // 0 sec
+    records.add(createRecordWithTimestampField(schema, timestampNow));
+
+    // 20 sec
+    timestampNow += advanceMs;
+    records.add(createRecordWithTimestampField(schema, timestampNow));
+
+    // 40 sec
+    timestampNow += advanceMs;
+    records.add(createRecordWithTimestampField(schema, timestampNow));
+
+    // 30 sec: This should not flush
+    timestampNow -= TimeUnit.SECONDS.toMillis(10);
+    records.add(createRecordWithTimestampField(schema, timestampNow));
+
+    // 90 sec: This should flush
+    timestampNow += TimeUnit.SECONDS.toMillis(90);
+    records.add(createRecordWithTimestampField(schema, timestampNow));
+
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records.subList(0, size), key, schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String encodedPartition = getTimebasedEncodedPartition(timestampNow);
+
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, encodedPartition);
+    List<String> expectedFiles = new ArrayList<>();
+    expectedFiles.add(FileUtils.fileKeyToCommit(
+        topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT
+    ));
+
+    verify(expectedFiles, 4, schema, records);
   }
 
   private String getTimebasedEncodedPartition(long timestamp) {
@@ -663,7 +875,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
 
     String key = "key";
     Schema schema = createSchema();
@@ -697,7 +909,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
 
     String key = "key";
     Schema schema = createSchema();
@@ -719,11 +931,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   private Struct createRecord(Schema schema, int ibase, float fbase) {
     return new Struct(schema)
-               .put("boolean", true)
-               .put("int", ibase)
-               .put("long", (long) ibase)
-               .put("float", fbase)
-               .put("double", (double) fbase);
+        .put("boolean", true)
+        .put("int", ibase)
+        .put("long", (long) ibase)
+        .put("float", fbase)
+        .put("double", (double) fbase);
   }
 
   // Create a batch of records with incremental numeric field values. Total number of records is given by 'size'.
@@ -757,7 +969,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     ArrayList<SinkRecord> sinkRecords = new ArrayList<>();
     for (int i = 0; i < records.size(); ++i) {
       sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(i),
-                                     i + startOffset));
+          i + startOffset));
     }
     return sinkRecords;
   }
@@ -768,7 +980,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     ArrayList<SinkRecord> sinkRecords = new ArrayList<>();
     for (int i = 0, offset = startOffset; i < records.size(); ++i, ++offset) {
       sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(i), offset,
-                                     startTime + offset * timeStep, TimestampType.CREATE_TIME));
+          startTime + offset * timeStep, TimestampType.CREATE_TIME));
     }
     return sinkRecords;
   }
@@ -805,7 +1017,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     }
 
     @Override
-    public void configure(Map<String, Object> config) {}
+    public void configure(Map<String, Object> config) {
+    }
 
     @Override
     public Long extract(ConnectRecord<?> record) {
