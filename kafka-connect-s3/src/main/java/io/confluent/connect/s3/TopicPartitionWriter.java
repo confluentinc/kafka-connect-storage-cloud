@@ -213,6 +213,8 @@ public class TopicPartitionWriter {
               setNextScheduledRotation();
               nextState();
             } else {
+              // If we are appending late data, then we only need to reset currentEncodedPartition
+              // the first time for the write buffer (e.g. when currentEncodedPartition is null)
               if (!appendLateData || currentEncodedPartition == null) {
                 currentEncodedPartition = encodedPartition;
               }
@@ -301,9 +303,15 @@ public class TopicPartitionWriter {
       return false;
     }
     boolean periodicRotationIsConfiged = rotateIntervalMs > 0 && timestampExtractor != null;
-    boolean newPartition = !appendLateData && !encodedPartition.equals(currentEncodedPartition);
+    // Create a new Encoded-Partition if the record belongs to a partition that isn't currently
+    // open, unless the user specifically configured appending of late data to current
+    // encodedPartition
+    boolean createNewEncodedPartition = !encodedPartition.equals(currentEncodedPartition)
+        && !appendLateData;
+    // periodicRotation happens if it is a) configured b) either enough time has passed or
+    // the record must go in a partition that isn't currently open
     boolean periodicRotation = periodicRotationIsConfiged &&
-        (recordTimestamp - baseRecordTimestamp >= rotateIntervalMs || newPartition);
+        (recordTimestamp - baseRecordTimestamp >= rotateIntervalMs || createNewEncodedPartition);
 
     log.trace(
         "Checking rotation on time with recordCount '{}' and encodedPartition '{}'",
