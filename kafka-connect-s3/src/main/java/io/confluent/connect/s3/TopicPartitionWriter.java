@@ -38,6 +38,7 @@ import java.util.Queue;
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
 import io.confluent.connect.storage.format.RecordWriter;
@@ -65,6 +66,7 @@ public class TopicPartitionWriter {
   private final SinkTaskContext context;
   private int recordCount;
   private final int flushSize;
+  private final boolean appendLateData;
   private final long rotateIntervalMs;
   private final long rotateScheduleIntervalMs;
   private long nextScheduledRotation;
@@ -114,6 +116,9 @@ public class TopicPartitionWriter {
                                   : null;
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
+    appendLateData = connectorConfig.getBoolean(
+        StorageSinkConnectorConfig.APPEND_LATE_DATA
+    );
     rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
     if (rotateIntervalMs > 0 && timestampExtractor == null) {
       log.warn(
@@ -258,7 +263,11 @@ public class TopicPartitionWriter {
       setNextScheduledRotation();
       nextState();
     } else {
-      currentEncodedPartition = encodedPartition;
+      // If we are appending late data, then we only need to reset currentEncodedPartition
+      // the first time for the write buffer (e.g. when currentEncodedPartition is null)
+      if (!appendLateData || currentEncodedPartition == null) {
+        currentEncodedPartition = encodedPartition;
+      }
       SinkRecord projectedRecord = compatibility.project(
           record,
           null,
@@ -341,13 +350,16 @@ public class TopicPartitionWriter {
     if (recordCount <= 0) {
       return false;
     }
-    // rotateIntervalMs > 0 implies timestampExtractor != null
-    boolean periodicRotation = rotateIntervalMs > 0
-        && timestampExtractor != null
-        && (
-        recordTimestamp - baseRecordTimestamp >= rotateIntervalMs
-            || !encodedPartition.equals(currentEncodedPartition)
-    );
+    boolean periodicRotationIsConfiged = rotateIntervalMs > 0 && timestampExtractor != null;
+    // Create a new Encoded-Partition if the record belongs to a partition that isn't currently
+    // open, unless the user specifically configured appending of late data to current
+    // encodedPartition
+    boolean createNewEncodedPartition = !encodedPartition.equals(currentEncodedPartition)
+        && !appendLateData;
+    // periodicRotation happens if it is a) configured b) either enough time has passed or
+    // the record must go in a partition that isn't currently open
+    boolean periodicRotation = periodicRotationIsConfiged
+        && (recordTimestamp - baseRecordTimestamp >= rotateIntervalMs || createNewEncodedPartition);
 
     log.trace(
         "Checking rotation on time with recordCount '{}' and encodedPartition '{}'",
