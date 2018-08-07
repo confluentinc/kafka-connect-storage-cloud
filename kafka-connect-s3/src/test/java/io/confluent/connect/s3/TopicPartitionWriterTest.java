@@ -31,7 +31,9 @@ import org.junit.After;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import io.confluent.common.utils.MockTime;
