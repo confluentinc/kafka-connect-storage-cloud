@@ -39,6 +39,20 @@ Connector
   * Default: 1000
   * Importance: low
 
+``enhanced.avro.schema.support``
+  Enable enhanced avro schema support in AvroConverter: Enum symbol preservation and Package Name awareness
+
+  * Type: boolean
+  * Default: false
+  * Importance: low
+
+``connect.meta.data``
+  Allow connect converter to add its meta data to the output schema
+
+  * Type: boolean
+  * Default: true
+  * Importance: low
+
 ``retry.backoff.ms``
   The retry backoff in milliseconds. This config is used to notify Kafka connect to retry delivering a message batch or performing recovery in case of transient exceptions.
 
