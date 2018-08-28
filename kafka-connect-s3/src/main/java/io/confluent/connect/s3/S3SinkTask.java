@@ -20,6 +20,7 @@ import com.amazonaws.AmazonClientException;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -41,6 +42,7 @@ import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.StorageFactory;
 import io.confluent.connect.storage.common.StorageCommonConfig;
+import io.confluent.connect.storage.common.util.StringUtils;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.partitioner.Partitioner;
@@ -92,6 +94,16 @@ public class S3SinkTask extends SinkTask {
   public void start(Map<String, String> props) {
     try {
       connectorConfig = new S3SinkConnectorConfig(props);
+      Long rotateScheduleIntervalMs = 
+              connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG);
+      if (rotateScheduleIntervalMs > 0) {
+        String timeZoneString = connectorConfig.getString(PartitionerConfig.TIMEZONE_CONFIG);
+        if (StringUtils.isBlank(timeZoneString)) {
+          throw new ConfigException(PartitionerConfig.TIMEZONE_CONFIG,
+                  timeZoneString, "Timezone cannot be empty when using scheduled file rotation."
+          );
+        }
+      }
       url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
 
       @SuppressWarnings("unchecked")
