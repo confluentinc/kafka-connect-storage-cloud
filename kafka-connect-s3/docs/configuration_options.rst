@@ -74,6 +74,12 @@ Connector
   * Type: string
   * Default: null
   * Valid Values: [null, deflate, snappy, bzip2]
+
+``append.late.data``
+  If true, the connector will append late-arriving data intended for earlier partitions into the current, open partition. If false, late-arriving data intended for earlier partitions will be rolled into files marked with the partition indicated by the extracted time, even if this creates many small files.
+
+  * Type: boolean
+  * Default: false
   * Importance: low
 
 S3
