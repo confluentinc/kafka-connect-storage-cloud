@@ -484,9 +484,6 @@ option.
 The S3 connector configuration outlined above results in newline-delimited gzipped objects in S3
 with ``.bin.gz``.
 
-
-Contents:
-
 .. toctree::
    :maxdepth: 1
    :hidden:
