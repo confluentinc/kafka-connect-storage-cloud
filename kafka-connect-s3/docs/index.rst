@@ -45,7 +45,7 @@ The S3 connector offers a variety of features:
 Install S3 Connector
 --------------------
 
-.. include:: ../../../../includes/connector-native-install.rst
+.. include:: ../../../includes/connector-native-install.rst
 
 
 Exactly-once delivery on top of eventual consistency
@@ -489,10 +489,7 @@ Contents:
 
 .. toctree::
    :maxdepth: 1
+   :hidden:
 
    configuration_options
    changelog
-
-The S3 connector is available as open source software under the
-`Apache License v2.0 license <http://www.apache.org/licenses/LICENSE-2.0>`_.
-Source code at `https://github.com/confluentinc/kafka-connect-storage-cloud <https://github.com/confluentinc/kafka-connect-storage-cloud>`_.
