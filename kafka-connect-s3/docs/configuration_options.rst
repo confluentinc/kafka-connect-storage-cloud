@@ -47,7 +47,7 @@ Connector
   * Importance: low
 
 ``connect.meta.data``
-  Allow connect converter to add its meta data to the output schema
+  Allow connect converter to add its metadata to the output schema
 
   * Type: boolean
   * Default: true
