@@ -58,10 +58,13 @@ import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.connect.storage.partitioner.TimestampExtractor;
 
+import static io.confluent.connect.s3.TopicPartitionWriter.shouldUpdateCurrentEncodedPartition;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 public class TopicPartitionWriterTest extends TestWithMockedS3 {
   // The default
@@ -668,24 +671,27 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Schema schema = createSchemaWithTimestampField();
 
     DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
-    // One record every 20 sec, puts 3 records every minute/rotate interval
-    long advanceMs = TimeUnit.SECONDS.toMillis(20);
-    long timeStampNow = first.getMillis();
-    int size = 3;
 
-    ArrayList<Struct> records = new ArrayList<>(size);
-    // 0 sec
-    records.add(createRecordWithTimestampField(schema, timeStampNow));
+    ArrayList<Struct> records = new ArrayList<>(50);
 
-    // -20 sec
-    long tminus20 = timeStampNow - advanceMs;
-    records.add(createRecordWithTimestampField(schema, tminus20));
+    long[] timestamps = {
+        // These two will roll together if we append-late
+        first.getMillis(),
+        first.minusSeconds(20).getMillis(),
+        // These will all roll together if we append-late
+        first.plusHours(2).getMillis(),
+        first.minusSeconds(20).getMillis(),
+        first.plusMinutes(90).getMillis(),
+        // These two will roll together in append-late mode, but not until they are flushed
+        first.plusHours(6).getMillis(),
+        first.plusHours(4).getMillis()
+    };
 
-    // 120 sec: This should flush
-    long tplus120 = timeStampNow + TimeUnit.SECONDS.toMillis(120);
-    records.add(createRecordWithTimestampField(schema, tplus120));
+    for (long timestamp : timestamps) {
+      records.add(createRecordWithTimestampField(schema, timestamp));
+    }
 
-    Collection<SinkRecord> sinkRecords = createSinkRecords(records.subList(0, size), key, schema);
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records.subList(0, records.size()), key, schema);
 
     for (SinkRecord record : sinkRecords) {
       topicPartitionWriter.buffer(record);
@@ -696,14 +702,20 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     List<String> expectedFiles = new ArrayList<>();
     // APPEND_LATE expects one rollup since we append late records to currently open
-    String encodedPartition = getTimebasedEncodedPartition(timeStampNow);
+    String encodedPartition = getTimebasedEncodedPartition(first.getMillis());
     String dirPrefix = partitioner.generatePartitionedPath(TOPIC, encodedPartition);
     expectedFiles.add(FileUtils.fileKeyToCommit(
         topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT
     ));
 
-    verify(expectedFiles, 2, schema, records);
+    String laterEncodedPartition = getTimebasedEncodedPartition(first.plusHours(2).getMillis());
+    String laterDirPrefix = partitioner.generatePartitionedPath(TOPIC, laterEncodedPartition);
+    expectedFiles.add(FileUtils.fileKeyToCommit(
+        topicsDir, laterDirPrefix, TOPIC_PARTITION, 2, extension, ZERO_PAD_FMT
+    ));
+    verify(expectedFiles, schema, records);
   }
+
 
   @Test
   public void testLateDataPartitionRotationRollSmallFile() throws Exception {
@@ -717,6 +729,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         StorageSinkConnectorConfig.APPEND_LATE_DATA,
         String.valueOf(false)
     );
+
     setUp();
 
     // Define the partitioner
@@ -731,22 +744,98 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Schema schema = createSchemaWithTimestampField();
 
     DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
-    // One record every 20 sec, puts 3 records every minute/rotate interval
+
+    ArrayList<Struct> records = new ArrayList<>(50);
+
+    // Each of these records will trigger a rollup since they are not in same partition as preceding
+    long[] timestamps = {
+        first.getMillis(),
+        first.minusSeconds(20).getMillis(),
+        first.plusHours(2).getMillis(),
+        first.minusSeconds(20).getMillis(),
+        first.plusMinutes(90).getMillis(),
+        first.plusHours(6).getMillis(),
+        first.plusHours(4).getMillis()
+    };
+
+    for (long timestamp : timestamps) {
+      records.add(createRecordWithTimestampField(schema, timestamp));
+    }
+
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records.subList(0, records.size()), key, schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    List<String> expectedFiles = new ArrayList<>();
+    expectedFiles.add(getExpectedFile(timestamps[0], 0, partitioner));
+    expectedFiles.add(getExpectedFile(timestamps[1], 1, partitioner));
+    expectedFiles.add(getExpectedFile(timestamps[2], 2, partitioner));
+    expectedFiles.add(getExpectedFile(timestamps[3], 3, partitioner));
+    expectedFiles.add(getExpectedFile(timestamps[4], 4, partitioner));
+    expectedFiles.add(getExpectedFile(timestamps[5], 5, partitioner));
+
+    // Expect the records to be sorted in the verify, and the last one will not be flushed
+    Collections.sort(records.subList(0, records.size()-1), new Comparator<Struct>() {
+      @Override
+      public int compare(Struct o1, Struct o2) {
+        return Long.compare((long) o1.get("timestamp"), (long) o2.get("timestamp"));
+      }
+    });
+
+    verify(expectedFiles, schema, records);
+  }
+
+  @Test
+  public void testLateDataNullTimestampExtractor() throws Exception {
+    // Do not roll on size, only based on time.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.MINUTES.toMillis(1))
+    );
+    localProps.put(
+        StorageSinkConnectorConfig.APPEND_LATE_DATA,
+        String.valueOf(true)
+    );
+    setUp();
+
+    // Define the partitioner
+    Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
+
+    String key = "key";
+    Schema schema = createSchemaWithTimestampField();
+
+    DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
     long advanceMs = TimeUnit.SECONDS.toMillis(20);
     long timeStampNow = first.getMillis();
-    int size = 3;
+    int size = 5;
 
     ArrayList<Struct> records = new ArrayList<>(size);
-    // 0 sec
+    // 0 sec: This initial record is our t=0 baseline record timestamp
     records.add(createRecordWithTimestampField(schema, timeStampNow));
 
-    // -20 sec
+    // -20 sec: Late arriving, and would normally go to its own partition & rollup
     long tminus20 = timeStampNow - advanceMs;
     records.add(createRecordWithTimestampField(schema, tminus20));
 
-    // 120 sec: This should flush
-    long tplus120 = timeStampNow + TimeUnit.SECONDS.toMillis(120);
-    records.add(createRecordWithTimestampField(schema, tplus120));
+    // 2 hrs later. This will flush the previous two records as a rollup, and should start a new
+    // partition in its own hour. I sent two so the rollups are all the same size
+    long tplus2hrs = timeStampNow + TimeUnit.HOURS.toMillis(2);
+    records.add(createRecordWithTimestampField(schema, tplus2hrs));
+    records.add(createRecordWithTimestampField(schema, tplus2hrs));
+
+    // 4 hrs later. This record will flush everythign in the writer
+    long tplus4hrs = timeStampNow + TimeUnit.HOURS.toMillis(4);
+    records.add(createRecordWithTimestampField(schema, tplus4hrs));
 
     Collection<SinkRecord> sinkRecords = createSinkRecords(records.subList(0, size), key, schema);
 
@@ -757,28 +846,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     topicPartitionWriter.write();
     topicPartitionWriter.close();
 
-    List<String> expectedFiles = new ArrayList<>();
-    // Record at 0 sec
-    String encodedPartition = getTimebasedEncodedPartition(timeStampNow);
-    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, encodedPartition);
-    expectedFiles.add(FileUtils.fileKeyToCommit(
-        topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT
-    ));
-    // Record at -20 sec
-    String earlyEncodedPartition = getTimebasedEncodedPartition(tminus20);
-    String earlyDirPrefix = partitioner.generatePartitionedPath(TOPIC, earlyEncodedPartition);
-    expectedFiles.add(FileUtils.fileKeyToCommit(
-        topicsDir, earlyDirPrefix, TOPIC_PARTITION, 1, extension, ZERO_PAD_FMT
-    ));
-
-    Collections.sort(records, new Comparator<Struct>() {
-      @Override
-      public int compare(Struct o1, Struct o2) {
-        return Long.compare((long) o1.get("timestamp"), (long) o2.get("timestamp"));
-      }
-    });
-
-    verify(expectedFiles, 1, schema, records);
+    // No flushing since there is no time-based partitioning
+    verify(Collections.<String>emptyList(), -1, schema, records);
   }
 
   @Test
@@ -1007,6 +1076,14 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     return sinkRecords;
   }
 
+  private String getExpectedFile(long timestamp, int offset, Partitioner<FieldSchema> partitioner) {
+    String encodedPartition = getTimebasedEncodedPartition(timestamp);
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, encodedPartition);
+    return FileUtils.fileKeyToCommit(
+        topicsDir, dirPrefix, TOPIC_PARTITION, offset, extension, ZERO_PAD_FMT
+    );
+  }
+
   private void verify(List<String> expectedFileKeys, int expectedSize, Schema schema, List<Struct> records)
       throws IOException {
     List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
@@ -1023,12 +1100,18 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     int index = 0;
     for (String fileKey : actualFiles) {
       Collection<Object> actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3);
-      assertEquals(expectedSize, actualRecords.size());
+      if (expectedSize >= 0) {
+        assertEquals(expectedSize, actualRecords.size());
+      }
       for (Object avroRecord : actualRecords) {
         Object expectedRecord = format.getAvroData().fromConnectData(schema, records.get(index++));
         assertEquals(expectedRecord, avroRecord);
       }
     }
+  }
+
+  private void verify(List<String> expectedFileKeys, Schema schema, List<Struct> records) throws IOException {
+    verify(expectedFileKeys, -1, schema, records);
   }
 
   public static class MockedWallclockTimestampExtractor implements TimestampExtractor {
@@ -1047,4 +1130,26 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       return time.milliseconds();
     }
   }
+
+  @Test
+  public void testShouldUpdateCurrentEncodedPartitionIfNotAppendLate() throws Exception {
+    // For mocks
+    setUp();
+    // Always update if not appending late data
+    assertTrue(shouldUpdateCurrentEncodedPartition(false, null, null));
+    assertTrue(shouldUpdateCurrentEncodedPartition(false, 1L, 2L));
+    assertTrue(shouldUpdateCurrentEncodedPartition(false, 2L, 1L));
+    assertTrue(shouldUpdateCurrentEncodedPartition(false, 1L, 1L));
+  }
+
+  @Test
+  public void testShouldNotUpdateCurrentEncodedPartitionIfLate() throws Exception {
+    // For mocks
+    setUp();
+    assertTrue(shouldUpdateCurrentEncodedPartition(true, null, null));
+    assertFalse(shouldUpdateCurrentEncodedPartition(true, 1L, 2L));
+    assertTrue(shouldUpdateCurrentEncodedPartition(true, 2L, 1L));
+    assertTrue(shouldUpdateCurrentEncodedPartition(true, 1L, 1L));
+  }
+
 }
