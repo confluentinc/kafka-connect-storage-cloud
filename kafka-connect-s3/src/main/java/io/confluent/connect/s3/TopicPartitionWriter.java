@@ -215,7 +215,9 @@ public class TopicPartitionWriter {
             } else {
               // If we are appending late data, then we only need to reset currentEncodedPartition
               // the first time for the write buffer (e.g. when currentEncodedPartition is null)
-              if (!appendLateData || currentEncodedPartition == null) {
+              if (shouldUpdateCurrentEncodedPartition(
+                    appendLateData, currentTimestamp, baseRecordTimestamp
+              )) {
                 currentEncodedPartition = encodedPartition;
               }
               SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
@@ -247,6 +249,24 @@ public class TopicPartitionWriter {
         break;
       }
     }
+    commitOnTimeIfNoData(now);
+  }
+
+  protected static boolean shouldUpdateCurrentEncodedPartition(
+      boolean appendLateData,
+      Long currentTimestamp,
+      Long baseRecordTimestamp
+  ) {
+    if (currentTimestamp == null || baseRecordTimestamp == null) {
+      // Indicates not timebased partition
+      return true;
+    }
+    // Update partition in all cases except when configured to append-late-data and the data
+    // is actually late
+    return !(appendLateData && currentTimestamp < baseRecordTimestamp);
+  }
+
+  private void commitOnTimeIfNoData(long now) {
     if (buffer.isEmpty()) {
       // committing files after waiting for rotateIntervalMs time but less than flush.size records available
       if (recordCount > 0 && rotateOnTime(currentEncodedPartition, currentTimestamp, now)) {
@@ -435,6 +455,7 @@ public class TopicPartitionWriter {
     currentSchemas.clear();
     recordCount = 0;
     baseRecordTimestamp = null;
+    currentEncodedPartition = null;
     log.info("Files committed to S3. Target commit offset for {} is {}", tp, offsetToCommit);
   }
 
