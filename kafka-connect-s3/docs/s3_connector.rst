@@ -369,14 +369,14 @@ Or, we could instead partition by the timestamp of the Kafka messages:
 .. sourcecode:: bash
 
   partitioner.class=io.confluent.connect.storage.partitioner.TimeBasedPartitioner
-  timestamp.extract=Record
+  timestamp.extractor=Record
 
 or the timestamp that the S3 connector processes each message:
 
 .. sourcecode:: bash
 
   partitioner.class=io.confluent.connect.storage.partitioner.TimeBasedPartitioner
-  timestamp.extract=Wallclock
+  timestamp.extractor=Wallclock
 
 Custom partitioners are always an option, too. Just be aware that since the record value is
 an opaque binary value, we cannot extract timestamps from fields using the ``RecordField``
