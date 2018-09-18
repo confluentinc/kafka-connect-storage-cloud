@@ -51,8 +51,8 @@ Kafka by the connector, then a re-upload will take place. However, such a re-upl
 bucket, who at any time will have access to the same records made eventually available by successful uploads to S3.
 
 In the current version, time-based partitioners, as opposed to default and field partitioners, depend on wall-clock time
-to partition data. A version of time-based partitioners based only on record timestamps that will guarantee exactly-once
-delivery to S3 will become soon available.
+to partition data. To achieve exactly-one delivery to S3, you must use one of the the deterministic time-based partitioners:
+``Record`` or ``RecordField``.
 
 Schema Evolution
 ----------------
