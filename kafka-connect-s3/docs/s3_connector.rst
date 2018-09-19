@@ -301,7 +301,7 @@ single chunk of Kafka records.
   partitioner.class=io.confluent.connect.storage.partitioner.DefaultPartitioner
 
 These class settings are required to specify the storage interface (here S3), the output file format, currently
-``io.confluent.connect.s3.format.avro.AvroFormat`` or ``io.confluent.connect.s3.format.json.JsonFormat`` and the partitioner
+``io.confluent.connect.s3.format.avro.AvroFormat`` or ``io.confluent.connect.s3.format.json.JsonFormat``, and the partitioner
 class.
 
 .. sourcecode:: bash
