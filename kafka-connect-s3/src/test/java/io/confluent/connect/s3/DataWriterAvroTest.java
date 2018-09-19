@@ -154,8 +154,8 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
 
   @Test
   public void testWriteRecordsOfUnionsWithEnhancedAvroData() throws Exception {
-    localProps.put(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, "true");
-    localProps.put(AvroDataConfig.CONNECT_META_DATA_CONFIG, "true");
+    localProps.put(StorageSinkConnectorConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, "true");
+    localProps.put(StorageSinkConnectorConfig.CONNECT_META_DATA_CONFIG, "true");
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
     List<SinkRecord> sinkRecords = createRecordsWithUnion(7, 0, Collections.singleton(new TopicPartition (TOPIC, PARTITION)));
