@@ -166,7 +166,6 @@ Then start the S3 connector by loading its configuration with the following comm
        "flush.size": "3",
        "storage.class": "io.confluent.connect.s3.storage.S3Storage",
        "format.class": "io.confluent.connect.s3.format.avro.AvroFormat",
-       "schema.generator.class": "io.confluent.connect.storage.hive.schema.DefaultSchemaGenerator",
        "partitioner.class": "io.confluent.connect.storage.partitioner.DefaultPartitioner",
        "schema.compatibility": "NONE",
        "name": "s3-sink"
@@ -281,13 +280,11 @@ single chunk of Kafka records.
 
   storage.class=io.confluent.connect.s3.storage.S3Storage
   format.class=io.confluent.connect.s3.format.avro.AvroFormat
-  schema.generator.class=io.confluent.connect.storage.hive.schema.DefaultSchemaGenerator
   partitioner.class=io.confluent.connect.storage.partitioner.DefaultPartitioner
 
 These class settings are required to specify the storage interface (here S3), the output file format, currently
-``io.confluent.connect.s3.format.avro.AvroFormat`` or ``io.confluent.connect.s3.format.json.JsonFormat`` and the partitioner
-class along with its schema generator class. When using a format with no schema definition, it is sufficient to set the
-schema generator class to its default value.
+``io.confluent.connect.s3.format.avro.AvroFormat`` or ``io.confluent.connect.s3.format.json.JsonFormat``, and the partitioner
+class.
 
 .. sourcecode:: bash
 
