@@ -62,7 +62,7 @@ Connector
   * Importance: low
 
 ``append.late.data``
-  If true, the connector will append late-arriving data intended for earlier partitions into the current, open partition. If false, late-arriving data intended for earlier partitions will be rolled into files marked with the partition indicated by the extracted time, even if this creates many small files.
+  Indicates how the connector manages late-arriving data that is intended for earlier partitions. A value of ``true`` means that the connector will append late-arriving data into the currently open partition. A value of ``false`` means that the connector will roll late-arriving data into files that are named as the partition and extraction time, even if this creates many small files.
 
   * Type: boolean
   * Default: false
