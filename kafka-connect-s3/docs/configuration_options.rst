@@ -61,6 +61,13 @@ Connector
   * Valid Values: [0,...]
   * Importance: low
 
+``append.late.data``
+  Indicates how the connector manages late-arriving data that is intended for earlier partitions. A value of ``true`` means that the connector will append late-arriving data into the currently open partition. A value of ``false`` means that the connector will roll late-arriving data into files that are named as the partition and extraction time, even if this creates many small files.
+
+  * Type: boolean
+  * Default: false
+  * Importance: low
+
 S3
 ^^
 
@@ -87,7 +94,7 @@ S3
   * Importance: high
 
 ``s3.credentials.provider.class``
-  Credentials provider or provider chain to use for authentication to AWS. By default the  connector uses 'DefaultAWSCredentialsProviderChain'.
+  Credentials provider or provider chain to use for authentication to AWS. By default the connector uses 'DefaultAWSCredentialsProviderChain'.
 
   * Type: class
   * Default: com.amazonaws.auth.DefaultAWSCredentialsProviderChain
