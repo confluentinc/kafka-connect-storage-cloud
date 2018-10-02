@@ -18,13 +18,16 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import io.confluent.common.utils.Time;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.junit.After;
@@ -1153,4 +1156,120 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     assertTrue(shouldUpdateCurrentEncodedPartition(true, 1L, 1L));
   }
 
+  static class SleepingTopicPartitionWriter extends TopicPartitionWriter {
+    private long sleepInterval;
+
+    SleepingTopicPartitionWriter(TopicPartition tp,
+                         RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
+                         Partitioner<FieldSchema> partitioner,
+                         S3SinkConnectorConfig connectorConfig,
+                         SinkTaskContext context,
+                         Time time,
+                         long sleepInterval) {
+      super(tp, writerProvider, partitioner, connectorConfig, context, time);
+      this.sleepInterval = sleepInterval;
+    }
+
+    @Override
+    protected void pollBuffer() {
+      buffer.poll();
+      time.sleep(sleepInterval);
+    }
+  }
+
+  /**
+    When a write buffer fills before the scheduled-rotation, and some of the records are processed
+   after the scheduled rotation, they should not get their own small file.
+   */
+  @Test
+  public void testBufferCrossesScheduledBoundary() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.HOURS.toMillis(1))
+    );
+    setUp();
+
+    // Define the partitioner
+    TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    parsedConfig.put(
+        PartitionerConfig.PARTITION_DURATION_MS_CONFIG,
+        TimeUnit.HOURS.toMillis(1));
+    parsedConfig.put(
+        PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+        MockedWallclockTimestampExtractor.class.getName());
+    partitioner.configure(parsedConfig);
+
+    MockTime time = ((MockedWallclockTimestampExtractor) partitioner.getTimestampExtractor()).time;
+
+    // Bring the clock to fixed time 10 min before the hour.
+    long startTime = new DateTime(2018, 1, 1, 1, 50, 0).getMillis();
+    time.sleep(-1*time.milliseconds());
+    time.sleep(startTime);
+
+    // Each record will take 2 minutes to write
+    TopicPartitionWriter topicPartitionWriter = new SleepingTopicPartitionWriter(
+        TOPIC_PARTITION, writerProvider, partitioner, connectorConfig, context, time,
+        TimeUnit.MINUTES.toMillis(2));
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 6);
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records.subList(0, 3), key, schema);
+
+    // Writing 3 records advances clock 6 minutes
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+    topicPartitionWriter.write();
+    assertEquals(startTime + TimeUnit.MINUTES.toMillis(6), time.milliseconds());
+    // No records written to S3 since we have not passed over hour mark
+    verify(new ArrayList<String>(), 0, schema, new ArrayList<Struct>());
+
+    // Writing 3 records advances clock 6 more minutes
+    sinkRecords = createSinkRecords(records.subList(3, 6), key, schema, 3);
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+    topicPartitionWriter.write();
+    assertEquals(startTime + TimeUnit.MINUTES.toMillis(12), time.milliseconds());
+    // First 5 records are flushed together
+    String encodedPartitionFirst = getTimebasedEncodedPartition(startTime);
+    String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC, encodedPartitionFirst);
+    List<String> expectedFiles = new ArrayList<>();
+    for (int i : new int[]{0}) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
+          ZERO_PAD_FMT));
+    }
+    verify(expectedFiles, 5, schema, records.subList(0,5));
+
+
+//    // More records later
+//    topicPartitionWriter.write();
+//    long timestampLater = time.milliseconds();
+//
+//    // 11 minutes later, another scheduled rotation
+//    time.sleep(TimeUnit.MINUTES.toMillis(11));
+//
+//    // Again the records are written due to scheduled rotation
+//    topicPartitionWriter.write();
+//    topicPartitionWriter.close();
+//
+//    String encodedPartitionFirst = getTimebasedEncodedPartition(timestampFirst);
+//    String encodedPartitionLater = getTimebasedEncodedPartition(timestampLater);
+//
+//    String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC, encodedPartitionFirst);
+//    List<String> expectedFiles = new ArrayList<>();
+//    for (int i : new int[]{0}) {
+//      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
+//          ZERO_PAD_FMT));
+//    }
+//
+//    String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
+//    for (int i : new int[]{3}) {
+//      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
+//          ZERO_PAD_FMT));
+//    }
+//    verify(expectedFiles, 3, schema, records);
+  }
 }

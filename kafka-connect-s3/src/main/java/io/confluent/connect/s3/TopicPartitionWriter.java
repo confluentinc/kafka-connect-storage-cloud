@@ -62,7 +62,7 @@ public class TopicPartitionWriter {
   private final TimestampExtractor timestampExtractor;
   private String topicsDir;
   private State state;
-  private final Queue<SinkRecord> buffer;
+  protected final Queue<SinkRecord> buffer;
   private final SinkTaskContext context;
   private int recordCount;
   private final int flushSize;
@@ -84,7 +84,7 @@ public class TopicPartitionWriter {
   private final String zeroPadOffsetFormat;
   private final String dirDelim;
   private final String fileDelim;
-  private final Time time;
+  protected final Time time;
   private DateTimeZone timeZone;
   private final S3SinkConnectorConfig connectorConfig;
   private static final Time SYSTEM_TIME = new SystemTime();
@@ -274,7 +274,7 @@ public class TopicPartitionWriter {
           currentValueSchema
       );
       writeRecord(projectedRecord);
-      buffer.poll();
+      pollBuffer();
       if (rotateOnSize()) {
         log.info(
             "Starting commit and rotation for topic partition {} with start offset {}",
@@ -288,6 +288,10 @@ public class TopicPartitionWriter {
       }
     }
     return true;
+  }
+
+  protected void pollBuffer() {
+    buffer.poll();
   }
 
   protected static boolean shouldUpdateCurrentEncodedPartition(
@@ -390,7 +394,8 @@ public class TopicPartitionWriter {
         periodicRotation
     );
 
-    boolean scheduledRotation = rotateScheduleIntervalMs > 0 && now >= nextScheduledRotation;
+    boolean scheduledRotation = rotateScheduleIntervalMs > 0
+        && currentTimestamp >= nextScheduledRotation;
     log.trace(
         "Should apply scheduled rotation: (rotateScheduleIntervalMs: '{}', nextScheduledRotation:"
             + " '{}', now: '{}')? {}",
