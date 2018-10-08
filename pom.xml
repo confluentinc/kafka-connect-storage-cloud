@@ -56,7 +56,7 @@
 
     <properties>
         <confluent.version>3.3.2-cp1</confluent.version>
-        <kafka.version>0.11.0.3-cp1</kafka.version>
+        <kafka.version>0.11.0.3-cp2</kafka.version>
         <jackson.version>2.9.4</jackson.version>
         <junit.version>4.12</junit.version>
         <easymock.version>3.4</easymock.version>
