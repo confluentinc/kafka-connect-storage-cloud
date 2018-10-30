@@ -18,6 +18,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import io.confluent.common.utils.SystemTime;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -25,13 +26,16 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.easymock.EasyMock;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.junit.After;
 import org.junit.Test;
+import io.confluent.common.utils.Time;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -489,6 +493,53 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     }
 
     topicPartitionWriter.write();
+  }
+
+  /* Test will start writing before the hour, and write some records after the hour, and verify
+     there is still only one output file created.
+   */
+  @Test
+  public void testWallclockAcrossPartitionBoundary() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "6");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.HOURS.toMillis(1))
+    );
+    setUp();
+
+    // Define the partitioner
+    TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
+    parsedConfig.put(
+        PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+        TimeBasedPartitioner.WallclockTimestampExtractor.class.getName());
+    partitioner.configure(parsedConfig);
+
+    Time systemTime = EasyMock.createMock(SystemTime.class);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, writerProvider, partitioner, connectorConfig, context, systemTime);
+
+    long freezeTime = 3599000L;
+    EasyMock.expect(systemTime.milliseconds()).andReturn(freezeTime);
+    EasyMock.replay(systemTime);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 6);
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records.subList(0, 9), key, schema);
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Set system time to 1 second before the hour
+
+    topicPartitionWriter.write();
+    List<String> expectedFiles = new ArrayList<>();
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, getTimebasedEncodedPartition(freezeTime));
+    expectedFiles.add(FileUtils.fileKeyToCommit(
+        topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    verify(expectedFiles, 6, schema, records);
   }
 
   @Test
