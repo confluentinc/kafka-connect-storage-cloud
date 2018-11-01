@@ -495,16 +495,13 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     topicPartitionWriter.write();
   }
 
-  /** Test will start writing before the hour, and write some records after the hour, and verify
-   *  there is still only one output file created.
-   */
   @Test
-  public void testWallclockAcrossPartitionBoundary() throws Exception {
+  public void testWallclockUsesBatchTimePartitionBoundary() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "6");
-    localProps.put(
-        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
-        String.valueOf(TimeUnit.HOURS.toMillis(1))
-    );
+//    localProps.put(
+//        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+//        String.valueOf(TimeUnit.HOURS.toMillis(1))
+//    );
     setUp();
 
     // Define the partitioner
@@ -520,6 +517,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, writerProvider, partitioner, connectorConfig, context, systemTime);
 
+    // Freeze clock passed into topicPartitionWriter, so we know what time it will use for "now"
     long freezeTime = 3599000L;
     EasyMock.expect(systemTime.milliseconds()).andReturn(freezeTime);
     EasyMock.replay(systemTime);
@@ -532,7 +530,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       topicPartitionWriter.buffer(record);
     }
 
+    // The Wallclock extractor should be passed the frozen time from topicPartitionWriter
     topicPartitionWriter.write();
+
     List<String> expectedFiles = new ArrayList<>();
     String dirPrefix = partitioner.generatePartitionedPath(TOPIC, getTimebasedEncodedPartition(freezeTime));
     expectedFiles.add(FileUtils.fileKeyToCommit(
