@@ -498,10 +498,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @Test
   public void testWallclockUsesBatchTimePartitionBoundary() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "6");
-//    localProps.put(
-//        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
-//        String.valueOf(TimeUnit.HOURS.toMillis(1))
-//    );
     setUp();
 
     // Define the partitioner
