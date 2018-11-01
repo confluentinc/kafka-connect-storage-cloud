@@ -495,8 +495,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     topicPartitionWriter.write();
   }
 
-  /* Test will start writing before the hour, and write some records after the hour, and verify
-     there is still only one output file created.
+  /** Test will start writing before the hour, and write some records after the hour, and verify
+   *  there is still only one output file created.
    */
   @Test
   public void testWallclockAcrossPartitionBoundary() throws Exception {
@@ -531,8 +531,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     for (SinkRecord record : sinkRecords) {
       topicPartitionWriter.buffer(record);
     }
-
-    // Set system time to 1 second before the hour
 
     topicPartitionWriter.write();
     List<String> expectedFiles = new ArrayList<>();
