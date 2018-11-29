@@ -89,6 +89,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   Partitioner<FieldSchema> partitioner;
   S3SinkTask task;
   Map<String, String> localProps = new HashMap<>();
+  private String prevMd5Prop = null;
 
   @Override
   protected Map<String, String> createProps() {
@@ -113,6 +114,9 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
 
     // Workaround to avoid AWS S3 client failing due to apparently incorrect S3Mock digest
+    prevMd5Prop = System.getProperty(
+        SkipMd5CheckStrategy.DISABLE_GET_OBJECT_MD5_VALIDATION_PROPERTY
+    );
     System.setProperty(SkipMd5CheckStrategy.DISABLE_GET_OBJECT_MD5_VALIDATION_PROPERTY, "true");
   }
 
@@ -121,6 +125,16 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   public void tearDown() throws Exception {
     super.tearDown();
     localProps.clear();
+
+    // Unset the property to the previous value
+    if (prevMd5Prop != null) {
+      System.setProperty(
+          SkipMd5CheckStrategy.DISABLE_GET_OBJECT_MD5_VALIDATION_PROPERTY,
+          prevMd5Prop
+      );
+    } else {
+      System.clearProperty(SkipMd5CheckStrategy.DISABLE_GET_OBJECT_MD5_VALIDATION_PROPERTY);
+    }
   }
 
   @Test
