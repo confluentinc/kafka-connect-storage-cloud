@@ -64,6 +64,7 @@ import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 public class TopicPartitionWriterTest extends TestWithMockedS3 {
   // The default
@@ -90,6 +91,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     s3 = newS3Client(connectorConfig);
     storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
     format = new AvroFormat(storage);
+
+    s3.createBucket(S3_TEST_BUCKET_NAME);
+    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
 
     Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
     writerProvider = format.getRecordWriterProvider();

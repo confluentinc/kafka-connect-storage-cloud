@@ -81,7 +81,7 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
   @Override
   public void tearDown() throws Exception {
     super.tearDown();
-    s3mock.stop();
+    s3mock.shutdown(); // shutdown the Akka and HTTP frameworks to close all connections
   }
 
   public static List<S3ObjectSummary> listObjects(String bucket, String prefix, AmazonS3 s3) {

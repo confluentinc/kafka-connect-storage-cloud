@@ -17,6 +17,7 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.internal.SkipMd5CheckStrategy;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.confluent.common.utils.MockTime;
 import io.confluent.common.utils.Time;
@@ -110,6 +111,9 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
 
     s3.createBucket(S3_TEST_BUCKET_NAME);
     assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
+
+    // Workaround to avoid AWS S3 client failing due to apparently incorrect S3Mock digest
+    System.setProperty(SkipMd5CheckStrategy.DISABLE_GET_OBJECT_MD5_VALIDATION_PROPERTY, "true");
   }
 
   @After
