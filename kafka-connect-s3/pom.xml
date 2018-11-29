@@ -37,16 +37,9 @@
 
     <properties>
         <aws.version>1.11.86</aws.version>
-        <s3mock.version>0.1.5</s3mock.version>
+        <s3mock.version>0.2.5</s3mock.version>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
     </properties>
-
-    <repositories>
-        <repository>
-            <id>findify</id>
-            <url>https://dl.bintray.com/findify/maven/</url>
-        </repository>
-    </repositories>
 
     <dependencyManagement>
         <dependencies>
@@ -67,7 +60,7 @@
         </dependency>
         <dependency>
             <groupId>io.findify</groupId>
-            <artifactId>s3mock_2.11</artifactId>
+            <artifactId>s3mock_2.12</artifactId>
             <version>${s3mock.version}</version>
             <scope>test</scope>
         </dependency>
