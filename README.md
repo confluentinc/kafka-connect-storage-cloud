@@ -27,7 +27,7 @@ You can build *kafka-connect-storage-cloud* with Maven using the standard lifecy
 
 # License
 
-The project is licensed under the Apache 2 license.
+This project is licensed under the [Confluent Community License](LICENSE).
 
 
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bhttps%3A%2F%2Fgithub.com%2Fconfluentinc%2Fkafka-connect-storage-cloud.svg?type=large)](https://app.fossa.io/projects/git%2Bhttps%3A%2F%2Fgithub.com%2Fconfluentinc%2Fkafka-connect-storage-cloud?ref=badge_large)
