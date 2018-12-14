@@ -24,7 +24,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>5.0.2-SNAPSHOT</version>
+        <version>5.0.2-beta181214001203</version>
     </parent>
 
     <groupId>io.confluent</groupId>
@@ -61,7 +61,7 @@
 
     <properties>
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
-        <licenses.version>5.0.2-SNAPSHOT</licenses.version>
+        <licenses.version>5.0.2-beta181214001203</licenses.version>
     </properties>
 
     <repositories>
