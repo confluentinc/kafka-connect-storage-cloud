@@ -27,6 +27,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -186,6 +187,23 @@ public class TopicPartitionWriter {
     commitOnTimeIfNoData(now);
   }
 
+  private String generateEncodedPartitionMetadata(SinkRecord record) {
+    String result = null;
+
+    try {
+      JSONObject jsonObj = new JSONObject(String.valueOf(record.value()));
+      JSONObject metadataObj = jsonObj.getJSONObject("metadata");
+      String metadataFieldValue =
+              metadataObj.getString(connectorConfig.getMetadataPartitionField());
+      result = connectorConfig.getMetadataPartitionField() + "=" + metadataFieldValue;
+      log.info("new encoded partition generated -- " + result);
+    } catch (Exception e) {
+      log.error(e.getStackTrace().toString());
+    }
+
+    return result;
+  }
+
   @SuppressWarnings("fallthrough")
   private void executeState(long now) {
     switch (state) {
@@ -202,7 +220,12 @@ public class TopicPartitionWriter {
           }
         }
         Schema valueSchema = record.valueSchema();
-        String encodedPartition = partitioner.encodePartition(record);
+        String encodedPartition;
+        if (connectorConfig.getMetadataPartitionField() == null) {
+          encodedPartition = partitioner.encodePartition(record);
+        } else {
+          encodedPartition = generateEncodedPartitionMetadata(record);
+        }
         Schema currentValueSchema = currentSchemas.get(encodedPartition);
         if (currentValueSchema == null) {
           currentSchemas.put(encodedPartition, valueSchema);

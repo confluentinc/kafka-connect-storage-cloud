@@ -64,6 +64,9 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
+  public static final String METADATA_PARTITION_FIELD = "metadata.partition.field";
+  public static final String METADATA_PARTITION_FIELD_DEFAULT = null;
+
   // S3 Group
   public static final String S3_BUCKET_CONFIG = "s3.bucket.name";
 
@@ -183,6 +186,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "S3 Bucket"
+      );
+
+      configDef.define(
+              METADATA_PARTITION_FIELD,
+              Type.STRING,
+              METADATA_PARTITION_FIELD_DEFAULT,
+              Importance.HIGH,
+              "The metadata partition field.",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "metadata partition field"
       );
 
       configDef.define(
@@ -459,6 +474,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     for (String key : parsedProps.keySet()) {
       propertyToConfig.put(key, config);
     }
+  }
+
+  public String getMetadataPartitionField() {
+    return getString(METADATA_PARTITION_FIELD);
   }
 
   public String getBucketName() {
