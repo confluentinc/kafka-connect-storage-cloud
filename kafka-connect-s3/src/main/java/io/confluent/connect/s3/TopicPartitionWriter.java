@@ -196,7 +196,7 @@ public class TopicPartitionWriter {
       String metadataFieldValue =
               metadataObj.getString(connectorConfig.getMetadataPartitionField());
       result = connectorConfig.getMetadataPartitionField() + "=" + metadataFieldValue;
-      log.info("new encoded partition generated -- " + result);
+      log.info("Metadata partition generated -- " + result);
     } catch (Exception e) {
       log.error(e.getStackTrace().toString());
     }
