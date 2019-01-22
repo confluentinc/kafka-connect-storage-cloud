@@ -221,7 +221,7 @@ public class TopicPartitionWriter {
         }
         Schema valueSchema = record.valueSchema();
         String encodedPartition;
-        if (connectorConfig.getMetadataPartitionField() == null) {
+        if (StringUtils.isBlank(connectorConfig.getMetadataPartitionField())) {
           encodedPartition = partitioner.encodePartition(record);
         } else {
           encodedPartition = generateEncodedPartitionMetadata(record);
@@ -293,7 +293,7 @@ public class TopicPartitionWriter {
         log.info(
             "Starting commit and rotation for topic partition {} with start offset {}",
             tp,
-            startOffsets
+            startOffsets.get(encodedPartition)
         );
         nextState();
         // Fall through and try to rotate immediately
@@ -443,7 +443,7 @@ public class TopicPartitionWriter {
     if (writers.containsKey(encodedPartition)) {
       return writers.get(encodedPartition);
     }
-    String commitFilename = getCommitFilename(encodedPartition);
+    String commitFilename = getCommitFilename(encodedPartition, record);
     log.debug(
         "Creating new writer encodedPartition='{}' filename='{}'",
         encodedPartition,
@@ -454,14 +454,14 @@ public class TopicPartitionWriter {
     return writer;
   }
 
-  private String getCommitFilename(String encodedPartition) {
+  private String getCommitFilename(String encodedPartition, SinkRecord record) {
     String commitFile;
     if (commitFiles.containsKey(encodedPartition)) {
       commitFile = commitFiles.get(encodedPartition);
     } else {
       long startOffset = startOffsets.get(encodedPartition);
       String prefix = getDirectoryPrefix(encodedPartition);
-      commitFile = fileKeyToCommit(prefix, startOffset);
+      commitFile = fileKeyToCommit(prefix, startOffset, record);
       commitFiles.put(encodedPartition, commitFile);
     }
     return commitFile;
@@ -474,13 +474,25 @@ public class TopicPartitionWriter {
            : suffix;
   }
 
-  private String fileKeyToCommit(String dirPrefix, long startOffset) {
-    String name = tp.topic()
-                      + fileDelim
-                      + tp.partition()
-                      + fileDelim
-                      + String.format(zeroPadOffsetFormat, startOffset)
-                      + extension;
+  private String fileKeyToCommit(String dirPrefix, long startOffset, SinkRecord record) {
+    String name;
+    if (StringUtils.isNotBlank(connectorConfig.getFileNameMetadataField())) {
+      try {
+        JSONObject jsonObj = new JSONObject(String.valueOf(record.value()));
+        JSONObject metadataObj = jsonObj.getJSONObject("metadata");
+        name = metadataObj.getString(connectorConfig.getFileNameMetadataField()) + extension;
+      } catch (Exception e) {
+        log.error(e.getStackTrace().toString());
+        name = null;
+      }
+    } else {
+      name = tp.topic()
+              + fileDelim
+              + tp.partition()
+              + fileDelim
+              + String.format(zeroPadOffsetFormat, startOffset)
+              + extension;
+    }
     return fileKey(topicsDir, dirPrefix, name);
   }
 

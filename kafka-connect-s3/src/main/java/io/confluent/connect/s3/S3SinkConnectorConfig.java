@@ -64,8 +64,12 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
-  public static final String METADATA_PARTITION_FIELD = "metadata.partition.field";
+  // Riskified
+  public static final String METADATA_PARTITION_FIELD = "s3.metadata.partition.field";
   public static final String METADATA_PARTITION_FIELD_DEFAULT = null;
+
+  public static final String FILE_NAME_METADATA_FIELD = "s3.metadata.filename.field";
+  public static final String FILE_NAME_METADATA_FIELD_DEFAULT = null;
 
   // S3 Group
   public static final String S3_BUCKET_CONFIG = "s3.bucket.name";
@@ -192,12 +196,24 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
               METADATA_PARTITION_FIELD,
               Type.STRING,
               METADATA_PARTITION_FIELD_DEFAULT,
-              Importance.HIGH,
+              Importance.LOW,
               "The metadata partition field.",
               group,
               ++orderInGroup,
               Width.LONG,
               "metadata partition field"
+      );
+
+      configDef.define(
+              FILE_NAME_METADATA_FIELD,
+              Type.STRING,
+              FILE_NAME_METADATA_FIELD_DEFAULT,
+              Importance.LOW,
+              "The filename by metadata field.",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "The filename by metadata field"
       );
 
       configDef.define(
@@ -478,6 +494,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public String getMetadataPartitionField() {
     return getString(METADATA_PARTITION_FIELD);
+  }
+
+  public String getFileNameMetadataField() {
+    return getString(FILE_NAME_METADATA_FIELD);
   }
 
   public String getBucketName() {
