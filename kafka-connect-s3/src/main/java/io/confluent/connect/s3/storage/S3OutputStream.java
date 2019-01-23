@@ -42,7 +42,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.ForkJoinTask;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Output stream enabling multi-part uploads of Kafka records.
@@ -62,11 +62,10 @@ public class S3OutputStream extends OutputStream {
   private final CannedAccessControlList cannedAcl;
   private boolean closed;
   private ByteBuffer buffer;
-  private MultipartUpload multiPartUpload;
+  private volatile MultipartUpload multiPartUpload;
   private final CompressionType compressionType;
   private volatile OutputStream compressionFilter;
   private ForkJoinPool pool;
-  private ArrayList<ForkJoinTask<MultipartUpload>> uploaders;
 
   public S3OutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
     this.s3 = s3;
@@ -86,7 +85,6 @@ public class S3OutputStream extends OutputStream {
     this.multiPartUpload = null;
     this.compressionType = conf.getCompressionType();
     this.pool = ForkJoinPool.commonPool();
-    this.uploaders = new ArrayList<>();
     log.debug("Create S3OutputStream for bucket '{}' key '{}'", bucket, key);
   }
 
@@ -129,22 +127,26 @@ public class S3OutputStream extends OutputStream {
 
   private void uploadPart(final int size) throws IOException {
     byte[] uploadBuffer = buffer.array();
-    ForkJoinTask<MultipartUpload> task = pool.submit(new Callable<MultipartUpload>() {
-      public MultipartUpload call() throws Exception {
-        return runUploadMultiPart(uploadBuffer, size);
+    pool.submit(new Callable<Void>() {
+      public Void call() throws Exception {
+        runUploadMultiPart(uploadBuffer, size);
+        return null;
       }
     });
-    uploaders.add(task);
   }
 
-  private MultipartUpload runUploadMultiPart(final byte[] uploadArray, final int size)
+  private void runUploadMultiPart(final byte[] uploadArray, final int size)
           throws IOException {
     log.debug("New multi-part upload for bucket '{}' key '{}'", bucket, key);
-    // TODO: Use a pool of initialized resources
-    MultipartUpload multiPartUpload = newMultipartUpload();
+    if (multiPartUpload == null) {
+      synchronized (MultipartUpload.class) {
+        if (multiPartUpload == null) {
+          multiPartUpload = newMultipartUpload();
+        }
+      }
+    }
     try {
       multiPartUpload.uploadPart(new ByteArrayInputStream(uploadArray), size);
-      return multiPartUpload;
     } catch (Exception e) {
       multiPartUpload.abort();
       log.debug("Multipart upload aborted for bucket '{}' key '{}'.", bucket, key);
@@ -167,16 +169,9 @@ public class S3OutputStream extends OutputStream {
       if (buffer.hasRemaining()) {
         uploadPart(buffer.position());
       }
-      //multiPartUpload.complete();
-      for (ForkJoinTask<MultipartUpload> task : uploaders) {
-        if (task.isDone()) {
-          task.get().complete();
-        } else {
-          // TODO verify how to better deal with incomplete tasks
-          task.invoke().complete();
-        }
-      }
-      uploaders.clear();
+      // TODO timeout config
+      pool.awaitQuiescence(10, TimeUnit.SECONDS);
+      multiPartUpload.complete();
       log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
     } catch (Exception e) {
       log.error("Multipart upload failed to complete for bucket '{}' key '{}'", bucket, key);
@@ -247,7 +242,7 @@ public class S3OutputStream extends OutputStream {
       );
     }
 
-    public void uploadPart(ByteArrayInputStream inputStream, int partSize) {
+    public synchronized void uploadPart(ByteArrayInputStream inputStream, int partSize) {
       int currentPartNumber = partETags.size() + 1;
       UploadPartRequest request = new UploadPartRequest()
                                             .withBucketName(bucket)
