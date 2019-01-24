@@ -71,6 +71,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String FILE_NAME_METADATA_FIELD = "s3.metadata.filename.field";
   public static final String FILE_NAME_METADATA_FIELD_DEFAULT = null;
 
+  public static final String WRITE_PAYLOAD_REDSHIFT = "s3.write.payload.redshift";
+  public static final boolean WRITE_PAYLOAD_REDSHIFT_DEFAULT = false;
+
   // S3 Group
   public static final String S3_BUCKET_CONFIG = "s3.bucket.name";
 
@@ -214,6 +217,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
               ++orderInGroup,
               Width.LONG,
               "The filename by metadata field"
+      );
+
+      configDef.define(
+              WRITE_PAYLOAD_REDSHIFT,
+              Type.BOOLEAN,
+              WRITE_PAYLOAD_REDSHIFT_DEFAULT,
+              Importance.LOW,
+              "Generate json payload array to redshift json documents",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "Generate json payload array to redshift json documents"
       );
 
       configDef.define(
@@ -490,6 +505,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     for (String key : parsedProps.keySet()) {
       propertyToConfig.put(key, config);
     }
+  }
+
+  public boolean getWritePayloadRedshift() {
+    return getBoolean(WRITE_PAYLOAD_REDSHIFT);
   }
 
   public String getMetadataPartitionField() {

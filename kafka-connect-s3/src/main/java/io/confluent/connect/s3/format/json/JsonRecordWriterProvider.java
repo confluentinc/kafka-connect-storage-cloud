@@ -16,18 +16,24 @@
 
 package io.confluent.connect.s3.format.json;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.json.JSONArray;
+import org.json.JSONException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.storage.S3OutputStream;
@@ -63,9 +69,11 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
       return new RecordWriter() {
         final S3OutputStream s3out = storage.create(filename, true);
         final OutputStream s3outWrapper = s3out.wrapForCompression();
-        final JsonGenerator writer = mapper.getFactory()
-                                         .createGenerator(s3outWrapper)
-                                         .setRootValueSeparator(null);
+        final JsonGenerator writer = mapper
+                .configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false)
+                .setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
+                .getFactory().createGenerator(s3outWrapper)
+                .setRootValueSeparator(null);
 
         @Override
         public void write(SinkRecord record) {
@@ -81,8 +89,22 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
               s3outWrapper.write(rawJson);
               s3outWrapper.write(LINE_SEPARATOR_BYTES);
             } else {
-              writer.writeObject(value);
-              writer.writeRaw(LINE_SEPARATOR);
+              if (conf.getWritePayloadRedshift()) {
+                try {
+                  String payload = (String) ((HashMap)value).get("payload");
+                  JSONArray payloadArr = new JSONArray(payload);
+
+                  for (int i = 0; i < payloadArr.length(); i++) {
+                    writer.writeObject(payloadArr.getJSONObject(i));
+                    writer.writeRaw(LINE_SEPARATOR);
+                  }
+                } catch (JSONException e) {
+                  throw new ConnectException(e);
+                }
+              } else {
+                writer.writeObject(value);
+                writer.writeRaw(LINE_SEPARATOR);
+              }
             }
           } catch (IOException e) {
             throw new ConnectException(e);
