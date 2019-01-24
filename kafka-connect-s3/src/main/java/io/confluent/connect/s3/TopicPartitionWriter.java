@@ -87,6 +87,8 @@ public class TopicPartitionWriter {
   private DateTimeZone timeZone;
   private final S3SinkConnectorConfig connectorConfig;
   private static final Time SYSTEM_TIME = new SystemTime();
+  private static final String ASYNC_ETL_FILES_FOLDER_NAME = "new";
+  private static final String METADATA_FILED_NAME = "metadata";
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
@@ -192,11 +194,10 @@ public class TopicPartitionWriter {
 
     try {
       JSONObject jsonObj = new JSONObject(String.valueOf(record.value()));
-      JSONObject metadataObj = jsonObj.getJSONObject("metadata");
+      JSONObject metadataObj = jsonObj.getJSONObject(METADATA_FILED_NAME);
       String metadataFieldValue =
               metadataObj.getString(connectorConfig.getMetadataPartitionField());
       result = connectorConfig.getMetadataPartitionField() + "=" + metadataFieldValue;
-      log.info("Metadata partition generated -- " + result);
     } catch (Exception e) {
       log.error(e.getStackTrace().toString());
     }
@@ -349,7 +350,11 @@ public class TopicPartitionWriter {
   }
 
   private String getDirectoryPrefix(String encodedPartition) {
-    return partitioner.generatePartitionedPath(tp.topic(), encodedPartition);
+    String folderPrefix = encodedPartition;
+    if (connectorConfig.getWritePayloadRedshift()) {
+      folderPrefix = ASYNC_ETL_FILES_FOLDER_NAME;
+    }
+    return partitioner.generatePartitionedPath(tp.topic(), folderPrefix);
   }
 
   private void nextState() {
@@ -479,7 +484,7 @@ public class TopicPartitionWriter {
     if (StringUtils.isNotBlank(connectorConfig.getFileNameMetadataField())) {
       try {
         JSONObject jsonObj = new JSONObject(String.valueOf(record.value()));
-        JSONObject metadataObj = jsonObj.getJSONObject("metadata");
+        JSONObject metadataObj = jsonObj.getJSONObject(METADATA_FILED_NAME);
         name = metadataObj.getString(connectorConfig.getFileNameMetadataField()) + extension;
       } catch (Exception e) {
         log.error(e.getStackTrace().toString());

@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import io.confluent.connect.s3.util.JsonMapConverter;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
@@ -48,6 +49,7 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
   private static final String LINE_SEPARATOR = System.lineSeparator();
   private static final byte[] LINE_SEPARATOR_BYTES
       = LINE_SEPARATOR.getBytes(StandardCharsets.UTF_8);
+  private static final String PAYLOAD_FIELD_NAME = "payload";
   private final S3Storage storage;
   private final ObjectMapper mapper;
   private final JsonConverter converter;
@@ -91,11 +93,10 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
             } else {
               if (conf.getWritePayloadRedshift()) {
                 try {
-                  String payload = (String) ((HashMap)value).get("payload");
-                  JSONArray payloadArr = new JSONArray(payload);
-
+                  JSONArray payloadArr =
+                          new JSONArray((String) ((HashMap)value).get(PAYLOAD_FIELD_NAME));
                   for (int i = 0; i < payloadArr.length(); i++) {
-                    writer.writeObject(payloadArr.getJSONObject(i));
+                    writer.writeObject(JsonMapConverter.toMap(payloadArr.getJSONObject(i)));
                     writer.writeRaw(LINE_SEPARATOR);
                   }
                 } catch (JSONException e) {
