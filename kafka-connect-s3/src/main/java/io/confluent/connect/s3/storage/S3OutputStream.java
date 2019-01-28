@@ -231,7 +231,7 @@ public class S3OutputStream extends OutputStream {
       // Initialize threadpool for multipart uploads
       int cores = Math.max(1, Runtime.getRuntime().availableProcessors());
       this.pool = new ThreadPoolExecutor(cores, cores * 2, 1, TimeUnit.MINUTES,
-              new MultipartUploadQueue(cores * 2), Executors.defaultThreadFactory(),
+              new ArrayBlockingQueue<>(cores * 2), Executors.defaultThreadFactory(),
               new ThreadPoolExecutor.CallerRunsPolicy());
       log.info("Initialized pool for S3OutputStream using cores value of '{}'", cores);
       log.debug(
@@ -294,25 +294,6 @@ public class S3OutputStream extends OutputStream {
         pool.shutdown();
       }
     }
-  }
-
-  public final class MultipartUploadQueue extends ArrayBlockingQueue<Runnable> {
-    private static final long serialVersionUID = -817911632652898427L;
-
-    public MultipartUploadQueue(int capacity) {
-      super(capacity);
-    }
-
-    @Override
-    public boolean offer(Runnable task) {
-      try {
-        put(task);
-      } catch (InterruptedException e) {
-        return false;
-      }
-      return true;
-    }
-
   }
 
   public OutputStream wrapForCompression() {
