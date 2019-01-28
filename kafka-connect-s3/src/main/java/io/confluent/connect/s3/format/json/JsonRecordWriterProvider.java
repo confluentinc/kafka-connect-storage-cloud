@@ -17,6 +17,7 @@
 package io.confluent.connect.s3.format.json;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -74,6 +75,8 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
         final JsonGenerator writer = mapper
                 .configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false)
                 .setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
+                .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+                .setSerializationInclusion(JsonInclude.Include.NON_EMPTY)
                 .getFactory().createGenerator(s3outWrapper)
                 .setRootValueSeparator(null);
 
