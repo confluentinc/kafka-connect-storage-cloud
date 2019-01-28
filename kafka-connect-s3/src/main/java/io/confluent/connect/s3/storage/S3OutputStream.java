@@ -136,7 +136,7 @@ public class S3OutputStream extends OutputStream {
       multiPartUpload = newMultipartUpload();
     }
     try {
-      multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), size);
+      multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array().clone()), size);
     } catch (Exception e) {
       if (multiPartUpload != null) {
         multiPartUpload.abort();
