@@ -211,6 +211,14 @@ public class S3SinkTask extends SinkTask {
         log.trace("Forwarding to framework request to commit offset: {} for {}", offset, tp);
         offsetsToCommit.put(tp, new OffsetAndMetadata(offset));
       }
+
+      if (topicPartitionWriters.get(tp).getRecordCount() == 0 && offsets != null) {
+        // if there are no records buffered, just flush the offsets received from kconnect framework
+        if (offsets.get(tp) != null) {
+          log.trace("Forwarding to framework request to commit offset: {} for {}", offsets.get(tp), tp);
+          offsetsToCommit.put(tp, offsets.get(tp));
+        }
+      }
     }
     return offsetsToCommit;
   }

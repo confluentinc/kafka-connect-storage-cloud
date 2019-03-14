@@ -324,6 +324,10 @@ public class TopicPartitionWriter {
     return latest;
   }
 
+  public int getRecordCount() {
+    return recordCount;
+  }
+
   private String getDirectoryPrefix(String encodedPartition) {
     return partitioner.generatePartitionedPath(tp.topic(), encodedPartition);
   }

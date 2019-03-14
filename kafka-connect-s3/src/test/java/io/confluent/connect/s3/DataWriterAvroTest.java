@@ -482,6 +482,38 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   }
 
   @Test
+  public void testPreCommitWithEmptyBuffer() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "3");
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+
+    long [] inputOffsets = new long[]{4L,4L};
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = task.preCommit(buildTopicOffsets(inputOffsets, context.assignment()));
+
+    // sink task has no records buffered, so it defaults to returning the offsets that it was given by the kafka connect framework
+    verifyOffsets(offsetsToCommit, inputOffsets, context.assignment());
+
+    List<SinkRecord> sinkRecords1 = createRecordsInterleaved(2 * context.assignment().size(), 4, context.assignment());
+
+    // sink has records buffered now but not enough to flush, should not return any offsets
+    task.put(sinkRecords1);
+    offsetsToCommit = task.preCommit(buildTopicOffsets(new long[]{7L,7L}, context.assignment()));
+
+    // Actual values are null, we set to negative for the verifier.
+    long[] validOffsets1 = {-1, -1};
+    verifyOffsets(offsetsToCommit, validOffsets1, context.assignment());
+
+    List<SinkRecord> sinkRecords2 = createRecordsInterleaved(1 * context.assignment().size(), 6, context.assignment());
+    task.put(sinkRecords2);
+    offsetsToCommit = task.preCommit(buildTopicOffsets(new long[]{7L,7L}, context.assignment()));
+    long[] validOffsets2 = {7, 7};
+    verifyOffsets(offsetsToCommit, validOffsets2, context.assignment());
+
+    task.close(context.assignment());
+    task.stop();
+  }
+
+  @Test
   public void testRebalance() throws Exception {
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
@@ -912,15 +944,19 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
 
   protected void verifyOffsets(Map<TopicPartition, OffsetAndMetadata> actualOffsets, long[] validOffsets,
                               Set<TopicPartition> partitions) {
-    int i = 0;
-    Map<TopicPartition, OffsetAndMetadata> expectedOffsets = new HashMap<>();
-    for (TopicPartition tp : partitions) {
-      long offset = validOffsets[i++];
-      if (offset >= 0) {
-        expectedOffsets.put(tp, new OffsetAndMetadata(offset, ""));
-      }
-    }
+    Map<TopicPartition, OffsetAndMetadata> expectedOffsets = buildTopicOffsets(validOffsets, partitions);
     assertTrue(Objects.equals(actualOffsets, expectedOffsets));
   }
-}
 
+  private Map<TopicPartition, OffsetAndMetadata> buildTopicOffsets(long[] partitionOffsets, Set<TopicPartition> partitions) {
+    int i = 0;
+    Map<TopicPartition, OffsetAndMetadata> offsetMap = new HashMap<>();
+    for (TopicPartition tp : partitions) {
+      long offset = partitionOffsets[i++];
+      if (offset >= 0) {
+        offsetMap.put(tp, new OffsetAndMetadata(offset, ""));
+      }
+    }
+    return offsetMap;
+  }
+}
