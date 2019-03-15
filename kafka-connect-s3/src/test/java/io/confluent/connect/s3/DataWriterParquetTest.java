@@ -58,7 +58,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
 
   private static final String ZERO_PAD_FMT = "%010d";
 
-  private final String extension = ".parquet";
+  private final String extension = ".snappy.parquet";
   protected S3Storage storage;
   protected AmazonS3 s3;
   protected Partitioner<FieldSchema> partitioner;

@@ -41,6 +41,7 @@ import java.io.IOException;
 public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
   private static final Logger log = LoggerFactory.getLogger(ParquetRecordWriterProvider.class);
   private static final String EXTENSION = ".parquet";
+  private static final String COMPRESSION_TYPE = ".snappy";
   private final S3Storage storage;
   private final AvroData avroData;
   private S3ParquetOutputFile s3ParquetOutputFile;
@@ -52,7 +53,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
 
   @Override
   public String getExtension() {
-    return EXTENSION;
+    return COMPRESSION_TYPE + EXTENSION;
   }
 
   @Override
