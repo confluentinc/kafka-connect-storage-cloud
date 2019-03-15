@@ -59,7 +59,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     return new RecordWriter() {
       Schema schema = null;
-      Boolean comitted = false;
+      Boolean committed = false;
       ParquetWriter<GenericRecord> writer;
 
       @Override
@@ -95,7 +95,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
 
       @Override
       public void close() {
-        if (comitted) {
+        if (committed) {
           return;
         }
         commit();
@@ -104,7 +104,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
       @Override
       public void commit() {
         try {
-          comitted = true;
+          committed = true;
           if (writer != null) {
             writer.close();
           }
