@@ -24,6 +24,7 @@ import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import io.confluent.connect.s3.format.parquet.ParquetUtils;
 import io.findify.s3mock.S3Mock;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.After;
@@ -121,6 +122,8 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
       } else if (extension.startsWith(".bin")) {
         return readRecordsByteArray(bucketName, fileKey, s3, compressionType,
             S3SinkConnectorConfig.FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT.getBytes());
+      } else if (extension.endsWith(".parquet")) {
+          return readRecordsParquet(bucketName, fileKey, s3);
       } else if (extension.startsWith(".customExtensionForTest")) {
         return readRecordsByteArray(bucketName, fileKey, s3, compressionType,
             "SEPARATOR".getBytes());
@@ -150,6 +153,12 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
       InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
 
       return ByteArrayUtils.getRecords(compressionType.wrapForInput(in), lineSeparatorBytes);
+  }
+
+  public static Collection<Object> readRecordsParquet(String bucketName, String fileKey, AmazonS3 s3) throws IOException {
+      log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
+      InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
+      return ParquetUtils.getRecords(in, fileKey);
   }
 
   @Override
