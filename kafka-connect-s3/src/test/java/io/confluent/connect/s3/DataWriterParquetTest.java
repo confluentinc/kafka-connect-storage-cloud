@@ -115,6 +115,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     setUp();
 
     // Upload partial file.
+    System.setProperty("com.amazonaws.services.s3.disableGetObjectMD5Validation", "true");
     List<SinkRecord> sinkRecords = createRecords(2);
     byte[] partialData = AvroUtils.putRecords(sinkRecords, format.getAvroData());
     String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT);
