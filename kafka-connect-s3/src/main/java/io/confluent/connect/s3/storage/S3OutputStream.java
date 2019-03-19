@@ -108,7 +108,6 @@ public class S3OutputStream extends PositionOutputStream {
     } else if (len == 0) {
       return;
     }
-
     if (buffer.remaining() <= len) {
       int firstPart = buffer.remaining();
       buffer.put(b, off, firstPart);
@@ -119,6 +118,7 @@ public class S3OutputStream extends PositionOutputStream {
       buffer.put(b, off, len);
       position += len;
     }
+
   }
 
   private static boolean outOfRange(int off, int len) {
@@ -149,9 +149,9 @@ public class S3OutputStream extends PositionOutputStream {
   public void commit() throws IOException {
     if (closed) {
       log.warn(
-          "Tried to commit data for bucket '{}' key '{}' on a closed stream. Ignoring.",
-          bucket,
-          key
+              "Tried to commit data for bucket '{}' key '{}' on a closed stream. Ignoring.",
+              bucket,
+              key
       );
       return;
     }
@@ -196,13 +196,13 @@ public class S3OutputStream extends PositionOutputStream {
 
   private MultipartUpload newMultipartUpload() throws IOException {
     InitiateMultipartUploadRequest initRequest = new InitiateMultipartUploadRequest(
-        bucket,
-        key,
-        newObjectMetadata()
+            bucket,
+            key,
+            newObjectMetadata()
     ).withCannedACL(cannedAcl);
 
     if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
-        && StringUtils.isNotBlank(sseKmsKeyId)) {
+            && StringUtils.isNotBlank(sseKmsKeyId)) {
       initRequest.setSSEAwsKeyManagementParams(new SSEAwsKeyManagementParams(sseKmsKeyId));
     } else if (sseCustomerKey != null) {
       initRequest.setSSECustomerKey(sseCustomerKey);
@@ -225,24 +225,24 @@ public class S3OutputStream extends PositionOutputStream {
       this.uploadId = uploadId;
       this.partETags = new ArrayList<>();
       log.debug(
-          "Initiated multi-part upload for bucket '{}' key '{}' with id '{}'",
-          bucket,
-          key,
-          uploadId
+              "Initiated multi-part upload for bucket '{}' key '{}' with id '{}'",
+              bucket,
+              key,
+              uploadId
       );
     }
 
     public void uploadPart(ByteArrayInputStream inputStream, int partSize) {
       int currentPartNumber = partETags.size() + 1;
       UploadPartRequest request = new UploadPartRequest()
-                                            .withBucketName(bucket)
-                                            .withKey(key)
-                                            .withUploadId(uploadId)
-                                            .withSSECustomerKey(sseCustomerKey)
-                                            .withInputStream(inputStream)
-                                            .withPartNumber(currentPartNumber)
-                                            .withPartSize(partSize)
-                                            .withGeneralProgressListener(progressListener);
+                                        .withBucketName(bucket)
+                                        .withKey(key)
+                                        .withUploadId(uploadId)
+                                        .withSSECustomerKey(sseCustomerKey)
+                                        .withInputStream(inputStream)
+                                        .withPartNumber(currentPartNumber)
+                                        .withPartSize(partSize)
+                                        .withGeneralProgressListener(progressListener);
       log.debug("Uploading part {} for id '{}'", currentPartNumber, uploadId);
       partETags.add(s3.uploadPart(request).getPartETag());
     }
@@ -250,7 +250,7 @@ public class S3OutputStream extends PositionOutputStream {
     public void complete() {
       log.debug("Completing multi-part upload for key '{}', id '{}'", key, uploadId);
       CompleteMultipartUploadRequest completeRequest =
-          new CompleteMultipartUploadRequest(bucket, key, uploadId, partETags);
+              new CompleteMultipartUploadRequest(bucket, key, uploadId, partETags);
       s3.completeMultipartUpload(completeRequest);
     }
 

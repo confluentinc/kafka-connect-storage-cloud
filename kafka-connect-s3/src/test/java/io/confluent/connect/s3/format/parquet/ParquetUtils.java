@@ -18,7 +18,6 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.io.DelegatingSeekableInputStream;
 import org.apache.parquet.io.InputFile;
 import org.apache.parquet.io.SeekableInputStream;
-
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -104,7 +103,7 @@ public class ParquetUtils {
     tempFilePath.getFileSystem(new Configuration()).delete(tempFilePath, false);
     return out.toByteArray();
   }
-
+  
   private static class S3ParquetInputFile implements InputFile {
 
     private SeekableByteChannel seekableByteChannel;

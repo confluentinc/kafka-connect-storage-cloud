@@ -186,5 +186,4 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
 
     return builder.build();
   }
-
 }
