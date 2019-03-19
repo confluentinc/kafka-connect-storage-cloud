@@ -103,7 +103,7 @@ public class ParquetUtils {
     tempFilePath.getFileSystem(new Configuration()).delete(tempFilePath, false);
     return out.toByteArray();
   }
-  
+
   private static class S3ParquetInputFile implements InputFile {
 
     private SeekableByteChannel seekableByteChannel;
