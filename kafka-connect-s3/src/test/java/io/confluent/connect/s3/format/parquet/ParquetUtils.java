@@ -14,7 +14,6 @@ import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.io.DelegatingSeekableInputStream;
 import org.apache.parquet.io.InputFile;
 import org.apache.parquet.io.SeekableInputStream;
@@ -71,7 +70,6 @@ public class ParquetUtils {
           .withSchema(avroSchema)
           .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
           .withDictionaryEncoding(true)
-          .withCompressionCodec(CompressionCodecName.SNAPPY)
           .withPageSize(pageSize)
           .build();
       }

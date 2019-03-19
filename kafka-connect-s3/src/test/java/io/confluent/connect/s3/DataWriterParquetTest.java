@@ -69,7 +69,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
 
   private static final String ZERO_PAD_FMT = "%010d";
 
-  private final String extension = ".snappy.parquet";
+  private final String extension = ".parquet";
   protected S3Storage storage;
   protected AmazonS3 s3;
   protected Partitioner<FieldSchema> partitioner;
@@ -106,8 +106,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     localProps.clear();
   }
 
-  @Test
-  public void testWriteRecords() throws Exception {
+  protected void testWriteRecords(String extension) throws Exception {
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
@@ -118,7 +117,24 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     task.stop();
 
     long[] validOffsets = {0, 3, 6};
-    verify(sinkRecords, validOffsets);
+    verify(sinkRecords, validOffsets, extension);
+  }
+
+  @Test
+  public void testUncompressedCompressionWriteRecords() throws Exception {
+      testWriteRecords(this.extension);
+  }
+
+  @Test
+  public void testGzipCompressionWriteRecords() throws Exception {
+    localProps.put(S3SinkConnectorConfig.PARQUET_COMPRESSION_TYPE_CONFIG, "gzip");
+    testWriteRecords(".gz" + this.extension);
+  }
+
+  @Test
+  public void testSnappyCompressionWriteRecords() throws Exception {
+    localProps.put(S3SinkConnectorConfig.PARQUET_COMPRESSION_TYPE_CONFIG, "snappy");
+    testWriteRecords(".snappy" + this.extension);
   }
 
   @Test
@@ -624,12 +640,21 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
   }
 
   protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets) throws IOException {
-    verify(sinkRecords, validOffsets, Collections.singleton(new TopicPartition(TOPIC, PARTITION)), false);
+    verify(sinkRecords, validOffsets, Collections.singleton(new TopicPartition(TOPIC, PARTITION)), false, this.extension);
+  }
+
+  protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, String extension) throws IOException {
+    verify(sinkRecords, validOffsets, Collections.singleton(new TopicPartition(TOPIC, PARTITION)), false, extension);
   }
 
   protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, Set<TopicPartition> partitions)
           throws IOException {
-    verify(sinkRecords, validOffsets, partitions, false);
+    verify(sinkRecords, validOffsets, partitions, false, this.extension);
+  }
+  protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, Set<TopicPartition> partitions,
+                        boolean skipFileListing)
+          throws IOException {
+    verify(sinkRecords, validOffsets, partitions, skipFileListing, this.extension);
   }
 
   /**
@@ -641,10 +666,10 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
    * @throws IOException
    */
   protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, Set<TopicPartition> partitions,
-                        boolean skipFileListing)
+                        boolean skipFileListing, String extension)
           throws IOException {
     if (!skipFileListing) {
-      verifyFileListing(validOffsets, partitions);
+      verifyFileListing(validOffsets, partitions, extension);
     }
 
     for (TopicPartition tp : partitions) {
@@ -662,10 +687,10 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     }
   }
 
-  protected void verifyFileListing(long[] validOffsets, Set<TopicPartition> partitions) throws IOException {
+  protected void verifyFileListing(long[] validOffsets, Set<TopicPartition> partitions, String extension) throws IOException {
     List<String> expectedFiles = new ArrayList<>();
     for (TopicPartition tp : partitions) {
-      expectedFiles.addAll(getExpectedFiles(validOffsets, tp));
+      expectedFiles.addAll(getExpectedFiles(validOffsets, tp, extension));
     }
     verifyFileListing(expectedFiles);
   }
@@ -716,6 +741,10 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
   }
 
   protected List<String> getExpectedFiles(long[] validOffsets, TopicPartition tp) {
+    return getExpectedFiles(validOffsets, tp, this.extension);
+  }
+
+  protected List<String> getExpectedFiles(long[] validOffsets, TopicPartition tp, String extension) {
     List<String> expectedFiles = new ArrayList<>();
     for (int i = 1; i <= validOffsets.length; ++i) {
       long startOffset = validOffsets[i - 1];

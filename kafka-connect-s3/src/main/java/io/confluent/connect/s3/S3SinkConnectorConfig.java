@@ -58,6 +58,7 @@ import io.confluent.connect.storage.partitioner.FieldPartitioner;
 import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
@@ -102,6 +103,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String COMPRESSION_TYPE_CONFIG = "s3.compression.type";
   public static final String COMPRESSION_TYPE_DEFAULT = "none";
+
+  public static final String PARQUET_COMPRESSION_TYPE_CONFIG = "s3.parquet.compression.type";
+  public static final String PARQUET_COMPRESSION_TYPE_DEFAULT = "uncompressed";
 
   public static final String S3_PART_RETRIES_CONFIG = "s3.part.retries";
   public static final int S3_PART_RETRIES_DEFAULT = 3;
@@ -314,6 +318,21 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "Compression type"
+      );
+
+      configDef.define(
+          PARQUET_COMPRESSION_TYPE_CONFIG,
+          Type.STRING,
+          PARQUET_COMPRESSION_TYPE_DEFAULT,
+          new ParquetCompressionTypeValidator(),
+          Importance.LOW,
+          "Compression type for file written to S3. "
+            + "Applied when using ParquetFormat. "
+            + "Available values: uncompressed, snappy, gzip, lzo, brotli, lz4, zstd.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Parquet Compression type"
       );
 
       configDef.define(
@@ -533,6 +552,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return CompressionType.forName(getString(COMPRESSION_TYPE_CONFIG));
   }
 
+  public CompressionCodecName getCompressionCodecName() {
+    return CompressionCodecName.fromConf(getString(PARQUET_COMPRESSION_TYPE_CONFIG));
+  }
+
   public int getS3PartRetries() {
     return getInt(S3_PART_RETRIES_CONFIG);
   }
@@ -658,6 +681,34 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       String compressionTypeString = ((String) compressionType).trim();
       if (!TYPES_BY_NAME.containsKey(compressionTypeString)) {
         throw new ConfigException(name, compressionType, "Value must be one of: " + ALLOWED_VALUES);
+      }
+    }
+
+    @Override
+    public String toString() {
+      return "[" + ALLOWED_VALUES + "]";
+    }
+  }
+
+  private static class ParquetCompressionTypeValidator implements ConfigDef.Validator {
+    public static final Map<String, CompressionCodecName> TYPES_BY_NAME = new HashMap<>();
+    public static final String ALLOWED_VALUES;
+
+    static {
+      List<String> names = new ArrayList<>();
+      for (CompressionCodecName compressionCodecName : CompressionCodecName.values()) {
+        TYPES_BY_NAME.put(compressionCodecName.name().toLowerCase(), compressionCodecName);
+        names.add(compressionCodecName.name().toLowerCase());
+      }
+      ALLOWED_VALUES = Utils.join(names, ", ");
+    }
+
+    @Override
+    public void ensureValid(String name, Object compressionCodecName) {
+      String compressionCodecNameString = ((String) compressionCodecName).trim();
+      if (!TYPES_BY_NAME.containsKey(compressionCodecNameString)) {
+        throw new ConfigException(name, compressionCodecName, 
+          "Value must be one of: " + ALLOWED_VALUES);
       }
     }
 

@@ -30,7 +30,6 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.io.OutputFile;
 import org.apache.parquet.io.PositionOutputStream;
 import org.slf4j.Logger;
@@ -41,7 +40,6 @@ import java.io.IOException;
 public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
   private static final Logger log = LoggerFactory.getLogger(ParquetRecordWriterProvider.class);
   private static final String EXTENSION = ".parquet";
-  private static final String COMPRESSION_TYPE = ".snappy";
   private final S3Storage storage;
   private final AvroData avroData;
 
@@ -52,7 +50,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
 
   @Override
   public String getExtension() {
-    return COMPRESSION_TYPE + EXTENSION;
+    return storage.conf().getCompressionCodecName().getExtension() + EXTENSION;
   }
 
   @Override
@@ -76,7 +74,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
                     .withSchema(avroSchema)
                     .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
                     .withDictionaryEncoding(true)
-                    .withCompressionCodec(CompressionCodecName.SNAPPY)
+                    .withCompressionCodec(storage.conf().getCompressionCodecName())
                     .withPageSize(pageSize)
                     .build();
           } catch (IOException e) {
