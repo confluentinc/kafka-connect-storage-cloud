@@ -44,7 +44,6 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
   private static final String COMPRESSION_TYPE = ".snappy";
   private final S3Storage storage;
   private final AvroData avroData;
-  private S3ParquetOutputFile s3ParquetOutputFile;
 
   ParquetRecordWriterProvider(S3Storage storage, AvroData avroData) {
     this.storage = storage;
@@ -69,12 +68,11 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
           schema = record.valueSchema();
           try {
             log.info("Opening record writer for: {}", filename);
-            s3ParquetOutputFile = new S3ParquetOutputFile(storage, filename);
             final int pageSize = 64 * 1024;
             org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
 
             writer = AvroParquetWriter
-                    .<GenericRecord>builder(s3ParquetOutputFile)
+                    .<GenericRecord>builder(new S3ParquetOutputFile(storage, filename))
                     .withSchema(avroSchema)
                     .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
                     .withDictionaryEncoding(true)
