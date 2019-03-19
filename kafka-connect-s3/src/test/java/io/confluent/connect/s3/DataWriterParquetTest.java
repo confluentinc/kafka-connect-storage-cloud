@@ -20,8 +20,8 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.confluent.common.utils.MockTime;
 import io.confluent.common.utils.Time;
-import io.confluent.connect.s3.format.avro.AvroUtils;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
+import io.confluent.connect.s3.format.parquet.ParquetUtils;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.hive.HiveConfig;
@@ -58,7 +58,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
 
   private static final String ZERO_PAD_FMT = "%010d";
 
-  private final String extension = ".parquet";
+  private final String extension = ".snappy.parquet";
   protected S3Storage storage;
   protected AmazonS3 s3;
   protected Partitioner<FieldSchema> partitioner;
@@ -115,8 +115,9 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     setUp();
 
     // Upload partial file.
+    System.setProperty("com.amazonaws.services.s3.disableGetObjectMD5Validation", "true");
     List<SinkRecord> sinkRecords = createRecords(2);
-    byte[] partialData = AvroUtils.putRecords(sinkRecords, format.getAvroData());
+    byte[] partialData = ParquetUtils.putRecords(sinkRecords, format.getAvroData());
     String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT);
     s3.putObject(S3_TEST_BUCKET_NAME, fileKey, new ByteArrayInputStream(partialData), null);
 

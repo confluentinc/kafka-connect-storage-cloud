@@ -1,17 +1,16 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
 package io.confluent.connect.s3.storage;
@@ -27,6 +26,7 @@ import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PartETag;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
+import com.amazonaws.services.s3.model.SSECustomerKey;
 import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
@@ -56,6 +56,7 @@ public class S3OutputStream extends PositionOutputStream {
   private final String bucket;
   private final String key;
   private final String ssea;
+  private final SSECustomerKey sseCustomerKey;
   private final String sseKmsKeyId;
   private final ProgressListener progressListener;
   private final int partSize;
@@ -73,6 +74,10 @@ public class S3OutputStream extends PositionOutputStream {
     this.bucket = conf.getBucketName();
     this.key = key;
     this.ssea = conf.getSsea();
+    final String sseCustomerKeyConfig = conf.getSseCustomerKey();
+    this.sseCustomerKey = (SSEAlgorithm.AES256.toString().equalsIgnoreCase(ssea)
+        && StringUtils.isNotBlank(sseCustomerKeyConfig))
+      ? new SSECustomerKey(sseCustomerKeyConfig) : null;
     this.sseKmsKeyId = conf.getSseKmsKeyId();
     this.partSize = conf.getPartSize();
     this.cannedAcl = conf.getCannedAcl();
@@ -199,6 +204,8 @@ public class S3OutputStream extends PositionOutputStream {
     if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
             && StringUtils.isNotBlank(sseKmsKeyId)) {
       initRequest.setSSEAwsKeyManagementParams(new SSEAwsKeyManagementParams(sseKmsKeyId));
+    } else if (sseCustomerKey != null) {
+      initRequest.setSSECustomerKey(sseCustomerKey);
     }
 
     try {
@@ -228,13 +235,14 @@ public class S3OutputStream extends PositionOutputStream {
     public void uploadPart(ByteArrayInputStream inputStream, int partSize) {
       int currentPartNumber = partETags.size() + 1;
       UploadPartRequest request = new UploadPartRequest()
-              .withBucketName(bucket)
-              .withKey(key)
-              .withUploadId(uploadId)
-              .withInputStream(inputStream)
-              .withPartNumber(currentPartNumber)
-              .withPartSize(partSize)
-              .withGeneralProgressListener(progressListener);
+                                        .withBucketName(bucket)
+                                        .withKey(key)
+                                        .withUploadId(uploadId)
+                                        .withSSECustomerKey(sseCustomerKey)
+                                        .withInputStream(inputStream)
+                                        .withPartNumber(currentPartNumber)
+                                        .withPartSize(partSize)
+                                        .withGeneralProgressListener(progressListener);
       log.debug("Uploading part {} for id '{}'", currentPartNumber, uploadId);
       partETags.add(s3.uploadPart(request).getPartETag());
     }
