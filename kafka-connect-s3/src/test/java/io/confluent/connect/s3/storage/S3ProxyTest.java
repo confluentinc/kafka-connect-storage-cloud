@@ -34,6 +34,7 @@ import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.S3SinkConnectorTestBase;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 public class S3ProxyTest extends S3SinkConnectorTestBase {
 
@@ -152,6 +153,29 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
     assertEquals(8080, clientConfig.getProxyPort());
     assertEquals(null, clientConfig.getProxyUsername());
     assertEquals(null, clientConfig.getProxyPassword());
+  }
+
+  @Test
+  public void testUseExpectContinueDefault() throws Exception {
+    localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://localhost:8080");
+    setUp();
+    clientConfig = storage.newClientConfiguration(connectorConfig);
+    assertEquals(Protocol.HTTP, clientConfig.getProtocol());
+    assertEquals("localhost", clientConfig.getProxyHost());
+    assertEquals(8080, clientConfig.getProxyPort());
+    assertEquals(true, clientConfig.isUseExpectContinue());
+  }
+
+  @Test
+  public void testUseExpectContinueFalse() throws Exception {
+    localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://localhost:8080");
+    localProps.put(S3SinkConnectorConfig.S3_PROXY_USE_EXPECT_CONTINUE_CONFIG, "false");
+    setUp();
+    clientConfig = storage.newClientConfiguration(connectorConfig);
+    assertEquals(Protocol.HTTP, clientConfig.getProtocol());
+    assertEquals("localhost", clientConfig.getProxyHost());
+    assertEquals(8080, clientConfig.getProxyPort());
+    assertEquals(false, clientConfig.isUseExpectContinue());
   }
 
   @Test

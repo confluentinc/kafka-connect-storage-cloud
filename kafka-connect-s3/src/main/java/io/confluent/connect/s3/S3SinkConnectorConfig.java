@@ -122,6 +122,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String S3_PROXY_PASS_CONFIG = "s3.proxy.password";
   public static final Password S3_PROXY_PASS_DEFAULT = new Password(null);
 
+  public static final String S3_PROXY_USE_EXPECT_CONTINUE_CONFIG = "s3.proxy.use.expect.continue";
+  public static final Boolean S3_PROXY_USE_EXPECT_CONTINUE_DEFAULT = true;
+
   /**
    * Maximum back-off time when retrying failed requests.
    */
@@ -425,6 +428,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "S3 Proxy Password"
+      );
+
+      configDef.define(
+          S3_PROXY_USE_EXPECT_CONTINUE_CONFIG,
+          Type.BOOLEAN,
+          S3_PROXY_USE_EXPECT_CONTINUE_DEFAULT,
+          Importance.LOW,
+          "Sets if use expect continue should be enabled when accessing S3 through a proxy.",
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "S3 Proxy Use Expect Continue"
       );
 
     }
