@@ -54,7 +54,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -62,6 +61,7 @@ import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
@@ -73,8 +73,8 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
   protected S3Storage storage;
   protected AmazonS3 s3;
   protected Partitioner<FieldSchema> partitioner;
-  protected S3SinkTask task;
-  protected Map<String, String> localProps = new HashMap<>();
+  private S3SinkTask task;
+  private Map<String, String> localProps = new HashMap<>();
   protected ParquetFormat format;
 
   @Override
@@ -106,7 +106,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     localProps.clear();
   }
 
-  protected void testWriteRecords(String extension) throws Exception {
+  private void testWriteRecords(String extension) throws Exception {
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
@@ -425,7 +425,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     context.setAssignment(nextAssignment);
     task.open(context.assignment());
 
-    assertEquals(null, task.getTopicPartitionWriter(TOPIC_PARTITION2));
+    assertNull(task.getTopicPartitionWriter(TOPIC_PARTITION2));
     assertNotNull(task.getTopicPartitionWriter(TOPIC_PARTITION));
     assertNotNull(task.getTopicPartitionWriter(TOPIC_PARTITION3));
 
@@ -563,10 +563,6 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     }
     return sinkRecords;
   }
-//
-//  protected Schema createComplexSchema(){
-//    return SchemaBuilder.struct().name("record").version(1).field("boolean", Schema.BOOLEAN_SCHEMA).field("int", Schema.INT32_SCHEMA).field("long", Schema.INT64_SCHEMA).field("float", Schema.FLOAT32_SCHEMA).field("double", Schema.FLOAT64_SCHEMA).field("long", Schema.).build();
-//  }
 
   protected List<SinkRecord> createRecordsInterleaved(int size, long startOffset, Set<TopicPartition> partitions) {
     String key = "key";
@@ -640,7 +636,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
   }
 
   protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets) throws IOException {
-    verify(sinkRecords, validOffsets, Collections.singleton(new TopicPartition(TOPIC, PARTITION)), false, this.extension);
+    verify(sinkRecords, validOffsets, Collections.singleton(new TopicPartition(TOPIC, PARTITION)), false);
   }
 
   protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, String extension) throws IOException {
@@ -649,8 +645,9 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
 
   protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, Set<TopicPartition> partitions)
           throws IOException {
-    verify(sinkRecords, validOffsets, partitions, false, this.extension);
+    verify(sinkRecords, validOffsets, partitions, false);
   }
+
   protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, Set<TopicPartition> partitions,
                         boolean skipFileListing)
           throws IOException {
@@ -663,7 +660,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
    * @param validOffsets an array containing the offsets that map to uploaded files for a topic-partition.
    *                     Offsets appear in ascending order, the difference between two consecutive offsets
    *                     equals the expected size of the file, and last offset in exclusive.
-   * @throws IOException
+   * @throws IOException throw this exception from readRecords
    */
   protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, Set<TopicPartition> partitions,
                         boolean skipFileListing, String extension)
@@ -687,7 +684,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     }
   }
 
-  protected void verifyFileListing(long[] validOffsets, Set<TopicPartition> partitions, String extension) throws IOException {
+  protected void verifyFileListing(long[] validOffsets, Set<TopicPartition> partitions, String extension) {
     List<String> expectedFiles = new ArrayList<>();
     for (TopicPartition tp : partitions) {
       expectedFiles.addAll(getExpectedFiles(validOffsets, tp, extension));
@@ -695,7 +692,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     verifyFileListing(expectedFiles);
   }
 
-  protected void verifyFileListing(List<String> expectedFiles) throws IOException {
+  protected void verifyFileListing(List<String> expectedFiles) {
     List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
     List<String> actualFiles = new ArrayList<>();
     for (S3ObjectSummary summary : summaries) {
@@ -736,7 +733,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
   }
 
   protected String getDirectory(String topic, int partition) {
-    String encodedPartition = "partition=" + String.valueOf(partition);
+    String encodedPartition = "partition=" + partition;
     return partitioner.generatePartitionedPath(topic, encodedPartition);
   }
 
@@ -764,7 +761,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
         expectedOffsets.put(tp, new OffsetAndMetadata(offset, ""));
       }
     }
-    assertTrue(Objects.equals(actualOffsets, expectedOffsets));
+    assertEquals(expectedOffsets, actualOffsets);
   }
 
   protected List<SinkRecord> createRecordsWithAlteringSchemas(int size, long startOffset) {
