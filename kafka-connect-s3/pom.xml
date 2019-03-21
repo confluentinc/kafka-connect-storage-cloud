@@ -38,6 +38,7 @@
         <aws.version>1.11.86</aws.version>
         <s3mock.version>0.2.5</s3mock.version>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
+        <orc.version>1.5.5</orc.version>
     </properties>
 
     <dependencyManagement>
@@ -57,6 +58,22 @@
             <groupId>com.amazonaws</groupId>
             <artifactId>aws-java-sdk-s3</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.apache.orc</groupId>
+            <artifactId>orc-core</artifactId>
+            <version>${orc.version}</version>
+          <exclusions>
+                <exclusion>
+                    <groupId>org.apache.hadoop</groupId>
+                    <artifactId>hadoop-common</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.hadoop</groupId>
+                    <artifactId>hadoop-hdfs</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
         <dependency>
             <groupId>io.findify</groupId>
             <artifactId>s3mock_2.12</artifactId>
@@ -79,16 +96,29 @@
                         <configuration>
                             <title>Kafka Connect S3</title>
                             <sourceUrl>https://github.com/confluentinc/kafka-connect-storage-cloud</sourceUrl>
-                            <documentationUrl>https://docs.confluent.io/${project.version}/connect/connect-storage-cloud/kafka-connect-s3/docs/index.html</documentationUrl>
+                            <documentationUrl>
+                                https://docs.confluent.io/${project.version}/connect/connect-storage-cloud/kafka-connect-s3/docs/index.html
+                            </documentationUrl>
                             <description>
-                                The S3 connector, currently available as a sink, allows you to export data from Kafka topics to S3 objects in either Avro or JSON formats. In addition, for certain data layouts, S3 connector exports data by guaranteeing exactly-once delivery semantics to consumers of the S3 objects it produces.
+                                The S3 connector, currently available as a sink, allows you to export data from Kafka
+                                topics to S3 objects in either Avro or JSON formats. In addition, for certain data
+                                layouts, S3 connector exports data by guaranteeing exactly-once delivery semantics to
+                                consumers of the S3 objects it produces.
 
-                                Being a sink, the S3 connector periodically polls data from Kafka and in turn uploads it to S3. A partitioner is used to split the data of every Kafka partition into chunks. Each chunk of data is represented as an S3 object, whose key name encodes the topic, the Kafka partition and the start offset of this data chunk. If no partitioner is specified in the configuration, the default partitioner which preserves Kafka partitioning is used. The size of each data chunk is determined by the number of records written to S3 and by schema compatibility.
+                                Being a sink, the S3 connector periodically polls data from Kafka and in turn uploads it
+                                to S3. A partitioner is used to split the data of every Kafka partition into chunks.
+                                Each chunk of data is represented as an S3 object, whose key name encodes the topic, the
+                                Kafka partition and the start offset of this data chunk. If no partitioner is specified
+                                in the configuration, the default partitioner which preserves Kafka partitioning is
+                                used. The size of each data chunk is determined by the number of records written to S3
+                                and by schema compatibility.
                             </description>
                             <logo>logos/s3.jpg</logo>
 
                             <supportProviderName>Confluent, Inc.</supportProviderName>
-                            <supportSummary>Confluent supports the S3 sink connector alongside community members as part of its Confluent Platform offering.</supportSummary>
+                            <supportSummary>Confluent supports the S3 sink connector alongside community members as part
+                                of its Confluent Platform offering.
+                            </supportSummary>
                             <supportUrl>https://docs.confluent.io/current/</supportUrl>
                             <supportLogo>logos/confluent.png</supportLogo>
 
