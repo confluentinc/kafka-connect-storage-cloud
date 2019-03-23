@@ -1,6 +1,12 @@
 package io.confluent.connect.s3.format.orc;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocalFileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RawLocalFileSystem;
+import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hive.ql.exec.vector.BytesColumnVector;
 import org.apache.hadoop.hive.ql.exec.vector.ColumnVector;
 import org.apache.hadoop.hive.ql.exec.vector.DoubleColumnVector;
@@ -13,7 +19,11 @@ import org.apache.orc.OrcFile;
 import org.apache.orc.Reader;
 import org.apache.orc.RecordReader;
 import org.apache.orc.TypeDescription;
+import org.apache.orc.Writer;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -80,5 +90,66 @@ public class OrcUtils {
     Object[] expectedValues = {value.get("boolean"), value.get("int"), value.get("long"), value.get("float"), value.get("double")};
     assertArrayEquals(expectedValues, (Object[]) actual);
   }
+
+  public static byte[] putRecords(Collection<SinkRecord> records) throws IOException {
+    if (records.isEmpty()) {
+      return new byte[0];
+    } else {
+      SinkRecord next = records.iterator().next();
+      OrcHepler orcHepler = new OrcHepler(next.valueSchema());
+      java.nio.file.Path tmpFile = Paths.get(System.getProperty("java.io.tmpdir"), "orc", "" + System.currentTimeMillis() + ".orc");
+
+      try {
+        VectorizedRowBatch rowBatch = orcHepler.orcSchema.createRowBatch();
+        Writer writer = createWriter(orcHepler.orcSchema, tmpFile.toString());
+
+        for (SinkRecord record : records) {
+          orcHepler.setValue(rowBatch, record.valueSchema(), (Struct) record.value(), rowBatch.size++);
+        }
+        writer.addRowBatch(rowBatch);
+        writer.close();
+        return Files.readAllBytes(tmpFile);
+      } finally {
+        FileUtils.deleteQuietly(tmpFile.toFile());
+      }
+    }
+  }
+
+  static Writer createWriter(TypeDescription schema, String filePath) throws IOException {
+    OrcFile.WriterOptions writerOptions = OrcFile.writerOptions(new Configuration()).setSchema(schema);
+    if (System.getProperty("os.name").startsWith("Windows")) {
+      WindowsTestFileSystem fs = new WindowsTestFileSystem(new Configuration());
+      writerOptions.fileSystem(fs);
+    }
+    return OrcFile.createWriter(new Path(filePath), writerOptions);
+  }
+
+
+  private static class WindowsTestFileSystem extends LocalFileSystem {
+
+    private RawLocalFileSystem raw = new RawLocalFileSystem(){
+      @Override
+      public void setPermission(Path p, FsPermission permission) throws IOException {
+        //do nothing
+      }
+    };
+
+    WindowsTestFileSystem(Configuration conf) {
+      super();
+      fs.setConf(conf);
+      setConf(conf);
+    }
+
+    @Override
+    public void setPermission(Path p, FsPermission permission) throws IOException {
+      //do nothing
+    }
+
+    @Override
+    public FileSystem getRawFileSystem() {
+      return raw;
+    }
+  }
+
 
 }
