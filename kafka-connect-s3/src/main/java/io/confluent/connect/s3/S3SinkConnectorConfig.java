@@ -121,6 +121,15 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String S3_PROXY_PASS_CONFIG = "s3.proxy.password";
   public static final Password S3_PROXY_PASS_DEFAULT = new Password(null);
 
+  public static final String ORC_CODEC_CONFIG = "orc.codec";
+  public static final String ORC_CODEC_DEFAULT = "ZLIB";
+  public static final String ORC_CODEC_DISPLAY = "ORC Compression Codec";
+  public static final String ORC_CODEC_DOC = "The ORC compression codec to be used for output  "
+      + "files. Available values: NONE, ZLIB, SNAPPY, LZO and LZ4 (CodecSource is org.apache.orc"
+      + "CompressionKind)";
+  public static final String[] ORC_SUPPORTED_CODECS = new String[]{"NONE", "ZLIB", "SNAPPY",
+      "LZO", "LZ4"};
+
   /**
    * Maximum back-off time when retrying failed requests.
    */
@@ -424,6 +433,19 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "S3 Proxy Password"
+      );
+
+      configDef.define(
+          ORC_CODEC_CONFIG,
+          Type.STRING,
+          ORC_CODEC_DEFAULT,
+          ConfigDef.ValidString.in(ORC_SUPPORTED_CODECS),
+          Importance.LOW,
+          ORC_CODEC_DOC,
+          group,
+          ++orderInGroup,
+          Width.MEDIUM,
+          ORC_CODEC_DISPLAY
       );
 
     }

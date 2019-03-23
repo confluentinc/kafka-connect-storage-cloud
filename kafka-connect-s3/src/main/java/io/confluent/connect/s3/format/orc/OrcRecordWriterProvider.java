@@ -26,6 +26,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.orc.CompressionKind;
 import org.apache.orc.OrcFile;
 import org.apache.orc.TypeDescription;
 import org.apache.orc.Writer;
@@ -33,6 +34,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+
+import static io.confluent.connect.s3.S3SinkConnectorConfig.ORC_CODEC_CONFIG;
 
 public class OrcRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
 
@@ -118,9 +121,14 @@ public class OrcRecordWriterProvider implements RecordWriterProvider<S3SinkConne
   }
 
   static OrcFile.WriterOptions getWriterOptions(TypeDescription schema, S3Storage s3Storage) {
-    OrcFile.WriterOptions writerOptions = OrcFile.writerOptions(new Configuration())
-
+    Configuration configuration = new Configuration();
+    OrcFile.WriterOptions writerOptions = OrcFile.writerOptions(configuration)
         .setSchema(schema);
+    S3SinkConnectorConfig conf = s3Storage.conf();
+    String compressionType = conf.getString(ORC_CODEC_CONFIG);
+    if (compressionType != null) {
+      writerOptions.compress(CompressionKind.valueOf(compressionType));
+    }
 
     return writerOptions;
 

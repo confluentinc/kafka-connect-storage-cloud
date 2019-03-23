@@ -2,6 +2,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.internal.SkipMd5CheckStrategy;
+import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.confluent.connect.s3.format.orc.OrcFormat;
 import io.confluent.connect.s3.format.orc.OrcUtils;
@@ -9,17 +10,24 @@ import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.Partitioner;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.orc.CompressionKind;
+import org.apache.orc.OrcFile;
+import org.apache.orc.Reader;
 import org.junit.After;
 import org.junit.Test;
 import org.powermock.api.mockito.PowerMockito;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -31,7 +39,6 @@ import java.util.Objects;
 import java.util.Set;
 
 import static org.hamcrest.CoreMatchers.is;
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
@@ -107,7 +114,36 @@ public class DataWriterOrcTest extends TestWithMockedS3 {
 
     long[] validOffsets = {0, 3, 6};
     verify(sinkRecords, validOffsets);
+  }
 
+  @Test
+  public void testCompressFile() throws Exception {
+    String codec = "SNAPPY";
+    localProps.put(S3SinkConnectorConfig.ORC_CODEC_CONFIG, codec);
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+
+    List<SinkRecord> sinkRecords = createRecords(7, 0);
+    // Perform write
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, "/", s3);
+    for (S3ObjectSummary summary : summaries) {
+      File tempFile = Files.createTempFile("test_orc", ".orc").toFile();
+      try {
+        s3.getObject(new GetObjectRequest(summary.getBucketName(), summary.getKey()), tempFile);
+        Reader reader = OrcFile.createReader(new Path(tempFile.getAbsolutePath()), OrcFile.readerOptions(new Configuration()));
+        CompressionKind compressionKind = reader.getCompressionKind();
+        assertEquals(CompressionKind.SNAPPY, compressionKind);
+      } finally {
+        org.apache.commons.io.FileUtils.deleteQuietly(tempFile);
+      }
+    }
+
+    long[] validOffsets = {0, 3, 6};
+    verify(sinkRecords, validOffsets);
   }
 
   protected List<SinkRecord> createRecords(int size, long startOffset) {
@@ -204,7 +240,7 @@ public class DataWriterOrcTest extends TestWithMockedS3 {
 
   protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records) {
     Iterator<Object> iterator = records.iterator();
-    while (iterator.hasNext()){
+    while (iterator.hasNext()) {
       SinkRecord sinkRecord = expectedRecords.get(startIndex++);
       Object actualData = iterator.next();
       OrcUtils.assertRecordMatches(sinkRecord, actualData);
