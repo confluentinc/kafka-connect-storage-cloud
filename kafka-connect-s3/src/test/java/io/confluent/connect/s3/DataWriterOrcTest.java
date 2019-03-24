@@ -21,6 +21,8 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.orc.CompressionKind;
@@ -153,6 +155,21 @@ public class DataWriterOrcTest extends TestWithMockedS3 {
     }
 
     long[] validOffsets = {0, 3, 6};
+    verify(sinkRecords, validOffsets);
+  }
+
+  @Test
+  public void testWriteRecordsWithInnerStruct() throws Exception {
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    List<SinkRecord> sinkRecords = createRecordsWithUnion(7, 0, Collections.singleton(new TopicPartition (TOPIC, PARTITION)));
+
+    // Perform write
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 3, 6, 9, 12, 15, 18, 21, 24, 27};
     verify(sinkRecords, validOffsets);
   }
 
@@ -563,8 +580,8 @@ public class DataWriterOrcTest extends TestWithMockedS3 {
     assertThat(actualFiles, is(expectedFiles));
   }
 
-  protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records) {
-    Iterator<Object> iterator = records.iterator();
+  protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> fileData) {
+    Iterator<Object> iterator = fileData.iterator();
     while (iterator.hasNext()) {
       SinkRecord sinkRecord = expectedRecords.get(startIndex++);
       Object actualData = iterator.next();
@@ -653,6 +670,45 @@ public class DataWriterOrcTest extends TestWithMockedS3 {
             time.milliseconds(),
             TimestampType.CREATE_TIME
         ));
+      }
+    }
+    return sinkRecords;
+  }
+
+  protected List<SinkRecord> createRecordsWithUnion(
+      int size,
+      long startOffset,
+      Set<TopicPartition> partitions
+  ) {
+    Schema recordSchema1 = SchemaBuilder.struct().name("InnerStruct1")
+        .field("test", Schema.INT32_SCHEMA).optional().build();
+    Schema recordSchema2 = SchemaBuilder.struct().name("InnerStruct2")
+        .field("test", Schema.INT32_SCHEMA).optional().build();
+    Schema schema = SchemaBuilder.struct()
+        .name("InnerStructTest")
+        .field("int", Schema.OPTIONAL_INT32_SCHEMA)
+        .field("string", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("InnerStruct1", recordSchema1)
+        .field("InnerStruct2", recordSchema2)
+        .build();
+
+    SchemaAndValue valueAndSchemaInt = new SchemaAndValue(schema, new Struct(schema).put("int", 12));
+    SchemaAndValue valueAndSchemaString = new SchemaAndValue(schema, new Struct(schema).put("string", "teststring"));
+
+    Struct schema1Test = new Struct(schema).put("InnerStruct1", new Struct(recordSchema1).put("test", 12));
+    SchemaAndValue valueAndSchema1 = new SchemaAndValue(schema, schema1Test);
+
+    Struct schema2Test = new Struct(schema).put("InnerStruct2", new Struct(recordSchema2).put("test", 12));
+    SchemaAndValue valueAndSchema2 = new SchemaAndValue(schema, schema2Test);
+
+    String key = "key";
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    for (TopicPartition tp : partitions) {
+      for (long offset = startOffset; offset < startOffset + 4 * size;) {
+        sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), Schema.STRING_SCHEMA, key, schema, valueAndSchemaInt.value(), offset++));
+        sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), Schema.STRING_SCHEMA, key, schema, valueAndSchemaString.value(), offset++));
+        sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), Schema.STRING_SCHEMA, key, schema, valueAndSchema1.value(), offset++));
+        sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), Schema.STRING_SCHEMA, key, schema, valueAndSchema2.value(), offset++));
       }
     }
     return sinkRecords;
