@@ -11,7 +11,9 @@ import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hive.ql.exec.vector.BytesColumnVector;
 import org.apache.hadoop.hive.ql.exec.vector.ColumnVector;
 import org.apache.hadoop.hive.ql.exec.vector.DoubleColumnVector;
+import org.apache.hadoop.hive.ql.exec.vector.ListColumnVector;
 import org.apache.hadoop.hive.ql.exec.vector.LongColumnVector;
+import org.apache.hadoop.hive.ql.exec.vector.MapColumnVector;
 import org.apache.hadoop.hive.ql.exec.vector.StructColumnVector;
 import org.apache.hadoop.hive.ql.exec.vector.TimestampColumnVector;
 import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
@@ -26,15 +28,19 @@ import org.apache.orc.TypeDescription;
 import org.apache.orc.Writer;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.Assert.assertArrayEquals;
 
-public class OrcUtils {
+public class OrcTestUtils {
 
   public static Collection<Object> getRecords(String filePath) {
     Reader reader = null;
@@ -71,6 +77,10 @@ public class OrcUtils {
       return null;
     } else {
       switch (fieldType) {
+        case BYTE:
+          return (byte) ((LongColumnVector) col).vector[row];
+        case SHORT:
+          return (short) ((LongColumnVector) col).vector[row];
         case INT:
           return (int) ((LongColumnVector) col).vector[row];
         case LONG:
@@ -83,8 +93,40 @@ public class OrcUtils {
           return ((LongColumnVector) col).vector[row] == 1;
         case STRING:
           return ((BytesColumnVector) col).toString(row);
+        case BINARY:
+          BytesColumnVector byteColumn = (BytesColumnVector) col;
+          byte[] bytes = byteColumn.vector[row];
+          ByteBuffer wrap = ByteBuffer.wrap(bytes, byteColumn.start[row], byteColumn.length[row]);
+          return wrap;
         case TIMESTAMP:
-          return ((TimestampColumnVector) col).getTime(row);
+          return new Date(((TimestampColumnVector) col).getTime(row));
+        case LIST:
+          ListColumnVector listColumn = (ListColumnVector) col;
+          long startPoint = listColumn.offsets[row];
+          long length = listColumn.lengths[row];
+          List<String> result = new ArrayList<>((int) length);
+          ColumnVector child = listColumn.child;
+          for (long i = startPoint; i < startPoint + length; i++) {
+            StringBuilder sb = new StringBuilder();
+            child.stringifyValue(sb, (int) i);
+            result.add(sb.toString().replaceAll("\"", ""));
+          }
+          return result;
+        case MAP:
+          MapColumnVector mapColumn = (MapColumnVector) col;
+          int start = (int) mapColumn.offsets[row];
+          int size = (int) mapColumn.lengths[row];
+          Map<String, String> transformedMap = new HashMap<>();
+          ColumnVector key = mapColumn.keys;
+          ColumnVector value = mapColumn.values;
+          for (int i = start; i < start + size; i++) {
+            StringBuilder sbKey = new StringBuilder();
+            key.stringifyValue(sbKey, i);
+            StringBuilder sbValue = new StringBuilder();
+            value.stringifyValue(sbValue, i);
+            transformedMap.put(sbKey.toString().replaceAll("\"", ""), sbValue.toString().replaceAll("\"", ""));
+          }
+          return transformedMap;
         case STRUCT:
           List<TypeDescription> children = fieldDescription.getChildren();
           ColumnVector[] data = ((StructColumnVector) col).fields;
@@ -111,7 +153,7 @@ public class OrcUtils {
   private static Object[] parseConnectData(List<Field> fields, Struct value) {
     Object[] data = new Object[fields.size()];
     if (value == null) {
-      return data;
+      return null;
     }
     for (int i = 0; i < fields.size(); i++) {
       Field field = fields.get(i);

@@ -24,11 +24,9 @@ import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.ObjectListing;
-import com.amazonaws.services.s3.model.S3ObjectInputStream;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
-import io.confluent.connect.s3.format.orc.OrcUtils;
+import io.confluent.connect.s3.format.orc.OrcTestUtils;
 import io.findify.s3mock.S3Mock;
-import org.apache.commons.io.IOUtils;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.After;
 import org.junit.Rule;
@@ -36,14 +34,11 @@ import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.attribute.FileAttribute;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -153,7 +148,7 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
     Path tempFile = Files.createTempFile("test", ".orc");
     try {
       s3.getObject(new GetObjectRequest(bucketName, fileKey), new File(tempFile.toString()));
-      return OrcUtils.getRecords(tempFile.toString());
+      return OrcTestUtils.getRecords(tempFile.toString());
     } finally {
       org.apache.commons.io.FileUtils.deleteQuietly(tempFile.toFile());
     }

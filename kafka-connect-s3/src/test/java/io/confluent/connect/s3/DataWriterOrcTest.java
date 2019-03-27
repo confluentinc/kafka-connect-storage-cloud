@@ -7,7 +7,7 @@ import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.confluent.common.utils.MockTime;
 import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.orc.OrcFormat;
-import io.confluent.connect.s3.format.orc.OrcUtils;
+import io.confluent.connect.s3.format.orc.OrcTestUtils;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
@@ -24,6 +24,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.orc.CompressionKind;
 import org.apache.orc.OrcFile;
@@ -35,10 +36,13 @@ import org.powermock.api.mockito.PowerMockito;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -129,6 +133,21 @@ public class DataWriterOrcTest extends TestWithMockedS3 {
   }
 
   @Test
+  public void testWriteAllTypeRecords() throws Exception {
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+
+    List<SinkRecord> sinkRecords = createAllTypeRecords(3);
+    // Perform write
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 3};
+    verify(sinkRecords, validOffsets);
+  }
+
+  @Test
   public void testCompressFile() throws Exception {
     String codec = "SNAPPY";
     localProps.put(S3SinkConnectorConfig.ORC_CODEC_CONFIG, codec);
@@ -162,7 +181,7 @@ public class DataWriterOrcTest extends TestWithMockedS3 {
   public void testWriteRecordsWithInnerStruct() throws Exception {
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
-    List<SinkRecord> sinkRecords = createRecordsWithUnion(7, 0, Collections.singleton(new TopicPartition (TOPIC, PARTITION)));
+    List<SinkRecord> sinkRecords = createRecordsWithUnion(7, 0, Collections.singleton(new TopicPartition(TOPIC, PARTITION)));
 
     // Perform write
     task.put(sinkRecords);
@@ -179,7 +198,7 @@ public class DataWriterOrcTest extends TestWithMockedS3 {
 
     // Upload partial file.
     List<SinkRecord> sinkRecords = createRecords(2, 0);
-    byte[] partialData = OrcUtils.putRecords(sinkRecords);
+    byte[] partialData = OrcTestUtils.putRecords(sinkRecords);
     String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT);
     s3.putObject(S3_TEST_BUCKET_NAME, fileKey, new ByteArrayInputStream(partialData), null);
 
@@ -585,7 +604,7 @@ public class DataWriterOrcTest extends TestWithMockedS3 {
     while (iterator.hasNext()) {
       SinkRecord sinkRecord = expectedRecords.get(startIndex++);
       Object actualData = iterator.next();
-      OrcUtils.assertRecordMatches(sinkRecord, actualData);
+      OrcTestUtils.assertRecordMatches(sinkRecord, actualData);
     }
   }
 
@@ -675,6 +694,50 @@ public class DataWriterOrcTest extends TestWithMockedS3 {
     return sinkRecords;
   }
 
+  private List<SinkRecord> createAllTypeRecords(int size) {
+    Schema schema = SchemaBuilder.struct()
+        .field("int8", SchemaBuilder.int8().defaultValue((byte) 2).doc("int8 field").build())
+        .field("int16", Schema.INT16_SCHEMA)
+        .field("int32", Schema.INT32_SCHEMA)
+        .field("int64", Schema.INT64_SCHEMA)
+        .field("float32", Schema.FLOAT32_SCHEMA)
+        .field("float64", Schema.FLOAT64_SCHEMA)
+        .field("boolean", Schema.BOOLEAN_SCHEMA)
+        .field("string", Schema.STRING_SCHEMA)
+        .field("bytes", Schema.BYTES_SCHEMA)
+        .field("timestamp", Timestamp.SCHEMA)
+        .field("array", SchemaBuilder.array(Schema.STRING_SCHEMA).optional().build())
+        .field("map", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).optional().build())
+        .field("mapNonStringKeys",
+            SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).build())
+        .build();
+    Struct struct = new Struct(schema)
+        .put("int8", (byte) 12)
+        .put("int16", (short) 12)
+        .put("int32", 12)
+        .put("int64", 12L)
+        .put("float32", 12.2f)
+        .put("float64", 12.2)
+        .put("boolean", true)
+        .put("string", "foo")
+        .put("timestamp", new Date())
+        .put("bytes", ByteBuffer.wrap("foo".getBytes()));
+
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    for (TopicPartition tp : Collections.singleton(new TopicPartition(TOPIC, PARTITION))) {
+      for (long offset = 0; offset < size; ++offset) {
+        if (offset % 2 == 0) {
+          struct.put("array", Arrays.asList("a", "b", "c"));
+          Map<String, String> strMap = new HashMap<>();
+          strMap.put("field", "1");
+          struct.put("map", strMap);
+        }
+        sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), Schema.STRING_SCHEMA, "key", schema, struct, offset));
+      }
+    }
+    return sinkRecords;
+  }
+
   protected List<SinkRecord> createRecordsWithUnion(
       int size,
       long startOffset,
@@ -704,7 +767,7 @@ public class DataWriterOrcTest extends TestWithMockedS3 {
     String key = "key";
     List<SinkRecord> sinkRecords = new ArrayList<>();
     for (TopicPartition tp : partitions) {
-      for (long offset = startOffset; offset < startOffset + 4 * size;) {
+      for (long offset = startOffset; offset < startOffset + 4 * size; ) {
         sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), Schema.STRING_SCHEMA, key, schema, valueAndSchemaInt.value(), offset++));
         sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), Schema.STRING_SCHEMA, key, schema, valueAndSchemaString.value(), offset++));
         sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), Schema.STRING_SCHEMA, key, schema, valueAndSchema1.value(), offset++));

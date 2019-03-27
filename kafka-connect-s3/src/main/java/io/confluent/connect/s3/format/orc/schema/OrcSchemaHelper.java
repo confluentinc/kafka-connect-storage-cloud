@@ -18,6 +18,7 @@ package io.confluent.connect.s3.format.orc.schema;
 import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.orc.TypeDescription;
@@ -41,7 +42,8 @@ public class OrcSchemaHelper {
   }
 
   public void setData(VectorizedRowBatch batch, Object connectData) {
-    orcStruct.setData(batch.cols, connectData, batch.size++);
+    OrcFieldHelper.convertStruct(batch.cols, (Struct)connectData, batch.size++);
+//    orcStruct.setData(batch.cols, connectData, batch.size++);
   }
 
 
