@@ -28,6 +28,9 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 
+/**
+ * FileSystem "mock", used only to set S3OutputStream as a output stream for ORC writer
+ */
 class S3OrcFileSystem extends FileSystem {
 
   S3OutputStream s3OutputStream;

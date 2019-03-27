@@ -81,14 +81,14 @@ public class OrcRecordWriterProvider implements RecordWriterProvider<S3SinkConne
         log.trace("Sink record: {}", record);
         try {
 
-          OrcConverterUtils.parseConnectData(batch.cols, (Struct)record.value(), batch.size++);
+          OrcConverterUtils.parseConnectData(batch.cols, (Struct) record.value(), batch.size++);
           if (batch.size == batch.getMaxSize()) {
             writer.addRowBatch(batch);
             batch.reset();
           }
         } catch (Exception e) {
-          throw new ConnectException("Issue on writing record into orc format, record: " +
-              record, e);
+          throw new ConnectException("Issue on writing record into orc format, record: "
+              + record, e);
         }
       }
 
@@ -98,7 +98,7 @@ public class OrcRecordWriterProvider implements RecordWriterProvider<S3SinkConne
           if (batch.size != 0) {
             writer.addRowBatch(batch);
           }
-          s3OutputStream.comiitBeforeClose();
+          s3OutputStream.commitBeforeClose();
           writer.close();
           closed = true;
         } catch (IOException e) {
@@ -119,7 +119,10 @@ public class OrcRecordWriterProvider implements RecordWriterProvider<S3SinkConne
     };
   }
 
-  private static Writer createWriter(String fileName, TypeDescription orcSchema, S3Storage s3Storage, S3OutputStream s3OutputStream) throws IOException {
+  private static Writer createWriter(
+      String fileName, TypeDescription orcSchema,
+      S3Storage s3Storage, S3OutputStream s3OutputStream
+  ) throws IOException {
     Configuration configuration = new Configuration();
     OrcFile.WriterOptions writerOptions = OrcFile.writerOptions(configuration)
         .fileSystem(new S3OrcFileSystem(s3OutputStream))

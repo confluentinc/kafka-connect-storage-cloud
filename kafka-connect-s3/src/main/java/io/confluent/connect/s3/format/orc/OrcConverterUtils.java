@@ -1,3 +1,18 @@
+/*
+ * Copyright 2018 Confluent Inc.
+ *
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
+ *
+ * http://www.confluent.io/confluent-community-license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+
 package io.confluent.connect.s3.format.orc;
 
 import org.apache.hadoop.hive.ql.exec.vector.BytesColumnVector;
@@ -25,19 +40,15 @@ import java.util.Map;
 
 public class OrcConverterUtils {
 
+  /**
+   * Create orc schema description from connect schema
+   * @param connectSchema connect schema
+   * @return orc schema
+   */
   public static TypeDescription fromConnectSchema(Schema connectSchema) {
     List<Field> fields = connectSchema.fields();
     TypeDescription orcSchema = fromConnectSchema(fields);
     return orcSchema;
-  }
-
-  public static void parseConnectData(ColumnVector[] orcColumns, Struct data, int rowIndex) {
-    List<Field> schemaFields = data.schema().fields();
-    for (int i = 0; i < orcColumns.length; i++) {
-      ColumnVector column = orcColumns[i];
-      Field field = schemaFields.get(i);
-      parseConnectData(column, field.schema(), data.get(field), rowIndex);
-    }
   }
 
   private static TypeDescription fromConnectSchema(List<Field> fields) {
@@ -75,7 +86,10 @@ public class OrcConverterUtils {
       case FLOAT32:
         return TypeDescription.createFloat();
       case MAP:
-        return TypeDescription.createMap(fromConnectFieldSchema(fieldSchema.keySchema()), fromConnectFieldSchema(fieldSchema.valueSchema()));
+        return TypeDescription.createMap(
+            fromConnectFieldSchema(fieldSchema.keySchema()),
+            fromConnectFieldSchema(fieldSchema.valueSchema())
+        );
       case ARRAY:
         return TypeDescription.createList(fromConnectFieldSchema(fieldSchema.valueSchema()));
       case STRUCT:
@@ -86,28 +100,48 @@ public class OrcConverterUtils {
     }
   }
 
-  private static void parseConnectData(ColumnVector column, Schema connectFieldSchema, Object fieldData, int rowIndex) {
+  /**
+   * Parse connector data and set its data to orc columns
+   * @param orcColumns columns which represent row batch
+   * @param data connect data to parse
+   * @param rowIndex index of row in batch
+   */
+  public static void parseConnectData(ColumnVector[] orcColumns, Struct data, int rowIndex) {
+    List<Field> schemaFields = data.schema().fields();
+    for (int i = 0; i < orcColumns.length; i++) {
+      ColumnVector column = orcColumns[i];
+      Field field = schemaFields.get(i);
+      parseConnectData(column, field.schema(), data.get(field), rowIndex);
+    }
+  }
+
+  private static void parseConnectData(ColumnVector column, Schema connectFieldSchema,
+                                       Object fieldData, int rowIndex) {
     if (fieldData == null) {
-      column.isNull[rowIndex] = true;
-      column.noNulls = false;
+      setNullData(column, rowIndex);
     } else {
       ColumnVector.Type type = column.type;
       switch (type) {
         case LONG:
-          ((LongColumnVector) column).vector[rowIndex] = (Long) fromConnectFieldData(connectFieldSchema, fieldData);
+          ((LongColumnVector) column).vector[rowIndex] =
+              (Long) fromConnectFieldData(connectFieldSchema, fieldData);
           break;
         case BYTES:
-          ((BytesColumnVector) column).setVal(rowIndex, (byte[]) fromConnectFieldData(connectFieldSchema, fieldData));
+          ((BytesColumnVector) column)
+              .setVal(rowIndex, (byte[]) fromConnectFieldData(connectFieldSchema, fieldData));
           break;
         case DOUBLE:
-          ((DoubleColumnVector) column).vector[rowIndex] = (Double) fromConnectFieldData(connectFieldSchema, fieldData);
+          ((DoubleColumnVector) column).vector[rowIndex]
+              = (Double) fromConnectFieldData(connectFieldSchema, fieldData);
           break;
         case TIMESTAMP:
-          ((TimestampColumnVector) column).set(rowIndex, new java.sql.Timestamp((Long) fromConnectFieldData(connectFieldSchema, fieldData)));
+          ((TimestampColumnVector) column).set(
+              rowIndex,
+              new java.sql.Timestamp((Long) fromConnectFieldData(connectFieldSchema, fieldData))
+          );
           break;
         case LIST:
           ListColumnVector listColumn = (ListColumnVector) column;
-
           listColumn.offsets[rowIndex] = listColumn.childCount;
           listColumn.lengths[rowIndex] = ((Collection) fieldData).size();
           listColumn.childCount += ((Collection) fieldData).size();
@@ -132,8 +166,10 @@ public class OrcConverterUtils {
           int startPosition = (int) mapColumn.offsets[rowIndex];
           for (Object entry : ((Map) fieldData).entrySet()) {
             int pos = startPosition++;
-            parseConnectData(keyColumn, connectFieldSchema.keySchema(), ((Map.Entry) entry).getKey(), pos);
-            parseConnectData(valueColumn, connectFieldSchema.valueSchema(), ((Map.Entry) entry).getValue(), pos);
+            Object key = ((Map.Entry) entry).getKey();
+            parseConnectData(keyColumn, connectFieldSchema.keySchema(), key, pos);
+            Object value = ((Map.Entry) entry).getValue();
+            parseConnectData(valueColumn, connectFieldSchema.valueSchema(), value, pos);
           }
           break;
         case STRUCT:
@@ -144,6 +180,14 @@ public class OrcConverterUtils {
           throw new DataException("Unsupported orc schema type:" + type);
       }
     }
+  }
+
+  /**
+   * Mark that current column on row has null as value, mark whole column as nullable
+   */
+  private static void setNullData(ColumnVector column, int rowIndex) {
+    column.isNull[rowIndex] = true;
+    column.noNulls = false;
   }
 
 
