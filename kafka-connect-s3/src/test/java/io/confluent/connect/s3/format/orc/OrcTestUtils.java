@@ -1,6 +1,5 @@
 package io.confluent.connect.s3.format.orc;
 
-import io.confluent.connect.s3.format.orc.schema.OrcSchemaHelper;
 import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -172,15 +171,15 @@ public class OrcTestUtils {
       return new byte[0];
     } else {
       SinkRecord next = records.iterator().next();
-      OrcSchemaHelper orcSchemaHelper = new OrcSchemaHelper(next.valueSchema());
+      TypeDescription orcSchema = OrcConverterUtils.fromConnectSchema(next.valueSchema());
       java.nio.file.Path tmpFile = Paths.get(System.getProperty("java.io.tmpdir"), "orc", "" + System.currentTimeMillis() + ".orc");
 
       try {
-        VectorizedRowBatch rowBatch = orcSchemaHelper.createBatch();
-        Writer writer = createWriter(orcSchemaHelper.getOrcSchema(), tmpFile.toString());
+        VectorizedRowBatch rowBatch = orcSchema.createRowBatch();
+        Writer writer = createWriter(orcSchema, tmpFile.toString());
 
         for (SinkRecord record : records) {
-          orcSchemaHelper.setData(rowBatch, record.value());
+          OrcConverterUtils.parseConnectData(rowBatch.cols, (Struct) record.value(), rowBatch.size++);
         }
         writer.addRowBatch(rowBatch);
         writer.close();

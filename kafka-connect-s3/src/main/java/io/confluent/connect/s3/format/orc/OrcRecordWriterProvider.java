@@ -16,8 +16,6 @@
 package io.confluent.connect.s3.format.orc;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
-import io.confluent.connect.s3.format.orc.schema.OrcFieldHelper;
-import io.confluent.connect.s3.format.orc.schema.SchemaParser;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
@@ -61,7 +59,6 @@ public class OrcRecordWriterProvider implements RecordWriterProvider<S3SinkConne
     return new RecordWriter() {
       Writer writer;
       S3OutputStreamWrapper s3OutputStream;
-//      OrcSchemaHelper orcHelper;
       TypeDescription orcSchema;
       VectorizedRowBatch batch;
       boolean closed;
@@ -72,10 +69,9 @@ public class OrcRecordWriterProvider implements RecordWriterProvider<S3SinkConne
         if (orcSchema == null) {
           Schema connectSchema = record.valueSchema();
           try {
-//            orcHelper = new OrcSchemaHelper(connectSchema);
-            orcSchema = SchemaParser.fromConnectSchema(connectSchema);
+            orcSchema = OrcConverterUtils.fromConnectSchema(connectSchema);
             batch = orcSchema.createRowBatch();
-            log.info("Opening record writer for: {}", filename);
+            log.debug("Opening record writer for: {}", filename);
             s3OutputStream = new S3OutputStreamWrapper(filename, storage.conf(), storage.getS3());
             writer = createWriter(filename, orcSchema, storage, s3OutputStream);
           } catch (IOException e) {
@@ -84,7 +80,8 @@ public class OrcRecordWriterProvider implements RecordWriterProvider<S3SinkConne
         }
         log.trace("Sink record: {}", record);
         try {
-          OrcFieldHelper.convertStruct(batch.cols, (Struct)record.value(), batch.size++);
+
+          OrcConverterUtils.parseConnectData(batch.cols, (Struct)record.value(), batch.size++);
           if (batch.size == batch.getMaxSize()) {
             writer.addRowBatch(batch);
             batch.reset();
