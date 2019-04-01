@@ -355,26 +355,11 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     );
     setUp();
 
-    // Define the partitioner
-    TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
-    parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
-    parsedConfig.put(
-            PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
-            TopicPartitionWriterTest.MockedWallclockTimestampExtractor.class.getName()
-    );
-    partitioner.configure(parsedConfig);
-
-    MockTime time = ((TopicPartitionWriterTest.MockedWallclockTimestampExtractor) partitioner
-            .getTimestampExtractor()).time;
+    MockTime time = new MockTime();
     // Bring the clock to present.
     time.sleep(SYSTEM.milliseconds());
 
-    List<SinkRecord> sinkRecords = createRecordsWithTimestamp(
-            3,
-            0,
-            Collections.singleton(new TopicPartition(TOPIC, PARTITION)),
-            time
-    );
+    List<SinkRecord> sinkRecords = createRecords(3, 0);
 
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, time);
 
