@@ -199,7 +199,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
-    List<SinkRecord> sinkRecords = createRecordsInterleaved(7 * context.assignment().size(), 0, context.assignment());
+    List<SinkRecord> sinkRecords = createRecordsInterleaved(7, 0, context.assignment());
     // Perform write
     task.put(sinkRecords);
     task.close(context.assignment());
@@ -214,7 +214,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
-    List<SinkRecord> sinkRecords = createRecordsInterleaved(7 * context.assignment().size(), 9, context.assignment());
+    List<SinkRecord> sinkRecords = createRecordsInterleaved(7, 9, context.assignment());
     // Perform write
     task.put(sinkRecords);
     task.close(context.assignment());
@@ -230,7 +230,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
-    List<SinkRecord> sinkRecords1 = createRecordsInterleaved(3 * context.assignment().size(), 0, context.assignment());
+    List<SinkRecord> sinkRecords1 = createRecordsInterleaved(3, 0, context.assignment());
 
     task.put(sinkRecords1);
     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = task.preCommit(null);
@@ -238,7 +238,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     long[] validOffsets1 = {3, 3};
     verifyOffsets(offsetsToCommit, validOffsets1, context.assignment());
 
-    List<SinkRecord> sinkRecords2 = createRecordsInterleaved(2 * context.assignment().size(), 3, context.assignment());
+    List<SinkRecord> sinkRecords2 = createRecordsInterleaved(2, 3, context.assignment());
 
     task.put(sinkRecords2);
     offsetsToCommit = task.preCommit(null);
@@ -247,7 +247,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     long[] validOffsets2 = {-1, -1};
     verifyOffsets(offsetsToCommit, validOffsets2, context.assignment());
 
-    List<SinkRecord> sinkRecords3 = createRecordsInterleaved(context.assignment().size(), 5, context.assignment());
+    List<SinkRecord> sinkRecords3 = createRecordsInterleaved(1, 5, context.assignment());
 
     task.put(sinkRecords3);
     offsetsToCommit = task.preCommit(null);
@@ -255,7 +255,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     long[] validOffsets3 = {6, 6};
     verifyOffsets(offsetsToCommit, validOffsets3, context.assignment());
 
-    List<SinkRecord> sinkRecords4 = createRecordsInterleaved(3 * context.assignment().size(), 6, context.assignment());
+    List<SinkRecord> sinkRecords4 = createRecordsInterleaved(3, 6, context.assignment());
 
     // Include all the records beside the last one in the second partition
     task.put(sinkRecords4.subList(0, 3 * context.assignment().size() - 1));
@@ -410,7 +410,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
-    List<SinkRecord> sinkRecords = createRecordsInterleaved(7 * context.assignment().size(), 0, context.assignment());
+    List<SinkRecord> sinkRecords = createRecordsInterleaved(7, 0, context.assignment());
     // Starts with TOPIC_PARTITION and TOPIC_PARTITION2
     Set<TopicPartition> originalAssignment = new HashSet<>(context.assignment());
     Set<TopicPartition> nextAssignment = new HashSet<>();
@@ -432,7 +432,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     long[] validOffsets = {0, 3, 6};
     verify(sinkRecords, validOffsets, originalAssignment);
 
-    sinkRecords = createRecordsInterleaved(7 * context.assignment().size(), 6, context.assignment());
+    sinkRecords = createRecordsInterleaved(7, 6, context.assignment());
     // Perform write
     task.put(sinkRecords);
     task.close(nextAssignment);
@@ -570,12 +570,9 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     Struct record = createRecord(schema);
 
     List<SinkRecord> sinkRecords = new ArrayList<>();
-    for (long offset = startOffset, total = 0; total < size; ++offset) {
+    for (long offset = startOffset; offset < startOffset + size; ++offset) {
       for (TopicPartition tp : partitions) {
         sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), Schema.STRING_SCHEMA, key, schema, record, offset));
-        if (++total >= size) {
-          break;
-        }
       }
     }
     return sinkRecords;
