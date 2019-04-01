@@ -235,7 +235,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     task.put(sinkRecords1);
     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = task.preCommit(null);
 
-    long[] validOffsets1 = {3, 3};
+    Long[] validOffsets1 = {3L, 3L};
     verifyOffsets(offsetsToCommit, validOffsets1, context.assignment());
 
     List<SinkRecord> sinkRecords2 = createRecordsInterleaved(2, 3, context.assignment());
@@ -243,8 +243,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     task.put(sinkRecords2);
     offsetsToCommit = task.preCommit(null);
 
-    // Actual values are null, we set to negative for the verifier.
-    long[] validOffsets2 = {-1, -1};
+    Long[] validOffsets2 = {null, null};
     verifyOffsets(offsetsToCommit, validOffsets2, context.assignment());
 
     List<SinkRecord> sinkRecords3 = createRecordsInterleaved(1, 5, context.assignment());
@@ -252,7 +251,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     task.put(sinkRecords3);
     offsetsToCommit = task.preCommit(null);
 
-    long[] validOffsets3 = {6, 6};
+    Long[] validOffsets3 = {6L, 6L};
     verifyOffsets(offsetsToCommit, validOffsets3, context.assignment());
 
     List<SinkRecord> sinkRecords4 = createRecordsInterleaved(3, 6, context.assignment());
@@ -261,8 +260,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     task.put(sinkRecords4.subList(0, 3 * context.assignment().size() - 1));
     offsetsToCommit = task.preCommit(null);
 
-    // Actual values are null, we set to negative for the verifier.
-    long[] validOffsets4 = {9, -1};
+    Long[] validOffsets4 = {9L, null};
     verifyOffsets(offsetsToCommit, validOffsets4, context.assignment());
 
     task.close(context.assignment());
@@ -282,7 +280,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
 
     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = task.preCommit(null);
 
-    long[] validOffsets = {1, -1};
+    Long[] validOffsets = {1L, null};
 
     verifyOffsets(offsetsToCommit, validOffsets, context.assignment());
 
@@ -328,14 +326,14 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
 
     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = task.preCommit(null);
 
-    long[] validOffsets1 = {-1, -1};
+    Long[] validOffsets1 = {null, null};
 
     verifyOffsets(offsetsToCommit, validOffsets1, context.assignment());
 
     // 2 hours
     time.sleep(TimeUnit.HOURS.toMillis(2));
 
-    long[] validOffsets2 = {3, -1};
+    Long[] validOffsets2 = {3L, null};
 
     // Rotation is only based on rotate.interval.ms, so I need at least one record to trigger flush.
     task.put(sinkRecords.subList(3, 4));
@@ -385,14 +383,14 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
 
     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = task.preCommit(null);
 
-    long[] validOffsets1 = {-1, -1};
+    Long[] validOffsets1 = {null, null};
 
     verifyOffsets(offsetsToCommit, validOffsets1, context.assignment());
 
     // 1 hour + 10 minutes
     time.sleep(TimeUnit.HOURS.toMillis(1) + TimeUnit.MINUTES.toMillis(10));
 
-    long[] validOffsets2 = {3, -1};
+    Long[] validOffsets2 = {3L, null};
 
     // Since rotation depends on scheduled intervals, flush will happen even when no new records
     // are returned.
@@ -748,13 +746,13 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     return expectedFiles;
   }
 
-  protected void verifyOffsets(Map<TopicPartition, OffsetAndMetadata> actualOffsets, long[] validOffsets,
+  protected void verifyOffsets(Map<TopicPartition, OffsetAndMetadata> actualOffsets, Long[] validOffsets,
                                Set<TopicPartition> partitions) {
     int i = 0;
     Map<TopicPartition, OffsetAndMetadata> expectedOffsets = new HashMap<>();
     for (TopicPartition tp : partitions) {
-      long offset = validOffsets[i++];
-      if (offset >= 0) {
+      Long offset = validOffsets[i++];
+      if (offset != null) {
         expectedOffsets.put(tp, new OffsetAndMetadata(offset, ""));
       }
     }
