@@ -274,8 +274,10 @@ public class S3OutputStream extends OutputStream {
           tags.add(tagTask.get());
         } catch (InterruptedException e) {
           log.error("Unable to get multipart upload result", e);
+          throw e;
         } catch (ExecutionException e) {
           log.error("Unable to get multipart upload result", e);
+          throw e;
         }
       }
       pool.shutdown();
