@@ -124,7 +124,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final Password S3_PROXY_PASS_DEFAULT = new Password(null);
 
   public static final String HEADERS_USE_EXPECT_CONTINUE_CONFIG =
-      "s3.headers.send.expect.continue";
+      "s3.http.send.expect.continue";
   public static final boolean HEADERS_USE_EXPECT_CONTINUE_DEFAULT =
       ClientConfiguration.DEFAULT_USE_EXPECT_CONTINUE;
 
