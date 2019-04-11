@@ -32,7 +32,6 @@ import io.confluent.connect.storage.common.util.StringUtils;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_PASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_USER_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_USE_EXPECT_CONTINUE_CONFIG;
 
 public class S3ProxyConfig {
   private static final Logger log = LoggerFactory.getLogger(S3ProxyConfig.class);
@@ -42,7 +41,6 @@ public class S3ProxyConfig {
   private final int port;
   private final String user;
   private final String pass;
-  private final boolean useExpectContinue;
 
   public S3ProxyConfig(S3SinkConnectorConfig config) {
     try {
@@ -58,7 +56,6 @@ public class S3ProxyConfig {
       pass = StringUtils.isNotBlank(password.value())
              ? password.value()
              : extractPass(url.getUserInfo());
-      useExpectContinue = config.getBoolean(S3_PROXY_USE_EXPECT_CONTINUE_CONFIG);
       log.info("Using proxy config {}", this);
     } catch (MalformedURLException e) {
       throw new ConfigException(
@@ -109,10 +106,6 @@ public class S3ProxyConfig {
     return pass;
   }
 
-  public boolean useExpectContinue() {
-    return useExpectContinue;
-  }
-
   @Override
   public String toString() {
     return "S3ProxyConfig{"
@@ -121,7 +114,6 @@ public class S3ProxyConfig {
         + ", port=" + port
         + ", user='" + user + '\''
         + ", pass='" + pass + '\''
-        + ", useExpectContinue=" + useExpectContinue
         + '}';
   }
 }

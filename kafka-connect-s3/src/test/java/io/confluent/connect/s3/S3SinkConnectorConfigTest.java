@@ -16,17 +16,20 @@
 
 package io.confluent.connect.s3;
 
+import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -50,6 +53,8 @@ import static org.junit.Assert.assertFalse;
 
 public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
 
+  protected Map<String, String> localProps = new HashMap<>();
+
   @Rule
   public ExpectedException thrown = ExpectedException.none();
 
@@ -57,6 +62,20 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   @Override
   public void setUp() throws Exception {
     super.setUp();
+  }
+
+  @After
+  @Override
+  public void tearDown() throws Exception {
+    super.tearDown();
+    localProps.clear();
+  }
+
+  @Override
+  protected Map<String, String> createProps() {
+    Map<String, String> props = super.createProps();
+    props.putAll(localProps);
+    return props;
   }
 
   @Test
@@ -198,6 +217,23 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
 
     assertEquals(ACCESS_KEY_VALUE, credentialsProvider.getCredentials().getAWSAccessKeyId());
     assertEquals(SECRET_KEY_VALUE, credentialsProvider.getCredentials().getAWSSecretKey());
+  }
+
+  @Test
+  public void testUseExpectContinueDefault() throws Exception {
+    setUp();
+    S3Storage storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, null);
+    ClientConfiguration clientConfig = storage.newClientConfiguration(connectorConfig);
+    assertEquals(true, clientConfig.isUseExpectContinue());
+  }
+
+  @Test
+  public void testUseExpectContinueFalse() throws Exception {
+    localProps.put(S3SinkConnectorConfig.HEADERS_USE_EXPECT_CONTINUE_CONFIG, "false");
+    setUp();
+    S3Storage storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, null);
+    ClientConfiguration clientConfig = storage.newClientConfiguration(connectorConfig);
+    assertEquals(false, clientConfig.isUseExpectContinue());
   }
 
   @Test

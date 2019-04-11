@@ -124,10 +124,10 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
       clientConfiguration.withProtocol(proxyConfig.protocol())
           .withProxyHost(proxyConfig.host())
           .withProxyPort(proxyConfig.port())
-          .withUseExpectContinue(proxyConfig.useExpectContinue())
           .withProxyUsername(proxyConfig.user())
           .withProxyPassword(proxyConfig.pass());
     }
+    clientConfiguration.withUseExpectContinue(config.useExpectContinue());
 
     return clientConfiguration;
   }
