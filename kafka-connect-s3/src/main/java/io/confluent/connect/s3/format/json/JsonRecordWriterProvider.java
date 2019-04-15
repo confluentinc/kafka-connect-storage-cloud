@@ -23,12 +23,15 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.confluent.connect.s3.util.JsonMapConverter;
+import io.confluent.connect.s3.util.JsonObjectUtil;
+import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +54,8 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
   private static final byte[] LINE_SEPARATOR_BYTES
       = LINE_SEPARATOR.getBytes(StandardCharsets.UTF_8);
   private static final String PAYLOAD_FIELD_NAME = "payload";
+  private static final String METADATA_FIELD_NAME = "metadata";
+  private static final String CREATED_AT_FIELD_NAME = "created_at";
   private final S3Storage storage;
   private final ObjectMapper mapper;
   private final JsonConverter converter;
@@ -64,6 +69,25 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
   @Override
   public String getExtension() {
     return EXTENSION + storage.conf().getCompressionType().extension;
+  }
+
+  private JSONObject generatePayloadMessage(JSONObject message,
+                                            JSONObject metadata,
+                                            S3SinkConnectorConfig conf) {
+    try {
+      if (StringUtils.isNotBlank(conf.getCopyMetadataFieldToMessages())) {
+        Object copyValue = JsonObjectUtil.getOrDefault(
+                metadata, conf.getCopyMetadataFieldToMessages(), null);
+        message.put(conf.getCopyMetadataFieldToMessages(), copyValue);
+      }
+      if (StringUtils.isNotBlank(conf.getCreatedAtMetadataField())) {
+        message.put(CREATED_AT_FIELD_NAME, metadata.get(conf.getCreatedAtMetadataField()));
+      }
+    } catch (JSONException e) {
+      throw new ConnectException(e);
+    }
+
+    return message;
   }
 
   @Override
@@ -95,22 +119,31 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
               s3outWrapper.write(LINE_SEPARATOR_BYTES);
             } else {
               if (conf.getWritePayloadRedshift()) {
-                try {
-                  JSONArray payloadArr =
-                          new JSONArray((String) ((HashMap)value).get(PAYLOAD_FIELD_NAME));
-                  for (int i = 0; i < payloadArr.length(); i++) {
-                    writer.writeObject(JsonMapConverter.toMap(payloadArr.getJSONObject(i)));
-                    writer.writeRaw(LINE_SEPARATOR);
-                  }
-                } catch (JSONException e) {
-                  throw new ConnectException(e);
-                }
+                writePayloadRedshift(value);
               } else {
                 writer.writeObject(value);
                 writer.writeRaw(LINE_SEPARATOR);
               }
             }
           } catch (IOException e) {
+            throw new ConnectException(e);
+          }
+        }
+
+        private void writePayloadRedshift(Object value) {
+          try {
+            JSONArray payloadArr =
+                    new JSONArray((String) ((HashMap)value).get(PAYLOAD_FIELD_NAME));
+            JSONObject jsonObj = new JSONObject(String.valueOf(value));
+            JSONObject metadata = jsonObj.getJSONObject(METADATA_FIELD_NAME);
+
+            for (int i = 0; i < payloadArr.length(); i++) {
+              writer.writeObject(JsonMapConverter.toMap(
+                      generatePayloadMessage(payloadArr.getJSONObject(i), metadata, conf)
+              ));
+              writer.writeRaw(LINE_SEPARATOR);
+            }
+          } catch (Exception e) {
             throw new ConnectException(e);
           }
         }

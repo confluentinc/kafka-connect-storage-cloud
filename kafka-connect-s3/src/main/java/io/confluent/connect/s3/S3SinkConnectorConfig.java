@@ -74,6 +74,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String WRITE_PAYLOAD_REDSHIFT = "s3.write.payload.redshift";
   public static final boolean WRITE_PAYLOAD_REDSHIFT_DEFAULT = false;
 
+  public static final String CREATED_AT_METADATA_FIELD = "s3.metadata.created.at.field";
+  public static final String CREATED_AT_METADATA_FIELD_DEFAULT = null;
+
+  public static final String COPY_METADATA_FIELD_TO_MESSAGES = "s3.metadata.copy.field.messages";
+  public static final String COPY_METADATA_FIELD_TO_MESSAGES_DEFAULT = null;
+
   // S3 Group
   public static final String S3_BUCKET_CONFIG = "s3.bucket.name";
 
@@ -217,6 +223,30 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
               ++orderInGroup,
               Width.LONG,
               "The filename by metadata field"
+      );
+
+      configDef.define(
+              CREATED_AT_METADATA_FIELD,
+              Type.STRING,
+              CREATED_AT_METADATA_FIELD_DEFAULT,
+              Importance.LOW,
+              "The created_at timestamp by metadata field.",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "The created_at timestamp by metadata field"
+      );
+
+      configDef.define(
+              COPY_METADATA_FIELD_TO_MESSAGES,
+              Type.STRING,
+              COPY_METADATA_FIELD_TO_MESSAGES_DEFAULT,
+              Importance.LOW,
+              "Copy metadata field to each payload message.",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "Copy metadata field to each payload message."
       );
 
       configDef.define(
@@ -517,6 +547,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public String getFileNameMetadataField() {
     return getString(FILE_NAME_METADATA_FIELD);
+  }
+
+  public String getCreatedAtMetadataField() {
+    return getString(CREATED_AT_METADATA_FIELD);
+  }
+
+  public String getCopyMetadataFieldToMessages() {
+    return getString(COPY_METADATA_FIELD_TO_MESSAGES);
   }
 
   public String getBucketName() {
