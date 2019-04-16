@@ -22,9 +22,14 @@ import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.storage.S3OutputStream;
+import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.JsonMapConverter;
 import io.confluent.connect.s3.util.JsonObjectUtil;
 import io.confluent.connect.storage.common.util.StringUtils;
+import io.confluent.connect.storage.format.RecordWriter;
+import io.confluent.connect.storage.format.RecordWriterProvider;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
@@ -38,13 +43,10 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
-
-import io.confluent.connect.s3.S3SinkConnectorConfig;
-import io.confluent.connect.s3.storage.S3OutputStream;
-import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.storage.format.RecordWriter;
-import io.confluent.connect.storage.format.RecordWriterProvider;
 
 public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
 
@@ -56,6 +58,7 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
   private static final String PAYLOAD_FIELD_NAME = "payload";
   private static final String METADATA_FIELD_NAME = "metadata";
   private static final String CREATED_AT_FIELD_NAME = "created_at";
+  private static final String DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
   private final S3Storage storage;
   private final ObjectMapper mapper;
   private final JsonConverter converter;
@@ -81,7 +84,12 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
         message.put(conf.getCopyMetadataFieldToMessages(), copyValue);
       }
       if (StringUtils.isNotBlank(conf.getCreatedAtMetadataField())) {
-        message.put(CREATED_AT_FIELD_NAME, metadata.get(conf.getCreatedAtMetadataField()));
+        long epochTime = Long.valueOf(
+                metadata.get(conf.getCreatedAtMetadataField()).toString()) * 1000;
+        Date date = new Date(epochTime);
+        DateFormat dateFormat = new SimpleDateFormat(DATE_FORMAT);
+        String dateFormatted = dateFormat.format(date);
+        message.put(CREATED_AT_FIELD_NAME, dateFormatted);
       }
     } catch (JSONException e) {
       throw new ConnectException(e);
