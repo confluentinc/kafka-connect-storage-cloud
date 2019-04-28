@@ -59,6 +59,7 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
   private static final String METADATA_FIELD_NAME = "metadata";
   private static final String CREATED_AT_FIELD_NAME = "created_at";
   private static final String DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
+
   private final S3Storage storage;
   private final ObjectMapper mapper;
   private final JsonConverter converter;
@@ -91,11 +92,90 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
         String dateFormatted = dateFormat.format(date);
         message.put(CREATED_AT_FIELD_NAME, dateFormatted);
       }
+      if (conf.getCoreOrderStalesConverter()) {
+        message = generateOrderStalesMessage(message, metadata);
+      }
     } catch (JSONException e) {
       throw new ConnectException(e);
     }
 
     return message;
+  }
+
+  private JSONObject generateOrderStalesMessage(JSONObject message, JSONObject metadata) {
+    try {
+      Object orderId = metadata.get("order_id");
+      Object changedAt = metadata.get(CREATED_AT_FIELD_NAME);
+      String[] messageParts = message.toString().replace("[","")
+              .replace("]","")
+              .split(",");
+      String newValue = null;
+      String oldValue = null;
+
+      switch (messageParts[0]) {
+        case "+":
+          newValue = messageParts[2];
+          break;
+        case "-":
+          oldValue = messageParts[2];
+          break;
+        case "~":
+          oldValue = messageParts[2];
+          newValue = messageParts[3];
+          break;
+        default:
+          break;
+      }
+
+      String fieldName = messageParts[1];
+      JSONObject newMessage = new JSONObject();
+      newMessage.put("order_id", orderId);
+      newMessage.put("change_at", changedAt);
+      newMessage.put("field_name", fieldName);
+      newMessage.put("old_value", oldValue);
+      newMessage.put("new_value", newValue);
+
+      return newMessage;
+    } catch (Exception e) {
+      throw new ConnectException(e);
+    }
+  }
+
+  private void writeSingleItemPayloadRedshift(Object value,
+                                              JsonGenerator writer,
+                                              S3SinkConnectorConfig conf) {
+    try {
+      JSONObject payload =
+              new JSONObject((String) ((HashMap)value).get(PAYLOAD_FIELD_NAME));
+      JSONObject jsonObj = new JSONObject(String.valueOf(value));
+      JSONObject metadata = jsonObj.getJSONObject(METADATA_FIELD_NAME);
+
+      writer.writeObject(JsonMapConverter
+              .toMap(generatePayloadMessage(payload, metadata, conf)));
+      writer.writeRaw(LINE_SEPARATOR);
+    } catch (Exception e) {
+      throw new ConnectException(e);
+    }
+  }
+
+  private void writePayloadRedshift(Object value,
+                                    JsonGenerator writer,
+                                    S3SinkConnectorConfig conf) {
+    try {
+      JSONArray payloadArr =
+              new JSONArray((String) ((HashMap)value).get(PAYLOAD_FIELD_NAME));
+      JSONObject jsonObj = new JSONObject(String.valueOf(value));
+      JSONObject metadata = jsonObj.getJSONObject(METADATA_FIELD_NAME);
+
+      for (int i = 0; i < payloadArr.length(); i++) {
+        writer.writeObject(JsonMapConverter.toMap(
+                generatePayloadMessage(payloadArr.getJSONObject(i), metadata, conf)
+        ));
+        writer.writeRaw(LINE_SEPARATOR);
+      }
+    } catch (Exception e) {
+      throw new ConnectException(e);
+    }
   }
 
   @Override
@@ -126,32 +206,16 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
               s3outWrapper.write(rawJson);
               s3outWrapper.write(LINE_SEPARATOR_BYTES);
             } else {
-              if (conf.getWritePayloadRedshift()) {
-                writePayloadRedshift(value);
+              if (conf.getWritePayloadRedshift() && !conf.getIsSingleItemPayloadRedshift()) {
+                writePayloadRedshift(value, writer, conf);
+              } else if (conf.getWritePayloadRedshift() && conf.getIsSingleItemPayloadRedshift()) {
+                writeSingleItemPayloadRedshift(value, writer, conf);
               } else {
                 writer.writeObject(value);
                 writer.writeRaw(LINE_SEPARATOR);
               }
             }
           } catch (IOException e) {
-            throw new ConnectException(e);
-          }
-        }
-
-        private void writePayloadRedshift(Object value) {
-          try {
-            JSONArray payloadArr =
-                    new JSONArray((String) ((HashMap)value).get(PAYLOAD_FIELD_NAME));
-            JSONObject jsonObj = new JSONObject(String.valueOf(value));
-            JSONObject metadata = jsonObj.getJSONObject(METADATA_FIELD_NAME);
-
-            for (int i = 0; i < payloadArr.length(); i++) {
-              writer.writeObject(JsonMapConverter.toMap(
-                      generatePayloadMessage(payloadArr.getJSONObject(i), metadata, conf)
-              ));
-              writer.writeRaw(LINE_SEPARATOR);
-            }
-          } catch (Exception e) {
             throw new ConnectException(e);
           }
         }

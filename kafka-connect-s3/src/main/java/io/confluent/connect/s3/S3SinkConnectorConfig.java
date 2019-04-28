@@ -78,7 +78,13 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String CREATED_AT_METADATA_FIELD_DEFAULT = null;
 
   public static final String COPY_METADATA_FIELD_TO_MESSAGES = "s3.metadata.copy.field.messages";
-  public static final String COPY_METADATA_FIELD_TO_MESSAGES_DEFAULT = null;
+  public static final boolean COPY_METADATA_FIELD_TO_MESSAGES_DEFAULT = false;
+
+  public static final String CORE_ORDER_STALES_CONVERTER = "s3.core.order.stales.converter";
+  public static final String CORE_ORDER_STALES_CONVERTER_DEFAULT = null;
+
+  public static final String IS_SINGLE_ITEM_PAYLOAD_REDSHIFT = "s3.is.single.item.payload.redshift";
+  public static final boolean IS_SINGLE_ITEM_PAYLOAD_REDSHIFT_DEFAULT = false;
 
   // S3 Group
   public static final String S3_BUCKET_CONFIG = "s3.bucket.name";
@@ -247,6 +253,30 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
               ++orderInGroup,
               Width.LONG,
               "Copy metadata field to each payload message."
+      );
+
+      configDef.define(
+              CORE_ORDER_STALES_CONVERTER,
+              Type.BOOLEAN,
+              CORE_ORDER_STALES_CONVERTER_DEFAULT,
+              Importance.LOW,
+              "Convert payload messages to order_stales raw.",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "Convert payload messages to order_stales raw."
+      );
+
+      configDef.define(
+              IS_SINGLE_ITEM_PAYLOAD_REDSHIFT,
+              Type.BOOLEAN,
+              IS_SINGLE_ITEM_PAYLOAD_REDSHIFT_DEFAULT,
+              Importance.LOW,
+              "Is payload exist only single item to redshift.",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "Is payload exist only single item to redshift."
       );
 
       configDef.define(
@@ -555,6 +585,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public String getCopyMetadataFieldToMessages() {
     return getString(COPY_METADATA_FIELD_TO_MESSAGES);
+  }
+
+  public boolean getCoreOrderStalesConverter() {
+    return getBoolean(CORE_ORDER_STALES_CONVERTER);
+  }
+
+  public boolean getIsSingleItemPayloadRedshift() {
+    return getBoolean(IS_SINGLE_ITEM_PAYLOAD_REDSHIFT);
   }
 
   public String getBucketName() {
