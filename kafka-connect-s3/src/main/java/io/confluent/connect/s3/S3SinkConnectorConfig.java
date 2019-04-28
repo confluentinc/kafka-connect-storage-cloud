@@ -78,10 +78,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String CREATED_AT_METADATA_FIELD_DEFAULT = null;
 
   public static final String COPY_METADATA_FIELD_TO_MESSAGES = "s3.metadata.copy.field.messages";
-  public static final boolean COPY_METADATA_FIELD_TO_MESSAGES_DEFAULT = false;
+  public static final String COPY_METADATA_FIELD_TO_MESSAGES_DEFAULT = null;
 
   public static final String CORE_ORDER_STALES_CONVERTER = "s3.core.order.stales.converter";
-  public static final String CORE_ORDER_STALES_CONVERTER_DEFAULT = null;
+  public static final boolean CORE_ORDER_STALES_CONVERTER_DEFAULT = false;
 
   public static final String IS_SINGLE_ITEM_PAYLOAD_REDSHIFT = "s3.is.single.item.payload.redshift";
   public static final boolean IS_SINGLE_ITEM_PAYLOAD_REDSHIFT_DEFAULT = false;

@@ -162,16 +162,24 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
                                     JsonGenerator writer,
                                     S3SinkConnectorConfig conf) {
     try {
-      JSONArray payloadArr =
-              new JSONArray((String) ((HashMap)value).get(PAYLOAD_FIELD_NAME));
-      JSONObject jsonObj = new JSONObject(String.valueOf(value));
-      JSONObject metadata = jsonObj.getJSONObject(METADATA_FIELD_NAME);
+      JSONArray payloadArr = null;
+      try {
+        payloadArr =
+                new JSONArray((String) ((HashMap) value).get(PAYLOAD_FIELD_NAME));
+      } catch (Exception e) {
+        log.error("---------------> Payload section is empty! <---------------" + e.getMessage());
+      }
 
-      for (int i = 0; i < payloadArr.length(); i++) {
-        writer.writeObject(JsonMapConverter.toMap(
-                generatePayloadMessage(payloadArr.getJSONObject(i), metadata, conf)
-        ));
-        writer.writeRaw(LINE_SEPARATOR);
+      if (payloadArr != null) {
+        JSONObject jsonObj = new JSONObject(String.valueOf(value));
+        JSONObject metadata = jsonObj.getJSONObject(METADATA_FIELD_NAME);
+
+        for (int i = 0; i < payloadArr.length(); i++) {
+          writer.writeObject(JsonMapConverter.toMap(
+                  generatePayloadMessage(payloadArr.getJSONObject(i), metadata, conf)
+          ));
+          writer.writeRaw(LINE_SEPARATOR);
+        }
       }
     } catch (Exception e) {
       throw new ConnectException(e);
