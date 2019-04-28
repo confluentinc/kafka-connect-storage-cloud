@@ -166,7 +166,7 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
       try {
         payloadArr =
                 new JSONArray((String) ((HashMap) value).get(PAYLOAD_FIELD_NAME));
-      } catch (Exception e) {
+      } catch (JSONException e) {
         log.error("---------------> Payload section is empty! <---------------" + e.getMessage());
       }
 
