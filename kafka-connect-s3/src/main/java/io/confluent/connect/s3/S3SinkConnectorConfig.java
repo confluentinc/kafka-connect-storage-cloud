@@ -445,7 +445,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           group,
           ++orderInGroup,
           Width.SHORT,
-          "S3 Proxy Use Expect Continue"
+          "S3 HTTP Send Uses Expect Continue"
       );
 
     }
