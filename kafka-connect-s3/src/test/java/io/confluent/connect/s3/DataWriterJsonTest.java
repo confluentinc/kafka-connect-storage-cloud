@@ -18,7 +18,6 @@ package io.confluent.connect.s3;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
@@ -56,7 +55,7 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
   protected final ObjectMapper mapper = new ObjectMapper();
   protected S3Storage storage;
   protected AmazonS3 s3;
-  protected Partitioner<FieldSchema> partitioner;
+  protected Partitioner<?> partitioner;
   protected JsonFormat format;
   protected S3SinkTask task;
   protected Map<String, String> localProps = new HashMap<>();
