@@ -175,7 +175,9 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
 
       @Override
       public List<Object> partitionFields() {
-        return null;
+        throw new UnsupportedOperationException(
+            "Hive integration is not currently supported in S3 Connector"
+        );
       }
     };
 
