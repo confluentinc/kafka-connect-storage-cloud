@@ -18,6 +18,8 @@ package io.confluent.connect.s3.util;
 import com.amazonaws.Protocol;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -31,6 +33,8 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_USER_CONFIG;
 
 public class S3ProxyConfig {
+  private static final Logger log = LoggerFactory.getLogger(S3ProxyConfig.class);
+
   private final Protocol protocol;
   private final String host;
   private final int port;
@@ -51,6 +55,7 @@ public class S3ProxyConfig {
       pass = StringUtils.isNotBlank(password.value())
              ? password.value()
              : extractPass(url.getUserInfo());
+      log.info("Using proxy config {}", this);
     } catch (MalformedURLException e) {
       throw new ConfigException(
           S3_PROXY_URL_CONFIG,
@@ -98,5 +103,16 @@ public class S3ProxyConfig {
 
   public String pass() {
     return pass;
+  }
+
+  @Override
+  public String toString() {
+    return "S3ProxyConfig{"
+        + "protocol=" + protocol
+        + ", host='" + host + '\''
+        + ", port=" + port
+        + ", user='" + user + '\''
+        + ", pass='" + pass + '\''
+        + '}';
   }
 }
