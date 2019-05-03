@@ -16,7 +16,6 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -53,7 +52,7 @@ public class S3SinkTask extends SinkTask {
   private S3Storage storage;
   private final Set<TopicPartition> assignment;
   private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
-  private Partitioner<FieldSchema> partitioner;
+  private Partitioner<?> partitioner;
   private Format<S3SinkConnectorConfig, String> format;
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private final Time time;
@@ -70,7 +69,7 @@ public class S3SinkTask extends SinkTask {
 
   // visible for testing.
   S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage,
-             Partitioner<FieldSchema> partitioner, Format<S3SinkConnectorConfig, String> format,
+             Partitioner<?> partitioner, Format<S3SinkConnectorConfig, String> format,
              Time time) throws Exception {
     this.assignment = new HashSet<>();
     this.topicPartitionWriters = new HashMap<>();
@@ -154,15 +153,15 @@ public class S3SinkTask extends SinkTask {
     return formatClass.getConstructor(S3Storage.class).newInstance(storage);
   }
 
-  private Partitioner<FieldSchema> newPartitioner(S3SinkConnectorConfig config)
+  private Partitioner<?> newPartitioner(S3SinkConnectorConfig config)
       throws ClassNotFoundException, IllegalAccessException, InstantiationException {
 
     @SuppressWarnings("unchecked")
-    Class<? extends Partitioner<FieldSchema>> partitionerClass =
-        (Class<? extends Partitioner<FieldSchema>>)
+    Class<? extends Partitioner<?>> partitionerClass =
+        (Class<? extends Partitioner<?>>)
             config.getClass(PartitionerConfig.PARTITIONER_CLASS_CONFIG);
 
-    Partitioner<FieldSchema> partitioner = partitionerClass.newInstance();
+    Partitioner<?> partitioner = partitionerClass.newInstance();
 
     Map<String, Object> plainValues = new HashMap<>(config.plainValues());
     Map<String, ?> originals = config.originals();

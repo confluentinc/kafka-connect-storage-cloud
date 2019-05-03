@@ -15,7 +15,7 @@
 
 package  io.confluent.connect.s3.format.bytearray;
 
-import org.apache.commons.io.IOUtils;
+import com.amazonaws.util.IOUtils;
 
 import java.io.IOException;
 import java.io.InputStream;

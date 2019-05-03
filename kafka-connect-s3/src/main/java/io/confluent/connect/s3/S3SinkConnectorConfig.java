@@ -52,7 +52,6 @@ import io.confluent.connect.storage.common.ComposableConfig;
 import io.confluent.connect.storage.common.GenericRecommender;
 import io.confluent.connect.storage.common.ParentValueRecommender;
 import io.confluent.connect.storage.common.StorageCommonConfig;
-import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.partitioner.DailyPartitioner;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.FieldPartitioner;
@@ -138,7 +137,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private final String name;
 
   private final StorageCommonConfig commonConfig;
-  private final HiveConfig hiveConfig;
   private final PartitionerConfig partitionerConfig;
 
   private final Map<String, ComposableConfig> propertyToConfig = new HashMap<>();
@@ -459,12 +457,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     super(configDef, props);
     ConfigDef storageCommonConfigDef = StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER);
     commonConfig = new StorageCommonConfig(storageCommonConfigDef, originalsStrings());
-    hiveConfig = new HiveConfig(originalsStrings());
     ConfigDef partitionerConfigDef = PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER);
     partitionerConfig = new PartitionerConfig(partitionerConfigDef, originalsStrings());
 
     this.name = parseName(originalsStrings());
-    addToGlobal(hiveConfig);
     addToGlobal(partitionerConfig);
     addToGlobal(commonConfig);
     addToGlobal(this);
