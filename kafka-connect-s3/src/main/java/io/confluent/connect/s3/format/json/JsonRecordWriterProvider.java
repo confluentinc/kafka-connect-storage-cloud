@@ -92,9 +92,6 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
         String dateFormatted = dateFormat.format(date);
         message.put(CREATED_AT_FIELD_NAME, dateFormatted);
       }
-      if (conf.getCoreOrderStalesConverter()) {
-        message = generateOrderStalesMessage(message, metadata);
-      }
     } catch (JSONException e) {
       throw new ConnectException(e);
     }
@@ -102,31 +99,36 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
     return message;
   }
 
-  private JSONObject generateOrderStalesMessage(JSONObject message, JSONObject metadata) {
+  private JSONObject generateOrderStalesMessage(String message, JSONObject metadata) {
     try {
       Object orderId = metadata.get("order_id");
       Object changedAt = metadata.get(CREATED_AT_FIELD_NAME);
-      String[] messageParts = message.toString().replace("[","")
+      String[] messageParts = message.replace("[","")
               .replace("]","")
               .split(",");
       String newValue = null;
       String oldValue = null;
+      String action = null;
 
       switch (messageParts[0]) {
         case "+":
           newValue = messageParts[2];
+          action = "added";
           break;
         case "-":
           oldValue = messageParts[2];
+          action = "deleted";
           break;
         case "~":
           oldValue = messageParts[2];
           newValue = messageParts[3];
+          action = "changed";
           break;
         default:
           break;
       }
 
+      Object traceId = metadata.get("trace_id");
       String fieldName = messageParts[1];
       JSONObject newMessage = new JSONObject();
       newMessage.put("order_id", orderId);
@@ -134,6 +136,8 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
       newMessage.put("field_name", fieldName);
       newMessage.put("old_value", oldValue);
       newMessage.put("new_value", newValue);
+      newMessage.put("action", action);
+      newMessage.put("trace_id", traceId);
 
       return newMessage;
     } catch (Exception e) {
@@ -175,9 +179,13 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
         JSONObject metadata = jsonObj.getJSONObject(METADATA_FIELD_NAME);
 
         for (int i = 0; i < payloadArr.length(); i++) {
-          writer.writeObject(JsonMapConverter.toMap(
-                  generatePayloadMessage(payloadArr.getJSONObject(i), metadata, conf)
-          ));
+          JSONObject generatedPayload = null;
+          if (conf.getCoreOrderStalesConverter()) {
+            generatedPayload = generateOrderStalesMessage(payloadArr.getString(i), metadata);
+          } else {
+            generatedPayload = generatePayloadMessage(payloadArr.getJSONObject(i), metadata, conf);
+          }
+          writer.writeObject(JsonMapConverter.toMap(generatedPayload));
           writer.writeRaw(LINE_SEPARATOR);
         }
       }
