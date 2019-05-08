@@ -45,6 +45,7 @@ public class ParquetFormat implements Format<S3SinkConnectorConfig, String> {
   }
 
   @Override
+  @Deprecated
   public Object getHiveFactory() {
     throw new UnsupportedOperationException(
             "Hive integration is not currently supported in S3 Connector"
