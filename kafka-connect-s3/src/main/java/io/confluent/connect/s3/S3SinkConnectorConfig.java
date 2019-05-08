@@ -332,7 +332,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           group,
           ++orderInGroup,
           Width.LONG,
-          "Parquet Compression type"
+          "Parquet Compression type",
+          new ParquetCompressionTypeRecommender()
       );
 
       configDef.define(
@@ -715,6 +716,27 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     @Override
     public String toString() {
       return "[" + ALLOWED_VALUES + "]";
+    }
+  }
+
+  private static class ParquetCompressionTypeRecommender implements ConfigDef.Recommender {
+    public static final List<Object> ALLOWED_VALUES;
+
+    static {
+      ALLOWED_VALUES = new ArrayList<>();
+      for (CompressionCodecName compressionCodecName : CompressionCodecName.values()) {
+        ALLOWED_VALUES.add(compressionCodecName.name().toLowerCase());
+      }
+    }
+
+    @Override
+    public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
+      return ALLOWED_VALUES;
+    }
+
+    @Override
+    public boolean visible(String name, Map<String, Object> parsedConfig) {
+      return true;
     }
   }
 
