@@ -179,7 +179,7 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
         JSONObject metadata = jsonObj.getJSONObject(METADATA_FIELD_NAME);
 
         for (int i = 0; i < payloadArr.length(); i++) {
-          JSONObject generatedPayload = null;
+          JSONObject generatedPayload;
           if (conf.getCoreOrderStalesConverter()) {
             generatedPayload = generateOrderStalesMessage(payloadArr.getString(i), metadata);
           } else {
