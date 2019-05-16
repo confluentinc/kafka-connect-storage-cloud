@@ -9,6 +9,8 @@ designed to be used to copy data from Kafka into Amazon S3.
 
 Documentation for this connector can be found [here](http://docs.confluent.io/current/connect/connect-storage-cloud/kafka-connect-s3/docs/index.html).
 
+Blogpost for this connector can be found [here](https://www.confluent.io/blog/apache-kafka-to-amazon-s3-exactly-once).
+
 # Development
 
 To build a development version you'll need a recent version of Kafka 

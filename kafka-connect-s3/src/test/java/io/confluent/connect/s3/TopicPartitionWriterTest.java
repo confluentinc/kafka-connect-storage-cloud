@@ -18,7 +18,6 @@ package io.confluent.connect.s3;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.confluent.common.utils.SystemTime;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
@@ -112,7 +111,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner
-    Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
@@ -145,7 +144,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner
-    Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
@@ -178,7 +177,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner
-    Partitioner<FieldSchema> partitioner = new FieldPartitioner<>();
+    Partitioner<?> partitioner = new FieldPartitioner<>();
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
@@ -232,7 +231,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     long timeBucketMs = TimeUnit.SECONDS.toMillis(5);
     long partitionDurationMs = TimeUnit.MINUTES.toMillis(1);
     // Define the partitioner
-    Partitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    Partitioner<?> partitioner = new TimeBasedPartitioner<>();
     parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, partitionDurationMs);
     parsedConfig.put(
         PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH_'min'=mm_'sec'=ss");
@@ -291,7 +290,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner
-    TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    TimeBasedPartitioner<?> partitioner = new TimeBasedPartitioner<>();
     parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
     parsedConfig.put(
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockedWallclockTimestampExtractor.class.getName());
@@ -363,7 +362,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner
-    Partitioner<FieldSchema> partitioner = new HourlyPartitioner<>();
+    Partitioner<?> partitioner = new HourlyPartitioner<>();
     parsedConfig.put(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG, TimeUnit.MINUTES.toMillis(1));
     parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
     partitioner.configure(parsedConfig);
@@ -420,7 +419,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner
-    Partitioner<FieldSchema> partitioner = new DailyPartitioner<>();
+    Partitioner<?> partitioner = new DailyPartitioner<>();
     parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
     parsedConfig.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd");
     partitioner.configure(parsedConfig);
@@ -476,7 +475,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner
-    Partitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    Partitioner<?> partitioner = new TimeBasedPartitioner<>();
     parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
     parsedConfig.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd");
     parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
@@ -504,7 +503,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner
-    TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    TimeBasedPartitioner<?> partitioner = new TimeBasedPartitioner<>();
     parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
     parsedConfig.put(
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
@@ -554,7 +553,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner
-    TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    TimeBasedPartitioner<?> partitioner = new TimeBasedPartitioner<>();
     parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
     parsedConfig.put(
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockedWallclockTimestampExtractor.class.getName());
@@ -629,7 +628,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner
-    Partitioner<FieldSchema> partitioner = new HourlyPartitioner<>();
+    Partitioner<?> partitioner = new HourlyPartitioner<>();
     parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "RecordField");
     partitioner.configure(parsedConfig);
 
@@ -703,7 +702,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner
-    Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
@@ -737,7 +736,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner
-    Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
@@ -766,7 +765,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner
-    Partitioner<FieldSchema> partitioner = new DefaultPartitioner<>();
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
