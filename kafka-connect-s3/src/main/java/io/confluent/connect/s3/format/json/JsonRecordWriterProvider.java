@@ -75,6 +75,19 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
     return EXTENSION + storage.conf().getCompressionType().extension;
   }
 
+  private String convertToSystemDate(long epochTime, boolean needMulti) {
+    Date date;
+
+    if (needMulti) {
+      date = new Date(epochTime * 1000);
+    }  else {
+      date = new Date(epochTime);
+    }
+
+    DateFormat dateFormat = new SimpleDateFormat(DATE_FORMAT);
+    return dateFormat.format(date);
+  }
+
   private JSONObject generatePayloadMessage(JSONObject message,
                                             JSONObject metadata,
                                             S3SinkConnectorConfig conf) {
@@ -85,11 +98,8 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
         message.put(conf.getCopyMetadataFieldToMessages(), copyValue);
       }
       if (StringUtils.isNotBlank(conf.getCreatedAtMetadataField())) {
-        long epochTime = Long.valueOf(
-                metadata.get(conf.getCreatedAtMetadataField()).toString()) * 1000;
-        Date date = new Date(epochTime);
-        DateFormat dateFormat = new SimpleDateFormat(DATE_FORMAT);
-        String dateFormatted = dateFormat.format(date);
+        String dateFormatted = convertToSystemDate(Long.valueOf(
+                metadata.get(conf.getCreatedAtMetadataField()).toString()), true);
         message.put(CREATED_AT_FIELD_NAME, dateFormatted);
       }
     } catch (JSONException e) {
@@ -99,48 +109,43 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
     return message;
   }
 
-  private JSONObject generateOrderStalesMessage(String message, JSONObject metadata) {
+  private JSONObject generateOrderStalesMessage(JSONArray recordContent, JSONObject metadata) {
     try {
       Object orderId = metadata.get("order_id");
-      Object changedAt = metadata.get(CREATED_AT_FIELD_NAME);
-      String[] messageParts = message.replace("[","")
-              .replace("]","")
-              .split(",");
-      String newValue = null;
-      String oldValue = null;
+      Object newValue = null;
+      Object oldValue = null;
       String action = null;
 
-      switch (messageParts[0]) {
-        case "+":
-          newValue = messageParts[2];
-          action = "added";
-          break;
-        case "-":
-          oldValue = messageParts[2];
-          action = "deleted";
-          break;
-        case "~":
-          oldValue = messageParts[2];
-          newValue = messageParts[3];
-          action = "changed";
-          break;
-        default:
-          break;
+      if ("+".equals(recordContent.getString(0))) {
+        newValue = recordContent.get(2);
+        action = "added";
+      } else if ("-".equals(recordContent.getString(0))) {
+        oldValue = recordContent.get(2);
+        action = "deleted";
+      } else if ("~".equals(recordContent.getString(0))) {
+        oldValue = recordContent.get(2);
+        newValue = recordContent.get(3);
+        action = "changed";
       }
 
+      long careatedAtValue = Double.valueOf(metadata.getDouble("created_at") * 1000).longValue();
+      String changedAt = convertToSystemDate(careatedAtValue, false);
       Object traceId = metadata.get("trace_id");
-      String fieldName = messageParts[1];
-      JSONObject newMessage = new JSONObject();
-      newMessage.put("order_id", orderId);
-      newMessage.put("change_at", changedAt);
-      newMessage.put("field_name", fieldName);
-      newMessage.put("old_value", oldValue);
-      newMessage.put("new_value", newValue);
-      newMessage.put("action", action);
-      newMessage.put("trace_id", traceId);
+      if (traceId.toString().equals("null")) {
+        traceId = null;
+      }
+      String fieldName = recordContent.getString(1);
+      JSONObject newRaw = new JSONObject();
+      newRaw.put("order_id", orderId);
+      newRaw.put("changed_at", changedAt);
+      newRaw.put("field_name", fieldName);
+      newRaw.put("old_value", oldValue);
+      newRaw.put("new_value", newValue);
+      newRaw.put("action", action);
+      newRaw.put("trace_id", traceId);
 
-      return newMessage;
-    } catch (Exception e) {
+      return newRaw;
+    } catch (JSONException e) {
       throw new ConnectException(e);
     }
   }
@@ -179,15 +184,29 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
         JSONObject metadata = jsonObj.getJSONObject(METADATA_FIELD_NAME);
 
         for (int i = 0; i < payloadArr.length(); i++) {
-          JSONObject generatedPayload;
-          if (conf.getCoreOrderStalesConverter()) {
-            generatedPayload = generateOrderStalesMessage(payloadArr.getString(i), metadata);
-          } else {
-            generatedPayload = generatePayloadMessage(payloadArr.getJSONObject(i), metadata, conf);
-          }
+          JSONObject generatedPayload =
+                  generatePayloadMessage(payloadArr.getJSONObject(i), metadata, conf);
           writer.writeObject(JsonMapConverter.toMap(generatedPayload));
           writer.writeRaw(LINE_SEPARATOR);
         }
+      }
+    } catch (Exception e) {
+      throw new ConnectException(e);
+    }
+  }
+
+  private void writeOrderStalesRedshift(Object value, JsonGenerator writer) {
+    try {
+      JSONObject jsonObj = new JSONObject(String.valueOf(value));
+      String payload = jsonObj.getString(PAYLOAD_FIELD_NAME);
+      JSONArray payloadArr = new JSONArray(payload);
+
+      for (int i = 0; i < payloadArr.length(); i++) {
+        JSONObject newRaw =
+                generateOrderStalesMessage((JSONArray) payloadArr.get(i),
+                        jsonObj.getJSONObject(METADATA_FIELD_NAME));
+        writer.writeObject(JsonMapConverter.toMap(newRaw));
+        writer.writeRaw(LINE_SEPARATOR);
       }
     } catch (Exception e) {
       throw new ConnectException(e);
@@ -222,9 +241,13 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
               s3outWrapper.write(rawJson);
               s3outWrapper.write(LINE_SEPARATOR_BYTES);
             } else {
-              if (conf.getWritePayloadRedshift() && !conf.getIsSingleItemPayloadRedshift()) {
+              if (conf.getCoreOrderStalesConverter()) {
+                writeOrderStalesRedshift(value, writer);
+              } else if (conf.getWritePayloadRedshift() && !conf.getIsSingleItemPayloadRedshift()) {
+                //Write multiple raws to Redshift
                 writePayloadRedshift(value, writer, conf);
               } else if (conf.getWritePayloadRedshift() && conf.getIsSingleItemPayloadRedshift()) {
+                //Write single raw to Redshift
                 writeSingleItemPayloadRedshift(value, writer, conf);
               } else {
                 writer.writeObject(value);
