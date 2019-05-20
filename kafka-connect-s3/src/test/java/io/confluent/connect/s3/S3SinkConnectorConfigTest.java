@@ -333,6 +333,10 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   
   @Test
   public void testParquetCompressionTypeSupported() {
+    properties.put(S3SinkConnectorConfig.PARQUET_COMPRESSION_TYPE_CONFIG, "uncompressed");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(CompressionCodecName.UNCOMPRESSED, connectorConfig.getCompressionCodecName());
+
     properties.put(S3SinkConnectorConfig.PARQUET_COMPRESSION_TYPE_CONFIG, "gzip");
     connectorConfig = new S3SinkConnectorConfig(properties);
     assertEquals(CompressionCodecName.GZIP, connectorConfig.getCompressionCodecName());
@@ -348,6 +352,14 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     properties.put(S3SinkConnectorConfig.PARQUET_COMPRESSION_TYPE_CONFIG, "zstd");
     connectorConfig = new S3SinkConnectorConfig(properties);
     assertEquals(CompressionCodecName.ZSTD, connectorConfig.getCompressionCodecName());
+
+    properties.put(S3SinkConnectorConfig.PARQUET_COMPRESSION_TYPE_CONFIG, "brotli");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(CompressionCodecName.BROTLI, connectorConfig.getCompressionCodecName());
+
+    properties.put(S3SinkConnectorConfig.PARQUET_COMPRESSION_TYPE_CONFIG, "lzo");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(CompressionCodecName.LZO, connectorConfig.getCompressionCodecName());
   }
 
   @Test(expected = ConfigException.class)
