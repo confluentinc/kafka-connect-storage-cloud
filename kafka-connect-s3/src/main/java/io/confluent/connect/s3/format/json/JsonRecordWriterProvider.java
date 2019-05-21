@@ -209,6 +209,7 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
         writer.writeRaw(LINE_SEPARATOR);
       }
     } catch (Exception e) {
+      log.error("ErrorValue ========> " + value.toString());
       throw new ConnectException(e);
     }
   }
