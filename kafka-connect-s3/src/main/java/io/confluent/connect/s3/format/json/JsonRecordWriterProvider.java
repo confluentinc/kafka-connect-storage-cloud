@@ -210,7 +210,11 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
       }
     } catch (Exception e) {
       log.error("ErrorValue ========> " + value.toString());
-      throw new ConnectException(e);
+      if (!(e.getMessage().contains("non-finite"))) {
+        throw new ConnectException(e);
+      } else {
+        log.error("non-finite exception thrown ========> " + e.getMessage());
+      }
     }
   }
 
