@@ -63,7 +63,6 @@
                 <exclude>io.confluent:kafka-connect-storage-common</exclude>
                 <exclude>io.confluent:kafka-connect-storage-core</exclude>
                 <exclude>io.confluent:kafka-connect-storage-format</exclude>
-                <exclude>io.confluent:kafka-connect-storage-hive</exclude>
                 <exclude>io.confluent:kafka-connect-storage-partitioner</exclude>
             </excludes>
         </dependencySet>

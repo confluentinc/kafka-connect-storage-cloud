@@ -21,7 +21,6 @@ import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.format.SchemaFileReader;
-import io.confluent.connect.storage.hive.HiveFactory;
 
 public class AvroFormat implements Format<S3SinkConnectorConfig, String> {
   private final S3Storage storage;
@@ -43,7 +42,7 @@ public class AvroFormat implements Format<S3SinkConnectorConfig, String> {
   }
 
   @Override
-  public HiveFactory getHiveFactory() {
+  public Object getHiveFactory() {
     throw new UnsupportedOperationException(
         "Hive integration is not currently supported in S3 Connector"
     );
