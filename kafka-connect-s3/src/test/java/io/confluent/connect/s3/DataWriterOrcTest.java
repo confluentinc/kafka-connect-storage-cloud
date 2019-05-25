@@ -16,7 +16,6 @@ import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.TimestampType;
@@ -66,7 +65,7 @@ public class DataWriterOrcTest extends TestWithMockedS3 {
   protected S3Storage storage;
   protected AmazonS3 s3;
   OrcFormat format;
-  Partitioner<FieldSchema> partitioner;
+  Partitioner<?> partitioner;
   S3SinkTask task;
   Map<String, String> localProps = new HashMap<>();
   private String prevMd5Prop = null;
@@ -355,7 +354,7 @@ public class DataWriterOrcTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner
-    TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    TimeBasedPartitioner<?> partitioner = new TimeBasedPartitioner<>();
     parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
     parsedConfig.put(
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
@@ -412,7 +411,7 @@ public class DataWriterOrcTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner
-    TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    TimeBasedPartitioner<?> partitioner = new TimeBasedPartitioner<>();
     parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
     parsedConfig.put(
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
