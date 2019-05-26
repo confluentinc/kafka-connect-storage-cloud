@@ -33,7 +33,7 @@ import java.net.URI;
  */
 class S3OrcFileSystem extends FileSystem {
 
-  S3OutputStream s3OutputStream;
+  private S3OutputStream s3OutputStream;
 
   public S3OrcFileSystem(S3OutputStream s3OutputStream) {
     this.s3OutputStream = s3OutputStream;

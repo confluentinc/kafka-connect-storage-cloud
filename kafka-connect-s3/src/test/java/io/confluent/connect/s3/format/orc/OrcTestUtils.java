@@ -172,7 +172,7 @@ public class OrcTestUtils {
     } else {
       SinkRecord next = records.iterator().next();
       TypeDescription orcSchema = OrcConverterUtils.fromConnectSchema(next.valueSchema());
-      java.nio.file.Path tmpFile = Paths.get(System.getProperty("java.io.tmpdir"), "orc", "" + System.currentTimeMillis() + ".orc");
+      java.nio.file.Path tmpFile = Paths.get(System.getProperty("java.io.tmpdir"), "orc", System.currentTimeMillis() + ".orc");
 
       try {
         VectorizedRowBatch rowBatch = orcSchema.createRowBatch();
