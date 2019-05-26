@@ -31,6 +31,7 @@ import org.apache.kafka.connect.errors.DataException;
 import org.apache.orc.TypeDescription;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
@@ -217,7 +218,7 @@ public class OrcConverterUtils {
           return fieldValue;
         }
       case STRING:
-        return ((String) fieldValue).getBytes();
+        return ((String) fieldValue).getBytes(StandardCharsets.UTF_8);
       case ARRAY:
         Schema listType = connectSchema.valueSchema();
         List<Object> transformedValues = new ArrayList<>(((List) fieldValue).size());
