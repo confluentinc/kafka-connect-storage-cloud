@@ -35,7 +35,6 @@ import java.util.Queue;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
-import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
@@ -86,7 +85,6 @@ public class TopicPartitionWriter {
   private static final Time SYSTEM_TIME = new SystemTime();
 
   public TopicPartitionWriter(TopicPartition tp,
-                              S3Storage storage,
                               RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
                               Partitioner<?> partitioner,
                               S3SinkConnectorConfig connectorConfig,
