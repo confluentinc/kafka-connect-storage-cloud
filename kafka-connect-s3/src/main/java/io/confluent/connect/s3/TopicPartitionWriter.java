@@ -15,6 +15,7 @@
 
 package io.confluent.connect.s3;
 
+import io.confluent.connect.s3.storage.S3Storage;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -83,6 +84,16 @@ public class TopicPartitionWriter {
   private DateTimeZone timeZone;
   private final S3SinkConnectorConfig connectorConfig;
   private static final Time SYSTEM_TIME = new SystemTime();
+
+  @Deprecated
+  public TopicPartitionWriter(TopicPartition tp,
+                              S3Storage storage,
+                              RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
+                              Partitioner<?> partitioner,
+                              S3SinkConnectorConfig connectorConfig,
+                              SinkTaskContext context) {
+    this(tp, writerProvider, partitioner, connectorConfig, context);
+  }
 
   public TopicPartitionWriter(TopicPartition tp,
                               RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
