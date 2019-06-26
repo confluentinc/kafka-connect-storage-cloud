@@ -81,7 +81,7 @@ public class DataWriterSafeByteArrayTest extends TestWithMockedS3 {
   @Test
   public void testBufferOverflowFix() throws Exception {
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, SafeByteArrayFormat.class.getName());
-    localProps.put(S3SinkConnectorConfig.FORMAT_BYTEARRAY_EXTENSION_CONFIG, ".sbin");
+    localProps.put(S3SinkConnectorConfig.FORMAT_BYTEARRAY_EXTENSION_CONFIG, ".bin");
     setUp();
     PowerMockito.doReturn(5).when(connectorConfig).getPartSize();
     S3OutputStream out = new S3OutputStream(S3_TEST_BUCKET_NAME, connectorConfig, s3);
@@ -92,7 +92,7 @@ public class DataWriterSafeByteArrayTest extends TestWithMockedS3 {
   @Test
   public void testNoSchema() throws Exception {
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, SafeByteArrayFormat.class.getName());
-    localProps.put(S3SinkConnectorConfig.FORMAT_BYTEARRAY_EXTENSION_CONFIG, ".sbin");
+    localProps.put(S3SinkConnectorConfig.FORMAT_BYTEARRAY_EXTENSION_CONFIG, ".bin");
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
@@ -102,7 +102,7 @@ public class DataWriterSafeByteArrayTest extends TestWithMockedS3 {
     task.stop();
 
     long[] validOffsets = {0, 3, 6};
-    verify(sinkRecords, validOffsets, context.assignment(), ".sbin");
+    verify(sinkRecords, validOffsets, context.assignment(), ".bin");
   }
 
   @Test
@@ -110,7 +110,7 @@ public class DataWriterSafeByteArrayTest extends TestWithMockedS3 {
     CompressionType compressionType = CompressionType.GZIP;
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, SafeByteArrayFormat.class.getName());
     localProps.put(S3SinkConnectorConfig.COMPRESSION_TYPE_CONFIG, compressionType.name);
-    localProps.put(S3SinkConnectorConfig.FORMAT_BYTEARRAY_EXTENSION_CONFIG, ".sbin");
+    localProps.put(S3SinkConnectorConfig.FORMAT_BYTEARRAY_EXTENSION_CONFIG, ".bin");
 
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
@@ -121,7 +121,7 @@ public class DataWriterSafeByteArrayTest extends TestWithMockedS3 {
     task.stop();
 
     long[] validOffsets = {0, 3, 6};
-    verify(sinkRecords, validOffsets, context.assignment(), ".sbin.gz");
+    verify(sinkRecords, validOffsets, context.assignment(), ".bin.gz");
   }
 
   protected List<SinkRecord> createByteArrayRecordsWithoutSchema(int size, long startOffset, Set<TopicPartition> partitions) {
