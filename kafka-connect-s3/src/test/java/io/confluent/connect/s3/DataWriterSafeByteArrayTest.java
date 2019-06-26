@@ -44,7 +44,7 @@ public class DataWriterSafeByteArrayTest extends TestWithMockedS3 {
 
   protected S3Storage storage;
   protected AmazonS3 s3;
-  protected Partitioner<FieldSchema> partitioner;
+  protected Partitioner<?> partitioner;
   protected SafeByteArrayFormat format;
   protected S3SinkTask task;
   protected Map<String, String> localProps = new HashMap<>();
