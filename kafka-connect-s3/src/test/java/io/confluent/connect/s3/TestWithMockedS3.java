@@ -139,14 +139,13 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
 
     while (in.available() > 0) {
       ByteBuffer sizeBuf = ByteBuffer.allocate(4);
-      if (in.read(sizeBuf.array()) < 0) {
+      if (in.read(sizeBuf.array()) == -1) break;
+      int size = sizeBuf.getInt();
+      byte[] record = new byte[size];
+      if (in.read(record) != size) {
           throw new IOException("invalid format");
       }
-      ByteBuffer bodyBuf = ByteBuffer.allocate(sizeBuf.getInt());
-      if (in.read(bodyBuf.array()) < 0) {
-          throw new IOException("invalid format");
-      }
-      records.add(bodyBuf.array());
+      records.add(record);
     }
 
     return records;
