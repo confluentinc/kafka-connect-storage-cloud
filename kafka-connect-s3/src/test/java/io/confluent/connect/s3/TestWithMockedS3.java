@@ -31,12 +31,8 @@ import org.junit.Rule;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.commons.io.IOUtils;
 
-
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -137,16 +133,20 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
   public static Collection<Object> readRecordsSafeByteArray(String bucketName, String fileKey, AmazonS3 s3,
                                                             CompressionType compressionType) throws IOException {
     log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
-    InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
+    InputStream in = compressionType.wrapForInput(s3.getObject(bucketName, fileKey).getObjectContent());
 
-    ByteBuffer buf = ByteBuffer.wrap(IOUtils.toByteArray(compressionType.wrapForInput(in)));
     List<Object> records = new ArrayList<>();
 
-    while (buf.hasRemaining()) {
-        int recordLength = buf.getInt();
-        byte[] record = ByteBuffer.allocate(recordLength).array();
-        buf.get(record, 0 , recordLength);
-        records.add(record);
+    while (in.available() > 0) {
+      ByteBuffer sizeBuf = ByteBuffer.allocate(4);
+      if (in.read(sizeBuf.array()) < 0) {
+          throw new IOException("invalid format");
+      }
+      ByteBuffer bodyBuf = ByteBuffer.allocate(sizeBuf.getInt());
+      if (in.read(bodyBuf.array()) < 0) {
+          throw new IOException("invalid format");
+      }
+      records.add(bodyBuf.array());
     }
 
     return records;
