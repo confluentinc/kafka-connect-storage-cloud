@@ -194,8 +194,10 @@ public class S3OutputStream extends OutputStream {
 
     if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
         && StringUtils.isNotBlank(sseKmsKeyId)) {
+      log.debug("Using KMS Key ID: {}", sseKmsKeyId);
       initRequest.setSSEAwsKeyManagementParams(new SSEAwsKeyManagementParams(sseKmsKeyId));
     } else if (sseCustomerKey != null) {
+      log.debug("Using KMS Customer Key");
       initRequest.setSSECustomerKey(sseCustomerKey);
     }
 
