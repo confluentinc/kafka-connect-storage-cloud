@@ -83,6 +83,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String CORE_ORDER_STALES_CONVERTER = "s3.core.order.stales.converter";
   public static final boolean CORE_ORDER_STALES_CONVERTER_DEFAULT = false;
 
+  public static final String LINKING_SERVICE_RESULTS_CONVERTER = "s3.linking.service.converter";
+  public static final boolean LINKING_SERVICE_RESULTS_CONVERTER_DEFAULT = false;
+
+
   public static final String IS_SINGLE_ITEM_PAYLOAD_REDSHIFT = "s3.is.single.item.payload.redshift";
   public static final boolean IS_SINGLE_ITEM_PAYLOAD_REDSHIFT_DEFAULT = false;
 
@@ -265,6 +269,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
               ++orderInGroup,
               Width.LONG,
               "Convert payload messages to order_stales raw."
+      );
+
+      configDef.define(
+              LINKING_SERVICE_RESULTS_CONVERTER,
+              Type.BOOLEAN,
+              LINKING_SERVICE_RESULTS_CONVERTER_DEFAULT,
+              Importance.LOW,
+              "parse linking service request messages.",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "parse linking service request messages."
       );
 
       configDef.define(
@@ -589,6 +605,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public boolean getCoreOrderStalesConverter() {
     return getBoolean(CORE_ORDER_STALES_CONVERTER);
+  }
+
+  public boolean getLinkingServiceResultsConverter() {
+    return getBoolean(LINKING_SERVICE_RESULTS_CONVERTER);
   }
 
   public boolean getIsSingleItemPayloadRedshift() {
