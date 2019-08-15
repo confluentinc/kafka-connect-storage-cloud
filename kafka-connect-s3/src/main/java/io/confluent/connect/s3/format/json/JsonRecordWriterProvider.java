@@ -99,7 +99,7 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
       }
       if (StringUtils.isNotBlank(conf.getCreatedAtMetadataField())) {
         String dateFormatted = convertToSystemDate(Long.valueOf(
-                metadata.get(conf.getCreatedAtMetadataField()).toString()), true);
+                metadata.get(conf.getCreatedAtMetadataField()).toString()), false);
         message.put(CREATED_AT_FIELD_NAME, dateFormatted);
       }
     } catch (JSONException e) {
