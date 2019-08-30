@@ -1,6 +1,6 @@
 #!/usr/bin/env groovy
 common {
-  slackChannel = '#connect-eng'
+  slackChannel = '#connect-warn'
   upstreamProjects = 'confluentinc/kafka-connect-storage-common'
   nodeLabel = 'docker-oraclejdk8'
 }
