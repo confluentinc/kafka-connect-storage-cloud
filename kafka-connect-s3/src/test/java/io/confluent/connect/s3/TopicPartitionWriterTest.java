@@ -45,6 +45,7 @@ import java.util.concurrent.TimeUnit;
 
 import io.confluent.common.utils.MockTime;
 import io.confluent.connect.s3.format.avro.AvroFormat;
+import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.s3.util.TimeUtils;
@@ -89,6 +90,30 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     s3 = newS3Client(connectorConfig);
     storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+    format = new AvroFormat(storage);
+
+    Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
+    writerProvider = format.getRecordWriterProvider();
+    extension = writerProvider.getExtension();
+  }
+
+
+  public void setUpWithCommitException() throws Exception {
+    super.setUp();
+
+    s3 = newS3Client(connectorConfig);
+    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3) {
+      @Override
+      public S3OutputStream create(String path, boolean overwrite) {
+        return new S3OutputStream(path, this.conf(), s3) {
+          @Override
+          public void commit() throws IOException {
+            throw new ConnectException("Fake exception");
+          }
+        };
+      }
+    };
+
     format = new AvroFormat(storage);
 
     Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
@@ -613,6 +638,51 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
                                                   ZERO_PAD_FMT));
     }
     verify(expectedFiles, 3, schema, records);
+  }
+
+  @Test(expected = ConnectException.class)
+  public void testPropagateErrorsDuringTimeBasedCommits() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.HOURS.toMillis(1))
+    );
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.MINUTES.toMillis(10))
+    );
+    setUpWithCommitException();
+
+    // Define the partitioner
+    TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
+    parsedConfig.put(
+        PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockedWallclockTimestampExtractor.class.getName());
+    partitioner.configure(parsedConfig);
+
+    MockTime time = ((MockedWallclockTimestampExtractor) partitioner.getTimestampExtractor()).time;
+
+    // Bring the clock to present.
+    time.sleep(SYSTEM.milliseconds());
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, writerProvider, partitioner, connectorConfig, context, time);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 6);
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records.subList(0, 3), key, schema);
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // No records written to S3
+    topicPartitionWriter.write();
+    long timestampFirst = time.milliseconds();
+
+    // 11 minutes
+    time.sleep(TimeUnit.MINUTES.toMillis(11));
+    // Records are written due to scheduled rotation
+    topicPartitionWriter.write();
   }
 
   @Test
