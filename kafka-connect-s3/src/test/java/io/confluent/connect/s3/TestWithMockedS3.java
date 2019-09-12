@@ -32,9 +32,8 @@ import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -121,12 +120,35 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
       } else if (extension.startsWith(".bin")) {
         return readRecordsByteArray(bucketName, fileKey, s3, compressionType,
             S3SinkConnectorConfig.FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT.getBytes());
+      } else if (extension.startsWith(".sbin")) {
+          return readRecordsSafeByteArray(bucketName, fileKey, s3, compressionType);
       } else if (extension.startsWith(".customExtensionForTest")) {
         return readRecordsByteArray(bucketName, fileKey, s3, compressionType,
             "SEPARATOR".getBytes());
       } else {
         throw new IllegalArgumentException("Unknown extension: " + extension);
       }
+  }
+
+  public static Collection<Object> readRecordsSafeByteArray(String bucketName, String fileKey, AmazonS3 s3,
+                                                            CompressionType compressionType) throws IOException {
+    log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
+    InputStream in = compressionType.wrapForInput(s3.getObject(bucketName, fileKey).getObjectContent());
+
+    List<Object> records = new ArrayList<>();
+
+    while (in.available() > 0) {
+      ByteBuffer sizeBuf = ByteBuffer.allocate(4);
+      if (in.read(sizeBuf.array()) == -1) break;
+      int size = sizeBuf.getInt();
+      byte[] record = new byte[size];
+      if (in.read(record) != size) {
+          throw new IOException("invalid format");
+      }
+      records.add(record);
+    }
+
+    return records;
   }
 
   public static Collection<Object> readRecordsAvro(String bucketName, String fileKey, AmazonS3 s3) throws IOException {
