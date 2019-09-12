@@ -16,4 +16,9 @@
             files="(S3SinkConnectorConfig).java"
     />
 
+    <suppress
+            checks="CyclomaticComplexity"
+            files="(OrcConverterUtils).java"
+    />
+
 </suppressions>

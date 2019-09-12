@@ -227,6 +227,10 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     return url;
   }
 
+  public AmazonS3 getS3() {
+    return s3;
+  }
+
   @Override
   public SeekableInput open(String path, S3SinkConnectorConfig conf) {
     throw new UnsupportedOperationException(
