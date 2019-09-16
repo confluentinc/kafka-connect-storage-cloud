@@ -22,6 +22,8 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
+import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
+import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -105,7 +107,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String COMPRESSION_TYPE_DEFAULT = "none";
 
   public static final String PARQUET_COMPRESSION_TYPE_CONFIG = "s3.parquet.compression.type";
-  public static final String PARQUET_COMPRESSION_TYPE_DEFAULT = "uncompressed";
+  public static final String PARQUET_COMPRESSION_TYPE_DEFAULT = "none";
 
   public static final String S3_PART_RETRIES_CONFIG = "s3.part.retries";
   public static final int S3_PART_RETRIES_DEFAULT = 3;
@@ -158,7 +160,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     );
 
     FORMAT_CLASS_RECOMMENDER.addValidValues(
-        Arrays.<Object>asList(AvroFormat.class, JsonFormat.class)
+        Arrays.<Object>asList(
+            AvroFormat.class,
+            JsonFormat.class,
+            ByteArrayFormat.class,
+            ParquetFormat.class
+        )
     );
 
     PARTITIONER_CLASS_RECOMMENDER.addValidValues(
@@ -328,7 +335,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Importance.LOW,
           "Compression type for file written to S3. "
             + "Applied when using ParquetFormat. "
-            + "Available values: uncompressed, snappy, gzip, lzo, brotli, lz4, zstd.",
+            + "Available values: " + ParquetCompressionTypeValidator.ALLOWED_VALUES + ".",
           group,
           ++orderInGroup,
           Width.LONG,
@@ -554,7 +561,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   public CompressionCodecName getCompressionCodecName() {
-    return CompressionCodecName.fromConf(getString(PARQUET_COMPRESSION_TYPE_CONFIG));
+    String parquetCompressionType = getString(PARQUET_COMPRESSION_TYPE_CONFIG);
+    if (parquetCompressionType.equals(PARQUET_COMPRESSION_TYPE_DEFAULT)) {
+      return CompressionCodecName.fromConf(null);
+    } else {
+      return CompressionCodecName.fromConf(parquetCompressionType);
+    }
   }
 
   public int getS3PartRetries() {
@@ -692,14 +704,19 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   private static class ParquetCompressionTypeValidator implements ConfigDef.Validator {
-    public static final Map<String, CompressionCodecName> TYPES_BY_NAME = new HashMap<>();
+    public static final Set<String> TYPES_BY_NAME = new HashSet<>();
     public static final String ALLOWED_VALUES;
 
     static {
       List<String> names = new ArrayList<>();
       for (CompressionCodecName compressionCodecName : CompressionCodecName.values()) {
-        TYPES_BY_NAME.put(compressionCodecName.name().toLowerCase(), compressionCodecName);
-        names.add(compressionCodecName.name().toLowerCase());
+        if (CompressionCodecName.UNCOMPRESSED.equals(compressionCodecName)) {
+          TYPES_BY_NAME.add("none");
+          names.add("none");
+        } else {
+          TYPES_BY_NAME.add(compressionCodecName.name().toLowerCase());
+          names.add(compressionCodecName.name().toLowerCase());
+        }
       }
       ALLOWED_VALUES = Utils.join(names, ", ");
     }
@@ -707,8 +724,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     @Override
     public void ensureValid(String name, Object compressionCodecName) {
       String compressionCodecNameString = ((String) compressionCodecName).trim();
-      if (!TYPES_BY_NAME.containsKey(compressionCodecNameString)) {
-        throw new ConfigException(name, compressionCodecName, 
+      if (!TYPES_BY_NAME.contains(compressionCodecNameString)) {
+        throw new ConfigException(name, compressionCodecName,
           "Value must be one of: " + ALLOWED_VALUES);
       }
     }
