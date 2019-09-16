@@ -23,7 +23,7 @@ import java.io.IOException;
 
 public class S3ParquetOutputStream extends S3OutputStream {
 
-  private boolean committed;
+  private volatile boolean committed;
 
   public S3ParquetOutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
     super(key, conf, s3);
