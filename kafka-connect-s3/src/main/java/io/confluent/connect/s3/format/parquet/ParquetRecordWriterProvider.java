@@ -106,7 +106,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
             writer.close();
           }
         } catch (IOException e) {
-          e.printStackTrace();
+          throw new ConnectException(e);
         }
       }
     };
