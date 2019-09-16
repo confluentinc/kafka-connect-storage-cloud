@@ -40,6 +40,7 @@ import java.io.IOException;
 public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
   private static final Logger log = LoggerFactory.getLogger(ParquetRecordWriterProvider.class);
   private static final String EXTENSION = ".parquet";
+  private static final int PAGE_SIZE = 64 * 1024;
   private final S3Storage storage;
   private final AvroData avroData;
 
@@ -66,7 +67,6 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
           schema = record.valueSchema();
           try {
             log.info("Opening record writer for: {}", filename);
-            final int pageSize = 64 * 1024;
             org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
 
             writer = AvroParquetWriter
@@ -75,7 +75,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
                     .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
                     .withDictionaryEncoding(true)
                     .withCompressionCodec(storage.conf().getCompressionCodecName())
-                    .withPageSize(pageSize)
+                    .withPageSize(PAGE_SIZE)
                     .build();
           } catch (IOException e) {
             throw new ConnectException(e);
@@ -113,6 +113,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
   }
 
   private static class S3ParquetOutputFile implements OutputFile {
+    private static final int DEFAULT_BLOCK_SIZE = 0;
     private S3Storage storage;
     private String filename;
     private S3ParquetOutputStream s3out;
@@ -140,7 +141,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
 
     @Override
     public long defaultBlockSize() {
-      return 0;
+      return DEFAULT_BLOCK_SIZE;
     }
   }
 }
