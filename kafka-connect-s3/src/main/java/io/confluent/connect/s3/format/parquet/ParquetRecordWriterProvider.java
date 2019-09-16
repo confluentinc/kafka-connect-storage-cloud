@@ -60,6 +60,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
       Schema schema = null;
       Boolean committed = false;
       ParquetWriter<GenericRecord> writer;
+      S3ParquetOutputFile s3ParquetOutputFile;
 
       @Override
       public void write(SinkRecord record) {
@@ -69,8 +70,9 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
             log.info("Opening record writer for: {}", filename);
             org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
 
+            s3ParquetOutputFile = new S3ParquetOutputFile(storage, filename);
             writer = AvroParquetWriter
-                    .<GenericRecord>builder(new S3ParquetOutputFile(storage, filename))
+                    .<GenericRecord>builder(s3ParquetOutputFile)
                     .withSchema(avroSchema)
                     .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
                     .withDictionaryEncoding(true)
@@ -102,6 +104,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
       public void commit() {
         try {
           committed = true;
+          s3ParquetOutputFile.s3out.setCommit();
           if (writer != null) {
             writer.close();
           }

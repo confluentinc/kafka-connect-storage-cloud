@@ -23,20 +23,23 @@ import java.io.IOException;
 
 public class S3ParquetOutputStream extends S3OutputStream {
 
-  private volatile boolean committed;
+  private volatile boolean commit;
 
   public S3ParquetOutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
     super(key, conf, s3);
-    committed = false;
+    commit = false;
   }
 
   @Override
   public void close() throws IOException {
-    if (!committed) {
-      committed = true;
+    if (commit) {
       super.commit();
     } else {
       super.close();
     }
+  }
+
+  public void setCommit() {
+    this.commit = true;
   }
 }

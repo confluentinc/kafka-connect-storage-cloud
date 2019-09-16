@@ -168,12 +168,16 @@ public class S3OutputStream extends PositionOutputStream {
     } finally {
       buffer.clear();
       multiPartUpload = null;
-      close();
+      internalClose();
     }
   }
 
   @Override
   public void close() throws IOException {
+    internalClose();
+  }
+
+  private void internalClose() throws IOException {
     if (closed) {
       return;
     }
