@@ -282,16 +282,4 @@ public class S3OutputStream extends PositionOutputStream {
   public long getPos() {
     return position;
   }
-
-  public String getKey() {
-    return key;
-  }
-
-  public AmazonS3 getS3() {
-    return s3;
-  }
-
-  public S3SinkConnectorConfig getConnectorConfig() {
-    return connectorConfig;
-  }
 }

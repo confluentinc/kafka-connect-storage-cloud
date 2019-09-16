@@ -16,14 +16,17 @@
 
 package io.confluent.connect.s3.storage;
 
+import com.amazonaws.services.s3.AmazonS3;
+import io.confluent.connect.s3.S3SinkConnectorConfig;
+
 import java.io.IOException;
 
 public class S3ParquetOutputStream extends S3OutputStream {
 
   private boolean committed;
 
-  public S3ParquetOutputStream(S3OutputStream s3OutputStream) {
-    super(s3OutputStream.getKey(), s3OutputStream.getConnectorConfig(), s3OutputStream.getS3());
+  public S3ParquetOutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
+    super(key, conf, s3);
     committed = false;
   }
 

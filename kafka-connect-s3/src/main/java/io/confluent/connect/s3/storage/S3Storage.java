@@ -179,6 +179,10 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   }
 
   public S3OutputStream create(String path, boolean overwrite) {
+    return create(path, overwrite, false);
+  }
+
+  public S3OutputStream create(String path, boolean overwrite, boolean isParquetFormat) {
     if (!overwrite) {
       throw new UnsupportedOperationException(
           "Creating a file without overwriting is not currently supported in S3 Connector"
@@ -189,8 +193,12 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
       throw new IllegalArgumentException("Path can not be empty!");
     }
 
-    // currently ignore what is passed as method argument.
-    return new S3OutputStream(path, this.conf, s3);
+    if (isParquetFormat) {
+      return new S3ParquetOutputStream(path, this.conf, s3);
+    } else {
+      // currently ignore what is passed as method argument.
+      return new S3OutputStream(path, this.conf, s3);
+    }
   }
 
   @Override
