@@ -105,35 +105,21 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     localProps.clear();
   }
 
-  private void testWriteRecords(String extension) throws Exception {
-    setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
-
-    List<SinkRecord> sinkRecords = createRecords(7);
-    // Perform write
-    task.put(sinkRecords);
-    task.close(context.assignment());
-    task.stop();
-
-    long[] validOffsets = {0, 3, 6};
-    verify(sinkRecords, validOffsets, extension);
-  }
-
   @Test
   public void testUncompressedCompressionWriteRecords() throws Exception {
-      testWriteRecords(this.extension);
+    writeRecordsWithExtensionAndVerifyResult(this.extension);
   }
 
   @Test
   public void testGzipCompressionWriteRecords() throws Exception {
     localProps.put(S3SinkConnectorConfig.PARQUET_COMPRESSION_TYPE_CONFIG, "gzip");
-    testWriteRecords(".gz" + this.extension);
+    writeRecordsWithExtensionAndVerifyResult(".gz" + this.extension);
   }
 
   @Test
   public void testSnappyCompressionWriteRecords() throws Exception {
     localProps.put(S3SinkConnectorConfig.PARQUET_COMPRESSION_TYPE_CONFIG, "snappy");
-    testWriteRecords(".snappy" + this.extension);
+    writeRecordsWithExtensionAndVerifyResult(".snappy" + this.extension);
   }
 
   @Test
@@ -762,5 +748,19 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
               startOffset + size - 1));
     }
     return sinkRecords;
+  }
+
+  protected void writeRecordsWithExtensionAndVerifyResult(String extension) throws Exception {
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+
+    List<SinkRecord> sinkRecords = createRecords(7);
+    // Perform write
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 3, 6};
+    verify(sinkRecords, validOffsets, extension);
   }
 }
