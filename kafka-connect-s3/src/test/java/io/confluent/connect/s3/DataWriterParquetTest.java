@@ -80,6 +80,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
   protected Map<String, String> createProps() {
     Map<String, String> props = super.createProps();
     props.putAll(localProps);
+    props.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
     return props;
   }
 

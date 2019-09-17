@@ -128,7 +128,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
 
     @Override
     public PositionOutputStream create(long blockSizeHint) {
-      s3out = (S3ParquetOutputStream) storage.create(filename, true, true);
+      s3out = (S3ParquetOutputStream) storage.create(filename, true);
       return s3out;
     }
 

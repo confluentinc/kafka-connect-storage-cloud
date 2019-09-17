@@ -562,7 +562,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public CompressionCodecName getCompressionCodecName() {
     String parquetCompressionType = getString(PARQUET_COMPRESSION_TYPE_CONFIG);
-    if (parquetCompressionType.equals(PARQUET_COMPRESSION_TYPE_DEFAULT)) {
+    if (parquetCompressionType.equals("none")) {
       return CompressionCodecName.fromConf(null);
     } else {
       return CompressionCodecName.fromConf(parquetCompressionType);

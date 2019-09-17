@@ -34,12 +34,13 @@ public class S3ParquetOutputStream extends S3OutputStream {
   public void close() throws IOException {
     if (commit) {
       super.commit();
+      commit = false;
     } else {
       super.close();
     }
   }
 
   public void setCommit() {
-    this.commit = true;
+    commit = true;
   }
 }
