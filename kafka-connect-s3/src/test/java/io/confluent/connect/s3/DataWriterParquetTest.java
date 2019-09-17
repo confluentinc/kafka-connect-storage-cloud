@@ -436,7 +436,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     task.close(context.assignment());
     task.stop();
 
-    long[] validOffsets = {0, 1, 3, 5};
+    long[] validOffsets = {0, 1, 3, 5, 7};
     verify(sinkRecords, validOffsets);
   }
 
@@ -472,7 +472,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     task.close(context.assignment());
     task.stop();
 
-    long[] validOffsets = {1, 2, 4, 6};
+    long[] validOffsets = {1, 2, 4, 6, 8};
     verify(sinkRecords, validOffsets);
   }
 
@@ -709,7 +709,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
 
   protected List<String> getExpectedFiles(long[] validOffsets, TopicPartition tp, String extension) {
     List<String> expectedFiles = new ArrayList<>();
-    for (int i = 1; i <= validOffsets.length; ++i) {
+    for (int i = 1; i < validOffsets.length; ++i) {
       long startOffset = validOffsets[i - 1];
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset,
               extension, ZERO_PAD_FMT));
