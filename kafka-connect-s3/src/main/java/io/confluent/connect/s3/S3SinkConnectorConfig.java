@@ -22,6 +22,8 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
+import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
+import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -58,6 +60,7 @@ import io.confluent.connect.storage.partitioner.FieldPartitioner;
 import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
@@ -154,7 +157,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     );
 
     FORMAT_CLASS_RECOMMENDER.addValidValues(
-        Arrays.<Object>asList(AvroFormat.class, JsonFormat.class)
+        Arrays.<Object>asList(
+            AvroFormat.class,
+            JsonFormat.class,
+            ByteArrayFormat.class,
+            ParquetFormat.class
+        )
     );
 
     PARTITIONER_CLASS_RECOMMENDER.addValidValues(
@@ -531,6 +539,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public CompressionType getCompressionType() {
     return CompressionType.forName(getString(COMPRESSION_TYPE_CONFIG));
+  }
+
+  public CompressionCodecName getCompressionCodecName() {
+    return CompressionCodecName.fromConf(null);
   }
 
   public int getS3PartRetries() {
