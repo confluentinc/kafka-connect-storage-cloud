@@ -106,9 +106,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String COMPRESSION_TYPE_CONFIG = "s3.compression.type";
   public static final String COMPRESSION_TYPE_DEFAULT = "none";
 
-  public static final String PARQUET_COMPRESSION_TYPE_CONFIG = "s3.parquet.compression.type";
-  public static final String PARQUET_COMPRESSION_TYPE_DEFAULT = "none";
-
   public static final String S3_PART_RETRIES_CONFIG = "s3.part.retries";
   public static final int S3_PART_RETRIES_DEFAULT = 3;
 
@@ -325,22 +322,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "Compression type"
-      );
-
-      configDef.define(
-          PARQUET_COMPRESSION_TYPE_CONFIG,
-          Type.STRING,
-          PARQUET_COMPRESSION_TYPE_DEFAULT,
-          new ParquetCompressionTypeValidator(),
-          Importance.LOW,
-          "Compression type for file written to S3. "
-            + "Applied when using ParquetFormat. "
-            + "Available values: " + ParquetCompressionTypeValidator.ALLOWED_VALUES + ".",
-          group,
-          ++orderInGroup,
-          Width.LONG,
-          "Parquet Compression type",
-          new ParquetCompressionTypeRecommender()
       );
 
       configDef.define(
@@ -561,12 +542,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   public CompressionCodecName getCompressionCodecName() {
-    String parquetCompressionType = getString(PARQUET_COMPRESSION_TYPE_CONFIG);
-    if (parquetCompressionType.equals("none")) {
-      return CompressionCodecName.fromConf(null);
-    } else {
-      return CompressionCodecName.fromConf(parquetCompressionType);
-    }
+    return CompressionCodecName.fromConf(null);
   }
 
   public int getS3PartRetries() {
@@ -700,60 +676,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     @Override
     public String toString() {
       return "[" + ALLOWED_VALUES + "]";
-    }
-  }
-
-  private static class ParquetCompressionTypeValidator implements ConfigDef.Validator {
-    public static final Set<String> TYPES_BY_NAME = new HashSet<>();
-    public static final String ALLOWED_VALUES;
-
-    static {
-      List<String> names = new ArrayList<>();
-      for (CompressionCodecName compressionCodecName : CompressionCodecName.values()) {
-        if (CompressionCodecName.UNCOMPRESSED.equals(compressionCodecName)) {
-          TYPES_BY_NAME.add("none");
-          names.add("none");
-        } else {
-          TYPES_BY_NAME.add(compressionCodecName.name().toLowerCase());
-          names.add(compressionCodecName.name().toLowerCase());
-        }
-      }
-      ALLOWED_VALUES = Utils.join(names, ", ");
-    }
-
-    @Override
-    public void ensureValid(String name, Object compressionCodecName) {
-      String compressionCodecNameString = ((String) compressionCodecName).trim();
-      if (!TYPES_BY_NAME.contains(compressionCodecNameString)) {
-        throw new ConfigException(name, compressionCodecName,
-          "Value must be one of: " + ALLOWED_VALUES);
-      }
-    }
-
-    @Override
-    public String toString() {
-      return "[" + ALLOWED_VALUES + "]";
-    }
-  }
-
-  private static class ParquetCompressionTypeRecommender implements ConfigDef.Recommender {
-    public static final List<Object> ALLOWED_VALUES;
-
-    static {
-      ALLOWED_VALUES = new ArrayList<>();
-      for (CompressionCodecName compressionCodecName : CompressionCodecName.values()) {
-        ALLOWED_VALUES.add(compressionCodecName.name().toLowerCase());
-      }
-    }
-
-    @Override
-    public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
-      return ALLOWED_VALUES;
-    }
-
-    @Override
-    public boolean visible(String name, Map<String, Object> parsedConfig) {
-      return true;
     }
   }
 

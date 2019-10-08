@@ -334,43 +334,5 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     connectorConfig = new S3SinkConnectorConfig(properties);
     connectorConfig.getLong(S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG);
   }
-
-  @Test
-  public void testParquetCompressionTypeSupported() {
-    properties.put(S3SinkConnectorConfig.PARQUET_COMPRESSION_TYPE_CONFIG, "none");
-    connectorConfig = new S3SinkConnectorConfig(properties);
-    assertEquals(CompressionCodecName.UNCOMPRESSED, connectorConfig.getCompressionCodecName());
-
-    properties.put(S3SinkConnectorConfig.PARQUET_COMPRESSION_TYPE_CONFIG, "gzip");
-    connectorConfig = new S3SinkConnectorConfig(properties);
-    assertEquals(CompressionCodecName.GZIP, connectorConfig.getCompressionCodecName());
-
-    properties.put(S3SinkConnectorConfig.PARQUET_COMPRESSION_TYPE_CONFIG, "snappy");
-    connectorConfig = new S3SinkConnectorConfig(properties);
-    assertEquals(CompressionCodecName.SNAPPY, connectorConfig.getCompressionCodecName());
-
-    properties.put(S3SinkConnectorConfig.PARQUET_COMPRESSION_TYPE_CONFIG, "lz4");
-    connectorConfig = new S3SinkConnectorConfig(properties);
-    assertEquals(CompressionCodecName.LZ4, connectorConfig.getCompressionCodecName());
-
-    properties.put(S3SinkConnectorConfig.PARQUET_COMPRESSION_TYPE_CONFIG, "zstd");
-    connectorConfig = new S3SinkConnectorConfig(properties);
-    assertEquals(CompressionCodecName.ZSTD, connectorConfig.getCompressionCodecName());
-
-    properties.put(S3SinkConnectorConfig.PARQUET_COMPRESSION_TYPE_CONFIG, "brotli");
-    connectorConfig = new S3SinkConnectorConfig(properties);
-    assertEquals(CompressionCodecName.BROTLI, connectorConfig.getCompressionCodecName());
-
-    properties.put(S3SinkConnectorConfig.PARQUET_COMPRESSION_TYPE_CONFIG, "lzo");
-    connectorConfig = new S3SinkConnectorConfig(properties);
-    assertEquals(CompressionCodecName.LZO, connectorConfig.getCompressionCodecName());
-  }
-
-  @Test(expected = ConfigException.class)
-  public void testUnsupportedParquetCompressionType() {
-    properties.put(S3SinkConnectorConfig.PARQUET_COMPRESSION_TYPE_CONFIG, "uncompressed");
-    connectorConfig = new S3SinkConnectorConfig(properties);
-    connectorConfig.getCompressionCodecName();
-  }
 }
 
