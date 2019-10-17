@@ -56,6 +56,7 @@ public class S3SinkTask extends SinkTask {
   private Format<S3SinkConnectorConfig, String> format;
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private final Time time;
+  private NotificationService notificationService;
 
   /**
    * No-arg constructor. Used by Connect framework.
@@ -68,9 +69,17 @@ public class S3SinkTask extends SinkTask {
   }
 
   // visible for testing.
+  public S3SinkTask(NotificationService notificationService){
+    this.notificationService = notificationService;
+    assignment = new HashSet<>();
+    topicPartitionWriters = new HashMap<>();
+    time = new SystemTime();
+  }
+
+  // visible for testing.
   S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage,
              Partitioner<?> partitioner, Format<S3SinkConnectorConfig, String> format,
-             Time time) throws Exception {
+             Time time, NotificationService notificationService) throws Exception {
     this.assignment = new HashSet<>();
     this.topicPartitionWriters = new HashMap<>();
     this.connectorConfig = connectorConfig;
@@ -79,6 +88,7 @@ public class S3SinkTask extends SinkTask {
     this.partitioner = partitioner;
     this.format = format;
     this.time = time;
+    this.notificationService = notificationService;
 
     url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
     writerProvider = this.format.getRecordWriterProvider();
@@ -111,6 +121,13 @@ public class S3SinkTask extends SinkTask {
 
       open(context.assignment());
       log.info("Started S3 connector task with assigned partitions: {}", assignment);
+      if (connectorConfig.getNotificationKafkaEnabled()){
+        notificationService = new KafkaNotificationService(connectorConfig);
+      }
+      else{
+        notificationService = new NoOpNotificationService();
+      }
+
     } catch (ClassNotFoundException | IllegalAccessException | InstantiationException
         | InvocationTargetException | NoSuchMethodException e) {
       throw new ConnectException("Reflection exception: ", e);
@@ -136,7 +153,8 @@ public class S3SinkTask extends SinkTask {
           partitioner,
           connectorConfig,
           context,
-          time
+          time,
+          notificationService
       );
       topicPartitionWriters.put(tp, writer);
     }
@@ -232,6 +250,7 @@ public class S3SinkTask extends SinkTask {
     try {
       if (storage != null) {
         storage.close();
+        notificationService.close();
       }
     } catch (Exception e) {
       throw new ConnectException(e);

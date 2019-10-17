@@ -47,6 +47,7 @@ import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.connect.storage.partitioner.TimestampExtractor;
 import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
 import io.confluent.connect.storage.util.DateTimeUtils;
+import s3connect.FileUploadedMessage;
 
 public class TopicPartitionWriter {
   private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriter.class);
@@ -84,14 +85,16 @@ public class TopicPartitionWriter {
   private DateTimeZone timeZone;
   private final S3SinkConnectorConfig connectorConfig;
   private static final Time SYSTEM_TIME = new SystemTime();
+  private  NotificationService notificationService;
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
                               RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
                               Partitioner<?> partitioner,
                               S3SinkConnectorConfig connectorConfig,
-                              SinkTaskContext context) {
-    this(tp, writerProvider, partitioner, connectorConfig, context, SYSTEM_TIME);
+                              SinkTaskContext context,
+                              NotificationService notificationService) {
+    this(tp, writerProvider, partitioner, connectorConfig, context, SYSTEM_TIME, notificationService);
   }
 
   // Visible for testing
@@ -100,8 +103,9 @@ public class TopicPartitionWriter {
                        Partitioner<?> partitioner,
                        S3SinkConnectorConfig connectorConfig,
                        SinkTaskContext context,
-                       Time time) {
+                       Time time, NotificationService notificationService) {
     this.connectorConfig = connectorConfig;
+    this.notificationService = notificationService;
     this.time = time;
     this.tp = tp;
     this.context = context;
@@ -482,6 +486,15 @@ public class TopicPartitionWriter {
     for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
       commitFile(entry.getKey());
       log.debug("Committed {} for {}", entry.getValue(), tp);
+      if (connectorConfig.getNotificationKafkaEnabled()) {
+        FileUploadedMessage msg = new FileUploadedMessage();
+        msg.setBucket(connectorConfig.getBucketName());
+        msg.setKey(entry.getValue());
+        msg.setPartition(tp.toString());
+        msg.setTopic(tp.topic());
+        notificationService.send(msg);
+        log.debug("Notification sent to kafka for {}", entry.getValue());
+      }
     }
     offsetToCommit = currentOffset + 1;
     commitFiles.clear();

@@ -136,6 +136,22 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   private final String name;
 
+  public static final String NOTIFICATION_KAFKA_ENABLED_CONFIG = "notification.kafka.enabled";
+  public static final String NOTIFICATION_KAFKA_TOPIC_CONFIG = "notification.kafka.topic";
+  public static final String NOTIFICATION_KAFKA_BROKER_CONFIG = "notification.kafka.producer.broker";
+  public static final String NOTIFICATION_KAFKA_SCHEMA_REGISTRY_CONFIG = "notification.kafka.schema.registry";
+  public static final String NOTIFICATION_KAFKA_SASLENABLED_CONFIG = "notification.kafka.producer.saslEnabled";
+  public static final String NOTIFICATION_KAFKA_SASLUSER_CONFIG = "notification.kafka.producer.saslUsername";
+  public static final String NOTIFICATION_KAFKA_SASLPASSWORD_CONFIG = "notification.kafka.producer.saslPassword";
+
+  private final Boolean notificationKafkaEnabled;
+  private final String notificationKafkaTopic;
+  private final String notificationKafkaBroker;
+  private final String notificationKafkaSchemaRegistry;
+  private final Boolean notificationKafkaSaslEnabled;
+  private final String notificationKafkaSaslUser;
+  private final String notificationKafkaSaslPassword;
+
   private final StorageCommonConfig commonConfig;
   private final PartitionerConfig partitionerConfig;
 
@@ -461,6 +477,13 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     partitionerConfig = new PartitionerConfig(partitionerConfigDef, originalsStrings());
 
     this.name = parseName(originalsStrings());
+    this.notificationKafkaEnabled = Boolean.valueOf(originalsStrings().get("notification.kafka.enabled"));
+    this.notificationKafkaTopic = originalsStrings().get("notification.kafka.topic");
+    this.notificationKafkaBroker = originalsStrings().get("notification.kafka.producer.broker");
+    this.notificationKafkaSchemaRegistry = originalsStrings().get("notification.kafka.schema.registry");
+    this.notificationKafkaSaslEnabled = Boolean.valueOf(originalsStrings().get("notification.kafka.producer.saslEnabled"));
+    this.notificationKafkaSaslUser = originalsStrings().get("notification.kafka.producer.saslUsername");
+    this.notificationKafkaSaslPassword = originalsStrings().get("notification.kafka.producer.saslPassword");
     addToGlobal(partitionerConfig);
     addToGlobal(commonConfig);
     addToGlobal(this);
@@ -558,6 +581,31 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public String getName() {
     return name;
   }
+
+  public Boolean getNotificationKafkaEnabled() {
+    return notificationKafkaEnabled;
+  }
+
+  public String getNotificationKafkaTopic() {
+    return notificationKafkaTopic;
+  }
+
+  public String getNotificationKafkaBroker() { return notificationKafkaBroker; }
+
+  public String getNotificationKafkaSchemaRegistry() { return notificationKafkaSchemaRegistry; }
+
+  public Boolean getNotificationKafkaSaslEnabled() {
+    return notificationKafkaSaslEnabled;
+  }
+
+  public String getNotificationKafkaSaslUser() {
+    return notificationKafkaSaslUser;
+  }
+
+  public String getNotificationKafkaSaslPassword() {
+    return notificationKafkaSaslPassword;
+  }
+
 
   @Override
   public Object get(String key) {

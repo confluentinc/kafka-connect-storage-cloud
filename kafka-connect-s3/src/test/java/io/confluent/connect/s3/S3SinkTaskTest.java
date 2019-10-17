@@ -86,7 +86,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
   public void testWriteRecord() throws Exception {
     setUp();
     replayAll();
-    task = new S3SinkTask();
+    task = new S3SinkTask(notificationService);
     task.initialize(context);
     task.start(properties);
     verifyAll();
@@ -104,7 +104,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
   public void testWriteRecordWithPrimitives() throws Exception {
     setUp();
     replayAll();
-    task = new S3SinkTask();
+    task = new S3SinkTask(notificationService);
     task.initialize(context);
     task.start(properties);
     verifyAll();
@@ -132,7 +132,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     sinkRecords.addAll(createRecords(5, 2));
 
     replayAll();
-    task = new S3SinkTask();
+    task = new S3SinkTask(notificationService);
     task.initialize(context);
     task.start(properties);
     verifyAll();
@@ -152,7 +152,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     List<SinkRecord> sinkRecords = createRecords(11000);
     replayAll();
 
-    task = new S3SinkTask();
+    task = new S3SinkTask(notificationService);
     task.initialize(context);
     task.start(properties);
     verifyAll();

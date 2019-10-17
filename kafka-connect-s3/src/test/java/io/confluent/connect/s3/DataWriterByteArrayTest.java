@@ -101,7 +101,7 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
   public void testNoSchema() throws Exception {
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, ByteArrayFormat.class.getName());
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, notificationService);
 
     List<SinkRecord> sinkRecords = createByteArrayRecordsWithoutSchema(7 * context.assignment().size(), 0, context.assignment());
     task.put(sinkRecords);
@@ -118,7 +118,7 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, ByteArrayFormat.class.getName());
     localProps.put(S3SinkConnectorConfig.COMPRESSION_TYPE_CONFIG, compressionType.name);
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, notificationService);
 
     List<SinkRecord> sinkRecords = createByteArrayRecordsWithoutSchema(7 * context.assignment().size(), 0, context.assignment());
     task.put(sinkRecords);
@@ -136,7 +136,7 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
     localProps.put(S3SinkConnectorConfig.FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG, "SEPARATOR");
     localProps.put(S3SinkConnectorConfig.FORMAT_BYTEARRAY_EXTENSION_CONFIG, extension);
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, notificationService);
 
     List<SinkRecord> sinkRecords = createByteArrayRecordsWithoutSchema(7 * context.assignment().size(), 0, context.assignment());
     task.put(sinkRecords);

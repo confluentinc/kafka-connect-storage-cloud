@@ -28,17 +28,25 @@ import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.schema.SchemaCompatibility;
 import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.junit.After;
 import org.junit.Rule;
 import org.junit.rules.TestRule;
 import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
+import org.mockito.Mockito;
 import org.powermock.api.mockito.PowerMockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import s3connect.FileUploadedMessage;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyChar;
+import static org.mockito.Mockito.mock;
 
 public class S3SinkConnectorTestBase extends StorageSinkTestBase {
 
@@ -52,6 +60,8 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
   protected String topicsDir;
   protected Map<String, Object> parsedConfig;
   protected SchemaCompatibility compatibility;
+
+  protected NotificationService notificationService;
 
   @Rule
   public TestRule watcher = new TestWatcher() {
@@ -77,6 +87,13 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     props.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH");
     props.put(PartitionerConfig.LOCALE_CONFIG, "en");
     props.put(PartitionerConfig.TIMEZONE_CONFIG, "America/Los_Angeles");
+    props.put(S3SinkConnectorConfig.NOTIFICATION_KAFKA_ENABLED_CONFIG, "true");
+    //props.put(S3SinkConnectorConfig.NOTIFICATION_KAFKA_BROKER_CONFIG, "localhost:9092");
+    //props.put(S3SinkConnectorConfig.NOTIFICATION_KAFKA_SCHEMA_REGISTRY_CONFIG, "http://localhost:8081");
+    //props.put(S3SinkConnectorConfig.NOTIFICATION_KAFKA_TOPIC_CONFIG, "test-notificationtopic");
+    props.put(S3SinkConnectorConfig.NOTIFICATION_KAFKA_SASLENABLED_CONFIG, "false");
+    props.put(S3SinkConnectorConfig.NOTIFICATION_KAFKA_SASLUSER_CONFIG, "testuser");
+    props.put(S3SinkConnectorConfig.NOTIFICATION_KAFKA_SASLPASSWORD_CONFIG, "testpassword");
     return props;
   }
 
@@ -89,6 +106,10 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     parsedConfig = new HashMap<>(connectorConfig.plainValues());
     compatibility = StorageSchemaCompatibility.getCompatibility(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG);
+    // mock producer
+    KafkaProducer producer = mock(KafkaProducer.class);
+    //PowerMockito.doReturn(producer).when(kns).createNotificationProducer(any(S3SinkConnectorConfig.class));
+    notificationService = PowerMockito.spy(new KafkaNotificationService(producer, topicsDir));
   }
 
   @After

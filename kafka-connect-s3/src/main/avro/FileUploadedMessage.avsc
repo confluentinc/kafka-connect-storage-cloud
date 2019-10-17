@@ -1,0 +1,23 @@
+{
+  "namespace": "s3connect",
+  "type": "record",
+  "name": "FileUploadedMessage",
+  "fields": [
+    {
+      "name": "topic",
+      "type": "string"
+    },
+    {
+      "name": "bucket",
+      "type": "string"
+    },
+    {
+      "name": "key",
+      "type": "string"
+    },
+    {
+      "name":"partition",
+      "type":"string"
+    }
+  ]
+}
