@@ -157,6 +157,7 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
   @Test
   public void testNullValue() throws Exception {
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+    localProps.put(S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG, "ignore");
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 

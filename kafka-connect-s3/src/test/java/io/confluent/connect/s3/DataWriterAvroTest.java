@@ -169,6 +169,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   public void testNullValue() throws Exception {
     localProps.put(StorageSinkConnectorConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, "true");
     localProps.put(StorageSinkConnectorConfig.CONNECT_META_DATA_CONFIG, "true");
+    localProps.put(S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG, "ignore");
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 

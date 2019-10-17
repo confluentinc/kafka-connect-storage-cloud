@@ -15,6 +15,7 @@
 
 package io.confluent.connect.s3.format.avro;
 
+import io.confluent.connect.s3.S3SinkConnectorConfig.BehaviorOnNullValues;
 import org.apache.avro.file.CodecFactory;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -82,9 +83,16 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3SinkConn
             value = ((NonRecordContainer) value).getValue();
           }
           if (value == null) {
-            log.debug("Null valued record cannot be written out S3 output as Avro. "
-                + "Skipping. Record Key: {}", record.key());
-            return;
+            if (conf.nullValueBehavior().equalsIgnoreCase(BehaviorOnNullValues.IGNORE.toString())) {
+              log.debug("Null valued record cannot be written to output as Avro. "
+                  + "Skipping. Record Key: {}", record.key());
+              return;
+            } else if (conf.nullValueBehavior().equalsIgnoreCase(BehaviorOnNullValues.FAIL.toString())) {
+              throw new ConnectException("Null valued records are not writeable with current "
+                  + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " 'settings.");
+            } else {
+              throw new UnsupportedOperationException();
+            }
           }
           writer.append(value);
         } catch (IOException e) {

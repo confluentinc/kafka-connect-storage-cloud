@@ -17,6 +17,7 @@ package io.confluent.connect.s3.format.json;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.connect.s3.S3SinkConnectorConfig.BehaviorOnNullValues;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
@@ -81,9 +82,18 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
               s3outWrapper.write(LINE_SEPARATOR_BYTES);
             } else {
               if (value == null) {
-                log.debug("Null valued record cannot be written out S3 output as Json. "
-                    + "Skipping. Record Key: {}", record.key());
-                return;
+                if (conf.nullValueBehavior()
+                    .equalsIgnoreCase(BehaviorOnNullValues.IGNORE.toString())) {
+                  log.debug("Null valued record cannot be written to output as Avro. "
+                      + "Skipping. Record Key: {}", record.key());
+                  return;
+                } else if (conf.nullValueBehavior()
+                    .equalsIgnoreCase(BehaviorOnNullValues.FAIL.toString())) {
+                  throw new ConnectException("Null valued records are not writeable with current "
+                      + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " 'settings.");
+                } else {
+                  throw new UnsupportedOperationException();
+                }
               }
               writer.writeObject(value);
               writer.writeRaw(LINE_SEPARATOR);

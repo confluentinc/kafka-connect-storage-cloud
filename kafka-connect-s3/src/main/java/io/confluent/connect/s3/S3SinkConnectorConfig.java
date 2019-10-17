@@ -24,6 +24,7 @@ import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
+import java.util.Locale;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -128,6 +129,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       "s3.http.send.expect.continue";
   public static final boolean HEADERS_USE_EXPECT_CONTINUE_DEFAULT =
       ClientConfiguration.DEFAULT_USE_EXPECT_CONTINUE;
+
+  public static final String BEHAVIOR_ON_NULL_VALUES_CONFIG = "behavior.on.null.values";
+  public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = BehaviorOnNullValues.FAIL.toString();
 
   /**
    * Maximum back-off time when retrying failed requests.
@@ -451,6 +455,20 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.SHORT,
           "S3 HTTP Send Uses Expect Continue"
+      );
+
+      configDef.define(
+          BEHAVIOR_ON_NULL_VALUES_CONFIG,
+          Type.STRING,
+          BEHAVIOR_ON_NULL_VALUES_DEFAULT,
+          BehaviorOnNullValues.VALIDATOR,
+          Importance.LOW,
+          "How to handle records with a null value (i.e. Kafka tombstone records)."
+              + " Valid options are 'ignore' and 'fail'.",
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Behavior for null-valued records"
       );
 
     }
@@ -777,6 +795,50 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       if (skip != null && !skip.contains(key.name)) {
         container.define(key);
       }
+    }
+  }
+
+  public String nullValueBehavior() {
+    return getString(BEHAVIOR_ON_NULL_VALUES_CONFIG);
+  }
+
+  public enum BehaviorOnNullValues {
+    IGNORE,
+    FAIL;
+
+    public static final ConfigDef.Validator VALIDATOR = new ConfigDef.Validator() {
+      private final ConfigDef.ValidString validator = ConfigDef.ValidString.in(names());
+
+      @Override
+      public void ensureValid(String name, Object value) {
+        if (value instanceof String) {
+          value = ((String) value).toLowerCase(Locale.ROOT);
+        }
+        validator.ensureValid(name, value);
+      }
+
+      // Overridden here so that ConfigDef.toEnrichedRst shows possible values correctly
+      @Override
+      public String toString() {
+        return validator.toString();
+      }
+
+    };
+
+    public static String[] names() {
+      BehaviorOnNullValues[] behaviors = values();
+      String[] result = new String[behaviors.length];
+
+      for (int i = 0; i < behaviors.length; i++) {
+        result[i] = behaviors[i].toString();
+      }
+
+      return result;
+    }
+
+    @Override
+    public String toString() {
+      return name().toLowerCase(Locale.ROOT);
     }
   }
 
