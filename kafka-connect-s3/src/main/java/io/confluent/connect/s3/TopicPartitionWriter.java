@@ -487,7 +487,7 @@ public class TopicPartitionWriter {
     ++recordCount;
   }
 
-  private void commitFiles() {
+  protected void commitFiles() {
     for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
       commitFile(entry.getKey());
       log.debug("Committed {} for {}", entry.getValue(), tp);

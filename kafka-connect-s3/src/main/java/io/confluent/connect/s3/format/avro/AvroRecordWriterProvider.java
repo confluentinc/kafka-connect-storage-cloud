@@ -81,6 +81,11 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3SinkConn
           if (value instanceof NonRecordContainer) {
             value = ((NonRecordContainer) value).getValue();
           }
+          if (value == null) {
+            log.debug("Null valued record cannot be written out S3 output as Avro. "
+                + "Skipping. Record Key: {}", record.key());
+            return;
+          }
           writer.append(value);
         } catch (IOException e) {
           throw new ConnectException(e);

@@ -166,6 +166,33 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   }
 
   @Test
+  public void testNullValue() throws Exception {
+    localProps.put(StorageSinkConnectorConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, "true");
+    localProps.put(StorageSinkConnectorConfig.CONNECT_META_DATA_CONFIG, "true");
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+
+    TopicPartition tp = context.assignment().iterator().next();
+    List<SinkRecord> sinkRecords = Collections.singletonList(new SinkRecord(TOPIC,
+        tp.partition(),
+        null,
+        "key",
+        null,
+        null,
+        42));
+    task.put(sinkRecords);
+    task.getTopicPartitionWriter(tp).commitFiles();
+    task.close(context.assignment());
+    task.stop();
+
+    List<String> fileNames = getExpectedFiles(new long[]{42L, 42L}, tp);
+    verifyFileListing(fileNames);
+    Collection<Object> records = readRecords(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, 42,
+        extension, ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
+    assertEquals(0, records.size());
+  }
+
+  @Test
   public void testWriteRecordsOfUnionsWithEnhancedAvroData() throws Exception {
     localProps.put(StorageSinkConnectorConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, "true");
     localProps.put(StorageSinkConnectorConfig.CONNECT_META_DATA_CONFIG, "true");

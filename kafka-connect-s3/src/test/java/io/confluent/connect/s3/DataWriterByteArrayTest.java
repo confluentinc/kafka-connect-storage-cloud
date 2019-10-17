@@ -34,6 +34,7 @@ import org.powermock.api.mockito.PowerMockito;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -43,6 +44,7 @@ import java.util.Set;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
@@ -110,6 +112,34 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
 
     long[] validOffsets = {0, 3, 6};
     verify(sinkRecords, validOffsets, context.assignment(), ".bin");
+  }
+
+  @Test
+  public void testNullValue() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, ByteArrayFormat.class.getName());
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+
+    TopicPartition tp = context.assignment().iterator().next();
+    List<SinkRecord> sinkRecords = Collections.singletonList(
+        new SinkRecord(TOPIC, tp.partition(), null, "key",
+            null, null, 42));
+    task.put(sinkRecords);
+    task.getTopicPartitionWriter(tp).commitFiles();
+    task.close(context.assignment());
+    task.stop();
+
+    List<String> fileNames = getExpectedFiles(new long[]{42L, 42L}, tp, ".bin");
+    verifyFileListing(fileNames);
+    Collection<Object> records = readRecords(topicsDir,
+        getDirectory(tp.topic(), tp.partition()),
+        tp,
+        42,
+        ".bin",
+        ZERO_PAD_FMT,
+        S3_TEST_BUCKET_NAME,
+        s3);
+    assertEquals(0, records.size());
   }
 
   @Test

@@ -80,6 +80,11 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
               s3outWrapper.write(rawJson);
               s3outWrapper.write(LINE_SEPARATOR_BYTES);
             } else {
+              if (value == null) {
+                log.debug("Null valued record cannot be written out S3 output as Json. "
+                    + "Skipping. Record Key: {}", record.key());
+                return;
+              }
               writer.writeObject(value);
               writer.writeRaw(LINE_SEPARATOR);
             }

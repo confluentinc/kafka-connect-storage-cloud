@@ -65,6 +65,11 @@ public class ByteArrayRecordWriterProvider implements RecordWriterProvider<S3Sin
         try {
           byte[] bytes = converter.fromConnectData(
               record.topic(), record.valueSchema(), record.value());
+          if (bytes == null) {
+            log.debug("Null valued record cannot be written out S3 output as bytes. "
+                + "Skipping. Record Key: {}", record.key());
+            return;
+          }
           s3outWrapper.write(bytes);
           s3outWrapper.write(lineSeparatorBytes);
         } catch (IOException | DataException e) {
