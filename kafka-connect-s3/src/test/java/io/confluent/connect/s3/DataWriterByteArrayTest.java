@@ -34,7 +34,6 @@ import org.powermock.api.mockito.PowerMockito;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -121,9 +120,8 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
     TopicPartition tp = context.assignment().iterator().next();
-    List<SinkRecord> sinkRecords = Collections.singletonList(
-        new SinkRecord(TOPIC, tp.partition(), null, "key",
-            null, null, 42));
+    List<SinkRecord> sinkRecords = Collections
+        .singletonList(new SinkRecord(TOPIC, tp.partition(), null, "key", null, null, 42));
     task.put(sinkRecords);
     task.getTopicPartitionWriter(tp).commitFiles();
     task.close(context.assignment());
@@ -131,14 +129,8 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
 
     List<String> fileNames = getExpectedFiles(new long[]{42L, 42L}, tp, ".bin");
     verifyFileListing(fileNames);
-    Collection<Object> records = readRecords(topicsDir,
-        getDirectory(tp.topic(), tp.partition()),
-        tp,
-        42,
-        ".bin",
-        ZERO_PAD_FMT,
-        S3_TEST_BUCKET_NAME,
-        s3);
+    Collection<Object> records = readRecords(topicsDir, getDirectory(tp.topic(), tp.partition()),
+        tp, 42, ".bin", ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
     assertEquals(0, records.size());
   }
 
