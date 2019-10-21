@@ -87,12 +87,9 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3SinkConn
               log.debug("Null valued record cannot be written to output as Avro. "
                   + "Skipping. Record Key: {}", record.key());
               return;
-            } else if (conf.nullValueBehavior().equalsIgnoreCase(
-                BehaviorOnNullValues.FAIL.toString())) {
+            } else {
               throw new ConnectException("Null valued records are not writeable with current "
                   + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " 'settings.");
-            } else {
-              throw new UnsupportedOperationException();
             }
           }
           writer.append(value);

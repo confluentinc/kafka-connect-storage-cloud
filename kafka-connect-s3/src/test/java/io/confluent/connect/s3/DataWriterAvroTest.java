@@ -170,6 +170,8 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     localProps.put(StorageSinkConnectorConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, "true");
     localProps.put(StorageSinkConnectorConfig.CONNECT_META_DATA_CONFIG, "true");
     localProps.put(S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG, "ignore");
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1");
+
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
@@ -177,7 +179,6 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     List<SinkRecord> sinkRecords = Collections
         .singletonList(new SinkRecord(TOPIC, tp.partition(), null, "key", null, null, 42));
     task.put(sinkRecords);
-    task.getTopicPartitionWriter(tp).commitFiles();
     task.close(context.assignment());
     task.stop();
 
