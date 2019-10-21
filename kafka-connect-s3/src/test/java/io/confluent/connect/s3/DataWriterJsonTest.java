@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
@@ -175,6 +176,20 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
     Collection<Object> records = readRecords(topicsDir, getDirectory(tp.topic(), tp.partition()),
         tp, 42, ".json", ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
     assertEquals(0, records.size());
+  }
+
+  @Test(expected = ConnectException.class)
+  public void testNullValueThrows() throws Exception {
+    localProps.put(S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG, "fail");
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1");
+
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+
+    TopicPartition tp = context.assignment().iterator().next();
+    List<SinkRecord> sinkRecords = Collections
+        .singletonList(new SinkRecord(TOPIC, tp.partition(), null, "key", null, null, 42));
+    task.put(sinkRecords);
   }
 
   protected List<SinkRecord> createRecordsInterleaved(int size, long startOffset, Set<TopicPartition> partitions) {

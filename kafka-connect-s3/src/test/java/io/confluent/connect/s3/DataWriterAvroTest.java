@@ -189,6 +189,20 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     assertEquals(0, records.size());
   }
 
+  @Test(expected = ConnectException.class)
+  public void testNullValueThrows() throws Exception {
+    localProps.put(S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG, "fail");
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1");
+
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+
+    TopicPartition tp = context.assignment().iterator().next();
+    List<SinkRecord> sinkRecords = Collections
+        .singletonList(new SinkRecord(TOPIC, tp.partition(), null, "key", null, null, 42));
+    task.put(sinkRecords);
+  }
+
   @Test
   public void testWriteRecordsOfUnionsWithEnhancedAvroData() throws Exception {
     localProps.put(StorageSinkConnectorConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, "true");
