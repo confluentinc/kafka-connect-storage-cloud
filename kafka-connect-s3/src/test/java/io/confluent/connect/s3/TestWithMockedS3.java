@@ -16,6 +16,7 @@
 
 package io.confluent.connect.s3;
 
+import akka.parboiled2.RuleTrace;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.AnonymousAWSCredentials;
@@ -27,6 +28,7 @@ import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.findify.s3mock.S3Mock;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.After;
 import org.junit.Rule;
 import org.junit.rules.TemporaryFolder;
@@ -41,11 +43,13 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import io.confluent.connect.s3.format.avro.AvroUtils;
 import io.confluent.connect.s3.format.bytearray.ByteArrayUtils;
 import io.confluent.connect.s3.format.json.JsonUtils;
 import io.confluent.connect.s3.storage.CompressionType;
+import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 
@@ -179,4 +183,21 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
     return builder.build();
   }
 
+  class S3OutputStreamFlaky extends S3OutputStream {
+    private final AtomicInteger retries;
+
+    public S3OutputStreamFlaky(String key, S3SinkConnectorConfig conf, AmazonS3 s3, AtomicInteger retries) {
+      super(key, conf, s3);
+      this.retries = retries;
+    }
+
+    @Override
+    public void commit() throws IOException {
+      if (retries.getAndIncrement() == 0) {
+        close();
+        throw new ConnectException("Fake exception");
+      }
+      super.commit();
+    }
+  }
 }
