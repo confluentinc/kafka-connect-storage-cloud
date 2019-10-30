@@ -52,9 +52,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.avro.AvroUtils;
+import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
@@ -113,6 +115,29 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
         SkipMd5CheckStrategy.DISABLE_GET_OBJECT_MD5_VALIDATION_PROPERTY
     );
     System.setProperty(SkipMd5CheckStrategy.DISABLE_GET_OBJECT_MD5_VALIDATION_PROPERTY, "true");
+  }
+
+  //@Before should be omitted in order to be able to add properties per test.
+  public void setUpWithCommitException() throws Exception {
+    super.setUp();
+
+    s3 = PowerMockito.spy(newS3Client(connectorConfig));
+
+    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3) {
+      private final AtomicInteger retries = new AtomicInteger(0);
+
+      @Override
+      public S3OutputStream create(String path, boolean overwrite) {
+        return new TopicPartitionWriterTest.S3OutputStreamFlaky(path, this.conf(), s3, retries);
+      }
+    };
+
+    partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+    format = new AvroFormat(storage);
+
+    s3.createBucket(S3_TEST_BUCKET_NAME);
+    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
   }
 
   @After
@@ -510,6 +535,89 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     offsetsToCommit = task.preCommit(null);
 
     verifyOffsets(offsetsToCommit, validOffsets2, context.assignment());
+
+    task.close(context.assignment());
+    task.stop();
+  }
+
+  @Test
+  public void testPreCommitOnRotateScheduleTimeWithException() throws Exception {
+    // Do not roll on size, only based on time.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.HOURS.toMillis(1))
+    );
+    setUpWithCommitException();
+
+    // Define the partitioner
+    TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
+    parsedConfig.put(
+        PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+        TopicPartitionWriterTest.MockedWallclockTimestampExtractor.class.getName()
+    );
+    partitioner.configure(parsedConfig);
+
+    MockTime time = ((TopicPartitionWriterTest.MockedWallclockTimestampExtractor) partitioner
+        .getTimestampExtractor()).time;
+    // Bring the clock to present.
+    time.sleep(SYSTEM.milliseconds());
+
+    List<SinkRecord> sinkRecords = createRecordsWithTimestamp(
+        3,
+        0,
+        Collections.singleton(new TopicPartition(TOPIC, PARTITION)),
+        time
+    );
+
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, time);
+
+    // Perform write
+    task.put(sinkRecords);
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = task.preCommit(null);
+
+    long[] validOffsets1 = {-1, -1};
+    verifyOffsets(offsetsToCommit, validOffsets1, context.assignment());
+
+    // 1 hour + 10 minutes
+    time.sleep(TimeUnit.HOURS.toMillis(1) + TimeUnit.MINUTES.toMillis(10));
+
+    // Perform write with no records that will flush the outstanding records due to scheduled
+    // interval
+    task.put(Collections.<SinkRecord>emptyList());
+
+    // After the exception is caught the connector resets offsets for rewind to the start offset
+    long[] validOffsets2 = {0, -1};
+    verifyRawOffsets(context.offsets(), validOffsets2, context.assignment());
+
+    // Offsets get rewind and the consumer redelivers the records that failed to commit
+    task.put(sinkRecords);
+
+    // But a retry backoff is in effect so these records won't be written to the underlying
+    // output stream until the backoff expires. Of course no offset commits happen either
+    offsetsToCommit = task.preCommit(null);
+
+    long[] validOffsets3 = {-1, -1};
+    verifyOffsets(offsetsToCommit, validOffsets3, context.assignment());
+
+    time.sleep(TimeUnit.MINUTES.toMillis(
+        connectorConfig.getLong(S3SinkConnectorConfig.RETRY_BACKOFF_CONFIG)));
+
+    // The backoff expires, the records are written to the underlying output stream. No commits yet
+    task.put(Collections.<SinkRecord>emptyList());
+
+    long[] validOffsets4 = {-1, -1};
+    verifyOffsets(offsetsToCommit, validOffsets4, context.assignment());
+
+    // 1 hour + 10 minutes
+    time.sleep(TimeUnit.HOURS.toMillis(1) + TimeUnit.MINUTES.toMillis(10));
+
+    task.put(Collections.<SinkRecord>emptyList());
+    offsetsToCommit = task.preCommit(null);
+
+    long[] validOffsets5 = {3, -1};
+    verifyOffsets(offsetsToCommit, validOffsets5, context.assignment());
 
     task.close(context.assignment());
     task.stop();
@@ -952,6 +1060,22 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
       long offset = validOffsets[i++];
       if (offset >= 0) {
         expectedOffsets.put(tp, new OffsetAndMetadata(offset, ""));
+      }
+    }
+    assertTrue(Objects.equals(actualOffsets, expectedOffsets));
+  }
+
+  protected void verifyRawOffsets(
+      Map<TopicPartition, Long> actualOffsets,
+      long[] validOffsets,
+      Set<TopicPartition> partitions
+  ) {
+    int i = 0;
+    Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
+    for (TopicPartition tp : partitions) {
+      long offset = validOffsets[i++];
+      if (offset >= 0) {
+        expectedOffsets.put(tp, offset);
       }
     }
     assertTrue(Objects.equals(actualOffsets, expectedOffsets));
