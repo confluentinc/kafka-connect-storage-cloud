@@ -30,9 +30,11 @@ import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Queue;
 
 import io.confluent.common.utils.SystemTime;
@@ -69,6 +71,7 @@ public class TopicPartitionWriter {
   private final long rotateScheduleIntervalMs;
   private long nextScheduledRotation;
   private long currentOffset;
+  private Long currentStartOffset;
   private Long currentTimestamp;
   private String currentEncodedPartition;
   private Long baseRecordTimestamp;
@@ -169,6 +172,8 @@ public class TopicPartitionWriter {
     long now = time.milliseconds();
     if (failureTime > 0 && now - failureTime < timeoutMs) {
       return;
+    } else {
+      failureTime = -1;
     }
 
     while (!buffer.isEmpty()) {
@@ -176,11 +181,6 @@ public class TopicPartitionWriter {
         executeState(now);
       } catch (SchemaProjectorException | IllegalWorkerStateException e) {
         throw new ConnectException(e);
-      } catch (RetriableException e) {
-        log.error("Exception on topic partition {}: ", tp, e);
-        failureTime = time.milliseconds();
-        setRetryTimeout(timeoutMs);
-        break;
       }
     }
     commitOnTimeIfNoData(now);
@@ -292,13 +292,7 @@ public class TopicPartitionWriter {
         );
         setNextScheduledRotation();
 
-        try {
-          commitFiles();
-        } catch (ConnectException e) {
-          log.error("Exception on topic partition {}: ", tp, e);
-          failureTime = time.milliseconds();
-          setRetryTimeout(timeoutMs);
-        }
+        commitFiles();
       }
 
       resume();
@@ -323,6 +317,20 @@ public class TopicPartitionWriter {
     Long latest = offsetToCommit;
     offsetToCommit = null;
     return latest;
+  }
+
+  public Long currentStartOffset() {
+    return currentStartOffset;
+  }
+
+  public void failureTime(long when) {
+    this.failureTime = when;
+  }
+
+  private Long minStartOffset() {
+    Optional<Long> minStartOffset = startOffsets.values().stream()
+        .min(Comparator.comparing(Long::valueOf));
+    return minStartOffset.isPresent() ? minStartOffset.get() : null;
   }
 
   private String getDirectoryPrefix(String encodedPartition) {
@@ -481,10 +489,16 @@ public class TopicPartitionWriter {
   }
 
   private void commitFiles() {
-    for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
-      commitFile(entry.getKey());
-      log.debug("Committed {} for {}", entry.getValue(), tp);
+    currentStartOffset = minStartOffset();
+    try {
+      for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
+        commitFile(entry.getKey());
+        log.debug("Committed {} for {}", entry.getValue(), tp);
+      }
+    } catch (ConnectException e) {
+      throw new RetriableException(e);
     }
+
     offsetToCommit = currentOffset + 1;
     commitFiles.clear();
     currentSchemas.clear();
@@ -508,9 +522,5 @@ public class TopicPartitionWriter {
     }
 
     startOffsets.remove(encodedPartition);
-  }
-
-  private void setRetryTimeout(long timeoutMs) {
-    context.timeout(timeoutMs);
   }
 }
