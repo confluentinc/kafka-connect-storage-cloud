@@ -68,6 +68,7 @@ public class TopicPartitionWriter {
   private final long rotateScheduleIntervalMs;
   private long nextScheduledRotation;
   private long currentOffset;
+  private Long currentStartOffset;
   private Long currentTimestamp;
   private String currentEncodedPartition;
   private Long baseRecordTimestamp;
@@ -169,6 +170,8 @@ public class TopicPartitionWriter {
     long now = time.milliseconds();
     if (failureTime > 0 && now - failureTime < timeoutMs) {
       return;
+    } else {
+      failureTime = -1;
     }
 
     while (!buffer.isEmpty()) {
@@ -231,11 +234,6 @@ public class TopicPartitionWriter {
         }
       } catch (SchemaProjectorException | IllegalWorkerStateException e) {
         throw new ConnectException(e);
-      } catch (RetriableException e) {
-        log.error("Exception on topic partition {}: ", tp, e);
-        failureTime = time.milliseconds();
-        setRetryTimeout(timeoutMs);
-        break;
       }
     }
     if (buffer.isEmpty()) {
@@ -244,13 +242,7 @@ public class TopicPartitionWriter {
         log.info("Committing files after waiting for rotateIntervalMs time but less than flush.size records available.");
         setNextScheduledRotation();
 
-        try {
-          commitFiles();
-        } catch (ConnectException e) {
-          log.error("Exception on topic partition {}: ", tp, e);
-          failureTime = time.milliseconds();
-          setRetryTimeout(timeoutMs);
-        }
+        commitFiles();
       }
 
       resume();
@@ -275,6 +267,22 @@ public class TopicPartitionWriter {
     Long latest = offsetToCommit;
     offsetToCommit = null;
     return latest;
+  }
+
+  public Long currentStartOffset() {
+    return currentStartOffset;
+  }
+
+  public void failureTime(long when) {
+    this.failureTime = when;
+  }
+
+  private Long minStartOffset() {
+    long min = Long.MAX_VALUE;
+    for (Long startOffset : startOffsets.values()) {
+      min = Math.min(min, startOffset);
+    }
+    return min == Long.MAX_VALUE ? null : min;
   }
 
   private String getDirectoryPrefix(String encodedPartition) {
@@ -416,10 +424,16 @@ public class TopicPartitionWriter {
   }
 
   private void commitFiles() {
-    for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
-      commitFile(entry.getKey());
-      log.debug("Committed {} for {}", entry.getValue(), tp);
+    currentStartOffset = minStartOffset();
+    try {
+      for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
+        commitFile(entry.getKey());
+        log.debug("Committed {} for {}", entry.getValue(), tp);
+      }
+    } catch (ConnectException e) {
+      throw new RetriableException(e);
     }
+
     offsetToCommit = currentOffset + 1;
     commitFiles.clear();
     currentSchemas.clear();
@@ -443,9 +457,5 @@ public class TopicPartitionWriter {
     }
 
     startOffsets.remove(encodedPartition);
-  }
-
-  private void setRetryTimeout(long timeoutMs) {
-    context.timeout(timeoutMs);
   }
 }
