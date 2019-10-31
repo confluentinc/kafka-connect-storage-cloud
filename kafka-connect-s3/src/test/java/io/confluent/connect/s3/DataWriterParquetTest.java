@@ -18,18 +18,6 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
-import io.confluent.common.utils.MockTime;
-import io.confluent.common.utils.Time;
-import io.confluent.connect.s3.format.parquet.ParquetFormat;
-import io.confluent.connect.s3.format.parquet.ParquetUtils;
-import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.s3.util.FileUtils;
-import io.confluent.connect.storage.StorageSinkConnectorConfig;
-import io.confluent.connect.storage.partitioner.DefaultPartitioner;
-import io.confluent.connect.storage.partitioner.Partitioner;
-import io.confluent.connect.storage.partitioner.PartitionerConfig;
-import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
-import io.confluent.kafka.serializers.NonRecordContainer;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -40,8 +28,8 @@ import org.apache.kafka.connect.data.SchemaProjector;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.junit.After;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.powermock.api.mockito.PowerMockito;
 
@@ -57,6 +45,19 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import io.confluent.common.utils.MockTime;
+import io.confluent.common.utils.Time;
+import io.confluent.connect.s3.format.parquet.ParquetFormat;
+import io.confluent.connect.s3.format.parquet.ParquetUtils;
+import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.s3.util.FileUtils;
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
+import io.confluent.connect.storage.partitioner.DefaultPartitioner;
+import io.confluent.connect.storage.partitioner.Partitioner;
+import io.confluent.connect.storage.partitioner.PartitionerConfig;
+import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
+import io.confluent.kafka.serializers.NonRecordContainer;
+
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
@@ -69,7 +70,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
 
   private static final String ZERO_PAD_FMT = "%010d";
 
-  private final String extension = ".parquet";
+  private final String extension = ".snappy.parquet";
   protected S3Storage storage;
   protected AmazonS3 s3;
   protected Partitioner<?> partitioner;
@@ -108,7 +109,26 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
   }
 
   @Test
+  public void testWithDefaultCodecWriteRecords() throws Exception {
+    writeRecordsWithExtensionAndVerifyResult(
+        "." + S3SinkConnectorConfig.PARQUET_CODEC_DEFAULT + ".parquet");
+  }
+
+  @Test
   public void testUncompressedCompressionWriteRecords() throws Exception {
+    localProps.put(S3SinkConnectorConfig.PARQUET_CODEC_CONFIG, "none");
+    writeRecordsWithExtensionAndVerifyResult(CompressionCodecName.UNCOMPRESSED.getExtension() + ".parquet");
+  }
+
+  @Test
+  public void testGzipCompressionWriteRecords() throws Exception {
+    localProps.put(S3SinkConnectorConfig.PARQUET_CODEC_CONFIG, "gzip");
+    writeRecordsWithExtensionAndVerifyResult(CompressionCodecName.GZIP.getExtension() + ".parquet");
+  }
+
+  @Test
+  public void testSnappyCompressionWriteRecords() throws Exception {
+    localProps.put(S3SinkConnectorConfig.PARQUET_CODEC_CONFIG, "snappy");
     writeRecordsWithExtensionAndVerifyResult(this.extension);
   }
 
