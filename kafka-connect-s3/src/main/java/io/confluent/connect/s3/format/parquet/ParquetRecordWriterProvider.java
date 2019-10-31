@@ -51,7 +51,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
 
   @Override
   public String getExtension() {
-    return storage.conf().getCompressionCodecName().getExtension() + EXTENSION;
+    return storage.conf().parquetCompressionCodecName().getExtension() + EXTENSION;
   }
 
   @Override
@@ -75,7 +75,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
                     .withSchema(avroSchema)
                     .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
                     .withDictionaryEncoding(true)
-                    .withCompressionCodec(storage.conf().getCompressionCodecName())
+                    .withCompressionCodec(storage.conf().parquetCompressionCodecName())
                     .withPageSize(PAGE_SIZE)
                     .build();
           } catch (IOException e) {
