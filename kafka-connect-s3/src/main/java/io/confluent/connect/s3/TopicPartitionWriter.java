@@ -90,16 +90,6 @@ public class TopicPartitionWriter {
   private final S3SinkConnectorConfig connectorConfig;
   private static final Time SYSTEM_TIME = new SystemTime();
 
-  @Deprecated
-  public TopicPartitionWriter(TopicPartition tp,
-                              S3Storage storage,
-                              RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
-                              Partitioner<?> partitioner,
-                              S3SinkConnectorConfig connectorConfig,
-                              SinkTaskContext context) {
-    this(tp, storage, writerProvider, partitioner, connectorConfig, context);
-  }
-
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
                               RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
