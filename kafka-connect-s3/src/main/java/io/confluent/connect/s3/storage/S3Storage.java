@@ -25,6 +25,7 @@ import com.amazonaws.retry.RetryPolicy;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ObjectListing;
+import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import com.amazonaws.services.s3.model.ObjectTagging;
 import com.amazonaws.services.s3.model.SetObjectTaggingRequest;
 import com.amazonaws.services.s3.model.Tag;
@@ -196,8 +197,13 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
       throw new IllegalArgumentException("Path can not be empty!");
     }
 
-    // currently ignore what is passed as method argument.
-    return new S3OutputStream(path, this.conf, s3);
+    if (ParquetFormat.class.isAssignableFrom(
+        this.conf.getClass(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG))) {
+      return new S3ParquetOutputStream(path, this.conf, s3);
+    } else {
+      // currently ignore what is passed as method argument.
+      return new S3OutputStream(path, this.conf, s3);
+    }
   }
 
   @Override

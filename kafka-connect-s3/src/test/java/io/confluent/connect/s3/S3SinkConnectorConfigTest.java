@@ -17,10 +17,13 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
+import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -98,7 +101,9 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     List<Object> expectedStorageClasses = Arrays.<Object>asList(S3Storage.class);
     List<Object> expectedFormatClasses = Arrays.<Object>asList(
         AvroFormat.class,
-        JsonFormat.class
+        JsonFormat.class,
+        ByteArrayFormat.class,
+        ParquetFormat.class
     );
     List<Object> expectedPartitionerClasses = Arrays.<Object>asList(
         DefaultPartitioner.class,

@@ -16,6 +16,7 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.SdkClientException;
+import io.confluent.connect.s3.storage.S3Storage;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -36,7 +37,6 @@ import java.util.Queue;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
-import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
@@ -89,6 +89,16 @@ public class TopicPartitionWriter {
   private DateTimeZone timeZone;
   private final S3SinkConnectorConfig connectorConfig;
   private static final Time SYSTEM_TIME = new SystemTime();
+
+  @Deprecated
+  public TopicPartitionWriter(TopicPartition tp,
+                              S3Storage storage,
+                              RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
+                              Partitioner<?> partitioner,
+                              S3SinkConnectorConfig connectorConfig,
+                              SinkTaskContext context) {
+    this(tp, storage, writerProvider, partitioner, connectorConfig, context);
+  }
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
@@ -483,7 +493,7 @@ public class TopicPartitionWriter {
       startOffsets.put(currentEncodedPartition, currentOffset);
 
       /*  Once we have a "start offset" for a particular "encoded partition"
-       *  value, we know that we have at least one record. This allows us 
+       *  value, we know that we have at least one record. This allows us
        *  to initialize all our maps at the same time, and saves future
        *  checks on the existence of keys
        */
@@ -496,11 +506,11 @@ public class TopicPartitionWriter {
     ++recordCount;
 
     recordCounts.put(currentEncodedPartition, recordCounts.get(currentEncodedPartition) + 1);
-    log.debug("Setting record count for '{}' to {}", 
-              currentEncodedPartition, 
+    log.debug("Setting record count for '{}' to {}",
+              currentEncodedPartition,
               recordCounts.get(currentEncodedPartition));
     endOffsets.put(currentEncodedPartition, currentOffset);
-    log.debug("Setting end offset for '{}' to {}", 
+    log.debug("Setting end offset for '{}' to {}",
               currentEncodedPartition, currentOffset);
   }
 
