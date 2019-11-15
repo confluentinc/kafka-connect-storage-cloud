@@ -66,6 +66,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   // S3 Group
   public static final String S3_BUCKET_CONFIG = "s3.bucket.name";
 
+  public static final String S3_OBJECT_TAGGING_CONFIG = "s3.object.tagging";
+  public static final boolean S3_OBJECT_TAGGING_DEFAULT = false;
+
   public static final String SSEA_CONFIG = "s3.ssea.name";
   public static final String SSEA_DEFAULT = "";
 
@@ -186,6 +189,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "S3 Bucket"
+      );
+
+      configDef.define(
+          S3_OBJECT_TAGGING_CONFIG,
+          Type.BOOLEAN,
+          S3_OBJECT_TAGGING_DEFAULT,
+          Importance.LOW,
+          "Tag S3 objects with offsets & record count.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Object Tagging"
       );
 
       configDef.define(

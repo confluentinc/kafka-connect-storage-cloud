@@ -17,6 +17,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.amazonaws.services.s3.model.Tag;
 import io.confluent.common.utils.SystemTime;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -513,7 +514,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Time systemTime = EasyMock.createMock(SystemTime.class);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, writerProvider, partitioner, connectorConfig, context, systemTime);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, systemTime);
 
     // Freeze clock passed into topicPartitionWriter, so we know what time it will use for "now"
     long freezeTime = 3599000L;
@@ -564,7 +565,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Bring the clock to present.
     time.sleep(SYSTEM.milliseconds());
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, writerProvider, partitioner, connectorConfig, context, time);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time);
 
     String key = "key";
     Schema schema = createSchema();
@@ -792,6 +793,44 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     verify(expectedFiles, 3, schema, records);
   }
 
+  @Test
+  public void testAddingS3ObjectTags() throws Exception{
+    // Setting size-based rollup to 10 but will produce fewer records. Commit should not happen.
+    localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 3);
+
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    // Check expected s3 object tags
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
+    Map<String, List<Tag>> expectedTaggedFiles = new HashMap<>();
+    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT),
+            Arrays.asList(new Tag("startOffset", "0"), new Tag("endOffset", "2"), new Tag("recordCount", "3")));
+    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT),
+            Arrays.asList(new Tag("startOffset", "3"), new Tag("endOffset", "5"), new Tag("recordCount", "3")));
+    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT),
+            Arrays.asList(new Tag("startOffset", "6"), new Tag("endOffset", "8"), new Tag("recordCount", "3")));
+    verifyTags(expectedTaggedFiles);
+  }
+
   private Struct createRecord(Schema schema, int ibase, float fbase) {
     return new Struct(schema)
                .put("boolean", true)
@@ -869,6 +908,27 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         Object expectedRecord = format.getAvroData().fromConnectData(schema, records.get(index++));
         assertEquals(expectedRecord, avroRecord);
       }
+    }
+  }
+
+  private void verifyTags(Map<String, List<Tag>> expectedTaggedFiles)
+          throws IOException {
+    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<String> actualFiles = new ArrayList<>();
+    for (S3ObjectSummary summary : summaries) {
+      String fileKey = summary.getKey();
+      actualFiles.add(fileKey);
+    }
+
+    List<String> expectedFileKeys = new ArrayList<>(expectedTaggedFiles.keySet());
+    Collections.sort(actualFiles);
+    Collections.sort(expectedFileKeys);
+    assertThat(actualFiles, is(expectedFileKeys));
+
+    for (String fileKey : actualFiles) {
+      List<Tag> actualTags = getS3ObjectTags(S3_TEST_BUCKET_NAME, fileKey, s3);
+      List<Tag> expectedTags = expectedTaggedFiles.get(fileKey);
+      assertTrue(actualTags.containsAll(expectedTags));
     }
   }
 

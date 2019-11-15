@@ -24,6 +24,9 @@ import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.amazonaws.services.s3.model.Tag;
+import com.amazonaws.services.s3.model.GetObjectTaggingResult;
+import com.amazonaws.services.s3.model.transform.XmlResponsesSaxParser;
 import io.findify.s3mock.S3Mock;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.After;
@@ -150,6 +153,19 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
       InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
 
       return ByteArrayUtils.getRecords(compressionType.wrapForInput(in), lineSeparatorBytes);
+  }
+
+  public static List<Tag> getS3ObjectTags(String bucketName, String fileKey, AmazonS3 s3) throws IOException {
+      //findify S3 mock does not currently support S3 object tag mocks, instead tags are stored as object data in AWS XML format
+      //leverage this workaround to parse the xml until tag mocks are supported
+      log.debug("Reading tags from bucket '{}' key '{}': ", bucketName, fileKey);
+      InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
+      XmlResponsesSaxParser parser = new XmlResponsesSaxParser();
+      GetObjectTaggingResult tagsResult = parser.parseObjectTaggingResponse(in).getResult();
+
+      List<Tag> tagList = new ArrayList<>();
+      tagList.addAll(tagsResult.getTagSet());
+      return tagList;
   }
 
   @Override

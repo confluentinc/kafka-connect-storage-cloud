@@ -15,6 +15,7 @@
 
 package io.confluent.connect.s3;
 
+import com.amazonaws.SdkClientException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -55,12 +56,14 @@ public class TopicPartitionWriter {
   private final Map<String, RecordWriter> writers;
   private final Map<String, Schema> currentSchemas;
   private final TopicPartition tp;
+  private final S3Storage storage;
   private final Partitioner<?> partitioner;
   private final TimestampExtractor timestampExtractor;
   private String topicsDir;
   private State state;
   private final Queue<SinkRecord> buffer;
   private final SinkTaskContext context;
+  private boolean tagging;
   private int recordCount;
   private final int flushSize;
   private final long rotateIntervalMs;
@@ -73,6 +76,8 @@ public class TopicPartitionWriter {
   private Long offsetToCommit;
   private final RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private final Map<String, Long> startOffsets;
+  private final Map<String, Long> endOffsets;
+  private final Map<String, Long> recordCounts;
   private long timeoutMs;
   private long failureTime;
   private final StorageSchemaCompatibility compatibility;
@@ -91,11 +96,12 @@ public class TopicPartitionWriter {
                               Partitioner<?> partitioner,
                               S3SinkConnectorConfig connectorConfig,
                               SinkTaskContext context) {
-    this(tp, writerProvider, partitioner, connectorConfig, context, SYSTEM_TIME);
+    this(tp, storage, writerProvider, partitioner, connectorConfig, context, SYSTEM_TIME);
   }
 
   // Visible for testing
   TopicPartitionWriter(TopicPartition tp,
+                       S3Storage storage,
                        RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
                        Partitioner<?> partitioner,
                        S3SinkConnectorConfig connectorConfig,
@@ -104,12 +110,14 @@ public class TopicPartitionWriter {
     this.connectorConfig = connectorConfig;
     this.time = time;
     this.tp = tp;
+    this.storage = storage;
     this.context = context;
     this.writerProvider = writerProvider;
     this.partitioner = partitioner;
     this.timestampExtractor = partitioner instanceof TimeBasedPartitioner
                                   ? ((TimeBasedPartitioner) partitioner).getTimestampExtractor()
                                   : null;
+    tagging = connectorConfig.getBoolean(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG);
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
@@ -136,6 +144,8 @@ public class TopicPartitionWriter {
     writers = new HashMap<>();
     currentSchemas = new HashMap<>();
     startOffsets = new HashMap<>();
+    endOffsets = new HashMap<>();
+    recordCounts = new HashMap<>();
     state = State.WRITE_STARTED;
     failureTime = -1L;
     currentOffset = -1L;
@@ -471,16 +481,33 @@ public class TopicPartitionWriter {
           currentOffset
       );
       startOffsets.put(currentEncodedPartition, currentOffset);
+
+      /*  Once we have a "start offset" for a particular "encoded partition"
+       *  value, we know that we have at least one record. This allows us 
+       *  to initialize all our maps at the same time, and saves future
+       *  checks on the existence of keys
+       */
+      recordCounts.put(currentEncodedPartition, 0L);
+      endOffsets.put(currentEncodedPartition, 0L);
     }
 
     RecordWriter writer = getWriter(record, currentEncodedPartition);
     writer.write(record);
     ++recordCount;
+
+    recordCounts.put(currentEncodedPartition, recordCounts.get(currentEncodedPartition) + 1);
+    log.debug("Setting record count for '{}' to {}", 
+              currentEncodedPartition, 
+              recordCounts.get(currentEncodedPartition));
+    endOffsets.put(currentEncodedPartition, currentOffset);
+    log.debug("Setting end offset for '{}' to {}", 
+              currentEncodedPartition, currentOffset);
   }
 
   private void commitFiles() {
     for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
       commitFile(entry.getKey());
+      tagFile(entry.getKey(), entry.getValue());
       log.debug("Committed {} for {}", entry.getValue(), tp);
     }
     offsetToCommit = currentOffset + 1;
@@ -504,8 +531,33 @@ public class TopicPartitionWriter {
       writers.remove(encodedPartition);
       log.debug("Removed writer for '{}'", encodedPartition);
     }
+  }
 
+  private void tagFile(String encodedPartition, String s3ObjectPath) {
+    if (tagging) {
+      if (!startOffsets.containsKey(encodedPartition)) {
+        log.warn("Tried to tag file with missing starting offset partition: {}. Ignoring",
+                encodedPartition);
+      } else {
+        log.debug("Object to tag is: {}", s3ObjectPath);
+        Map<String, String> tags = new HashMap<>();
+        tags.put("startOffset", Long.toString(startOffsets.get(encodedPartition)));
+        tags.put("endOffset", Long.toString(endOffsets.get(encodedPartition)));
+        tags.put("recordCount", Long.toString(recordCounts.get(encodedPartition)));
+
+        try {
+          storage.addTags(s3ObjectPath, tags);
+          log.info("Tagged file {} with record count {}", s3ObjectPath, recordCount);
+        } catch (SdkClientException e) {
+          log.trace("Unable to tag file {} with record count.", s3ObjectPath);
+        } catch (Exception e) {
+          log.trace("Unrecoverable exception while attempting to tag s3 object.");
+        }
+      }
+    }
     startOffsets.remove(encodedPartition);
+    endOffsets.remove(encodedPartition);
+    recordCounts.remove(encodedPartition);
   }
 
   private void setRetryTimeout(long timeoutMs) {

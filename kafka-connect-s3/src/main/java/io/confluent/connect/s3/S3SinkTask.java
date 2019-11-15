@@ -132,6 +132,7 @@ public class S3SinkTask extends SinkTask {
     for (TopicPartition tp : assignment) {
       TopicPartitionWriter writer = new TopicPartitionWriter(
           tp,
+          storage,
           writerProvider,
           partitioner,
           connectorConfig,

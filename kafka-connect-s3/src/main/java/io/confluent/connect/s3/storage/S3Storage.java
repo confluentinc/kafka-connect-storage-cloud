@@ -25,9 +25,16 @@ import com.amazonaws.retry.RetryPolicy;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ObjectListing;
+import com.amazonaws.services.s3.model.ObjectTagging;
+import com.amazonaws.services.s3.model.SetObjectTaggingRequest;
+import com.amazonaws.services.s3.model.Tag;
+import com.amazonaws.SdkClientException;
 import org.apache.avro.file.SeekableInput;
 
 import java.io.OutputStream;
+import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.util.S3ProxyConfig;
@@ -211,6 +218,18 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
   @Override
   public void close() {}
+
+  public void addTags(String fileName, Map<String, String> tags)
+          throws SdkClientException {
+    List<Tag> newTagList = new ArrayList<>();
+    for (Map.Entry<String, String> entry : tags.entrySet()) {
+      newTagList.add(new Tag(entry.getKey(), entry.getValue()));
+    }
+    s3.setObjectTagging(new SetObjectTaggingRequest(
+            this.bucketName,
+            fileName,
+            new ObjectTagging(newTagList)));
+  }
 
   @Override
   public ObjectListing list(String path) {
