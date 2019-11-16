@@ -33,6 +33,7 @@ import org.junit.After;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -666,7 +667,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Bring the clock to present.
     time.sleep(SYSTEM.milliseconds());
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, writerProvider, partitioner, connectorConfig, context, time);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time);
 
     String key = "key";
     Schema schema = createSchema();
