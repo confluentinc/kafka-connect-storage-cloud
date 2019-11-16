@@ -22,8 +22,6 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
-import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
-import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -34,20 +32,26 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.Locale;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
+import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
+import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
@@ -61,7 +65,6 @@ import io.confluent.connect.storage.partitioner.FieldPartitioner;
 import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
@@ -157,6 +160,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private static final GenericRecommender PARTITIONER_CLASS_RECOMMENDER = new GenericRecommender();
   private static final ParentValueRecommender AVRO_COMPRESSION_RECOMMENDER
       = new ParentValueRecommender(FORMAT_CLASS_CONFIG, AvroFormat.class, AVRO_SUPPORTED_CODECS);
+  private static final ParquetCodecRecommender PARQUET_COMPRESSION_RECOMMENDER =
+      new ParquetCodecRecommender();
 
   static {
     STORAGE_CLASS_RECOMMENDER.addValidValues(
@@ -188,6 +193,20 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         FORMAT_CLASS_RECOMMENDER,
         AVRO_COMPRESSION_RECOMMENDER
     );
+
+    final String connectorGroup = "Connector";
+    final int latestOrderInGroup = configDef.configKeys().values().stream()
+        .filter(c -> connectorGroup.equalsIgnoreCase(c.group))
+        .map(c -> c.orderInGroup)
+        .max(Integer::compare).orElse(0);
+
+    StorageSinkConnectorConfig.enableParquetConfig(
+        configDef,
+        PARQUET_COMPRESSION_RECOMMENDER,
+        connectorGroup,
+        latestOrderInGroup
+    );
+
     {
       final String group = "S3";
       int orderInGroup = 0;
@@ -574,8 +593,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return CompressionType.forName(getString(COMPRESSION_TYPE_CONFIG));
   }
 
-  public CompressionCodecName getCompressionCodecName() {
-    return CompressionCodecName.fromConf(null);
+  public CompressionCodecName parquetCompressionCodecName() {
+    return "none".equalsIgnoreCase(getString(PARQUET_CODEC_CONFIG))
+           ? CompressionCodecName.fromConf(null)
+           : CompressionCodecName.fromConf(getString(PARQUET_CODEC_CONFIG));
   }
 
   public int getS3PartRetries() {
@@ -709,6 +730,42 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     @Override
     public String toString() {
       return "[" + ALLOWED_VALUES + "]";
+    }
+  }
+
+  private static class ParquetCodecRecommender extends ParentValueRecommender
+      implements ConfigDef.Validator {
+    public static final Map<String, CompressionCodecName> TYPES_BY_NAME;
+    public static final List<String> ALLOWED_VALUES;
+
+    static {
+      TYPES_BY_NAME = Arrays.stream(CompressionCodecName.values())
+          .filter(c -> !CompressionCodecName.UNCOMPRESSED.equals(c))
+          .collect(Collectors.toMap(c -> c.name().toLowerCase(), Function.identity()));
+      TYPES_BY_NAME.put("none", CompressionCodecName.UNCOMPRESSED);
+      ALLOWED_VALUES = new ArrayList<>(TYPES_BY_NAME.keySet());
+      // Not a hard requirement but this call usually puts 'none' first in the list of allowed
+      // values
+      Collections.reverse(ALLOWED_VALUES);
+    }
+
+    public ParquetCodecRecommender() {
+      super(FORMAT_CLASS_CONFIG, ParquetFormat.class, ALLOWED_VALUES.toArray());
+    }
+
+    @Override
+    public void ensureValid(String name, Object compressionCodecName) {
+      String compressionCodecNameString = ((String) compressionCodecName).trim();
+      if (!TYPES_BY_NAME.containsKey(compressionCodecNameString)) {
+        throw new ConfigException(name, compressionCodecName,
+            "Value must be one of: " + ALLOWED_VALUES);
+      }
+    }
+
+    @Override
+    public String toString() {
+      return "[" + Utils.join(ALLOWED_VALUES, ", ") + "]";
+
     }
   }
 
