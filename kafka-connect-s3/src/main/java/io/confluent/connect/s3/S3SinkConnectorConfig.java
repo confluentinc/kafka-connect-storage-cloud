@@ -321,9 +321,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Importance.MEDIUM,
           "Maximum number of retry attempts for failed requests. Zero means no retries. "
               + "The actual number of attempts is determined by the S3 client based on multiple "
-              + "factors, including, but not limited to - "
-              + "the value of this parameter, type of exception occurred, "
-              + "throttling settings of the underlying S3 client, etc.",
+              + "factors including, but not limited to: the value of this parameter, type of "
+              + "exception occurred, and throttling settings of the underlying S3 client.",
           group,
           ++orderInGroup,
           Width.LONG,
