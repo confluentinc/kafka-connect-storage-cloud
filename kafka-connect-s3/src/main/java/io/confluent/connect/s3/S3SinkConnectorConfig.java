@@ -218,7 +218,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           new CredentialsProviderValidator(),
           Importance.LOW,
           "Credentials provider or provider chain to use for authentication to AWS. By default "
-              + "the connector uses 'DefaultAWSCredentialsProviderChain'.",
+              + "the connector uses ``DefaultAWSCredentialsProviderChain``.",
           group,
           ++orderInGroup,
           Width.LONG,
@@ -263,7 +263,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Importance.LOW,
           "The name of the AWS Key Management Service (AWS-KMS) key to be used for server side "
               + "encryption of the S3 objects. No encryption is used when no key is provided, but"
-              + " it is enabled when '" + SSEAlgorithm.KMS + "' is specified as encryption "
+              + " it is enabled when ``" + SSEAlgorithm.KMS + "`` is specified as encryption "
               + "algorithm with a valid key name.",
           group,
           ++orderInGroup,
@@ -320,9 +320,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Importance.MEDIUM,
           "Maximum number of retry attempts for failed requests. Zero means no retries. "
               + "The actual number of attempts is determined by the S3 client based on multiple "
-              + "factors, including, but not limited to - "
-              + "the value of this parameter, type of exception occurred, "
-              + "throttling settings of the underlying S3 client, etc.",
+              + "factors including, but not limited to: the value of this parameter, type of "
+              + "exception occurred, and throttling settings of the underlying S3 client.",
           group,
           ++orderInGroup,
           Width.LONG,
@@ -351,7 +350,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           FORMAT_BYTEARRAY_EXTENSION_DEFAULT,
           Importance.LOW,
           String.format(
-              "Output file extension for ByteArrayFormat. Defaults to '%s'",
+              "Output file extension for ByteArrayFormat. Defaults to ``%s``.",
               FORMAT_BYTEARRAY_EXTENSION_DEFAULT
           ),
           group,
@@ -369,8 +368,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           null,
           Importance.LOW,
           "String inserted between records for ByteArrayFormat. "
-              + "Defaults to 'System.lineSeparator()' "
-              + "and may contain escape sequences like '\\n'. "
+              + "Defaults to ``System.lineSeparator()`` "
+              + "and may contain escape sequences like ``\\n``. "
               + "An input record that contains the line separator will look like "
               + "multiple records in the output S3 object.",
           group,
