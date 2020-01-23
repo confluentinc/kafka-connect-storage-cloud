@@ -465,7 +465,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Type.BOOLEAN,
           HEADERS_USE_EXPECT_CONTINUE_DEFAULT,
           Importance.LOW,
-          "Enable/disable use of the HTTP/1.1 handshake using EXPECT: 100-CONTINUE during "
+          "Enable or disable use of the HTTP/1.1 handshake using EXPECT: 100-CONTINUE during "
               + "multi-part upload. If true, the client will wait for a 100 (CONTINUE) response "
               + "before sending the request body. Else, the client uploads the entire request "
               + "body without checking if the server is willing to accept the request.",
