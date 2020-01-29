@@ -15,8 +15,15 @@
 
 package io.confluent.connect.s3;
 
+import com.amazonaws.SdkClientException;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.internal.BucketNameUtils;
+import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,4 +92,35 @@ public class S3SinkConnector extends SinkConnector {
     return S3SinkConnectorConfig.getConfig();
   }
 
+  @Override
+  public Config validate(final Map<String, String> connectorConfigs) {
+    ConfigDef configDef = this.config();
+    if (null == configDef) {
+      throw new ConnectException(String.format("%s.config() must return a ConfigDef that is not"
+              + " null.", this.getClass().getName()));
+    } else {
+
+      // Checking whether bucket name has a valid format.
+      String bucketName = connectorConfigs.get(S3SinkConnectorConfig.S3_BUCKET_CONFIG);
+      try {
+        BucketNameUtils.validateBucketName(bucketName);
+      } catch (IllegalArgumentException e) {
+        throw new ConnectException(bucketName
+                + " is an invalid bucket name. Does not follow AWS guidelines.");
+      }
+
+      // Check whether the bucket exists.
+      final AmazonS3 bucket_check_helper = AmazonS3ClientBuilder.defaultClient();
+      try {
+        if (!bucket_check_helper.doesBucketExist(bucketName)) {
+          throw new ConnectException("Bucket does not exist.");
+        }
+      } catch (SdkClientException e) {
+        throw new ConnectException("Error when accessing bucket.");
+      }
+    }
+
+    List<ConfigValue> configValues = configDef.validate(connectorConfigs);
+    return new Config(configValues);
+  }
 }
