@@ -92,6 +92,15 @@ public class S3SinkConnector extends SinkConnector {
     return S3SinkConnectorConfig.getConfig();
   }
 
+  public boolean checkBucketExists(String bucketName) {
+    try {
+      final AmazonS3 bucketCheckHelper = AmazonS3ClientBuilder.defaultClient();
+      return bucketCheckHelper.doesBucketExist(bucketName);
+    } catch (SdkClientException e) {
+      return false;
+    }
+  }
+
   @Override
   public Config validate(final Map<String, String> connectorConfigs) {
     ConfigDef configDef = this.config();
@@ -110,13 +119,8 @@ public class S3SinkConnector extends SinkConnector {
       }
 
       // Check whether the bucket exists.
-      final AmazonS3 bucket_check_helper = AmazonS3ClientBuilder.defaultClient();
-      try {
-        if (!bucket_check_helper.doesBucketExist(bucketName)) {
-          throw new ConnectException("Bucket does not exist.");
-        }
-      } catch (SdkClientException e) {
-        throw new ConnectException("Error when accessing bucket.");
+      if (!checkBucketExists(bucketName)) {
+        throw new ConnectException("Bucket does not exist.");
       }
     }
 

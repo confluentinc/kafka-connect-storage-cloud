@@ -16,14 +16,24 @@
 package io.confluent.connect.s3;
 
 import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.junit.Test;
+import org.mockito.Mockito;
+import org.powermock.api.mockito.PowerMockito;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNotNull;
 
 public class S3SinkConnectorTest {
+
+  private Map<String, String> properties = new HashMap();
+  private S3SinkConnector connector = PowerMockito.spy(new S3SinkConnector());
+  private boolean testPassed;
 
   @Test
   public void testVersion() {
@@ -36,6 +46,47 @@ public class S3SinkConnectorTest {
   public void connectorType() {
     Connector connector = new S3SinkConnector();
     assertTrue(SinkConnector.class.isAssignableFrom(connector.getClass()));
+  }
+
+  @Test
+  public void testInvalidBucketName() {
+    testPassed = true;
+    properties.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "test_bucket");
+
+    try {
+      connector.validate(properties);
+    } catch (ConnectException e) {
+      testPassed = false;
+    }
+    assertFalse(testPassed);
+  }
+
+  @Test
+  public void testBucketWithValidNameWhichExists() {
+    testPassed = true;
+    properties.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "test-bucket");
+    PowerMockito.doReturn(true).when(connector).checkBucketExists(Mockito.anyString());
+
+    try {
+      connector.validate(properties);
+    } catch (ConnectException e) {
+      testPassed = false;
+    }
+    assertTrue(testPassed);
+  }
+
+  @Test
+  public void testBucketWithValidNameAndDoesNotExists() {
+    testPassed = true;
+    properties.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "test-bucket");
+    PowerMockito.doReturn(false).when(connector).checkBucketExists(Mockito.anyString());
+
+    try {
+      connector.validate(properties);
+    } catch (ConnectException e) {
+      testPassed = false;
+    }
+    assertFalse(testPassed);
   }
 }
 
