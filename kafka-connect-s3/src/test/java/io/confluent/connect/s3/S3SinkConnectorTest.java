@@ -65,7 +65,7 @@ public class S3SinkConnectorTest {
   public void testBucketWithValidNameWhichExists() {
     testPassed = true;
     properties.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "test-bucket");
-    PowerMockito.doReturn(true).when(connector).checkBucketExists(Mockito.anyString());
+    PowerMockito.doReturn(true).when(connector).checkBucketExists("test-bucket");
 
     try {
       connector.validate(properties);
@@ -79,7 +79,7 @@ public class S3SinkConnectorTest {
   public void testBucketWithValidNameAndDoesNotExists() {
     testPassed = true;
     properties.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "test-bucket");
-    PowerMockito.doReturn(false).when(connector).checkBucketExists(Mockito.anyString());
+    PowerMockito.doReturn(false).when(connector).checkBucketExists("test-bucket");
 
     try {
       connector.validate(properties);
