@@ -33,7 +33,6 @@ public class S3SinkConnectorTest {
 
   private Map<String, String> properties = new HashMap();
   private S3SinkConnector connector = PowerMockito.spy(new S3SinkConnector());
-  private boolean testPassed;
 
   @Test
   public void testVersion() {
@@ -48,45 +47,34 @@ public class S3SinkConnectorTest {
     assertTrue(SinkConnector.class.isAssignableFrom(connector.getClass()));
   }
 
-  @Test
-  public void testInvalidBucketName() {
-    testPassed = true;
-    properties.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "test_bucket");
-
+  private boolean validateConnector() {
+    boolean testPassed = true;
     try {
       connector.validate(properties);
     } catch (ConnectException e) {
       testPassed = false;
     }
-    assertFalse(testPassed);
+    return testPassed;
+  }
+
+  @Test
+  public void testInvalidBucketName() {
+    properties.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "test_bucket");
+    assertFalse(validateConnector());
   }
 
   @Test
   public void testBucketWithValidNameWhichExists() {
-    testPassed = true;
     properties.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "test-bucket");
-    PowerMockito.doReturn(true).when(connector).checkBucketExists(Mockito.anyString());
-
-    try {
-      connector.validate(properties);
-    } catch (ConnectException e) {
-      testPassed = false;
-    }
-    assertTrue(testPassed);
+    PowerMockito.doReturn(true).when(connector).checkBucketExists("test-bucket");
+    assertTrue(validateConnector());
   }
 
   @Test
   public void testBucketWithValidNameAndDoesNotExists() {
-    testPassed = true;
     properties.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "test-bucket");
-    PowerMockito.doReturn(false).when(connector).checkBucketExists(Mockito.anyString());
-
-    try {
-      connector.validate(properties);
-    } catch (ConnectException e) {
-      testPassed = false;
-    }
-    assertFalse(testPassed);
+    PowerMockito.doReturn(false).when(connector).checkBucketExists("test-bucket");
+    assertFalse(validateConnector());
   }
 }
 

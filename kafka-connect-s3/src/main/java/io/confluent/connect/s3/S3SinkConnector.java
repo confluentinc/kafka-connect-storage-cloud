@@ -108,8 +108,7 @@ public class S3SinkConnector extends SinkConnector {
       throw new ConnectException(String.format("%s.config() must return a ConfigDef that is not"
               + " null.", this.getClass().getName()));
     } else {
-
-      // Checking whether bucket name has a valid format.
+      // Checking whether bucket name has a valid format
       String bucketName = connectorConfigs.get(S3SinkConnectorConfig.S3_BUCKET_CONFIG);
       try {
         BucketNameUtils.validateBucketName(bucketName);
@@ -118,7 +117,7 @@ public class S3SinkConnector extends SinkConnector {
                 + " is an invalid bucket name. Does not follow AWS guidelines.");
       }
 
-      // Check whether the bucket exists.
+      // Checking whether the bucket exists
       if (!checkBucketExists(bucketName)) {
         throw new ConnectException("Bucket does not exist.");
       }
