@@ -47,34 +47,24 @@ public class S3SinkConnectorTest {
     assertTrue(SinkConnector.class.isAssignableFrom(connector.getClass()));
   }
 
-  private boolean validateConnector() {
-    boolean testPassed = true;
-    try {
-      connector.validate(properties);
-    } catch (ConnectException e) {
-      testPassed = false;
-    }
-    return testPassed;
-  }
-
-  @Test
+  @Test(expected = ConnectException.class)
   public void testInvalidBucketName() {
     properties.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "test_bucket");
-    assertFalse(validateConnector());
+    connector.validate(properties);
   }
 
   @Test
   public void testBucketWithValidNameWhichExists() {
     properties.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "test-bucket");
     PowerMockito.doReturn(true).when(connector).checkBucketExists("test-bucket");
-    assertTrue(validateConnector());
+    connector.validate(properties);
   }
 
-  @Test
+  @Test(expected = ConnectException.class)
   public void testBucketWithValidNameAndDoesNotExists() {
     properties.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "test-bucket");
     PowerMockito.doReturn(false).when(connector).checkBucketExists("test-bucket");
-    assertFalse(validateConnector());
+    connector.validate(properties);
   }
 }
 
