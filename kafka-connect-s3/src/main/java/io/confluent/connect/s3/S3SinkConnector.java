@@ -16,8 +16,14 @@
 
 package io.confluent.connect.s3;
 
+import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.storage.StorageFactory;
+import io.confluent.connect.storage.common.StorageCommonConfig;
+import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,6 +90,38 @@ public class S3SinkConnector extends SinkConnector {
   @Override
   public ConfigDef config() {
     return S3SinkConnectorConfig.getConfig();
+  }
+
+  private boolean checkBucketExists(S3SinkConnectorConfig config) {
+    @SuppressWarnings("unchecked")
+    Class<? extends S3Storage> storageClass =
+            (Class<? extends S3Storage>)
+                    config.getClass(StorageCommonConfig.STORAGE_CLASS_CONFIG);
+
+    final S3Storage bucketCheckHelper = StorageFactory.createStorage(storageClass,
+            S3SinkConnectorConfig.class, config,
+            config.getString(StorageCommonConfig.STORE_URL_CONFIG));
+
+    return bucketCheckHelper.bucketExists();
+  }
+
+  @Override
+  public Config validate(final Map<String, String> connectorConfigs) {
+    ConfigDef configDef = this.config();
+    if (null == configDef) {
+      throw new ConnectException(String.format("%s.config() must return a ConfigDef that is not"
+              + " null.", this.getClass().getName()));
+    } else {
+
+      // Checking whether the bucket exists
+      if (!checkBucketExists(new S3SinkConnectorConfig(connectorConfigs))) {
+        throw new ConnectException("Bucket does not exist or invalid credentials "
+                + "provided");
+      }
+
+      List<ConfigValue> configValues = configDef.validate(connectorConfigs);
+      return new Config(configValues);
+    }
   }
 
 }
