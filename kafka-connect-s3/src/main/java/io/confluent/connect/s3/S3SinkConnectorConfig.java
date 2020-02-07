@@ -21,6 +21,7 @@ import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
+import com.amazonaws.services.s3.internal.BucketNameUtils;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
 import org.apache.kafka.common.Configurable;
@@ -183,6 +184,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       configDef.define(
           S3_BUCKET_CONFIG,
           Type.STRING,
+          ConfigDef.NO_DEFAULT_VALUE,
+          new BucketNameValidator(),
           Importance.HIGH,
           "The S3 Bucket.",
           group,
@@ -610,6 +613,19 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
     public String toString() {
       return "[" + min + ",...," + max + "]";
+    }
+  }
+
+  private static class BucketNameValidator implements ConfigDef.Validator {
+    @Override
+    public void ensureValid(String name, Object bucket) {
+      String bucketName = ((String) bucket).trim();
+      try {
+        BucketNameUtils.validateBucketName(bucketName);
+      } catch (IllegalArgumentException e) {
+        throw new ConfigException(bucketName
+                + " is an invalid bucket name. Does not follow AWS guidelines.");
+      }
     }
   }
 
