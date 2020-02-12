@@ -17,6 +17,8 @@ package io.confluent.connect.s3.storage;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.PredefinedClientConfigurations;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.retry.PredefinedBackoffStrategies;
@@ -42,6 +44,8 @@ import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.Storage;
 import io.confluent.connect.storage.common.util.StringUtils;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
@@ -82,12 +86,18 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
     ClientConfiguration clientConfiguration = newClientConfiguration(config);
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
-                                        .withAccelerateModeEnabled(
-                                            config.getBoolean(WAN_MODE_CONFIG)
-                                        )
-                                        .withPathStyleAccessEnabled(true)
-                                        .withCredentials(config.getCredentialsProvider())
-                                        .withClientConfiguration(clientConfiguration);
+        .withAccelerateModeEnabled(config.getBoolean(WAN_MODE_CONFIG))
+        .withPathStyleAccessEnabled(true)
+        .withClientConfiguration(clientConfiguration);
+
+    String accessKeyId = config.getString(AWS_ACCESS_KEY_ID_CONFIG);
+    String secretKey = config.getPassword(AWS_SECRET_ACCESS_KEY_CONFIG).value();
+    if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
+      BasicAWSCredentials awsCreds = new BasicAWSCredentials(accessKeyId, secretKey);
+      builder.withCredentials(new AWSStaticCredentialsProvider(awsCreds));
+    } else {
+      builder.withCredentials(config.getCredentialsProvider());
+    }
 
     String region = config.getString(REGION_CONFIG);
     if (StringUtils.isBlank(url)) {

@@ -106,6 +106,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           CREDENTIALS_PROVIDER_CLASS_CONFIG.lastIndexOf(".") + 1
       );
 
+  public static final String AWS_ACCESS_KEY_ID_CONFIG = "aws.access.key.id";
+  public static final String AWS_ACCESS_KEY_ID_DEFAULT = "";
+
+  public static final String AWS_SECRET_ACCESS_KEY_CONFIG = "aws.secret.access.key";
+  public static final Password AWS_SECRET_ACCESS_KEY_DEFAULT = new Password(null);
+
   public static final String REGION_CONFIG = "s3.region";
   public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
 
@@ -280,6 +286,36 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "AWS Credentials Provider Class"
+      );
+
+      configDef.define(
+          AWS_ACCESS_KEY_ID_CONFIG,
+          Type.STRING,
+          AWS_ACCESS_KEY_ID_DEFAULT,
+          Importance.HIGH,
+          "The AWS access key ID used to authenticate personal AWS credentials such as IAM "
+              + "credentials. Use only if you do not wish to authenticate by using a credentials "
+              + "provider class via "
+              + CREDENTIALS_PROVIDER_CLASS_CONFIG,
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "AWS Access Key ID"
+      );
+
+      configDef.define(
+          AWS_SECRET_ACCESS_KEY_CONFIG,
+          Type.PASSWORD,
+          AWS_SECRET_ACCESS_KEY_DEFAULT,
+          Importance.HIGH,
+          "The secret access key used to authenticate personal AWS credentials such as IAM "
+              + "credentials. Use only if you do not wish to authenticate by using a credentials "
+              + "provider class via "
+              + CREDENTIALS_PROVIDER_CLASS_CONFIG,
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "AWS Secret Access Key"
       );
 
       List<String> validSsea = new ArrayList<>(SSEAlgorithm.values().length + 1);
