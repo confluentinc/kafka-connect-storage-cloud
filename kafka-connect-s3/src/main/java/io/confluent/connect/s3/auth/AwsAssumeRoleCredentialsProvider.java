@@ -54,7 +54,6 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
           ConfigDef.Type.STRING,
           ConfigDef.Importance.HIGH,
           "Role session name to use when starting a session"
-
       );
   
   private String roleArn;
@@ -84,7 +83,7 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
 
   @Override
   public void refresh() {
-    //Nothing to do really, since we acquire a new session every getCredentials() call.
+    // Nothing to do really, since we acquire a new session every getCredentials() call.
   }
 
 }
