@@ -34,8 +34,7 @@ import org.apache.avro.file.SeekableInput;
 
 import java.io.OutputStream;
 import java.util.Map;
-import java.util.List;
-import java.util.ArrayList;
+import java.util.stream.Collectors;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.util.S3ProxyConfig;
@@ -225,15 +224,11 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   @Override
   public void close() {}
 
-  public void addTags(String fileName, Map<String, String> tags)
-          throws SdkClientException {
+  public void addTags(String fileName, Map<String, String> tags) throws SdkClientException {
     ObjectTagging objectTagging = new ObjectTagging(tags.entrySet().stream()
         .map(e -> new Tag(e.getKey(), e.getValue()))
         .collect(Collectors.toList()));
-    s3.setObjectTagging(new SetObjectTaggingRequest(
-            this.bucketName,
-            fileName,
-            new ObjectTagging(newTagList)));
+    s3.setObjectTagging(new SetObjectTaggingRequest(this.bucketName, fileName, objectTagging));
   }
 
   @Override

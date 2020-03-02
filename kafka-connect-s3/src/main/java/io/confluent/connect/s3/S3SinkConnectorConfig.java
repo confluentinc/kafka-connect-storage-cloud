@@ -227,7 +227,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Type.BOOLEAN,
           S3_OBJECT_TAGGING_DEFAULT,
           Importance.LOW,
-          "Tag S3 objects with offsets & record count.",
+          "Tag S3 objects with start and end offsets, as well as record count.",
           group,
           ++orderInGroup,
           Width.LONG,

@@ -65,7 +65,7 @@ public class TopicPartitionWriter {
   private State state;
   private final Queue<SinkRecord> buffer;
   private final SinkTaskContext context;
-  private boolean tagging;
+  private final boolean isTaggingEnabled;
   private int recordCount;
   private final int flushSize;
   private final long rotateIntervalMs;
@@ -120,7 +120,7 @@ public class TopicPartitionWriter {
     this.timestampExtractor = partitioner instanceof TimeBasedPartitioner
                                   ? ((TimeBasedPartitioner) partitioner).getTimestampExtractor()
                                   : null;
-    tagging = connectorConfig.getBoolean(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG);
+    isTaggingEnabled = connectorConfig.getBoolean(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG);
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
@@ -488,13 +488,12 @@ public class TopicPartitionWriter {
           currentEncodedPartition,
           currentOffset
       );
-      startOffsets.put(currentEncodedPartition, currentOffset);
 
-      /*  Once we have a "start offset" for a particular "encoded partition"
-       *  value, we know that we have at least one record. This allows us
-       *  to initialize all our maps at the same time, and saves future
-       *  checks on the existence of keys
-       */
+      // Once we have a "start offset" for a particular "encoded partition"
+      // value, we know that we have at least one record. This allows us
+      // to initialize all our maps at the same time, and saves future
+      // checks on the existence of keys
+      startOffsets.put(currentEncodedPartition, currentOffset);
       recordCounts.put(currentEncodedPartition, 0L);
       endOffsets.put(currentEncodedPartition, 0L);
     }
@@ -504,20 +503,21 @@ public class TopicPartitionWriter {
     ++recordCount;
 
     recordCounts.put(currentEncodedPartition, recordCounts.get(currentEncodedPartition) + 1);
-    log.debug("Setting record count for '{}' to {}",
-              currentEncodedPartition,
-              recordCounts.get(currentEncodedPartition));
     endOffsets.put(currentEncodedPartition, currentOffset);
-    log.debug("Setting end offset for '{}' to {}",
-              currentEncodedPartition, currentOffset);
   }
 
   private void commitFiles() {
     currentStartOffset = minStartOffset();
     try {
       for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
-        commitFile(entry.getKey());
-        tagFile(entry.getKey(), entry.getValue());
+        String encodedPartition = entry.getKey();
+        commitFile(encodedPartition);
+        if (isTaggingEnabled) {
+          tagFile(encodedPartition, entry.getValue());
+        }
+        startOffsets.remove(encodedPartition);
+        endOffsets.remove(encodedPartition);
+        recordCounts.remove(encodedPartition);
         log.debug("Committed {} for {}", entry.getValue(), tp);
       }
     } catch (ConnectException e) {
@@ -548,29 +548,31 @@ public class TopicPartitionWriter {
   }
 
   private void tagFile(String encodedPartition, String s3ObjectPath) {
-    if (tagging) {
-      if (!startOffsets.containsKey(encodedPartition)) {
-        log.warn("Tried to tag file with missing starting offset partition: {}. Ignoring",
-                encodedPartition);
-      } else {
-        log.debug("Object to tag is: {}", s3ObjectPath);
-        Map<String, String> tags = new HashMap<>();
-        tags.put("startOffset", Long.toString(startOffsets.get(encodedPartition)));
-        tags.put("endOffset", Long.toString(endOffsets.get(encodedPartition)));
-        tags.put("recordCount", Long.toString(recordCounts.get(encodedPartition)));
+    if (!startOffsets.containsKey(encodedPartition)) {
+      log.warn("Tried to tag file with missing starting offset partition: {}. Ignoring.",
+          encodedPartition);
+    } else if (!endOffsets.containsKey(encodedPartition)) {
+      log.warn("Tried to tag file with missing ending offset partition: {}. Ignoring.",
+          encodedPartition);
+    } else if (!recordCounts.containsKey(encodedPartition)) {
+      log.warn("Tried to tag file with missing record count partition: {}. Ignoring.",
+          encodedPartition);
+    } else {
+      log.debug("Object to tag is: {}", s3ObjectPath);
+      Map<String, String> tags = new HashMap<>();
+      tags.put("startOffset", Long.toString(startOffsets.get(encodedPartition)));
+      tags.put("endOffset", Long.toString(endOffsets.get(encodedPartition)));
+      tags.put("recordCount", Long.toString(recordCounts.get(encodedPartition)));
 
-        try {
-          storage.addTags(s3ObjectPath, tags);
-          log.info("Tagged file {} with record count {}", s3ObjectPath, recordCount);
-        } catch (SdkClientException e) {
-          log.trace("Unable to tag file {} with record count.", s3ObjectPath);
-        } catch (Exception e) {
-          log.trace("Unrecoverable exception while attempting to tag s3 object.");
-        }
+      try {
+        storage.addTags(s3ObjectPath, tags);
+        log.info("Tagged file {} with starting offset {}, ending offset {}, record count {}",
+            s3ObjectPath, startOffsets, endOffsets, recordCount);
+      } catch (SdkClientException e) {
+        log.warn("Unable to tag file {}. Ignoring.", s3ObjectPath);
+      } catch (Exception e) {
+        log.warn("Unrecoverable exception while attempting to tag s3 object. Ignoring.");
       }
     }
-    startOffsets.remove(encodedPartition);
-    endOffsets.remove(encodedPartition);
-    recordCounts.remove(encodedPartition);
   }
 }
