@@ -227,10 +227,9 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
   public void addTags(String fileName, Map<String, String> tags)
           throws SdkClientException {
-    List<Tag> newTagList = new ArrayList<>();
-    for (Map.Entry<String, String> entry : tags.entrySet()) {
-      newTagList.add(new Tag(entry.getKey(), entry.getValue()));
-    }
+    ObjectTagging objectTagging = new ObjectTagging(tags.entrySet().stream()
+        .map(e -> new Tag(e.getKey(), e.getValue()))
+        .collect(Collectors.toList()));
     s3.setObjectTagging(new SetObjectTaggingRequest(
             this.bucketName,
             fileName,
