@@ -623,7 +623,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       try {
         BucketNameUtils.validateBucketName(bucketName);
       } catch (IllegalArgumentException e) {
-        throw new ConfigException(bucketName
+        throw new ConfigException(e.getMessage() + ". " + bucketName
                 + " is an invalid bucket name. Does not follow AWS guidelines.");
       }
     }

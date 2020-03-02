@@ -16,7 +16,6 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.AmazonServiceException;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -31,14 +30,17 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import java.util.HashMap;
 import java.util.Map;
 
+import io.confluent.connect.s3.util.S3BucketCheck;
+
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNotNull;
+import static org.powermock.api.mockito.PowerMockito.mockStatic;
 import static org.powermock.api.mockito.PowerMockito.spy;
-import static org.powermock.api.mockito.PowerMockito.doReturn;
+import static org.powermock.api.mockito.PowerMockito.when;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({S3SinkConnector.class, AmazonServiceException.class})
+@PrepareForTest({S3BucketCheck.class})
 @PowerMockIgnore({"io.findify.s3mock.*", "akka.*", "javax.*", "org.xml.*", "com.sun.org.apache" +
         ".xerces.*"})
 public class S3SinkConnectorTest extends S3SinkConnectorTestBase {
@@ -66,18 +68,20 @@ public class S3SinkConnectorTest extends S3SinkConnectorTestBase {
   }
 
   @Test(expected = ConnectException.class)
-  public void checkNonExistentBucket() throws Exception {
+  public void checkNonExistentBucket() {
     configProps.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "non-existent-bucket");
     connector = spy(new S3SinkConnector(new S3SinkConnectorConfig(configProps)));
-    doReturn(false).when(connector, "checkBucketExists", Mockito.any());
+    mockStatic(S3BucketCheck.class);
+    when(S3BucketCheck.checkBucketExists(Mockito.any())).thenReturn(false);
     connector.validate(configProps);
   }
 
   @Test()
-  public void checkExistentBucket() throws Exception {
+  public void checkExistentBucket() {
     configProps.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "existent-bucket");
     connector = spy(new S3SinkConnector(new S3SinkConnectorConfig(configProps)));
-    doReturn(true).when(connector, "checkBucketExists", Mockito.any());
+    mockStatic(S3BucketCheck.class);
+    when(S3BucketCheck.checkBucketExists(Mockito.any())).thenReturn(true);
     connector.validate(configProps);
   }
 }
