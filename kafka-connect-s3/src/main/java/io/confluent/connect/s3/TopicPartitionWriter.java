@@ -569,9 +569,9 @@ public class TopicPartitionWriter {
         log.info("Tagged file {} with starting offset {}, ending offset {}, record count {}",
             s3ObjectPath, startOffsets, endOffsets, recordCount);
       } catch (SdkClientException e) {
-        log.warn("Unable to tag file {}. Ignoring.", s3ObjectPath);
+        log.warn("Unable to tag file {}. Ignoring.", s3ObjectPath, e);
       } catch (Exception e) {
-        log.warn("Unrecoverable exception while attempting to tag s3 object. Ignoring.");
+        log.warn("Unrecoverable exception while attempting to tag s3 object. Ignoring.", e);
       }
     }
   }
