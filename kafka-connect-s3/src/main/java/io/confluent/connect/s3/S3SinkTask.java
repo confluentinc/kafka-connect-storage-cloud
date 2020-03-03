@@ -254,6 +254,7 @@ public class S3SinkTask extends SinkTask {
   private TopicPartitionWriter newTopicPartitionWriter(TopicPartition tp) {
     return new TopicPartitionWriter(
         tp,
+        storage,
         writerProvider,
         partitioner,
         connectorConfig,

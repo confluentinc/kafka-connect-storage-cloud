@@ -261,6 +261,20 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     connectorConfig.getCredentialsProvider();
   }
 
+  @Test
+  public void testConfigurableS3ObjectTaggingConfigs() {
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(false, connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG));
+
+    properties.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(true, connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG));
+
+    properties.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "false");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(false, connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG));
+  }
+
   private void assertDefaultPartitionerVisibility(List<ConfigValue> values) {
     for (ConfigValue val : values) {
       switch (val.name()) {
