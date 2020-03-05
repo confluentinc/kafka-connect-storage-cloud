@@ -16,6 +16,8 @@
 
 package io.confluent.connect.s3;
 
+import org.apache.kafka.common.config.Config;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -67,22 +69,32 @@ public class S3SinkConnectorTest extends S3SinkConnectorTestBase {
     assertTrue(SinkConnector.class.isAssignableFrom(connector.getClass()));
   }
 
-  @Test(expected = ConnectException.class)
+  @Test
   public void checkNonExistentBucket() {
     configProps.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "non-existent-bucket");
     connector = spy(new S3SinkConnector(new S3SinkConnectorConfig(configProps)));
     mockStatic(S3BucketCheck.class);
     when(S3BucketCheck.checkBucketExists(Mockito.any())).thenReturn(false);
-    connector.validate(configProps);
+    Config config = connector.validate(configProps);
+    for (ConfigValue configValue : config.configValues()) {
+      if (configValue.name().equals(S3SinkConnectorConfig.S3_BUCKET_CONFIG)) {
+        assertFalse(configValue.errorMessages().isEmpty());
+      }
+    }
   }
 
-  @Test()
+  @Test
   public void checkExistentBucket() {
     configProps.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "existent-bucket");
     connector = spy(new S3SinkConnector(new S3SinkConnectorConfig(configProps)));
     mockStatic(S3BucketCheck.class);
     when(S3BucketCheck.checkBucketExists(Mockito.any())).thenReturn(true);
-    connector.validate(configProps);
+    Config config = connector.validate(configProps);
+    for (ConfigValue configValue : config.configValues()) {
+      if (configValue.name().equals(S3SinkConnectorConfig.S3_BUCKET_CONFIG)) {
+        assertTrue(configValue.errorMessages().isEmpty());
+      }
+    }
   }
 }
 

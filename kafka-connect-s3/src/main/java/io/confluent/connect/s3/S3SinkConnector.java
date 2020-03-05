@@ -18,8 +18,8 @@ package io.confluent.connect.s3;
 
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Task;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,8 +94,14 @@ public class S3SinkConnector extends SinkConnector {
     Config config = super.validate(connectorConfigs);
     // Checking whether the bucket exists
     if (!S3BucketCheck.checkBucketExists(new S3SinkConnectorConfig(connectorConfigs))) {
-      throw new ConnectException("Bucket does not exist or invalid credentials "
-              + "provided");
+      for (ConfigValue configValue : config.configValues()) {
+        if (configValue.name().equals(S3SinkConnectorConfig.S3_BUCKET_CONFIG)) {
+          String bucketName = configValue.value().toString();
+          configValue.addErrorMessage(String.format("The S3 bucket named %s could not be found."
+                  + " Check the S3 credentials and verify the %s bucket exists.",
+              bucketName, bucketName));
+        }
+      }
     }
     return config;
   }
