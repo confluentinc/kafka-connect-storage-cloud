@@ -19,6 +19,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -38,8 +39,18 @@ public enum CompressionType {
   GZIP("gzip", ".gz") {
     @Override
     public OutputStream wrapForOutput(OutputStream out) {
+      return wrapForOutput(out, Deflater.DEFAULT_COMPRESSION);
+    }
+
+    @Override
+    public OutputStream wrapForOutput(OutputStream out, int level) {
       try {
-        return new GZIPOutputStream(out, GZIP_BUFFER_SIZE_BYTES);
+        return new GZIPOutputStream(out, GZIP_BUFFER_SIZE_BYTES) {
+          public OutputStream setLevel(int level) {
+            def.setLevel(level);
+            return this;
+          }
+        }.setLevel(level);
       } catch (Exception e) {
         throw new ConnectException(e);
       }
@@ -63,7 +74,7 @@ public enum CompressionType {
           throw new ConnectException(e);
         }
       } else {
-        throw new ConnectException("Expected compressionFilter to be a DeflatorOutputStream, "
+        throw new ConnectException("Expected compressionFilter to be a DeflaterOutputStream, "
             + "but was passed an instance that does not match that type.");
       }
     }
@@ -103,6 +114,18 @@ public enum CompressionType {
    */
   public OutputStream wrapForOutput(OutputStream out) {
     return out;
+  }
+
+  /**
+   * Wrap {@code out} with a filter that will compress data with this CompressionType at the
+   * given compression level (optional operation).
+   *
+   * @param out the {@link OutputStream} to wrap
+   * @param level the compression level for this compression type
+   * @return a wrapped version of {@code out} that will apply compression at the given level
+   */
+  public OutputStream wrapForOutput(OutputStream out, int level) {
+    return wrapForOutput(out);
   }
 
   /**

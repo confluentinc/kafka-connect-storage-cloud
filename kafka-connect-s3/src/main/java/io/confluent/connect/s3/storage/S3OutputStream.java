@@ -64,6 +64,7 @@ public class S3OutputStream extends PositionOutputStream {
   private ByteBuffer buffer;
   private MultipartUpload multiPartUpload;
   private final CompressionType compressionType;
+  private final int compressionLevel;
   private volatile OutputStream compressionFilter;
   private Long position;
 
@@ -85,6 +86,7 @@ public class S3OutputStream extends PositionOutputStream {
     this.progressListener = new ConnectProgressListener();
     this.multiPartUpload = null;
     this.compressionType = conf.getCompressionType();
+    this.compressionLevel = conf.getCompressionLevel();
     this.position = 0L;
     log.debug("Create S3OutputStream for bucket '{}' key '{}'", bucket, key);
   }
@@ -273,7 +275,7 @@ public class S3OutputStream extends PositionOutputStream {
   public OutputStream wrapForCompression() {
     if (compressionFilter == null) {
       // Initialize compressionFilter the first time this method is called.
-      compressionFilter = compressionType.wrapForOutput(this);
+      compressionFilter = compressionType.wrapForOutput(this, compressionLevel);
     }
     return compressionFilter;
   }
