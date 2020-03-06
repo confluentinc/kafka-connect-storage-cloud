@@ -41,6 +41,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.zip.Deflater;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertArrayEquals;
@@ -118,6 +119,24 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
     CompressionType compressionType = CompressionType.GZIP;
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, ByteArrayFormat.class.getName());
     localProps.put(S3SinkConnectorConfig.COMPRESSION_TYPE_CONFIG, compressionType.name);
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+
+    List<SinkRecord> sinkRecords = createByteArrayRecordsWithoutSchema(7 * context.assignment().size(), 0, context.assignment());
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 3, 6};
+    verify(sinkRecords, validOffsets, context.assignment(), ".bin.gz");
+  }
+
+  @Test
+  public void testBestGzipCompression() throws Exception {
+    CompressionType compressionType = CompressionType.GZIP;
+    localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, ByteArrayFormat.class.getName());
+    localProps.put(S3SinkConnectorConfig.COMPRESSION_TYPE_CONFIG, compressionType.name);
+    localProps.put(S3SinkConnectorConfig.COMPRESSION_LEVEL_CONFIG, String.valueOf(Deflater.BEST_COMPRESSION));
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
 
