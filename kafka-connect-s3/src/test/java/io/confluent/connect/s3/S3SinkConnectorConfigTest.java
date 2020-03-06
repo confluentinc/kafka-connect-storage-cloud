@@ -33,6 +33,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
@@ -321,18 +323,39 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
       }
     }
   }
+
   @Test(expected = ConfigException.class)
   public void testS3PartRetriesNegative() {
     properties.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "-1");
     connectorConfig = new S3SinkConnectorConfig(properties);
-    connectorConfig.getInt(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG);
   }
 
   @Test(expected = ConfigException.class)
   public void testS3RetryBackoffNegative() {
     properties.put(S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG, "-1");
     connectorConfig = new S3SinkConnectorConfig(properties);
-    connectorConfig.getLong(S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG);
+  }
+
+  @Test(expected = ConfigException.class)
+  public void testInvalidHighCompressionLevel() {
+    properties.put(S3SinkConnectorConfig.COMPRESSION_LEVEL_CONFIG, "10");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+  }
+
+  @Test(expected = ConfigException.class)
+  public void testInvalidLowCompressionLevel() {
+    properties.put(S3SinkConnectorConfig.COMPRESSION_LEVEL_CONFIG, "-2");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+  }
+
+  @Test
+  public void testValidCompressionLevels() {
+    IntStream.range(-1, 9).boxed().forEach(i -> {
+          properties.put(S3SinkConnectorConfig.COMPRESSION_LEVEL_CONFIG, String.valueOf(i));
+          connectorConfig = new S3SinkConnectorConfig(properties);
+          assertEquals((int) i, connectorConfig.getCompressionLevel());
+        }
+    );
   }
 
   @Test
