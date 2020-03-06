@@ -43,6 +43,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.zip.Deflater;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
@@ -104,6 +107,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String COMPRESSION_TYPE_CONFIG = "s3.compression.type";
   public static final String COMPRESSION_TYPE_DEFAULT = "none";
+
+  public static final String COMPRESSION_LEVEL_CONFIG = "s3.compression.level";
+  public static final int COMPRESSION_LEVEL_DEFAULT = Deflater.DEFAULT_COMPRESSION;
+  private static final CompressionLevelValidator COMPRESSION_LEVEL_VALIDATOR =
+      new CompressionLevelValidator();
 
   public static final String S3_PART_RETRIES_CONFIG = "s3.part.retries";
   public static final int S3_PART_RETRIES_DEFAULT = 3;
@@ -310,13 +318,28 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           COMPRESSION_TYPE_DEFAULT,
           new CompressionTypeValidator(),
           Importance.LOW,
-          "Compression type for file written to S3. "
+          "Compression type for files written to S3. "
           + "Applied when using JsonFormat or ByteArrayFormat. "
           + "Available values: none, gzip.",
           group,
           ++orderInGroup,
           Width.LONG,
           "Compression type"
+      );
+
+      configDef.define(
+          COMPRESSION_LEVEL_CONFIG,
+          Type.INT,
+          COMPRESSION_LEVEL_DEFAULT,
+          COMPRESSION_LEVEL_VALIDATOR,
+          Importance.LOW,
+          "Compression level for files written to S3. "
+              + "Applied when using JsonFormat or ByteArrayFormat. ",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Compression type",
+          COMPRESSION_LEVEL_VALIDATOR
       );
 
       configDef.define(
@@ -537,6 +560,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return CompressionType.forName(getString(COMPRESSION_TYPE_CONFIG));
   }
 
+  public int getCompressionLevel() {
+    return getInt(COMPRESSION_LEVEL_CONFIG);
+  }
+
   public int getS3PartRetries() {
     return getInt(S3_PART_RETRIES_CONFIG);
   }
@@ -668,6 +695,34 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     @Override
     public String toString() {
       return "[" + ALLOWED_VALUES + "]";
+    }
+  }
+
+  private static class CompressionLevelValidator
+      implements ConfigDef.Validator, ConfigDef.Recommender {
+    private static final int MIN = -1;
+    private static final int MAX = 9;
+    private static final ConfigDef.Range validRange = ConfigDef.Range.between(MIN, MAX);
+
+    @Override
+    public void ensureValid(String name, Object compressionLevel) {
+      validRange.ensureValid(name, compressionLevel);
+    }
+
+    @Override
+    public String toString() {
+      return "-1 for system default, or " + validRange.toString() + " for levels between no "
+          + "compression and best compression";
+    }
+
+    @Override
+    public List<Object> validValues(String s, Map<String, Object> map) {
+      return IntStream.range(MIN, MAX).boxed().collect(Collectors.toList());
+    }
+
+    @Override
+    public boolean visible(String s, Map<String, Object> map) {
+      return true;
     }
   }
 
