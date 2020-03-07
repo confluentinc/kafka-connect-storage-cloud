@@ -281,7 +281,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           new CredentialsProviderValidator(),
           Importance.LOW,
           "Credentials provider or provider chain to use for authentication to AWS. By default "
-              + "the connector uses ``DefaultAWSCredentialsProviderChain``.",
+              + "the connector uses ``"
+              + DefaultAWSCredentialsProviderChain.class.getSimpleName()
+              + "``.",
+
           group,
           ++orderInGroup,
           Width.LONG,
@@ -295,8 +298,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Importance.HIGH,
           "The AWS access key ID used to authenticate personal AWS credentials such as IAM "
               + "credentials. Use only if you do not wish to authenticate by using a credentials "
-              + "provider class via "
-              + CREDENTIALS_PROVIDER_CLASS_CONFIG,
+              + "provider class via ``"
+              + CREDENTIALS_PROVIDER_CLASS_CONFIG
+              + "``",
           group,
           ++orderInGroup,
           Width.LONG,
@@ -310,8 +314,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Importance.HIGH,
           "The secret access key used to authenticate personal AWS credentials such as IAM "
               + "credentials. Use only if you do not wish to authenticate by using a credentials "
-              + "provider class via "
-              + CREDENTIALS_PROVIDER_CLASS_CONFIG,
+              + "provider class via ``"
+              + CREDENTIALS_PROVIDER_CLASS_CONFIG
+              + "``",
           group,
           ++orderInGroup,
           Width.LONG,
@@ -631,8 +636,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       if (provider instanceof Configurable) {
         Map<String, Object> configs = originalsWithPrefix(CREDENTIALS_PROVIDER_CONFIG_PREFIX);
         configs.remove(CREDENTIALS_PROVIDER_CLASS_CONFIG.substring(
-            CREDENTIALS_PROVIDER_CONFIG_PREFIX.length(),
-            CREDENTIALS_PROVIDER_CLASS_CONFIG.length()
+            CREDENTIALS_PROVIDER_CONFIG_PREFIX.length()
         ));
         ((Configurable) provider).configure(configs);
       }

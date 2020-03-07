@@ -17,6 +17,7 @@ package io.confluent.connect.s3.storage;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.PredefinedClientConfigurations;
+import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder;
@@ -33,6 +34,8 @@ import com.amazonaws.services.s3.model.SetObjectTaggingRequest;
 import com.amazonaws.services.s3.model.Tag;
 import com.amazonaws.SdkClientException;
 import org.apache.avro.file.SeekableInput;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.OutputStream;
 import java.util.Map;
@@ -56,6 +59,8 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
  * S3 implementation of the storage interface for Connect sinks.
  */
 public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> {
+
+  private static final Logger log = LoggerFactory.getLogger(S3Storage.class);
 
   private final String url;
   private final String bucketName;
@@ -88,16 +93,8 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
         .withAccelerateModeEnabled(config.getBoolean(WAN_MODE_CONFIG))
         .withPathStyleAccessEnabled(true)
+        .withCredentials(newCredentialsProvider(config))
         .withClientConfiguration(clientConfiguration);
-
-    String accessKeyId = config.getString(AWS_ACCESS_KEY_ID_CONFIG);
-    String secretKey = config.getPassword(AWS_SECRET_ACCESS_KEY_CONFIG).value();
-    if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
-      BasicAWSCredentials awsCreds = new BasicAWSCredentials(accessKeyId, secretKey);
-      builder.withCredentials(new AWSStaticCredentialsProvider(awsCreds));
-    } else {
-      builder.withCredentials(config.getCredentialsProvider());
-    }
 
     String region = config.getString(REGION_CONFIG);
     if (StringUtils.isBlank(url)) {
@@ -160,7 +157,6 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
    * @see PredefinedBackoffStrategies.FullJitterBackoffStrategy
    */
   protected RetryPolicy newFullJitterRetryPolicy(S3SinkConnectorConfig config) {
-
     PredefinedBackoffStrategies.FullJitterBackoffStrategy backoffStrategy =
         new PredefinedBackoffStrategies.FullJitterBackoffStrategy(
             config.getLong(S3_RETRY_BACKOFF_CONFIG).intValue(),
@@ -174,6 +170,21 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
         false
     );
     return retryPolicy;
+  }
+
+  protected AWSCredentialsProvider newCredentialsProvider(S3SinkConnectorConfig config) {
+    final String accessKeyId = config.getString(AWS_ACCESS_KEY_ID_CONFIG);
+    final String secretKey = config.getPassword(AWS_SECRET_ACCESS_KEY_CONFIG).value();
+    if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
+      log.info("Returning new credentials provider using the access key id and "
+          + "the secret access key that were directly supplied through the connector's "
+          + "configuration");
+      BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
+      return new AWSStaticCredentialsProvider(basicCredentials);
+    }
+    log.info(
+        "Returning new credentials provider based on the configured credentials provider class");
+    return config.getCredentialsProvider();
   }
 
   @Override
