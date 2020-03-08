@@ -21,9 +21,9 @@ import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
-import io.confluent.common.config.AbstractConfig;
-import io.confluent.common.config.ConfigDef;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigDef;
 
 import java.util.Map;
 
@@ -55,7 +55,7 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
           ConfigDef.Importance.HIGH,
           "Role session name to use when starting a session"
       );
-  
+
   private String roleArn;
   private String roleExternalId;
   private String roleSessionName;
@@ -70,15 +70,10 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
 
   @Override
   public AWSCredentials getCredentials() {
-    AWSSecurityTokenServiceClientBuilder clientBuilder =
-        AWSSecurityTokenServiceClientBuilder.standard();
-    AWSCredentialsProvider provider =
-        new STSAssumeRoleSessionCredentialsProvider.Builder(roleArn, roleSessionName)
-            .withStsClient(clientBuilder.defaultClient())
-            .withExternalId(roleExternalId)
-            .build();
-
-    return provider.getCredentials();
+    return new STSAssumeRoleSessionCredentialsProvider.Builder(roleArn, roleSessionName)
+        .withStsClient(AWSSecurityTokenServiceClientBuilder.defaultClient())
+        .withExternalId(roleExternalId)
+        .build().getCredentials();
   }
 
   @Override
