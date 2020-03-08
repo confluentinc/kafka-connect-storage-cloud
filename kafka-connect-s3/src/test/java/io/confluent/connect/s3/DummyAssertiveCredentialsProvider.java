@@ -25,7 +25,8 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
-class DummyAssertiveCredentialsProvider implements AWSCredentialsProvider, Configurable {
+public final class DummyAssertiveCredentialsProvider implements AWSCredentialsProvider,
+    Configurable {
 
   public static final String ACCESS_KEY_NAME = "access.key";
   public static final String SECRET_KEY_NAME = "secret.key";
