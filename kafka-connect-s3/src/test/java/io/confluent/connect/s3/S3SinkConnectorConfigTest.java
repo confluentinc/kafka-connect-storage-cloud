@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import io.confluent.connect.s3.auth.AwsAssumeRoleCredentialsProvider;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.S3Storage;
@@ -227,6 +228,31 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   }
 
   @Test
+  public void testConfigurableAwsAssumeRoleCredentialsProvider() {
+    properties.put(
+        S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
+        AwsAssumeRoleCredentialsProvider.class.getName()
+    );
+    String configPrefix = S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_ARN_CONFIG),
+        "arn:aws:iam::012345678901:role/my-restricted-role"
+    );
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_SESSION_NAME_CONFIG),
+        "my-session-name"
+    );
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_EXTERNAL_ID_CONFIG),
+        "my-external-id"
+    );
+    connectorConfig = new S3SinkConnectorConfig(properties);
+
+    AwsAssumeRoleCredentialsProvider credentialsProvider =
+        (AwsAssumeRoleCredentialsProvider) connectorConfig.getCredentialsProvider();
+  }
+
+  @Test
   public void testUseExpectContinueDefault() throws Exception {
     setUp();
     S3Storage storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, null);
@@ -261,6 +287,36 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
 
     connectorConfig = new S3SinkConnectorConfig(properties);
     connectorConfig.getCredentialsProvider();
+  }
+
+  @Test
+  public void testConfigurableAwsAssumeRoleCredentialsProviderMissingConfigs() {
+    thrown.expect(ConfigException.class);
+    thrown.expectMessage("Missing required configuration");
+
+    properties.put(
+        S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
+        AwsAssumeRoleCredentialsProvider.class.getName()
+    );
+    String configPrefix = S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_ARN_CONFIG),
+        "arn:aws:iam::012345678901:role/my-restricted-role"
+    );
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_SESSION_NAME_CONFIG),
+        "my-session-name"
+    );
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_EXTERNAL_ID_CONFIG),
+        "my-external-id"
+    );
+    connectorConfig = new S3SinkConnectorConfig(properties);
+
+    AwsAssumeRoleCredentialsProvider credentialsProvider =
+        (AwsAssumeRoleCredentialsProvider) connectorConfig.getCredentialsProvider();
+
+    credentialsProvider.configure(properties);
   }
 
   @Test
