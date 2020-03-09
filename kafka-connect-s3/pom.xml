@@ -37,6 +37,7 @@
     <properties>
         <aws.version>1.11.725</aws.version>
         <s3mock.version>0.2.5</s3mock.version>
+        <apache.httpclient.version>4.5.9</apache.httpclient.version>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
     </properties>
 
@@ -65,6 +66,11 @@
         <dependency>
             <groupId>com.amazonaws</groupId>
             <artifactId>aws-java-sdk-sts</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+            <version>${apache.httpclient.version}</version>
         </dependency>
         <dependency>
             <groupId>io.findify</groupId>
