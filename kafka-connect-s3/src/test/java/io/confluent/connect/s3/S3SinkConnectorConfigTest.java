@@ -17,6 +17,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.services.s3.model.StorageClass;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import org.apache.kafka.common.config.ConfigException;
@@ -408,6 +409,25 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     properties.put(S3SinkConnectorConfig.PARQUET_CODEC_CONFIG, "uncompressed");
     connectorConfig = new S3SinkConnectorConfig(properties);
     connectorConfig.parquetCompressionCodecName();
+  }
+
+  @Test
+  public void testS3StorageClassSupported() {
+    properties.put(S3SinkConnectorConfig.S3_STORAGE_CLASS, "STANDARD");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(StorageClass.Standard, connectorConfig.getS3StorageClass());
+
+    properties.put(S3SinkConnectorConfig.S3_STORAGE_CLASS, "GLACIER");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(StorageClass.Glacier, connectorConfig.getS3StorageClass());
+
+    properties.put(S3SinkConnectorConfig.S3_STORAGE_CLASS, "STANDARD_IA");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(StorageClass.StandardInfrequentAccess, connectorConfig.getS3StorageClass());
+
+    properties.put(S3SinkConnectorConfig.S3_STORAGE_CLASS, "REDUCED_REDUNDANCY");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(StorageClass.ReducedRedundancy, connectorConfig.getS3StorageClass());
   }
 }
 

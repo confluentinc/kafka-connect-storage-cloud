@@ -22,6 +22,8 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
+import com.amazonaws.services.s3.model.StorageClass;
+import io.confluent.connect.storage.Storage;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -89,6 +91,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String PART_SIZE_CONFIG = "s3.part.size";
   public static final int PART_SIZE_DEFAULT = 25 * 1024 * 1024;
+
+  public static final String S3_STORAGE_CLASS = "s3.storage.class";
+  public static final String S3_STORAGE_CLASS_DEFAULT = StorageClass.Standard.toString();
 
   public static final String WAN_MODE_CONFIG = "s3.wan.mode";
   private static final boolean WAN_MODE_DEFAULT = false;
@@ -272,6 +277,19 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "S3 Part Size"
+      );
+
+      configDef.define(
+        S3_STORAGE_CLASS,
+        Type.STRING,
+        S3_STORAGE_CLASS_DEFAULT,
+        new S3StorageClassValidator(),
+        Importance.LOW,
+        "The S3 Storage class to use when upload a file to S3.",
+        group,
+        ++orderInGroup,
+        Width.LONG,
+        "S3 Storage Class"
       );
 
       configDef.define(
@@ -664,6 +682,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
            : CompressionCodecName.fromConf(getString(PARQUET_CODEC_CONFIG));
   }
 
+  public StorageClass getS3StorageClass() {
+    return StorageClass.fromValue(getString(S3_STORAGE_CLASS));
+  }
+
   public int getS3PartRetries() {
     return getInt(S3_PART_RETRIES_CONFIG);
   }
@@ -937,6 +959,32 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     public boolean visible(String name, Map<String, Object> connectorConfigs) {
       return SSEAlgorithm.KMS.toString()
           .equalsIgnoreCase((String) connectorConfigs.get(SSEA_CONFIG));
+    }
+  }
+
+  private static class S3StorageClassValidator implements ConfigDef.Validator {
+
+    public static final Map<String, StorageClass> TYPES_BY_NAME;
+    public static final List<String> ALLOWED_VALUES;
+
+    static {
+      TYPES_BY_NAME = Arrays.stream(StorageClass.values())
+        .collect(Collectors.toMap(c -> c.toString(), Function.identity()));
+      ALLOWED_VALUES = new ArrayList<>(TYPES_BY_NAME.keySet());
+    }
+
+    @Override
+    public void ensureValid(String name, Object storageClassName) {
+      String compressionCodecNameString = ((String) storageClassName).trim();
+      if (!TYPES_BY_NAME.containsKey(compressionCodecNameString)) {
+        throw new ConfigException(name, storageClassName,
+                                  "Value must be one of: " + ALLOWED_VALUES);
+      }
+    }
+
+    @Override
+    public String toString() {
+      return "[" + Utils.join(ALLOWED_VALUES, ", ") + "]";
     }
   }
 
