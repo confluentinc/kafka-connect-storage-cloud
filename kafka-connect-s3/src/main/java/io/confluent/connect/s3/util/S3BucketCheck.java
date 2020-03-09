@@ -16,6 +16,10 @@
 
 package io.confluent.connect.s3.util;
 
+import com.amazonaws.services.s3.internal.BucketNameUtils;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
+
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.StorageFactory;
@@ -33,5 +37,32 @@ public class S3BucketCheck {
         config.getString(StorageCommonConfig.STORE_URL_CONFIG));
 
     return bucketCheckHelper.bucketExists();
+  }
+
+  public static ConfigDef.Validator bucketNameValidator() {
+    return new BucketNameValidator();
+  }
+
+  private static class BucketNameValidator implements ConfigDef.Validator {
+    @Override
+    public void ensureValid(String name, Object bucket) {
+      String bucketName = ((String) bucket).trim();
+      try {
+        BucketNameUtils.validateBucketName(bucketName);
+      } catch (IllegalArgumentException e) {
+        throw new ConfigException(
+            String.format(
+                "'%s' is not a valid bucket name and does not follow AWS guidelines. %s",
+                bucketName,
+                e.getMessage()
+            )
+        );
+      }
+    }
+
+    @Override
+    public String toString() {
+      return "Follows the AWS guidelines for S3 bucket names";
+    }
   }
 }

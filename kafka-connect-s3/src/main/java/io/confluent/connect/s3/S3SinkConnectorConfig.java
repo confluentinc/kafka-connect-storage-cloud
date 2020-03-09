@@ -21,7 +21,6 @@ import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
-import com.amazonaws.services.s3.internal.BucketNameUtils;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
 import org.apache.kafka.common.Configurable;
@@ -49,6 +48,7 @@ import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.s3.util.S3BucketCheck;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.ComposableConfig;
 import io.confluent.connect.storage.common.GenericRecommender;
@@ -185,7 +185,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           S3_BUCKET_CONFIG,
           Type.STRING,
           ConfigDef.NO_DEFAULT_VALUE,
-          new BucketNameValidator(),
+          S3BucketCheck.bucketNameValidator(),
           Importance.HIGH,
           "The S3 Bucket.",
           group,
@@ -616,18 +616,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     }
   }
 
-  private static class BucketNameValidator implements ConfigDef.Validator {
-    @Override
-    public void ensureValid(String name, Object bucket) {
-      String bucketName = ((String) bucket).trim();
-      try {
-        BucketNameUtils.validateBucketName(bucketName);
-      } catch (IllegalArgumentException e) {
-        throw new ConfigException(e.getMessage() + ". " + bucketName
-                + " is an invalid bucket name. Does not follow AWS guidelines.");
-      }
-    }
-  }
 
   private static class RegionRecommender implements ConfigDef.Recommender {
     @Override
