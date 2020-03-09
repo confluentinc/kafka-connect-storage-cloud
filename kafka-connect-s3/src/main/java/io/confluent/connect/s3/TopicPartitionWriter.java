@@ -548,31 +548,38 @@ public class TopicPartitionWriter {
   }
 
   private void tagFile(String encodedPartition, String s3ObjectPath) {
-    if (!startOffsets.containsKey(encodedPartition)) {
-      log.warn("Tried to tag file with missing starting offset partition: {}. Ignoring.",
-          encodedPartition);
-    } else if (!endOffsets.containsKey(encodedPartition)) {
-      log.warn("Tried to tag file with missing ending offset partition: {}. Ignoring.",
-          encodedPartition);
-    } else if (!recordCounts.containsKey(encodedPartition)) {
-      log.warn("Tried to tag file with missing record count partition: {}. Ignoring.",
-          encodedPartition);
-    } else {
-      log.debug("Object to tag is: {}", s3ObjectPath);
-      Map<String, String> tags = new HashMap<>();
-      tags.put("startOffset", Long.toString(startOffsets.get(encodedPartition)));
-      tags.put("endOffset", Long.toString(endOffsets.get(encodedPartition)));
-      tags.put("recordCount", Long.toString(recordCounts.get(encodedPartition)));
+    Long startOffset = startOffsets.get(encodedPartition);
+    Long endOffset = endOffsets.get(encodedPartition);
+    Long recordCount = recordCounts.get(encodedPartition);
+    if (startOffset == null || endOffset == null || recordCount == null) {
+      log.warn(
+          "Missing tags when attempting to tag file {}. "
+              + "Starting offset tag: {}, "
+              + "ending offset tag: {}, "
+              + "record count tag: {}. Ignoring.",
+          encodedPartition,
+          startOffset == null ? "missing" : startOffset,
+          endOffset == null ? "missing" : endOffset,
+          recordCount == null ? "missing" : recordCount
+      );
+      return;
+    }
 
-      try {
-        storage.addTags(s3ObjectPath, tags);
-        log.info("Tagged file {} with starting offset {}, ending offset {}, record count {}",
-            s3ObjectPath, startOffsets, endOffsets, recordCount);
-      } catch (SdkClientException e) {
-        log.warn("Unable to tag file {}. Ignoring.", s3ObjectPath, e);
-      } catch (Exception e) {
-        log.warn("Unrecoverable exception while attempting to tag s3 object. Ignoring.", e);
-      }
+    log.debug("Object to tag is: {}", s3ObjectPath);
+    Map<String, String> tags = new HashMap<>();
+    tags.put("startOffset", Long.toString(startOffset));
+    tags.put("endOffset", Long.toString(endOffset));
+    tags.put("recordCount", Long.toString(recordCount));
+
+    try {
+      storage.addTags(s3ObjectPath, tags);
+      log.info("Tagged S3 object {} with starting offset {}, ending offset {}, record count {}",
+          s3ObjectPath, startOffset, endOffset, recordCount);
+    } catch (SdkClientException e) {
+      log.warn("Unable to tag S3 object {}. Ignoring.", s3ObjectPath, e);
+    } catch (Exception e) {
+      log.warn("Unrecoverable exception while attempting to tag S3 object {}. Ignoring.",
+          s3ObjectPath, e);
     }
   }
 }
