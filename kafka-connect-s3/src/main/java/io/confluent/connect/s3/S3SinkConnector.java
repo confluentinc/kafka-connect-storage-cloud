@@ -98,8 +98,9 @@ public class S3SinkConnector extends SinkConnector {
         if (configValue.name().equals(S3SinkConnectorConfig.S3_BUCKET_CONFIG)) {
           String bucketName = configValue.value().toString();
           configValue.addErrorMessage(
-              String.format("The S3 bucket named %s could not be found."
-                      + " Check the S3 credentials and verify the %s bucket exists.",
+              String.format(
+                  "The S3 bucket named '%s' could not be found. Check the S3 credentials and "
+                  + "verify the '%s' bucket exists.",
                   bucketName,
                   bucketName
               )
