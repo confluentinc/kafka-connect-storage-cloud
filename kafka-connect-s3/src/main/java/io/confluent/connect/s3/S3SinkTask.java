@@ -1,28 +1,27 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
 package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -53,10 +52,11 @@ public class S3SinkTask extends SinkTask {
 
   private S3SinkConnectorConfig connectorConfig;
   private String url;
+  private long timeoutMs;
   private S3Storage storage;
   private final Set<TopicPartition> assignment;
   private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
-  private Partitioner<FieldSchema> partitioner;
+  private Partitioner<?> partitioner;
   private Format<S3SinkConnectorConfig, String> format;
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private final Time time;
@@ -73,7 +73,7 @@ public class S3SinkTask extends SinkTask {
 
   // visible for testing.
   S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage,
-             Partitioner<FieldSchema> partitioner, Format<S3SinkConnectorConfig, String> format,
+             Partitioner<?> partitioner, Format<S3SinkConnectorConfig, String> format,
              Time time) throws Exception {
     this.assignment = new HashSet<>();
     this.topicPartitionWriters = new HashMap<>();
@@ -105,6 +105,7 @@ public class S3SinkTask extends SinkTask {
         }
       }
       url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
+      timeoutMs = connectorConfig.getLong(S3SinkConnectorConfig.RETRY_BACKOFF_CONFIG);
 
       @SuppressWarnings("unchecked")
       Class<? extends S3Storage> storageClass =
@@ -144,15 +145,7 @@ public class S3SinkTask extends SinkTask {
     // a call to "close".
     assignment.addAll(partitions);
     for (TopicPartition tp : assignment) {
-      TopicPartitionWriter writer = new TopicPartitionWriter(
-          tp,
-          writerProvider,
-          partitioner,
-          connectorConfig,
-          context,
-          time
-      );
-      topicPartitionWriters.put(tp, writer);
+      topicPartitionWriters.put(tp, newTopicPartitionWriter(tp));
     }
   }
 
@@ -167,15 +160,15 @@ public class S3SinkTask extends SinkTask {
     return formatClass.getConstructor(S3Storage.class).newInstance(storage);
   }
 
-  private Partitioner<FieldSchema> newPartitioner(S3SinkConnectorConfig config)
+  private Partitioner<?> newPartitioner(S3SinkConnectorConfig config)
       throws ClassNotFoundException, IllegalAccessException, InstantiationException {
 
     @SuppressWarnings("unchecked")
-    Class<? extends Partitioner<FieldSchema>> partitionerClass =
-        (Class<? extends Partitioner<FieldSchema>>)
+    Class<? extends Partitioner<?>> partitionerClass =
+        (Class<? extends Partitioner<?>>)
             config.getClass(PartitionerConfig.PARTITIONER_CLASS_CONFIG);
 
-    Partitioner<FieldSchema> partitioner = partitionerClass.newInstance();
+    Partitioner<?> partitioner = partitionerClass.newInstance();
 
     Map<String, Object> plainValues = new HashMap<>(config.plainValues());
     Map<String, ?> originals = config.originals();
@@ -204,7 +197,20 @@ public class S3SinkTask extends SinkTask {
     }
 
     for (TopicPartition tp : assignment) {
-      topicPartitionWriters.get(tp).write();
+      TopicPartitionWriter writer = topicPartitionWriters.get(tp);
+      try {
+        writer.write();
+      } catch (RetriableException e) {
+        log.error("Exception on topic partition {}: ", tp, e);
+        Long currentStartOffset = writer.currentStartOffset();
+        if (currentStartOffset != null) {
+          context.offset(tp, currentStartOffset);
+        }
+        context.timeout(timeoutMs);
+        writer = newTopicPartitionWriter(tp);
+        writer.failureTime(time.milliseconds());
+        topicPartitionWriters.put(tp, writer);
+      }
     }
   }
 
@@ -255,6 +261,18 @@ public class S3SinkTask extends SinkTask {
   // Visible for testing
   TopicPartitionWriter getTopicPartitionWriter(TopicPartition tp) {
     return topicPartitionWriters.get(tp);
+  }
+
+  private TopicPartitionWriter newTopicPartitionWriter(TopicPartition tp) {
+    return new TopicPartitionWriter(
+        tp,
+        storage,
+        writerProvider,
+        partitioner,
+        connectorConfig,
+        context,
+        time
+    );
   }
 
   // Visible for testing

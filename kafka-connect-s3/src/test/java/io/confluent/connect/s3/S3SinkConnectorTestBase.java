@@ -1,17 +1,16 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
 package io.confluent.connect.s3;
@@ -23,10 +22,9 @@ import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.avro.AvroFormat;
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.StorageSinkTestBase;
 import io.confluent.connect.storage.common.StorageCommonConfig;
-import io.confluent.connect.storage.hive.HiveConfig;
-import io.confluent.connect.storage.hive.schema.DefaultSchemaGenerator;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.schema.SchemaCompatibility;
 import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
@@ -79,7 +77,6 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     props.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH");
     props.put(PartitionerConfig.LOCALE_CONFIG, "en");
     props.put(PartitionerConfig.TIMEZONE_CONFIG, "America/Los_Angeles");
-    props.put(HiveConfig.HIVE_CONF_DIR_CONFIG, "America/Los_Angeles");
     return props;
   }
 
@@ -91,8 +88,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     PowerMockito.doReturn(1024).when(connectorConfig).getPartSize();
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     parsedConfig = new HashMap<>(connectorConfig.plainValues());
-    compatibility = StorageSchemaCompatibility.getCompatibility(
-                    connectorConfig.getString(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG));
+    compatibility = StorageSchemaCompatibility.getCompatibility(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG);
   }
 
   @After

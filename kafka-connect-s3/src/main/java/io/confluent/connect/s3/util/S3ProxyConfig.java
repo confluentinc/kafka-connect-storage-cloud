@@ -1,17 +1,16 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
 package io.confluent.connect.s3.util;
@@ -19,6 +18,8 @@ package io.confluent.connect.s3.util;
 import com.amazonaws.Protocol;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -32,6 +33,8 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_USER_CONFIG;
 
 public class S3ProxyConfig {
+  private static final Logger log = LoggerFactory.getLogger(S3ProxyConfig.class);
+
   private final Protocol protocol;
   private final String host;
   private final int port;
@@ -52,6 +55,7 @@ public class S3ProxyConfig {
       pass = StringUtils.isNotBlank(password.value())
              ? password.value()
              : extractPass(url.getUserInfo());
+      log.info("Using proxy config {}", this);
     } catch (MalformedURLException e) {
       throw new ConfigException(
           S3_PROXY_URL_CONFIG,
@@ -99,5 +103,16 @@ public class S3ProxyConfig {
 
   public String pass() {
     return pass;
+  }
+
+  @Override
+  public String toString() {
+    return "S3ProxyConfig{"
+        + "protocol=" + protocol
+        + ", host='" + host + '\''
+        + ", port=" + port
+        + ", user='" + user + '\''
+        + ", pass='" + pass + '\''
+        + '}';
   }
 }

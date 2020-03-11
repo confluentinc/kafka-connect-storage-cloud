@@ -1,21 +1,21 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
 package io.confluent.connect.s3;
 
+import akka.parboiled2.RuleTrace;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.AnonymousAWSCredentials;
@@ -25,8 +25,13 @@ import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.amazonaws.services.s3.model.Tag;
+import com.amazonaws.services.s3.model.GetObjectTaggingResult;
+import com.amazonaws.services.s3.model.transform.XmlResponsesSaxParser;
+import io.confluent.connect.s3.format.parquet.ParquetUtils;
 import io.findify.s3mock.S3Mock;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.After;
 import org.junit.Rule;
 import org.junit.rules.TemporaryFolder;
@@ -41,11 +46,13 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import io.confluent.connect.s3.format.avro.AvroUtils;
 import io.confluent.connect.s3.format.bytearray.ByteArrayUtils;
 import io.confluent.connect.s3.format.json.JsonUtils;
 import io.confluent.connect.s3.storage.CompressionType;
+import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 
@@ -81,7 +88,7 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
   @Override
   public void tearDown() throws Exception {
     super.tearDown();
-    s3mock.stop();
+    s3mock.shutdown(); // shutdown the Akka and HTTP frameworks to close all connections
   }
 
   public static List<S3ObjectSummary> listObjects(String bucket, String prefix, AmazonS3 s3) {
@@ -122,6 +129,8 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
       } else if (extension.startsWith(".bin")) {
         return readRecordsByteArray(bucketName, fileKey, s3, compressionType,
             S3SinkConnectorConfig.FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT.getBytes());
+      } else if (extension.endsWith(".parquet")) {
+          return readRecordsParquet(bucketName, fileKey, s3);
       } else if (extension.startsWith(".customExtensionForTest")) {
         return readRecordsByteArray(bucketName, fileKey, s3, compressionType,
             "SEPARATOR".getBytes());
@@ -153,6 +162,25 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
       return ByteArrayUtils.getRecords(compressionType.wrapForInput(in), lineSeparatorBytes);
   }
 
+  public static List<Tag> getS3ObjectTags(String bucketName, String fileKey, AmazonS3 s3) throws IOException {
+      //findify S3 mock does not currently support S3 object tag mocks, instead tags are stored as object data in AWS XML format
+      //leverage this workaround to parse the xml until tag mocks are supported
+      log.debug("Reading tags from bucket '{}' key '{}': ", bucketName, fileKey);
+      InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
+      XmlResponsesSaxParser parser = new XmlResponsesSaxParser();
+      GetObjectTaggingResult tagsResult = parser.parseObjectTaggingResponse(in).getResult();
+
+      List<Tag> tagList = new ArrayList<>();
+      tagList.addAll(tagsResult.getTagSet());
+      return tagList;
+  }
+
+  public static Collection<Object> readRecordsParquet(String bucketName, String fileKey, AmazonS3 s3) throws IOException {
+      log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
+      InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
+      return ParquetUtils.getRecords(in, fileKey);
+  }
+
   @Override
   public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
     final AWSCredentialsProvider provider = new AWSCredentialsProvider() {
@@ -179,4 +207,21 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
     return builder.build();
   }
 
+  class S3OutputStreamFlaky extends S3OutputStream {
+    private final AtomicInteger retries;
+
+    public S3OutputStreamFlaky(String key, S3SinkConnectorConfig conf, AmazonS3 s3, AtomicInteger retries) {
+      super(key, conf, s3);
+      this.retries = retries;
+    }
+
+    @Override
+    public void commit() throws IOException {
+      if (retries.getAndIncrement() == 0) {
+        close();
+        throw new ConnectException("Fake exception");
+      }
+      super.commit();
+    }
+  }
 }

@@ -1,22 +1,22 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
 package io.confluent.connect.s3.format.bytearray;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.S3SinkConnectorConfig.BehaviorOnNullValues;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
@@ -66,6 +66,16 @@ public class ByteArrayRecordWriterProvider implements RecordWriterProvider<S3Sin
         try {
           byte[] bytes = converter.fromConnectData(
               record.topic(), record.valueSchema(), record.value());
+          if (bytes == null) {
+            if (conf.nullValueBehavior().equalsIgnoreCase(BehaviorOnNullValues.IGNORE.toString())) {
+              log.debug("Null valued record cannot be written to output as Avro. "
+                  + "Skipping. Record Key: {}", record.key());
+              return;
+            } else {
+              throw new ConnectException("Null valued records are not writeable with current "
+                  + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " 'settings.");
+            }
+          }
           s3outWrapper.write(bytes);
           s3outWrapper.write(lineSeparatorBytes);
         } catch (IOException | DataException e) {

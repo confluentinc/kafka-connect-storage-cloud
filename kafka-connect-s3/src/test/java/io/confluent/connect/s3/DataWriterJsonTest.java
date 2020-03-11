@@ -1,17 +1,16 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
 package io.confluent.connect.s3;
@@ -19,10 +18,10 @@ package io.confluent.connect.s3;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
@@ -36,6 +35,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.zip.Deflater;
 
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.CompressionType;
@@ -57,7 +57,7 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
   protected final ObjectMapper mapper = new ObjectMapper();
   protected S3Storage storage;
   protected AmazonS3 s3;
-  protected Partitioner<FieldSchema> partitioner;
+  protected Partitioner<?> partitioner;
   protected JsonFormat format;
   protected S3SinkTask task;
   protected Map<String, String> localProps = new HashMap<>();
@@ -154,6 +154,61 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
 
     long[] validOffsets = {0, 3, 6};
     verify(sinkRecords, validOffsets, context.assignment(), ".json.gz");
+  }
+
+  @Test
+  public void testBestGzipCompressionNoSchema() throws Exception {
+    CompressionType compressionType = CompressionType.GZIP;
+    localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+    localProps.put(S3SinkConnectorConfig.COMPRESSION_TYPE_CONFIG, compressionType.name);
+    localProps.put(S3SinkConnectorConfig.COMPRESSION_LEVEL_CONFIG, String.valueOf(Deflater.BEST_COMPRESSION));
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+
+    List<SinkRecord> sinkRecords = createJsonRecordsWithoutSchema(7 * context.assignment().size(), 0, context.assignment());
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 3, 6};
+    verify(sinkRecords, validOffsets, context.assignment(), ".json.gz");
+  }
+
+  @Test
+  public void testNullValue() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+    localProps.put(S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG, "ignore");
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1");
+
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+
+    TopicPartition tp = context.assignment().iterator().next();
+    List<SinkRecord> sinkRecords = Collections
+        .singletonList(new SinkRecord(TOPIC, tp.partition(), null, "key", null, null, 42));
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    List<String> fileNames = getExpectedFiles(new long[]{42L, 42L}, tp, ".json");
+    verifyFileListing(fileNames);
+    Collection<Object> records = readRecords(topicsDir, getDirectory(tp.topic(), tp.partition()),
+        tp, 42, ".json", ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
+    assertEquals(0, records.size());
+  }
+
+  @Test(expected = ConnectException.class)
+  public void testNullValueThrows() throws Exception {
+    localProps.put(S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG, "fail");
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1");
+
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+
+    TopicPartition tp = context.assignment().iterator().next();
+    List<SinkRecord> sinkRecords = Collections
+        .singletonList(new SinkRecord(TOPIC, tp.partition(), null, "key", null, null, 42));
+    task.put(sinkRecords);
   }
 
   protected List<SinkRecord> createRecordsInterleaved(int size, long startOffset, Set<TopicPartition> partitions) {

@@ -1,22 +1,22 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
 package io.confluent.connect.s3;
 
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import com.amazonaws.SdkClientException;
+import io.confluent.connect.s3.storage.S3Storage;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -30,20 +30,20 @@ import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Queue;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
-import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
-import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
@@ -58,25 +58,29 @@ public class TopicPartitionWriter {
   private final Map<String, RecordWriter> writers;
   private final Map<String, Schema> currentSchemas;
   private final TopicPartition tp;
-  private final Partitioner<FieldSchema> partitioner;
+  private final S3Storage storage;
+  private final Partitioner<?> partitioner;
   private final TimestampExtractor timestampExtractor;
   private String topicsDir;
   private State state;
   private final Queue<SinkRecord> buffer;
   private final SinkTaskContext context;
+  private final boolean isTaggingEnabled;
   private int recordCount;
   private final int flushSize;
-  private final boolean appendLateData;
   private final long rotateIntervalMs;
   private final long rotateScheduleIntervalMs;
   private long nextScheduledRotation;
   private long currentOffset;
+  private Long currentStartOffset;
   private Long currentTimestamp;
   private String currentEncodedPartition;
   private Long baseRecordTimestamp;
   private Long offsetToCommit;
   private final RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private final Map<String, Long> startOffsets;
+  private final Map<String, Long> endOffsets;
+  private final Map<String, Long> recordCounts;
   private long timeoutMs;
   private long failureTime;
   private final StorageSchemaCompatibility compatibility;
@@ -92,33 +96,33 @@ public class TopicPartitionWriter {
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
                               RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
-                              Partitioner<FieldSchema> partitioner,
+                              Partitioner<?> partitioner,
                               S3SinkConnectorConfig connectorConfig,
                               SinkTaskContext context) {
-    this(tp, writerProvider, partitioner, connectorConfig, context, SYSTEM_TIME);
+    this(tp, storage, writerProvider, partitioner, connectorConfig, context, SYSTEM_TIME);
   }
 
   // Visible for testing
   TopicPartitionWriter(TopicPartition tp,
+                       S3Storage storage,
                        RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
-                       Partitioner<FieldSchema> partitioner,
+                       Partitioner<?> partitioner,
                        S3SinkConnectorConfig connectorConfig,
                        SinkTaskContext context,
                        Time time) {
     this.connectorConfig = connectorConfig;
     this.time = time;
     this.tp = tp;
+    this.storage = storage;
     this.context = context;
     this.writerProvider = writerProvider;
     this.partitioner = partitioner;
     this.timestampExtractor = partitioner instanceof TimeBasedPartitioner
                                   ? ((TimeBasedPartitioner) partitioner).getTimestampExtractor()
                                   : null;
+    isTaggingEnabled = connectorConfig.getBoolean(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG);
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
-    appendLateData = connectorConfig.getBoolean(
-        StorageSinkConnectorConfig.APPEND_LATE_DATA
-    );
     rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
     if (rotateIntervalMs > 0 && timestampExtractor == null) {
       log.warn(
@@ -136,13 +140,15 @@ public class TopicPartitionWriter {
     }
     timeoutMs = connectorConfig.getLong(S3SinkConnectorConfig.RETRY_BACKOFF_CONFIG);
     compatibility = StorageSchemaCompatibility.getCompatibility(
-        connectorConfig.getString(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG));
+        connectorConfig.getString(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG));
 
     buffer = new LinkedList<>();
     commitFiles = new HashMap<>();
     writers = new HashMap<>();
     currentSchemas = new HashMap<>();
     startOffsets = new HashMap<>();
+    endOffsets = new HashMap<>();
+    recordCounts = new HashMap<>();
     state = State.WRITE_STARTED;
     failureTime = -1L;
     currentOffset = -1L;
@@ -174,6 +180,8 @@ public class TopicPartitionWriter {
     long now = time.milliseconds();
     if (failureTime > 0 && now - failureTime < timeoutMs) {
       return;
+    } else {
+      failureTime = -1;
     }
 
     while (!buffer.isEmpty()) {
@@ -181,11 +189,6 @@ public class TopicPartitionWriter {
         executeState(now);
       } catch (SchemaProjectorException | IllegalWorkerStateException e) {
         throw new ConnectException(e);
-      } catch (RetriableException e) {
-        log.error("Exception on topic partition {}: ", tp, e);
-        failureTime = time.milliseconds();
-        setRetryTimeout(timeoutMs);
-        break;
       }
     }
     commitOnTimeIfNoData(now);
@@ -201,13 +204,13 @@ public class TopicPartitionWriter {
       case WRITE_PARTITION_PAUSED:
         SinkRecord record = buffer.peek();
         if (timestampExtractor != null) {
-          currentTimestamp = timestampExtractor.extract(record);
+          currentTimestamp = timestampExtractor.extract(record, now);
           if (baseRecordTimestamp == null) {
             baseRecordTimestamp = currentTimestamp;
           }
         }
         Schema valueSchema = record.valueSchema();
-        String encodedPartition = partitioner.encodePartition(record);
+        String encodedPartition = partitioner.encodePartition(record, now);
         Schema currentValueSchema = currentSchemas.get(encodedPartition);
         if (currentValueSchema == null) {
           currentSchemas.put(encodedPartition, valueSchema);
@@ -263,11 +266,7 @@ public class TopicPartitionWriter {
       setNextScheduledRotation();
       nextState();
     } else {
-      // If we are appending late data, then we only need to reset currentEncodedPartition
-      // the first time for the write buffer (e.g. when currentEncodedPartition is null)
-      if (!appendLateData || currentEncodedPartition == null) {
-        currentEncodedPartition = encodedPartition;
-      }
+      currentEncodedPartition = encodedPartition;
       SinkRecord projectedRecord = compatibility.project(
           record,
           null,
@@ -301,13 +300,7 @@ public class TopicPartitionWriter {
         );
         setNextScheduledRotation();
 
-        try {
-          commitFiles();
-        } catch (ConnectException e) {
-          log.error("Exception on topic partition {}: ", tp, e);
-          failureTime = time.milliseconds();
-          setRetryTimeout(timeoutMs);
-        }
+        commitFiles();
       }
 
       resume();
@@ -334,6 +327,20 @@ public class TopicPartitionWriter {
     return latest;
   }
 
+  public Long currentStartOffset() {
+    return currentStartOffset;
+  }
+
+  public void failureTime(long when) {
+    this.failureTime = when;
+  }
+
+  private Long minStartOffset() {
+    Optional<Long> minStartOffset = startOffsets.values().stream()
+        .min(Comparator.comparing(Long::valueOf));
+    return minStartOffset.isPresent() ? minStartOffset.get() : null;
+  }
+
   private String getDirectoryPrefix(String encodedPartition) {
     return partitioner.generatePartitionedPath(tp.topic(), encodedPartition);
   }
@@ -350,16 +357,13 @@ public class TopicPartitionWriter {
     if (recordCount <= 0) {
       return false;
     }
-    boolean periodicRotationIsConfiged = rotateIntervalMs > 0 && timestampExtractor != null;
-    // Create a new Encoded-Partition if the record belongs to a partition that isn't currently
-    // open, unless the user specifically configured appending of late data to current
-    // encodedPartition
-    boolean createNewEncodedPartition = !encodedPartition.equals(currentEncodedPartition)
-        && !appendLateData;
-    // periodicRotation happens if it is a) configured b) either enough time has passed or
-    // the record must go in a partition that isn't currently open
-    boolean periodicRotation = periodicRotationIsConfiged
-        && (recordTimestamp - baseRecordTimestamp >= rotateIntervalMs || createNewEncodedPartition);
+    // rotateIntervalMs > 0 implies timestampExtractor != null
+    boolean periodicRotation = rotateIntervalMs > 0
+        && timestampExtractor != null
+        && (
+        recordTimestamp - baseRecordTimestamp >= rotateIntervalMs
+            || !encodedPartition.equals(currentEncodedPartition)
+    );
 
     log.trace(
         "Checking rotation on time with recordCount '{}' and encodedPartition '{}'",
@@ -369,10 +373,12 @@ public class TopicPartitionWriter {
 
     log.trace(
         "Should apply periodic time-based rotation (rotateIntervalMs: '{}', baseRecordTimestamp: "
-            + "'{}', timestamp: '{}')? {}",
+            + "'{}', timestamp: '{}', encodedPartition: '{}', currentEncodedPartition: '{}')? {}",
         rotateIntervalMs,
         baseRecordTimestamp,
         recordTimestamp,
+        encodedPartition,
+        currentEncodedPartition,
         periodicRotation
     );
 
@@ -482,19 +488,42 @@ public class TopicPartitionWriter {
           currentEncodedPartition,
           currentOffset
       );
+
+      // Once we have a "start offset" for a particular "encoded partition"
+      // value, we know that we have at least one record. This allows us
+      // to initialize all our maps at the same time, and saves future
+      // checks on the existence of keys
       startOffsets.put(currentEncodedPartition, currentOffset);
+      recordCounts.put(currentEncodedPartition, 0L);
+      endOffsets.put(currentEncodedPartition, 0L);
     }
 
     RecordWriter writer = getWriter(record, currentEncodedPartition);
     writer.write(record);
     ++recordCount;
+
+    recordCounts.put(currentEncodedPartition, recordCounts.get(currentEncodedPartition) + 1);
+    endOffsets.put(currentEncodedPartition, currentOffset);
   }
 
   private void commitFiles() {
-    for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
-      commitFile(entry.getKey());
-      log.debug("Committed {} for {}", entry.getValue(), tp);
+    currentStartOffset = minStartOffset();
+    try {
+      for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
+        String encodedPartition = entry.getKey();
+        commitFile(encodedPartition);
+        if (isTaggingEnabled) {
+          tagFile(encodedPartition, entry.getValue());
+        }
+        startOffsets.remove(encodedPartition);
+        endOffsets.remove(encodedPartition);
+        recordCounts.remove(encodedPartition);
+        log.debug("Committed {} for {}", entry.getValue(), tp);
+      }
+    } catch (ConnectException e) {
+      throw new RetriableException(e);
     }
+
     offsetToCommit = currentOffset + 1;
     commitFiles.clear();
     currentSchemas.clear();
@@ -516,11 +545,41 @@ public class TopicPartitionWriter {
       writers.remove(encodedPartition);
       log.debug("Removed writer for '{}'", encodedPartition);
     }
-
-    startOffsets.remove(encodedPartition);
   }
 
-  private void setRetryTimeout(long timeoutMs) {
-    context.timeout(timeoutMs);
+  private void tagFile(String encodedPartition, String s3ObjectPath) {
+    Long startOffset = startOffsets.get(encodedPartition);
+    Long endOffset = endOffsets.get(encodedPartition);
+    Long recordCount = recordCounts.get(encodedPartition);
+    if (startOffset == null || endOffset == null || recordCount == null) {
+      log.warn(
+          "Missing tags when attempting to tag file {}. "
+              + "Starting offset tag: {}, "
+              + "ending offset tag: {}, "
+              + "record count tag: {}. Ignoring.",
+          encodedPartition,
+          startOffset == null ? "missing" : startOffset,
+          endOffset == null ? "missing" : endOffset,
+          recordCount == null ? "missing" : recordCount
+      );
+      return;
+    }
+
+    log.debug("Object to tag is: {}", s3ObjectPath);
+    Map<String, String> tags = new HashMap<>();
+    tags.put("startOffset", Long.toString(startOffset));
+    tags.put("endOffset", Long.toString(endOffset));
+    tags.put("recordCount", Long.toString(recordCount));
+
+    try {
+      storage.addTags(s3ObjectPath, tags);
+      log.info("Tagged S3 object {} with starting offset {}, ending offset {}, record count {}",
+          s3ObjectPath, startOffset, endOffset, recordCount);
+    } catch (SdkClientException e) {
+      log.warn("Unable to tag S3 object {}. Ignoring.", s3ObjectPath, e);
+    } catch (Exception e) {
+      log.warn("Unrecoverable exception while attempting to tag S3 object {}. Ignoring.",
+          s3ObjectPath, e);
+    }
   }
 }
