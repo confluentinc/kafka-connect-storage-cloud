@@ -50,6 +50,7 @@ import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.s3.util.S3BucketCheck;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.ComposableConfig;
 import io.confluent.connect.storage.common.GenericRecommender;
@@ -190,6 +191,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       configDef.define(
           S3_BUCKET_CONFIG,
           Type.STRING,
+          ConfigDef.NO_DEFAULT_VALUE,
+          S3BucketCheck.bucketNameValidator(),
           Importance.HIGH,
           "The S3 Bucket.",
           group,
@@ -638,6 +641,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       return "[" + min + ",...," + max + "]";
     }
   }
+
 
   private static class RegionRecommender implements ConfigDef.Recommender {
     @Override
