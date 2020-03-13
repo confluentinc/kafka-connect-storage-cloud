@@ -465,5 +465,23 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     connectorConfig = new S3SinkConnectorConfig(properties);
     connectorConfig.parquetCompressionCodecName();
   }
+
+  @Test(expected = ConfigException.class)
+  public void testInvalidBucketName() {
+    properties.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "test_bucket");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+  }
+
+  @Test(expected = ConfigException.class)
+  public void testEmptyBucketName() {
+    properties.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+  }
+
+  @Test
+  public void testValidBucketName() {
+    properties.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, "test-bucket");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+  }
 }
 
