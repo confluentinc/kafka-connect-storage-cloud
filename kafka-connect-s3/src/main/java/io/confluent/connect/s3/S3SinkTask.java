@@ -134,6 +134,7 @@ public class S3SinkTask extends SinkTask {
     assignment.addAll(partitions);
     for (TopicPartition tp : assignment) {
       topicPartitionWriters.put(tp, newTopicPartitionWriter(tp));
+      storage.setBufferSize(tp, connectorConfig.getInitialBufferSize());
     }
   }
 
@@ -230,6 +231,7 @@ public class S3SinkTask extends SinkTask {
       } catch (ConnectException e) {
         log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
       }
+      storage.closePartition(tp);
     }
     topicPartitionWriters.clear();
     assignment.clear();

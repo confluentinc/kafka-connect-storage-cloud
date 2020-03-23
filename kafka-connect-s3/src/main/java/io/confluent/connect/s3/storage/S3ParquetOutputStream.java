@@ -16,7 +16,6 @@
 
 package io.confluent.connect.s3.storage;
 
-import com.amazonaws.services.s3.AmazonS3;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 
 import java.io.IOException;
@@ -25,8 +24,13 @@ public class S3ParquetOutputStream extends S3OutputStream {
 
   private volatile boolean commit;
 
-  public S3ParquetOutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
-    super(key, conf, s3);
+  public S3ParquetOutputStream(
+      String key,
+      S3SinkConnectorConfig conf,
+      S3Storage s3Storage,
+      int bufferSize
+  ) {
+    super(key, conf, s3Storage, bufferSize);
     commit = false;
   }
 

@@ -19,6 +19,7 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.services.s3.model.Tag;
 import io.confluent.common.utils.SystemTime;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
@@ -93,10 +94,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     s3 = newS3Client(connectorConfig);
     storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+    setUpStorage();
     format = new AvroFormat(storage);
 
     s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
+    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
 
     Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
     writerProvider = format.getRecordWriterProvider();
@@ -112,15 +114,22 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
       @Override
       public S3OutputStream create(String path, boolean overwrite) {
-        return new S3OutputStreamFlaky(path, this.conf(), s3, retries);
+        return new S3OutputStreamFlaky(path, this.conf(), storage, retries);
       }
     };
+    setUpStorage();
 
     format = new AvroFormat(storage);
 
     Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
     writerProvider = format.getRecordWriterProvider();
     extension = writerProvider.getExtension();
+  }
+
+  private void setUpStorage() {
+    for (TopicPartition tp : context.assignment()) {
+      storage.setBufferSize(tp, connectorConfig.getInitialBufferSize());
+    }
   }
 
   @After

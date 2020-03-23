@@ -80,7 +80,7 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
     format = new ByteArrayFormat(storage);
     s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
+    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
   }
 
   @After
@@ -95,7 +95,12 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, ByteArrayFormat.class.getName());
     setUp();
     PowerMockito.doReturn(5).when(connectorConfig).getPartSize();
-    S3OutputStream out = new S3OutputStream(S3_TEST_BUCKET_NAME, connectorConfig, s3);
+    S3OutputStream out = new S3OutputStream(
+        S3_TEST_BUCKET_NAME,
+        connectorConfig,
+        storage,
+        connectorConfig.getInitialBufferSize()
+    );
     out.write(new byte[]{65,66,67,68,69});
     out.write(70);
   }

@@ -98,7 +98,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     format = new ParquetFormat(storage);
 
     s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
+    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
   }
 
   @After
@@ -106,6 +106,68 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
   public void tearDown() throws Exception {
     super.tearDown();
     localProps.clear();
+  }
+
+  @Test
+  public void testDynamicPartSize() throws Exception {
+    int initialSize = 128;
+    // Do not roll on size, only based on time.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(S3SinkConnectorConfig.INITIAL_BUFFER_SIZE_CONFIG, String.valueOf(initialSize));
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.HOURS.toMillis(1))
+    );
+    setUp();
+
+    // Define the partitioner
+    TimeBasedPartitioner<?> partitioner = new TimeBasedPartitioner<>();
+    parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
+    parsedConfig.put(
+        PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+        TopicPartitionWriterTest.MockedWallclockTimestampExtractor.class.getName()
+    );
+    partitioner.configure(parsedConfig);
+
+    MockTime time = ((TopicPartitionWriterTest.MockedWallclockTimestampExtractor) partitioner
+        .getTimestampExtractor()).time;
+    // Bring the clock to present.
+    time.sleep(SYSTEM.milliseconds());
+
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, time);
+
+    context.assignment()
+        .forEach(
+            tp -> assertEquals(
+                (int) (initialSize * connectorConfig.getBufferSizePadding()),
+                storage.getRecommendedBufferSize(tp)
+            )
+        );
+
+    TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
+    for (int hours = 0; hours < 10; hours++) {
+      List<SinkRecord> sinkRecords = createRecordsWithTimestamp(
+          100,
+          0,
+          Collections.singleton(tp),
+          time
+      );
+
+      // Perform write
+      task.put(sinkRecords);
+
+      // 1 hour
+      time.sleep(TimeUnit.HOURS.toMillis(1));
+
+      // Since rotation depends on scheduled intervals, flush will happen even when no new records
+      // are returned.
+      task.put(Collections.<SinkRecord>emptyList());
+    }
+
+    assertEquals(connectorConfig.getPartSize(), storage.getRecommendedBufferSize(tp));
+
+    task.close(context.assignment());
+    task.stop();
   }
 
   @Test

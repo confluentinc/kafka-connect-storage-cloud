@@ -74,6 +74,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import static org.powermock.api.mockito.PowerMockito.doReturn;
 
 public class DataWriterAvroTest extends TestWithMockedS3 {
 
@@ -102,13 +103,14 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     s3 = PowerMockito.spy(newS3Client(connectorConfig));
 
     storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+    setUpStorage();
 
     partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     format = new AvroFormat(storage);
 
     s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
+    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
 
     // Workaround to avoid AWS S3 client failing due to apparently incorrect S3Mock digest
     prevMd5Prop = System.getProperty(
@@ -118,7 +120,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   }
 
   //@Before should be omitted in order to be able to add properties per test.
-  public void setUpWithCommitException() throws Exception {
+  public void  setUpWithCommitException() throws Exception {
     super.setUp();
 
     s3 = PowerMockito.spy(newS3Client(connectorConfig));
@@ -128,16 +130,26 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
 
       @Override
       public S3OutputStream create(String path, boolean overwrite) {
-        return new TopicPartitionWriterTest.S3OutputStreamFlaky(path, this.conf(), s3, retries);
+        S3OutputStream stream
+            = new TopicPartitionWriterTest.S3OutputStreamFlaky(path, this.conf(), storage, retries);
+        openStreams.put(stream, getTopicPartitionFromPath(path));
+        return stream;
       }
     };
+    setUpStorage();
 
     partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     format = new AvroFormat(storage);
 
     s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
+    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
+  }
+
+  private void setUpStorage() {
+    for (TopicPartition tp : context.assignment()) {
+      storage.setBufferSize(tp, connectorConfig.getInitialBufferSize());
+    }
   }
 
   @After
@@ -171,6 +183,68 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     long[] validOffsets = {0, 3, 6};
     verify(sinkRecords, validOffsets);
 
+  }
+
+  @Test
+  public void testDynamicPartSize() throws Exception {
+    int initialSize = 128;
+    // Do not roll on size, only based on time.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(S3SinkConnectorConfig.INITIAL_BUFFER_SIZE_CONFIG, String.valueOf(initialSize));
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.HOURS.toMillis(1))
+    );
+    setUp();
+
+    // Define the partitioner
+    TimeBasedPartitioner<?> partitioner = new TimeBasedPartitioner<>();
+    parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
+    parsedConfig.put(
+        PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+        TopicPartitionWriterTest.MockedWallclockTimestampExtractor.class.getName()
+    );
+    partitioner.configure(parsedConfig);
+
+    MockTime time = ((TopicPartitionWriterTest.MockedWallclockTimestampExtractor) partitioner
+        .getTimestampExtractor()).time;
+    // Bring the clock to present.
+    time.sleep(SYSTEM.milliseconds());
+
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, time);
+
+    context.assignment()
+        .forEach(
+            tp -> assertEquals(
+                (int) (initialSize * connectorConfig.getBufferSizePadding()),
+                storage.getRecommendedBufferSize(tp)
+            )
+        );
+
+    TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
+    for (int hours = 0; hours < 10; hours++) {
+      List<SinkRecord> sinkRecords = createRecordsWithTimestamp(
+          100,
+          0,
+          Collections.singleton(tp),
+          time
+      );
+
+      // Perform write
+      task.put(sinkRecords);
+
+      // 1 hour
+      time.sleep(TimeUnit.HOURS.toMillis(1));
+
+      // Since rotation depends on scheduled intervals, flush will happen even when no new records
+      // are returned.
+      task.put(Collections.<SinkRecord>emptyList());
+    }
+
+    assertEquals(connectorConfig.getPartSize(), storage.getRecommendedBufferSize(tp));
+
+    task.close(context.assignment());
+    task.stop();
   }
 
   @Test

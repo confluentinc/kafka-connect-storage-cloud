@@ -568,7 +568,46 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       );
 
     }
+
+    addInternalConfigs(configDef);
     return configDef;
+  }
+
+  protected static final String INITIAL_BUFFER_SIZE_CONFIG = "initial.buffer.size";
+  private static final String MOVING_AVERAGE_FORGETTING_FACTOR_CONFIG = "forgetting.factor";
+  private static final String BUFFER_SIZE_PADDING_MULTIPLIER_CONFIG =
+      "buffer.size.padding.multiplier";
+
+  private static void addInternalConfigs(ConfigDef configDef) {
+    configDef
+        .defineInternal(
+            INITIAL_BUFFER_SIZE_CONFIG,
+            Type.INT,
+            1024 * 512,
+            Importance.LOW
+        ).defineInternal(
+            MOVING_AVERAGE_FORGETTING_FACTOR_CONFIG,
+            Type.DOUBLE,
+            .9,
+            Importance.LOW
+        ).defineInternal(
+            BUFFER_SIZE_PADDING_MULTIPLIER_CONFIG,
+            Type.DOUBLE,
+            1.5,
+            Importance.LOW
+    );
+  }
+
+  public int getInitialBufferSize() {
+    return getInt(INITIAL_BUFFER_SIZE_CONFIG);
+  }
+
+  public double getForgettingFactor() {
+    return getDouble(MOVING_AVERAGE_FORGETTING_FACTOR_CONFIG);
+  }
+
+  public double getBufferSizePadding() {
+    return getDouble(BUFFER_SIZE_PADDING_MULTIPLIER_CONFIG);
   }
 
   public S3SinkConnectorConfig(Map<String, String> props) {

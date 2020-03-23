@@ -52,6 +52,7 @@ public class S3OutputStream extends PositionOutputStream {
   private static final Logger log = LoggerFactory.getLogger(S3OutputStream.class);
   private final AmazonS3 s3;
   private final S3SinkConnectorConfig connectorConfig;
+  private final S3Storage s3Storage;
   private final String bucket;
   private final String key;
   private final String ssea;
@@ -68,9 +69,15 @@ public class S3OutputStream extends PositionOutputStream {
   private volatile OutputStream compressionFilter;
   private Long position;
 
-  public S3OutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
-    this.s3 = s3;
+  public S3OutputStream(
+      String key,
+      S3SinkConnectorConfig conf,
+      S3Storage s3Storage,
+      int bufferSize
+  ) {
+    this.s3 = s3Storage.s3();
     this.connectorConfig = conf;
+    this.s3Storage = s3Storage;
     this.bucket = conf.getBucketName();
     this.key = key;
     this.ssea = conf.getSsea();
@@ -82,7 +89,7 @@ public class S3OutputStream extends PositionOutputStream {
     this.partSize = conf.getPartSize();
     this.cannedAcl = conf.getCannedAcl();
     this.closed = false;
-    this.buffer = ByteBuffer.allocate(this.partSize);
+    this.buffer = ByteBuffer.allocate(bufferSize);
     this.progressListener = new ConnectProgressListener();
     this.multiPartUpload = null;
     this.compressionType = conf.getCompressionType();
@@ -95,7 +102,11 @@ public class S3OutputStream extends PositionOutputStream {
   public void write(int b) throws IOException {
     buffer.put((byte) b);
     if (!buffer.hasRemaining()) {
-      uploadPart();
+      if (buffer.capacity() < partSize) {
+        increaseBufferSize(1);
+      } else {
+        uploadPart();
+      }
     }
     position++;
   }
@@ -111,15 +122,40 @@ public class S3OutputStream extends PositionOutputStream {
     }
 
     if (buffer.remaining() <= len) {
-      int firstPart = buffer.remaining();
-      buffer.put(b, off, firstPart);
-      position += firstPart;
-      uploadPart();
-      write(b, off + firstPart, len - firstPart);
+      if (increaseBufferSize(len)) {
+        buffer.put(b, off, len);
+        position += len;
+
+      } else {
+        int firstPart = buffer.remaining();
+        buffer.put(b, off, firstPart);
+        position += firstPart;
+        uploadPart();
+        write(b, off + firstPart, len - firstPart);
+      }
+
     } else {
       buffer.put(b, off, len);
       position += len;
     }
+  }
+
+  private boolean increaseBufferSize(int minIncrease) {
+    if (buffer.capacity() == partSize) {
+      return false;
+    }
+
+    int newCapacity = buffer.capacity();
+    while (newCapacity - buffer.position() < minIncrease) {
+      newCapacity *= 2;
+    }
+
+    log.trace("Trying to increase buffer size from {} to {}", buffer.capacity(), newCapacity);
+    ByteBuffer newBuffer = ByteBuffer.allocate(Math.min(newCapacity, partSize));
+    newBuffer.put(buffer.array(), 0, buffer.position());
+    buffer = newBuffer;
+
+    return buffer.remaining() >= minIncrease;
   }
 
   private static boolean outOfRange(int off, int len) {
@@ -189,6 +225,7 @@ public class S3OutputStream extends PositionOutputStream {
       log.debug("Multipart upload aborted for bucket '{}' key '{}'.", bucket, key);
     }
     super.close();
+    s3Storage.closeStream(this);
   }
 
   private ObjectMetadata newObjectMetadata() {
@@ -241,6 +278,11 @@ public class S3OutputStream extends PositionOutputStream {
 
     public void uploadPart(ByteArrayInputStream inputStream, int partSize) {
       int currentPartNumber = partETags.size() + 1;
+      // the last part can be smaller than partSize, so report it as the full size to not lower
+      // the average uploaded part size, unless the entire file is less than partSize
+      int reportedPartSize = currentPartNumber == 1 ? partSize : S3OutputStream.this.partSize;
+      s3Storage.reportLastUploadSize(S3OutputStream.this, reportedPartSize);
+
       UploadPartRequest request = new UploadPartRequest()
                                             .withBucketName(bucket)
                                             .withKey(key)
@@ -250,7 +292,12 @@ public class S3OutputStream extends PositionOutputStream {
                                             .withPartNumber(currentPartNumber)
                                             .withPartSize(partSize)
                                             .withGeneralProgressListener(progressListener);
-      log.debug("Uploading part {} for id '{}'", currentPartNumber, uploadId);
+      log.debug(
+          "Uploading part {} for id '{}' with size {}",
+          currentPartNumber,
+          uploadId,
+          reportedPartSize
+      );
       partETags.add(s3.uploadPart(request).getPartETag());
     }
 

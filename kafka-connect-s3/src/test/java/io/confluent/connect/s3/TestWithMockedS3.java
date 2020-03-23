@@ -15,7 +15,6 @@
 
 package io.confluent.connect.s3;
 
-import akka.parboiled2.RuleTrace;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.AnonymousAWSCredentials;
@@ -29,6 +28,7 @@ import com.amazonaws.services.s3.model.Tag;
 import com.amazonaws.services.s3.model.GetObjectTaggingResult;
 import com.amazonaws.services.s3.model.transform.XmlResponsesSaxParser;
 import io.confluent.connect.s3.format.parquet.ParquetUtils;
+import io.confluent.connect.s3.storage.S3Storage;
 import io.findify.s3mock.S3Mock;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -210,8 +210,13 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
   class S3OutputStreamFlaky extends S3OutputStream {
     private final AtomicInteger retries;
 
-    public S3OutputStreamFlaky(String key, S3SinkConnectorConfig conf, AmazonS3 s3, AtomicInteger retries) {
-      super(key, conf, s3);
+    public S3OutputStreamFlaky(
+        String key,
+        S3SinkConnectorConfig conf,
+        S3Storage storage,
+        AtomicInteger retries
+    ) {
+      super(key, conf, storage, conf.getInitialBufferSize());
       this.retries = retries;
     }
 
