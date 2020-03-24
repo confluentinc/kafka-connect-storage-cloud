@@ -29,12 +29,14 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.format.RecordViewSetter;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 
-public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
+public class JsonRecordWriterProvider extends RecordViewSetter
+    implements RecordWriterProvider<S3SinkConnectorConfig> {
 
   private static final Logger log = LoggerFactory.getLogger(JsonRecordWriterProvider.class);
   private static final String EXTENSION = ".json";
@@ -70,11 +72,11 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
         public void write(SinkRecord record) {
           log.trace("Sink record: {}", record);
           try {
-            Object value = record.value();
+            Object value = recordView.getView(record);
             if (value instanceof Struct) {
               byte[] rawJson = converter.fromConnectData(
                   record.topic(),
-                  record.valueSchema(),
+                  recordView.getViewSchema(record),
                   value
               );
               s3outWrapper.write(rawJson);
