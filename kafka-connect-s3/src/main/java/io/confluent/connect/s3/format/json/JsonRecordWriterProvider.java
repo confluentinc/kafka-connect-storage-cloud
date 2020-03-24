@@ -70,7 +70,7 @@ public class JsonRecordWriterProvider extends RecordViewSetter
 
         @Override
         public void write(SinkRecord record) {
-          log.trace("Sink record: {}", record);
+          log.trace("Sink record with view {}: {}", recordView, record);
           try {
             Object value = recordView.getView(record);
             if (value instanceof Struct) {

@@ -84,7 +84,7 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
             throw new ConnectException(e);
           }
         }
-        log.trace("Sink record: {}", record.toString());
+        log.trace("Sink record with view {}: {}", recordView, record);
         Object value = avroData.fromConnectData(schema, recordView.getView(record));
         try {
           writer.write((GenericRecord) value);

@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 public final class RecordViews {
-  public static final class KeyRecordView implements RecordView {
+  public static final class KeyRecordView extends BaseRecordView {
     @Override
     public Schema getViewSchema(SinkRecord record) {
       return record.keySchema();
@@ -38,7 +38,7 @@ public final class RecordViews {
     }
   }
 
-  public static final class ValueRecordView implements RecordView {
+  public static final class ValueRecordView extends BaseRecordView {
     @Override
     public Schema getViewSchema(SinkRecord record) {
       return record.valueSchema();
@@ -50,8 +50,9 @@ public final class RecordViews {
     }
   }
 
-  public static final class HeaderRecordView implements RecordView {
-    private static final Schema SINGLE_HEADER_SCHEMA = SchemaBuilder.struct()
+  public static final class HeaderRecordView extends BaseRecordView {
+    // VisibleForTesting
+    static final Schema SINGLE_HEADER_SCHEMA = SchemaBuilder.struct()
         .field("key", Schema.STRING_SCHEMA)
         .field("value", Schema.STRING_SCHEMA)
         .build();
@@ -68,6 +69,13 @@ public final class RecordViews {
               .put("key", h.key())
               .put("value", Values.convertToString(h.schema(), h.value())))
           .collect(Collectors.toList());
+    }
+  }
+
+  private abstract static class BaseRecordView implements RecordView {
+    @Override
+    public String toString() {
+      return this.getClass().getSimpleName();
     }
   }
 }
