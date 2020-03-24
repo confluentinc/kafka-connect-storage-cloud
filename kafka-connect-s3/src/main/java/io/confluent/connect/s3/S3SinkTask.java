@@ -37,6 +37,7 @@ import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
 import io.confluent.connect.s3.format.RecordViewSetter;
+import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.Version;
@@ -160,10 +161,12 @@ public class S3SinkTask extends SinkTask {
           .getRecordWriterProvider();
       ((RecordViewSetter) keyWriterProvider).setRecordView(new KeyRecordView());
     }
-    RecordWriterProvider<S3SinkConnectorConfig> headerWriterProvider =
-        config.getBoolean(S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG)
-            ? newFormat(S3SinkConnectorConfig.HEADERS_FORMAT_CLASS_CONFIG).getRecordWriterProvider()
-            : null;
+    RecordWriterProvider<S3SinkConnectorConfig> headerWriterProvider = null;
+    if (config.getBoolean(S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG)) {
+      headerWriterProvider = newFormat(S3SinkConnectorConfig.HEADERS_FORMAT_CLASS_CONFIG)
+          .getRecordWriterProvider();
+      ((RecordViewSetter) headerWriterProvider).setRecordView(new HeaderRecordView());
+    }
 
     return new KeyValueHeaderRecordWriterProvider(
         valueWriterProvider, keyWriterProvider, headerWriterProvider);
