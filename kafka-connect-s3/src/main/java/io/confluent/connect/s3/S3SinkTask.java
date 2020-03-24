@@ -35,6 +35,7 @@ import java.util.Map;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
+import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.StorageFactory;
@@ -107,7 +108,11 @@ public class S3SinkTask extends SinkTask {
         throw new DataException("No-existent S3 bucket: " + connectorConfig.getBucketName());
       }
 
-      writerProvider = newFormat().getRecordWriterProvider();
+      writerProvider = new KeyValueHeaderRecordWriterProvider(
+          newFormat().getRecordWriterProvider(),
+          null,
+          null);
+
       partitioner = newPartitioner(connectorConfig);
 
       open(context.assignment());
