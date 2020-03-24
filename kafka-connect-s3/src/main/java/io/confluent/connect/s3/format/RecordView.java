@@ -23,4 +23,6 @@ public interface RecordView {
   Schema getViewSchema(SinkRecord record);
 
   Object getView(SinkRecord record);
+
+  String getExtension();
 }

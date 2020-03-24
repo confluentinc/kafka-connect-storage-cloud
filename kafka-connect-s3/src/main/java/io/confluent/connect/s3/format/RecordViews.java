@@ -36,6 +36,11 @@ public final class RecordViews {
     public Object getView(SinkRecord record) {
       return record.key();
     }
+
+    @Override
+    public String getExtension() {
+      return ".keys";
+    }
   }
 
   public static final class ValueRecordView extends BaseRecordView {
@@ -47,6 +52,11 @@ public final class RecordViews {
     @Override
     public Object getView(SinkRecord record) {
       return record.value();
+    }
+
+    @Override
+    public String getExtension() {
+      return "";
     }
   }
 
@@ -69,6 +79,11 @@ public final class RecordViews {
               .put("key", h.key())
               .put("value", Values.convertToString(h.schema(), h.value())))
           .collect(Collectors.toList());
+    }
+
+    @Override
+    public String getExtension() {
+      return ".headers";
     }
   }
 

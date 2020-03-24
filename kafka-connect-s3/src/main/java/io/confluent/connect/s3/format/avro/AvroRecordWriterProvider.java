@@ -57,6 +57,11 @@ public class AvroRecordWriterProvider extends RecordViewSetter
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     // This is not meant to be a thread-safe writer!
     return new RecordWriter() {
+      int extensionOffset = filename.indexOf(getExtension());
+      final String adjustedFilename = extensionOffset > -1
+          ? filename.substring(0, extensionOffset) + recordView.getExtension()
+          + filename.substring(extensionOffset)
+          : filename;
       final DataFileWriter<Object> writer = new DataFileWriter<>(new GenericDatumWriter<>());
       Schema schema = null;
       S3OutputStream s3out;
@@ -66,8 +71,8 @@ public class AvroRecordWriterProvider extends RecordViewSetter
         if (schema == null) {
           schema = recordView.getViewSchema(record);
           try {
-            log.info("Opening record writer for: {}", filename);
-            s3out = storage.create(filename, true);
+            log.info("Opening record writer for: {}", adjustedFilename);
+            s3out = storage.create(adjustedFilename, true);
             org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
             writer.setCodec(CodecFactory.fromString(conf.getAvroCodec()));
             writer.create(avroSchema, s3out);

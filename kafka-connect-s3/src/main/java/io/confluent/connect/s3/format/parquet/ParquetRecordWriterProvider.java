@@ -59,6 +59,11 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
   @Override
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     return new RecordWriter() {
+      int extensionOffset = filename.indexOf(getExtension());
+      final String adjustedFilename = extensionOffset > -1
+          ? filename.substring(0, extensionOffset) + recordView.getExtension()
+          + filename.substring(extensionOffset)
+          : filename;
       Schema schema = null;
       ParquetWriter<GenericRecord> writer;
       S3ParquetOutputFile s3ParquetOutputFile;
@@ -68,10 +73,10 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
         if (schema == null) {
           schema = recordView.getViewSchema(record);
           try {
-            log.info("Opening record writer for: {}", filename);
+            log.info("Opening record writer for: {}", adjustedFilename);
             org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
 
-            s3ParquetOutputFile = new S3ParquetOutputFile(storage, filename);
+            s3ParquetOutputFile = new S3ParquetOutputFile(storage, adjustedFilename);
             writer = AvroParquetWriter
                     .<GenericRecord>builder(s3ParquetOutputFile)
                     .withSchema(avroSchema)
