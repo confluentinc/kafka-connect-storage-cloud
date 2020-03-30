@@ -13,22 +13,24 @@ import static org.junit.Assert.assertTrue;
 
 public class ElasticByteBufferTest {
 
+  public static final int INIT_CAP = 128 * 1024;
+
   @Rule
   public ExpectedException exceptionRule = ExpectedException.none();
 
   @Test(expected = IllegalArgumentException.class)
   public void testIllegalCapacity1() {
-    ElasticByteBuffer buf = new ElasticByteBuffer(-1);
+    ElasticByteBuffer buf = new ElasticByteBuffer(-1, INIT_CAP);
   }
 
   @Test(expected = IllegalArgumentException.class)
   public void testIllegalCapacity2() {
-    ElasticByteBuffer buf = new ElasticByteBuffer(0);
+    ElasticByteBuffer buf = new ElasticByteBuffer(0, INIT_CAP);
   }
 
   @Test
   public void testLessThanInitCapacityPut1() {
-    ElasticByteBuffer buf = new ElasticByteBuffer(1024);
+    ElasticByteBuffer buf = new ElasticByteBuffer(1024, INIT_CAP);
 
     assertEquals(1024, buf.physicalRemaining());
     assertEquals(1024, buf.remaining());
@@ -60,7 +62,7 @@ public class ElasticByteBufferTest {
 
   @Test
   public void testLessThanInitCapacityPut2() {
-    ElasticByteBuffer buf = new ElasticByteBuffer(1024);
+    ElasticByteBuffer buf = new ElasticByteBuffer(1024, INIT_CAP);
 
     byte[] randomBytes1 = RandomStringUtils.randomAlphanumeric(4).getBytes();
     buf.put(randomBytes1, 0, randomBytes1.length);
@@ -87,7 +89,7 @@ public class ElasticByteBufferTest {
 
   @Test
   public void testLessThanInitCapacityClear() {
-    ElasticByteBuffer buf = new ElasticByteBuffer(1024);
+    ElasticByteBuffer buf = new ElasticByteBuffer(1024, INIT_CAP);
 
     byte[] randomBytes1 = RandomStringUtils.randomAlphanumeric(4).getBytes();
     buf.put(randomBytes1, 0, randomBytes1.length);
@@ -104,24 +106,24 @@ public class ElasticByteBufferTest {
   public void testGreaterThanInitCapacityPut1() {
 
     int cap = 10 * 1024 * 1024;
-    ElasticByteBuffer buf = new ElasticByteBuffer(cap);
+    ElasticByteBuffer buf = new ElasticByteBuffer(cap, INIT_CAP);
 
-    assertEquals(ElasticByteBuffer.INIT_CAPACITY, buf.physicalRemaining());
+    assertEquals(INIT_CAP, buf.physicalRemaining());
     assertEquals(cap, buf.remaining());
     assertEquals(0, buf.position());
     assertEquals(true, buf.hasRemaining());
-    assertEquals(ElasticByteBuffer.INIT_CAPACITY, buf.array().length);
+    assertEquals(INIT_CAP, buf.array().length);
 
-    byte[] randomBytes1 = RandomStringUtils.randomAlphanumeric(ElasticByteBuffer.INIT_CAPACITY).getBytes();
+    byte[] randomBytes1 = RandomStringUtils.randomAlphanumeric(INIT_CAP).getBytes();
     for (byte randomByte : randomBytes1) {
       buf.put(randomByte);
     }
 
     assertEquals(0, buf.physicalRemaining());
-    assertEquals(cap - ElasticByteBuffer.INIT_CAPACITY, buf.remaining());
-    assertEquals(ElasticByteBuffer.INIT_CAPACITY, buf.position());
+    assertEquals(cap - INIT_CAP, buf.remaining());
+    assertEquals(INIT_CAP, buf.position());
     assertEquals(true, buf.hasRemaining());
-    assertEquals(ElasticByteBuffer.INIT_CAPACITY, buf.array().length);
+    assertEquals(INIT_CAP, buf.array().length);
 
     int testBytesLen1 = 5;
     byte[] randomBytes2 = RandomStringUtils.randomAlphanumeric(testBytesLen1).getBytes();
@@ -129,15 +131,15 @@ public class ElasticByteBufferTest {
       buf.put(randomByte);
     }
 
-    int exceptNewPhysicalSize = ElasticByteBuffer.INIT_CAPACITY * 2;
+    int exceptNewPhysicalSize = INIT_CAP * 2;
 
-    assertEquals(exceptNewPhysicalSize - (ElasticByteBuffer.INIT_CAPACITY + testBytesLen1), buf.physicalRemaining());
-    assertEquals(cap - (ElasticByteBuffer.INIT_CAPACITY + testBytesLen1), buf.remaining());
-    assertEquals(ElasticByteBuffer.INIT_CAPACITY + testBytesLen1, buf.position());
+    assertEquals(exceptNewPhysicalSize - (INIT_CAP + testBytesLen1), buf.physicalRemaining());
+    assertEquals(cap - (INIT_CAP + testBytesLen1), buf.remaining());
+    assertEquals(INIT_CAP + testBytesLen1, buf.position());
     assertEquals(true, buf.hasRemaining());
     assertEquals(exceptNewPhysicalSize, buf.array().length);
 
-    int remaining = cap - (ElasticByteBuffer.INIT_CAPACITY + testBytesLen1);
+    int remaining = cap - (INIT_CAP + testBytesLen1);
     byte[] randomBytes3 = RandomStringUtils.randomAlphanumeric(remaining).getBytes();
     for (byte randomByte : randomBytes3) {
       buf.put(randomByte);
@@ -156,36 +158,36 @@ public class ElasticByteBufferTest {
   @Test
   public void testGreaterThanInitCapacityPut2() {
     int cap = 10 * 1024 * 1024;
-    ElasticByteBuffer buf = new ElasticByteBuffer(cap);
+    ElasticByteBuffer buf = new ElasticByteBuffer(cap, INIT_CAP);
 
-    assertEquals(ElasticByteBuffer.INIT_CAPACITY, buf.physicalRemaining());
+    assertEquals(INIT_CAP, buf.physicalRemaining());
     assertEquals(cap, buf.remaining());
     assertEquals(0, buf.position());
     assertEquals(true, buf.hasRemaining());
-    assertEquals(ElasticByteBuffer.INIT_CAPACITY, buf.array().length);
+    assertEquals(INIT_CAP, buf.array().length);
 
-    byte[] randomBytes1 = RandomStringUtils.randomAlphanumeric(ElasticByteBuffer.INIT_CAPACITY).getBytes();
+    byte[] randomBytes1 = RandomStringUtils.randomAlphanumeric(INIT_CAP).getBytes();
     buf.put(randomBytes1, 0, randomBytes1.length);
 
     assertEquals(0, buf.physicalRemaining());
-    assertEquals(cap - ElasticByteBuffer.INIT_CAPACITY, buf.remaining());
-    assertEquals(ElasticByteBuffer.INIT_CAPACITY, buf.position());
+    assertEquals(cap - INIT_CAP, buf.remaining());
+    assertEquals(INIT_CAP, buf.position());
     assertEquals(true, buf.hasRemaining());
-    assertEquals(ElasticByteBuffer.INIT_CAPACITY, buf.array().length);
+    assertEquals(INIT_CAP, buf.array().length);
 
     int testBytesLen1 = 5;
     byte[] randomBytes2 = RandomStringUtils.randomAlphanumeric(testBytesLen1).getBytes();
     buf.put(randomBytes2, 0, randomBytes2.length);
 
-    int exceptNewPhysicalSize = ElasticByteBuffer.INIT_CAPACITY * 2;
+    int exceptNewPhysicalSize = INIT_CAP * 2;
 
-    assertEquals(exceptNewPhysicalSize - (ElasticByteBuffer.INIT_CAPACITY + testBytesLen1), buf.physicalRemaining());
-    assertEquals(cap - (ElasticByteBuffer.INIT_CAPACITY + testBytesLen1), buf.remaining());
-    assertEquals(ElasticByteBuffer.INIT_CAPACITY + testBytesLen1, buf.position());
+    assertEquals(exceptNewPhysicalSize - (INIT_CAP + testBytesLen1), buf.physicalRemaining());
+    assertEquals(cap - (INIT_CAP + testBytesLen1), buf.remaining());
+    assertEquals(INIT_CAP + testBytesLen1, buf.position());
     assertEquals(true, buf.hasRemaining());
     assertEquals(exceptNewPhysicalSize, buf.array().length);
 
-    int remaining = cap - (ElasticByteBuffer.INIT_CAPACITY + testBytesLen1);
+    int remaining = cap - (INIT_CAP + testBytesLen1);
     byte[] randomBytes3 = RandomStringUtils.randomAlphanumeric(remaining).getBytes();
     buf.put(randomBytes3, 0, randomBytes3.length);
 
@@ -202,7 +204,7 @@ public class ElasticByteBufferTest {
   @Test
   public void testGreaterThanInitCapacityClear() {
     int cap = 10 * 1024 * 1024;
-    ElasticByteBuffer buf = new ElasticByteBuffer(cap);
+    ElasticByteBuffer buf = new ElasticByteBuffer(cap, INIT_CAP);
 
     byte[] randomBytes1 = RandomStringUtils.randomAlphanumeric(5 * 1024 * 1024).getBytes();
     buf.put(randomBytes1, 0, randomBytes1.length);
@@ -213,10 +215,10 @@ public class ElasticByteBufferTest {
 
     assertEquals(0, buf.position());
     assertEquals(true, buf.hasRemaining());
-    assertEquals(ElasticByteBuffer.INIT_CAPACITY, buf.physicalRemaining());
+    assertEquals(INIT_CAP, buf.physicalRemaining());
     assertEquals(cap, buf.remaining());
 
-    assertEquals(ElasticByteBuffer.INIT_CAPACITY, arrayAfterClear.length);
+    assertEquals(INIT_CAP, arrayAfterClear.length);
     assertTrue(arrayAfterClear.length < arrayBeforeClear.length);
     assertTrue(arrayAfterClear != arrayBeforeClear);
   }
@@ -224,7 +226,7 @@ public class ElasticByteBufferTest {
   @Test
   public void testLessThanInitSizeDataPut1() {
     int cap = 1024;
-    ElasticByteBuffer buf = new ElasticByteBuffer(cap);
+    ElasticByteBuffer buf = new ElasticByteBuffer(cap, INIT_CAP);
 
     int testBytesLen1 = 4;
     String data1 = RandomStringUtils.randomAlphanumeric(testBytesLen1);
@@ -248,7 +250,7 @@ public class ElasticByteBufferTest {
   @Test
   public void testLessThanInitSizeDataPut2() {
     int cap = 1024;
-    ElasticByteBuffer buf = new ElasticByteBuffer(cap);
+    ElasticByteBuffer buf = new ElasticByteBuffer(cap, INIT_CAP);
 
     int testBytesLen1 = 4;
     String data1 = RandomStringUtils.randomAlphanumeric(testBytesLen1);
@@ -268,7 +270,7 @@ public class ElasticByteBufferTest {
   @Test
   public void testGreaterThanInitSizeDataPut1() {
     int cap = 5 * 1024 * 1024;
-    ElasticByteBuffer buf = new ElasticByteBuffer(cap);
+    ElasticByteBuffer buf = new ElasticByteBuffer(cap, INIT_CAP);
 
     int testBytesLen1 = RandomUtils.nextInt(cap);
     String data1 = RandomStringUtils.randomAlphanumeric(testBytesLen1);
@@ -292,7 +294,7 @@ public class ElasticByteBufferTest {
   @Test
   public void testGreaterThanInitSizeDataPut2() {
     int cap = 5 * 1024 * 1024;
-    ElasticByteBuffer buf = new ElasticByteBuffer(cap);
+    ElasticByteBuffer buf = new ElasticByteBuffer(cap, INIT_CAP);
 
     int testBytesLen1 = RandomUtils.nextInt(cap);
     String data1 = RandomStringUtils.randomAlphanumeric(testBytesLen1);

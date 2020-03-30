@@ -21,13 +21,15 @@ import java.nio.BufferOverflowException;
  * A elastic byte buffer with a logic size as max size.
  * The formula to expand: initCapacity * 2 ^ (incrementFactor * N)
  */
-public class ElasticByteBuffer {
+public class ElasticByteBuffer implements ByteBuf {
 
-  public static final int INIT_CAPACITY = 128 * 1024;  // 128KB
   public static final int INCREMENT_FACTOR = 1;
 
   /* logical capacity */
   private int capacity;
+
+  /* initial physical capacity  */
+  private int initPhysicalCap;
 
   /* the next position to write */
   private int position;
@@ -35,17 +37,24 @@ public class ElasticByteBuffer {
   /* physical buf */
   private byte[] buf;
 
-  public ElasticByteBuffer(int capacity) {
+  public ElasticByteBuffer(int capacity, int initPhysicalCap) {
     if (capacity <= 0) {
       throw new IllegalArgumentException("capacity must greater than zero");
     }
+
+    if (initPhysicalCap <= 0) {
+      throw new IllegalArgumentException("initial physical capacity must greater than zero");
+    }
+
     this.capacity = capacity;
+    this.initPhysicalCap = initPhysicalCap;
+
     initialize();
   }
 
   private void initialize() {
     this.position = 0;
-    int initCapacity = Math.min(this.capacity, INIT_CAPACITY);
+    int initCapacity = Math.min(this.capacity, this.initPhysicalCap);
     this.buf = new byte[initCapacity];
   }
 
@@ -133,7 +142,7 @@ public class ElasticByteBuffer {
   }
 
   public void clear() {
-    if (this.buf.length <= INIT_CAPACITY) {
+    if (this.buf.length <= this.initPhysicalCap) {
       // has not ever expanded, just reset position
       this.position = 0;
     } else {
