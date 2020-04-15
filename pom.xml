@@ -23,7 +23,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>5.3.0</version>
+        <version>5.3.0-cp2</version>
     </parent>
 
     <groupId>io.confluent</groupId>
@@ -60,7 +60,7 @@
 
     <properties>
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
-        <licenses.version>5.3.0</licenses.version>
+        <licenses.version>5.3.0-cp2</licenses.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
     </properties>
 
