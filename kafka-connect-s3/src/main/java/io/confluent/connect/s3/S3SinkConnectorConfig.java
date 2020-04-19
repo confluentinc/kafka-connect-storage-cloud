@@ -112,6 +112,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String AWS_SECRET_ACCESS_KEY_CONFIG = "aws.secret.access.key";
   public static final Password AWS_SECRET_ACCESS_KEY_DEFAULT = new Password(null);
 
+  public static final String AWS_IAM_ROLE_ARN_CONFIG = "aws.iam.role.arn";
+  public static final String AWS_IAM_ROLE_ARN_DEFAULT = "";
+
   public static final String REGION_CONFIG = "s3.region";
   public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
 
@@ -298,9 +301,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Importance.HIGH,
           "The AWS access key ID used to authenticate personal AWS credentials such as IAM "
               + "credentials. Use only if you do not wish to authenticate by using a credentials "
-              + "provider class via ``"
-              + CREDENTIALS_PROVIDER_CLASS_CONFIG
-              + "``",
+              + "provider class via ``" + CREDENTIALS_PROVIDER_CLASS_CONFIG + "``. "
+              + "The access key id is used to make all requests to S3 if "
+              + AWS_IAM_ROLE_ARN_CONFIG + "is empty. "
+              + "Otherwise, the AWS access key ID is only used to assume the IAM role.",
           group,
           ++orderInGroup,
           Width.LONG,
@@ -314,13 +318,32 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Importance.HIGH,
           "The secret access key used to authenticate personal AWS credentials such as IAM "
               + "credentials. Use only if you do not wish to authenticate by using a credentials "
-              + "provider class via ``"
-              + CREDENTIALS_PROVIDER_CLASS_CONFIG
-              + "``",
+              + "provider class via ``" + CREDENTIALS_PROVIDER_CLASS_CONFIG + "``. "
+              + "The secret key is used to make all requests to S3 if "
+              + AWS_IAM_ROLE_ARN_CONFIG + "is empty. "
+              + "Otherwise, the AWS access secret key is only used to assume the IAM role.",
           group,
           ++orderInGroup,
           Width.LONG,
           "AWS Secret Access Key"
+      );
+
+      configDef.define(
+          AWS_IAM_ROLE_ARN_CONFIG,
+          Type.STRING,
+          AWS_IAM_ROLE_ARN_DEFAULT,
+          Importance.HIGH,
+          "The IAM role ARN which which will be assumed to obtain short lived session credentials. "
+              + "The session credentials will subsequently be used to make requests to S3. "
+              + "The Role will be assumed using the aws access key provided via ``"
+              + AWS_ACCESS_KEY_ID_CONFIG + "`` as well as the aws secret key provided "
+              + "via ``" + AWS_SECRET_ACCESS_KEY_CONFIG + "``. "
+              + "The assumed role is also scoped down to only allow the necessary permissions "
+              + "for the sink connector",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "AWS IAM Role ARN"
       );
 
       List<String> validSsea = new ArrayList<>(SSEAlgorithm.values().length + 1);
@@ -402,8 +425,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           new CompressionTypeValidator(),
           Importance.LOW,
           "Compression type for files written to S3. "
-          + "Applied when using JsonFormat or ByteArrayFormat. "
-          + "Available values: none, gzip.",
+              + "Applied when using JsonFormat or ByteArrayFormat. "
+              + "Available values: none, gzip.",
           group,
           ++orderInGroup,
           Width.LONG,
@@ -660,8 +683,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public CompressionCodecName parquetCompressionCodecName() {
     return "none".equalsIgnoreCase(getString(PARQUET_CODEC_CONFIG))
-           ? CompressionCodecName.fromConf(null)
-           : CompressionCodecName.fromConf(getString(PARQUET_CODEC_CONFIG));
+        ? CompressionCodecName.fromConf(null)
+        : CompressionCodecName.fromConf(getString(PARQUET_CODEC_CONFIG));
   }
 
   public int getS3PartRetries() {
@@ -895,7 +918,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     @Override
     public void ensureValid(String name, Object provider) {
       if (provider != null && provider instanceof Class
-              && AWSCredentialsProvider.class.isAssignableFrom((Class<?>) provider)) {
+          && AWSCredentialsProvider.class.isAssignableFrom((Class<?>) provider)) {
         return;
       }
       throw new ConfigException(
