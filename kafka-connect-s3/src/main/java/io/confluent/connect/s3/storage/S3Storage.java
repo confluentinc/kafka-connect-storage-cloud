@@ -33,8 +33,8 @@ import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.ObjectTagging;
 import com.amazonaws.services.s3.model.SetObjectTaggingRequest;
 import com.amazonaws.services.s3.model.Tag;
-import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClient;
+import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.util.S3ProxyConfig;
@@ -212,14 +212,15 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
     String region = config.getString(REGION_CONFIG);
 
-    AWSSecurityTokenService stsClient = AWSSecurityTokenServiceClient.builder()
-        .withCredentials(staticCredentialsProvider)
-        .withRegion(region)
-        .build();
+    AWSSecurityTokenServiceClientBuilder stsBuilder = AWSSecurityTokenServiceClient.builder()
+        .withCredentials(staticCredentialsProvider);
+    stsBuilder = "us-east-1".equals(region)
+          ? stsBuilder.withRegion(Regions.US_EAST_1)
+          : stsBuilder.withRegion(region);
 
     return new STSAssumeRoleSessionCredentialsProvider
         .Builder(iamRoleArn, config.getName() + "-S3SinkConnector")
-        .withStsClient(stsClient)
+        .withStsClient(stsBuilder.build())
         .build();
   }
 
