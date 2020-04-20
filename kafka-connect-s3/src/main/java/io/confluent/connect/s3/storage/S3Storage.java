@@ -71,27 +71,6 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   private final S3SinkConnectorConfig conf;
   private static final String VERSION_FORMAT = "APN/1.0 Confluent/1.0 KafkaS3Connector/%s";
 
-  private static final String SCOPE_DOWN_POLICY = "{"
-      + "  \"Version\": \"2012-10-17\","
-      + "  \"Statement\": ["
-      + "    {"
-      + "      \"Sid\": \"S3SinkConnector\","
-      + "      \"Action\": ["
-      + "        \"s3:PutObject\","
-      + "        \"s3:GetObject\","
-      + "        \"s3:ListBucketMultipartUploads\","
-      + "        \"s3:AbortMultipartUpload\","
-      + "        \"s3:ListMultipartUploadParts\""
-      + "      ],"
-      + "      \"Effect\": \"Allow\","
-      + "      \"Resource\": ["
-      + "        \"arn:aws:s3:::%1$s\"," // %1$s uses the first parameter passed to String.format
-      + "        \"arn:aws:s3:::%1$s/*\"" //re-use the first parameter again.
-      + "      ]"
-      + "    }"
-      + "  ]"
-      + "}";
-
   /**
    * Construct an S3 storage class given a configuration and an AWS S3 address.
    *
@@ -229,8 +208,6 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
         + "IAM role ARN provided in the connector's config . "
         + "The role will be assumed with the access key id and secret key also provided. "
         + "The assumed role with also be scoped down to the necessary permissions.");
-    String scopeDownPolicy = String.format(SCOPE_DOWN_POLICY, bucketName);
-    log.info("Scope down policy: " + scopeDownPolicy);
     log.info("Using AWS Access key " + accessKeyId + " and secret key " + secretKey);
 
     String region = config.getString(REGION_CONFIG);
@@ -243,7 +220,6 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     return new STSAssumeRoleSessionCredentialsProvider
         .Builder(iamRoleArn, config.getName() + "-S3SinkConnector")
         .withStsClient(stsClient)
-        .withScopeDownPolicy(scopeDownPolicy)
         .build();
   }
 
