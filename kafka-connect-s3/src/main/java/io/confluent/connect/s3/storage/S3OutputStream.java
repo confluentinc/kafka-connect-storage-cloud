@@ -207,8 +207,7 @@ public class S3OutputStream extends PositionOutputStream {
         bucket,
         key,
         newObjectMetadata()
-    ).withCannedACL(cannedAcl);
-    initRequest.setStorageClass(this.s3StorageClass);
+    ).withCannedACL(cannedAcl).withStorageClass(s3StorageClass);
 
     if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
         && StringUtils.isNotBlank(sseKmsKeyId)) {

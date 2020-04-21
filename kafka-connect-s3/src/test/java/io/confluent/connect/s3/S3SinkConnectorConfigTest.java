@@ -413,21 +413,11 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
 
   @Test
   public void testS3StorageClassSupported() {
-    properties.put(S3SinkConnectorConfig.S3_STORAGE_CLASS, "STANDARD");
-    connectorConfig = new S3SinkConnectorConfig(properties);
-    assertEquals(StorageClass.Standard, connectorConfig.getS3StorageClass());
-
-    properties.put(S3SinkConnectorConfig.S3_STORAGE_CLASS, "GLACIER");
-    connectorConfig = new S3SinkConnectorConfig(properties);
-    assertEquals(StorageClass.Glacier, connectorConfig.getS3StorageClass());
-
-    properties.put(S3SinkConnectorConfig.S3_STORAGE_CLASS, "STANDARD_IA");
-    connectorConfig = new S3SinkConnectorConfig(properties);
-    assertEquals(StorageClass.StandardInfrequentAccess, connectorConfig.getS3StorageClass());
-
-    properties.put(S3SinkConnectorConfig.S3_STORAGE_CLASS, "REDUCED_REDUNDANCY");
-    connectorConfig = new S3SinkConnectorConfig(properties);
-    assertEquals(StorageClass.ReducedRedundancy, connectorConfig.getS3StorageClass());
+    for (StorageClass sc : StorageClass.values()) {
+      properties.put(S3SinkConnectorConfig.S3_STORAGE_CLASS, sc.toString());
+      connectorConfig = new S3SinkConnectorConfig(properties);
+      assertEquals(sc, connectorConfig.getS3StorageClass());
+    }
   }
 }
 
