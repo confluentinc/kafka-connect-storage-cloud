@@ -28,6 +28,7 @@
 
     <groupId>io.confluent</groupId>
     <artifactId>kafka-connect-storage-cloud</artifactId>
+    <version>6.0.0-0</version>
     <packaging>pom</packaging>
     <name>kafka-connect-storage-cloud</name>
     <organization>
