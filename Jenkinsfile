@@ -1,6 +1,6 @@
 #!/usr/bin/env groovy
 common {
-  slackChannel = '#connect-warn'
+  slackChannel = ''
   upstreamProjects = 'confluentinc/kafka-connect-storage-common'
   pintMerge = true
   twistlockCveScan = true
