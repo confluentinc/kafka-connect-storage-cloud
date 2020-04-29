@@ -26,4 +26,12 @@ public class RecordViewSetter {
   public void setRecordView(RecordView recordView) {
     this.recordView = requireNonNull(recordView);
   }
+
+  protected String getAdjustedFilename(String filename, String extension) {
+    int extensionOffset = filename.indexOf(extension);
+    return extensionOffset > -1
+        ? filename.substring(0, extensionOffset) + recordView.getExtension()
+        + filename.substring(extensionOffset)
+        : filename;
+  }
 }

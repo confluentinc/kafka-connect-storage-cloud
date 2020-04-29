@@ -59,11 +59,7 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
   @Override
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     return new RecordWriter() {
-      int extensionOffset = filename.indexOf(getExtension());
-      final String adjustedFilename = extensionOffset > -1
-          ? filename.substring(0, extensionOffset) + recordView.getExtension()
-          + filename.substring(extensionOffset)
-          : filename;
+      final String adjustedFilename = getAdjustedFilename(filename, getExtension());
       Schema schema = null;
       ParquetWriter<GenericRecord> writer;
       S3ParquetOutputFile s3ParquetOutputFile;
