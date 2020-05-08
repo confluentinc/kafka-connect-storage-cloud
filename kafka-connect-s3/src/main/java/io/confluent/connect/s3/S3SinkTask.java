@@ -32,9 +32,7 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
@@ -54,7 +52,6 @@ public class S3SinkTask extends SinkTask {
   private String url;
   private long timeoutMs;
   private S3Storage storage;
-  private final Set<TopicPartition> assignment;
   private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
   private Partitioner<FieldSchema> partitioner;
   private Format<S3SinkConnectorConfig, String> format;
@@ -66,7 +63,6 @@ public class S3SinkTask extends SinkTask {
    */
   public S3SinkTask() {
     // no-arg constructor required by Connect framework.
-    assignment = new HashSet<>();
     topicPartitionWriters = new HashMap<>();
     time = new SystemTime();
   }
@@ -75,7 +71,6 @@ public class S3SinkTask extends SinkTask {
   S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage,
              Partitioner<FieldSchema> partitioner, Format<S3SinkConnectorConfig, String> format,
              Time time) throws Exception {
-    this.assignment = new HashSet<>();
     this.topicPartitionWriters = new HashMap<>();
     this.connectorConfig = connectorConfig;
     this.context = context;
@@ -88,7 +83,9 @@ public class S3SinkTask extends SinkTask {
     writerProvider = this.format.getRecordWriterProvider();
 
     open(context.assignment());
-    log.info("Started S3 connector task with assigned partitions {}", assignment);
+    log.info("Started S3 connector task with assigned partitions {}",
+        topicPartitionWriters.keySet()
+    );
   }
 
   public void start(Map<String, String> props) {
@@ -115,7 +112,9 @@ public class S3SinkTask extends SinkTask {
       partitioner = newPartitioner(connectorConfig);
 
       open(context.assignment());
-      log.info("Started S3 connector task with assigned partitions: {}", assignment);
+      log.info("Started S3 connector task with assigned partitions: {}",
+          topicPartitionWriters.keySet()
+      );
     } catch (ClassNotFoundException | IllegalAccessException | InstantiationException
         | InvocationTargetException | NoSuchMethodException e) {
       throw new ConnectException("Reflection exception: ", e);
@@ -131,10 +130,7 @@ public class S3SinkTask extends SinkTask {
 
   @Override
   public void open(Collection<TopicPartition> partitions) {
-    // assignment should be empty, either because this is the initial call or because it follows
-    // a call to "close".
-    assignment.addAll(partitions);
-    for (TopicPartition tp : assignment) {
+    for (TopicPartition tp : partitions) {
       topicPartitionWriters.put(tp, newTopicPartitionWriter(tp));
     }
   }
@@ -186,7 +182,7 @@ public class S3SinkTask extends SinkTask {
       log.debug("Read {} records from Kafka", records.size());
     }
 
-    for (TopicPartition tp : assignment) {
+    for (TopicPartition tp : topicPartitionWriters.keySet()) {
       TopicPartitionWriter writer = topicPartitionWriters.get(tp);
       try {
         writer.write();
@@ -214,7 +210,7 @@ public class S3SinkTask extends SinkTask {
       Map<TopicPartition, OffsetAndMetadata> offsets
   ) {
     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
-    for (TopicPartition tp : assignment) {
+    for (TopicPartition tp : topicPartitionWriters.keySet()) {
       Long offset = topicPartitionWriters.get(tp).getOffsetToCommitAndReset();
       if (offset != null) {
         log.trace("Forwarding to framework request to commit offset: {} for {}", offset, tp);
@@ -226,7 +222,7 @@ public class S3SinkTask extends SinkTask {
 
   @Override
   public void close(Collection<TopicPartition> partitions) {
-    for (TopicPartition tp : assignment) {
+    for (TopicPartition tp : topicPartitionWriters.keySet()) {
       try {
         topicPartitionWriters.get(tp).close();
       } catch (ConnectException e) {
@@ -234,7 +230,6 @@ public class S3SinkTask extends SinkTask {
       }
     }
     topicPartitionWriters.clear();
-    assignment.clear();
   }
 
   @Override
