@@ -176,7 +176,8 @@ public class S3SinkTask extends SinkTask {
       int partition = record.kafkaPartition();
       TopicPartition tp = new TopicPartition(topic, partition);
       if (record.value() == null) {
-        if (connectorConfig.nullValueBehavior().equalsIgnoreCase(BehaviorOnNullValues.IGNORE.toString())) {
+        if (connectorConfig.nullValueBehavior()
+            .equalsIgnoreCase(BehaviorOnNullValues.IGNORE.toString())) {
           log.debug("Null valued record cannot be written to output as Avro. "
               + "Skipping. Record Key: {}", record.key());
           return;
