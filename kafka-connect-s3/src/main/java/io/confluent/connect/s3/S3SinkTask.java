@@ -180,7 +180,7 @@ public class S3SinkTask extends SinkTask {
             .equalsIgnoreCase(BehaviorOnNullValues.IGNORE.toString())) {
           log.debug("Null valued record cannot be written to output as Avro. "
               + "Skipping. Record Key: {}", record.key());
-          return;
+          continue;
         } else {
           throw new ConnectException("Null valued records are not writeable with current "
               + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " 'settings.");
