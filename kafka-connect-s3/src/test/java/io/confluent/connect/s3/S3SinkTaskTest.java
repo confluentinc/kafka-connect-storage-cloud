@@ -19,6 +19,7 @@ import com.amazonaws.services.s3.model.CannedAccessControlList;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.data.Schema;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.After;
@@ -30,6 +31,7 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.io.ByteArrayInputStream;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -97,6 +99,30 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     task.stop();
 
     long[] validOffsets = {0, 3, 6};
+    verify(sinkRecords, validOffsets);
+  }
+
+  @Test
+  public void testWriteTwoRecords() throws Exception {
+    setUp();
+    replayAll();
+    task = new S3SinkTask();
+    task.initialize(context);
+    properties.put(S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG,
+        S3SinkConnectorConfig.BehaviorOnNullValues.IGNORE.toString());
+    task.start(properties);
+    verifyAll();
+
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    sinkRecords.add(
+        new SinkRecord(TOPIC, PARTITION, null, null, Schema.OPTIONAL_STRING_SCHEMA, null,
+            0));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, null, null, null, null, 1));
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {};
     verify(sinkRecords, validOffsets);
   }
 
