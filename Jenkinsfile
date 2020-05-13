@@ -4,4 +4,5 @@ common {
   upstreamProjects = 'confluentinc/kafka-connect-storage-common'
   pintMerge = false
   twistlockCveScan = true
+  testbreakReporting = false
 }
