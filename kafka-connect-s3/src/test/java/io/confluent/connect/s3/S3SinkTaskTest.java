@@ -103,7 +103,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
   }
 
   @Test
-  public void testWriteTwoRecords() throws Exception {
+  public void testWriteNullRecords() throws Exception {
     setUp();
     replayAll();
     task = new S3SinkTask();

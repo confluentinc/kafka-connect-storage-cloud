@@ -178,8 +178,8 @@ public class S3SinkTask extends SinkTask {
       if (record.value() == null) {
         if (connectorConfig.nullValueBehavior()
             .equalsIgnoreCase(BehaviorOnNullValues.IGNORE.toString())) {
-          log.debug("Null valued record cannot be written to output as Avro. "
-              + "Skipping. Record Key: {}", record.key());
+          log.debug("Null valued record cannot be written to output: offset {}",
+              record.kafkaOffset());
           continue;
         } else {
           throw new ConnectException("Null valued records are not writeable with current "
