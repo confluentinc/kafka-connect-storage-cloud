@@ -113,17 +113,26 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     task.start(properties);
     verifyAll();
 
-    List<SinkRecord> sinkRecords = new ArrayList<>();
+    List<SinkRecord> sinkRecords = createRecordsWithPrimitive(3, 0,
+        Collections.singleton(new TopicPartition(TOPIC, PARTITION)));
     sinkRecords.add(
         new SinkRecord(TOPIC, PARTITION, null, null, Schema.OPTIONAL_STRING_SCHEMA, null,
             0));
     sinkRecords.add(new SinkRecord(TOPIC, PARTITION, null, null, null, null, 1));
+    sinkRecords.addAll(createRecordsWithPrimitive(4, 3,
+        Collections.singleton(new TopicPartition(TOPIC, PARTITION))));
     task.put(sinkRecords);
     task.close(context.assignment());
     task.stop();
 
-    long[] validOffsets = {};
-    verify(sinkRecords, validOffsets);
+    long[] validOffsets = {0, 3, 6};
+
+    // expect sink records like the ones we put, but without the null records
+    List<SinkRecord> expectedSinkRecords = createRecordsWithPrimitive(3, 0,
+        Collections.singleton(new TopicPartition(TOPIC, PARTITION)));
+    expectedSinkRecords.addAll(createRecordsWithPrimitive(4, 3,
+        Collections.singleton(new TopicPartition(TOPIC, PARTITION))));
+    verify(expectedSinkRecords, validOffsets);
   }
 
   @Test
