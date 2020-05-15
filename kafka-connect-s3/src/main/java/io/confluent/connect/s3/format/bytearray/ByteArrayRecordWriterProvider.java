@@ -16,7 +16,6 @@
 package io.confluent.connect.s3.format.bytearray;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
-import io.confluent.connect.s3.S3SinkConnectorConfig.BehaviorOnNullValues;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
@@ -66,16 +65,6 @@ public class ByteArrayRecordWriterProvider implements RecordWriterProvider<S3Sin
         try {
           byte[] bytes = converter.fromConnectData(
               record.topic(), record.valueSchema(), record.value());
-          if (bytes == null) {
-            if (conf.nullValueBehavior().equalsIgnoreCase(BehaviorOnNullValues.IGNORE.toString())) {
-              log.debug("Null valued record cannot be written to output as Avro. "
-                  + "Skipping. Record Key: {}", record.key());
-              return;
-            } else {
-              throw new ConnectException("Null valued records are not writeable with current "
-                  + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " 'settings.");
-            }
-          }
           s3outWrapper.write(bytes);
           s3outWrapper.write(lineSeparatorBytes);
         } catch (IOException | DataException e) {
