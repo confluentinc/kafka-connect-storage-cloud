@@ -183,6 +183,7 @@ public class S3SinkTask extends SinkTask {
             record.kafkaPartition(),
             record.kafkaOffset()
         );
+        continue;
       }
       topicPartitionWriters.get(tp).buffer(record);
     }
