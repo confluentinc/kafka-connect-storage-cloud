@@ -16,6 +16,7 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
+import io.confluent.connect.s3.S3SinkConnectorConfig.BehaviorOnNullValues;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -174,6 +175,10 @@ public class S3SinkTask extends SinkTask {
       String topic = record.topic();
       int partition = record.kafkaPartition();
       TopicPartition tp = new TopicPartition(topic, partition);
+
+      if (maybeSkipOnNullValue(record)) {
+        continue;
+      }
       topicPartitionWriters.get(tp).buffer(record);
     }
     if (log.isDebugEnabled()) {
@@ -196,6 +201,25 @@ public class S3SinkTask extends SinkTask {
         topicPartitionWriters.put(tp, writer);
       }
     }
+  }
+
+  private boolean maybeSkipOnNullValue(SinkRecord record) {
+    if (record.value() == null) {
+      if (connectorConfig.nullValueBehavior()
+          .equalsIgnoreCase(BehaviorOnNullValues.IGNORE.toString())) {
+        log.debug(
+            "Null valued record from topic '{}', partition {} and offset {} was skipped.",
+            record.topic(),
+            record.kafkaPartition(),
+            record.kafkaOffset()
+        );
+        return true;
+      } else {
+        throw new ConnectException("Null valued records are not writeable with current "
+            + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " 'settings.");
+      }
+    }
+    return false;
   }
 
   @Override
