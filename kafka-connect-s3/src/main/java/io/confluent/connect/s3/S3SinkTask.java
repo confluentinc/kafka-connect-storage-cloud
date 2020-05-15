@@ -175,16 +175,11 @@ public class S3SinkTask extends SinkTask {
       String topic = record.topic();
       int partition = record.kafkaPartition();
       TopicPartition tp = new TopicPartition(topic, partition);
-      if (record.value() == null) {
-        if (connectorConfig.nullValueBehavior()
-            .equalsIgnoreCase(BehaviorOnNullValues.IGNORE.toString())) {
-          log.debug("Null valued record cannot be written to output: offset {}",
-              record.kafkaOffset());
-          continue;
-        } else {
-          throw new ConnectException("Null valued records are not writeable with current "
-              + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " 'settings.");
-        }
+
+      if (maybeSkipOnNullValue(record)) {
+        log.debug("Null valued record cannot be written to output: offset {}",
+            record.kafkaOffset());
+        continue;
       }
       topicPartitionWriters.get(tp).buffer(record);
     }
@@ -208,6 +203,19 @@ public class S3SinkTask extends SinkTask {
         topicPartitionWriters.put(tp, writer);
       }
     }
+  }
+
+  private boolean maybeSkipOnNullValue(SinkRecord record) {
+    if (record.value() == null) {
+      if (connectorConfig.nullValueBehavior()
+          .equalsIgnoreCase(BehaviorOnNullValues.IGNORE.toString())) {
+        return true;
+      } else {
+        throw new ConnectException("Null valued records are not writeable with current "
+            + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " 'settings.");
+      }
+    }
+    return false;
   }
 
   @Override
