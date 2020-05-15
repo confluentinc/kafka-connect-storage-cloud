@@ -177,9 +177,12 @@ public class S3SinkTask extends SinkTask {
       TopicPartition tp = new TopicPartition(topic, partition);
 
       if (maybeSkipOnNullValue(record)) {
-        log.debug("Null valued record cannot be written to output: offset {}",
-            record.kafkaOffset());
-        continue;
+        log.debug(
+            "Null valued record from topic '{}', partition {} and offset {} was skipped.",
+            record.topic(),
+            record.kafkaPartition(),
+            record.kafkaOffset()
+        );
       }
       topicPartitionWriters.get(tp).buffer(record);
     }
