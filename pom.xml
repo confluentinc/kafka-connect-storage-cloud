@@ -63,7 +63,6 @@
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <hadoop.version>2.7.7</hadoop.version>
-        <io.confluent.license-file-generator.version>[6.0.0-0, 6.0.1-0)</io.confluent.license-file-generator.version>
     </properties>
 
     <repositories>
