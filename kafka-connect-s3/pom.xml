@@ -78,6 +78,10 @@
             <version>${s3mock.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>connect-runtime</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
