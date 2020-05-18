@@ -217,6 +217,7 @@
                                     <mainClass>io.confluent.licenses.LicenseFinder</mainClass>
                                     <arguments>
                                         <!-- Note use of development instead of package so we pick up all dependencies. -->
+                                        <!--TODO: update-->
                                         <argument>-i
                                             ${project.build.directory}/${project.build.finalName}-package/share/java/${project.name}
                                         </argument>
