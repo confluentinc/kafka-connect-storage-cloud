@@ -23,12 +23,12 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>[6.0.0-0, 6.0.1-0)</version>
+        <version>6.0.0-3</version>
     </parent>
 
     <groupId>io.confluent</groupId>
     <artifactId>kafka-connect-storage-cloud</artifactId>
-    <version>6.0.0-0</version>
+    <version>6.0.0-1</version>
     <packaging>pom</packaging>
     <name>kafka-connect-storage-cloud</name>
     <organization>
@@ -63,7 +63,7 @@
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <hadoop.version>2.7.7</hadoop.version>
-        <io.confluent.kafka-connect-storage-cloud.version>6.0.0-0</io.confluent.kafka-connect-storage-cloud.version>
+        <io.confluent.kafka-connect-storage-cloud.version>6.0.0-1</io.confluent.kafka-connect-storage-cloud.version>
     </properties>
 
     <repositories>
