@@ -63,7 +63,7 @@
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <hadoop.version>2.7.7</hadoop.version>
-        <io.confluent.kafka-connect-storage-cloud>6.0.0-0</io.confluent.kafka-connect-storage-cloud>
+        <io.confluent.kafka-connect-storage-cloud.version>6.0.0-0</io.confluent.kafka-connect-storage-cloud.version>
     </properties>
 
     <repositories>
@@ -94,22 +94,22 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-common</artifactId>
-            <version>${io.confluent.kafka-connect-storage-common.versio}</version>
+            <version>${io.confluent.kafka-connect-storage-common.version}</version>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-core</artifactId>
-            <version>${io.confluent.kafka-connect-storage-common.versio}</version>
+            <version>${io.confluent.kafka-connect-storage-common.version}</version>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-format</artifactId>
-            <version>${io.confluent.kafka-connect-storage-common.versio}</version>
+            <version>${io.confluent.kafka-connect-storage-common.version}</version>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-partitioner</artifactId>
-            <version>${io.confluent.kafka-connect-storage-common.versio}</version>
+            <version>${io.confluent.kafka-connect-storage-common.version}</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
