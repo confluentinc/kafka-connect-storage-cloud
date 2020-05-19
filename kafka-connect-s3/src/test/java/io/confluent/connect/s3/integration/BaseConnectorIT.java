@@ -6,6 +6,10 @@ package io.confluent.connect.s3.integration;
 
 import com.adobe.testing.s3mock.junit4.S3MockRule;
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.ListObjectsV2Request;
+import com.amazonaws.services.s3.model.ListObjectsV2Result;
+import com.amazonaws.services.s3.model.S3Object;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.confluent.common.utils.IntegrationTest;
 import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -19,6 +23,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -59,15 +65,10 @@ public abstract class BaseConnectorIT {
     connect = new EmbeddedConnectCluster.Builder()
         .name("my-connect-cluster")
         .build();
-
-    // start the clusters
     connect.start();
-
-    //TODO: Start proxy or external system
   }
 
   protected void stopConnect() {
-    // stop all Connect, Kafka and Zk threads.
     connect.stop();
   }
 
@@ -109,4 +110,45 @@ public abstract class BaseConnectorIT {
       return Optional.empty();
     }
   }
+
+  protected void waitForConnectorToCompleteSendingRecords(long noOfRecordsProduced, int flushSize) throws InterruptedException {
+    TestUtils.waitForCondition(
+      () -> assertConnectorAndDestinationRecords(noOfRecordsProduced, flushSize).orElse(false),
+      CONNECTOR_STARTUP_DURATION_MS,
+      "Connector could not send all records in time."
+    );
+  }
+
+  protected Optional<Boolean> assertConnectorAndDestinationRecords(long noOfRecordsProduced, int flushSize) {
+    try {
+    int noOfObjectsInS3 = getNoOfObjectsInS3();
+    boolean result = noOfObjectsInS3 == noOfRecordsProduced/flushSize;
+    return Optional.of(result);
+  } catch (Exception e) {
+    log.error("Could not check S3 state", e);
+    return Optional.empty();
+  }
+  }
+
+  protected int getNoOfObjectsInS3() {
+    ListObjectsV2Request req = new ListObjectsV2Request().withBucketName(S3_BUCKET).withMaxKeys(2);
+    ListObjectsV2Result result;
+    List<S3Object> records = new ArrayList<>();
+
+    do {
+      result = s3.listObjectsV2(req);
+
+      for (S3ObjectSummary objectSummary : result.getObjectSummaries()) {
+        if(objectSummary.getSize()>0) {
+          records.add(s3.getObject(S3_BUCKET, objectSummary.getKey()));
+        }
+      }
+      // If there are more than maxKeys keys in the bucket, get a continuation token
+      // and list the next objects.
+      String token = result.getNextContinuationToken();
+      req.setContinuationToken(token);
+    } while (result.isTruncated());
+    return records.size();
+  }
+
 }

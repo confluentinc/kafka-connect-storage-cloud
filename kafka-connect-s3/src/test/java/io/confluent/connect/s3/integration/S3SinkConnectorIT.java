@@ -8,8 +8,8 @@ import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.Region;
 import io.confluent.common.utils.IntegrationTest;
-import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
+import org.apache.kafka.connect.storage.StringConverter;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -24,23 +24,27 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.*;
-import static org.apache.kafka.test.TestUtils.waitForCondition;
+import static org.junit.Assert.assertEquals;
 
 @Category(IntegrationTest.class)
-public class MySinkConnectorIT extends BaseConnectorIT {
+public class S3SinkConnectorIT extends BaseConnectorIT {
 
-  private static final Logger log = LoggerFactory.getLogger(MySinkConnectorIT.class);
+  private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorIT.class);
 
-  private static final String CONNECTOR_NAME = "ms3-sink-connector";
-  private static final long NUM_RECORDS_PRODUCED = 20;
+  private static final String CONNECTOR_NAME = "s3-sink-connector";
+  private static final long NUM_RECORDS_PRODUCED = 10;
   private static final int TASKS_MAX = 1;
   private static final List<String> KAFKA_TOPICS = Arrays.asList("kafka1");
+  private static final int FLUSH_SIZE = 1;
 
   @Before
   public void setup() throws IOException {
-
     startConnect();
+    createS3Client();
+    s3.createBucket(S3_BUCKET);
+  }
 
+  private void createS3Client() {
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
       .withPathStyleAccessEnabled(true)
       .withEndpointConfiguration(
@@ -53,30 +57,16 @@ public class MySinkConnectorIT extends BaseConnectorIT {
   @After
   public void close() {
     stopConnect();
-
-    //TODO: Stop mock or external system
   }
 
   @Test
   public void testSink() throws Throwable {
-    //TODO: find proxy endpoint
 
     // create topics in Kafka
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
 
     // setup up props for the sink connector
     Map<String, String> props = getProperties();
-
-    //TODO: put connector-specific properties
-
-    // start a sink connector
-    connect.configureConnector(CONNECTOR_NAME, props);
-
-    // wait for tasks to spin up
-    int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
-    waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
-
-    // TODO: setup proxy/external system to listen to any messages published
 
     // Send records to Kafka
     for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
@@ -87,17 +77,15 @@ public class MySinkConnectorIT extends BaseConnectorIT {
       connect.kafka().produce(kafkaTopic, kafkaKey, kafkaValue);
     }
 
-    // wait for tasks to spin up and write records to proxy/external system
-    waitForCondition(
-        () -> {
-          int numFound = 0;
-          // TODO: count the number of records in the external system
-          return numFound >= NUM_RECORDS_PRODUCED;
-        },
-        CONSUME_MAX_DURATION_MS,
-        "Message consumption duration exceeded without all expected messages seen yet in server");
+    // start a sink connector
+    connect.configureConnector(CONNECTOR_NAME, props);
 
-    // Verify the record were written to the proxy/external system
+    // wait for tasks to spin up
+    int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
+    waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
+    waitForConnectorToCompleteSendingRecords(NUM_RECORDS_PRODUCED, FLUSH_SIZE);
+
+    assertEquals(getNoOfObjectsInS3(), NUM_RECORDS_PRODUCED/FLUSH_SIZE);
   }
 
   private Map<String, String> getProperties() {
@@ -109,14 +97,13 @@ public class MySinkConnectorIT extends BaseConnectorIT {
     props.put("s3.region", "us-east-2");
     props.put("s3.part.size", "5242880");
     props.put("s3.bucket.name", S3_BUCKET);
-    props.put("flush.size", "3");
+    props.put("flush.size", Integer.toString(FLUSH_SIZE));
     props.put("storage.class","io.confluent.connect.s3.storage.S3Storage");
     props.put("partitioner.class", "io.confluent.connect.storage.partitioner.DefaultPartitioner");
     props.put("store.url", "http://localhost:" + S3_MOCK_RULE.getHttpPort());
-
     // converters
-    props.put(KEY_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
-    props.put(VALUE_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
+    props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+    props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
 
     props.put("format.class",JSON_FORMAT_CLASS);
     // license properties
