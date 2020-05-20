@@ -12,11 +12,14 @@ import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.testcontainers.containers.DockerComposeContainer;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -37,6 +40,11 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final List<String> KAFKA_TOPICS = Arrays.asList("kafka1");
   private static final int FLUSH_SIZE = 1;
 
+  @ClassRule
+  public static DockerComposeContainer compose =
+    new DockerComposeContainer(
+      new File("src/test/docker/docker-compose.yml"));
+
   @Before
   public void setup() throws IOException {
     startConnect();
@@ -49,9 +57,10 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
       .withPathStyleAccessEnabled(true)
       .withEndpointConfiguration(
         new AwsClientBuilder.EndpointConfiguration(
-          "http://localhost:" + S3_MOCK_RULE.getHttpPort(),
+          "http://localhost:9090",
           Region.US_East_2.toString()));
     s3 = builder.build();
+    System.out.println(S3_MOCK_RULE.getHttpPort());
   }
 
   @After
@@ -82,6 +91,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
     // wait for tasks to spin up
     int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
+
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
     waitForConnectorToCompleteSendingRecords(NUM_RECORDS_PRODUCED, FLUSH_SIZE);
 

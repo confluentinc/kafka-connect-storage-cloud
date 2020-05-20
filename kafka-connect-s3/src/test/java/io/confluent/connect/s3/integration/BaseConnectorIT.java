@@ -24,7 +24,9 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -54,7 +56,7 @@ public abstract class BaseConnectorIT {
       s3mockRoot.create();
       File s3mockDir = s3mockRoot.newFolder("s3-tests-" + UUID.randomUUID().toString());
       log.info("Create folder: " + s3mockDir.getCanonicalPath());
-      S3_MOCK_RULE = S3MockRule.builder()
+      S3_MOCK_RULE = S3MockRule.builder().withHttpPort(9999)
         .withRootFolder(s3mockDir.getAbsolutePath()).silent().build();
     } catch (IOException e) {
       log.error("Erorr while running S3 mock. {}", e);
@@ -62,8 +64,11 @@ public abstract class BaseConnectorIT {
   }
 
   protected void startConnect() throws IOException {
+    Map<String, String> props = new HashMap<>();
+    props.put("consumer.max.poll.records","1");
     connect = new EmbeddedConnectCluster.Builder()
         .name("my-connect-cluster")
+        .workerProps(props)
         .build();
     connect.start();
   }
@@ -131,7 +136,7 @@ public abstract class BaseConnectorIT {
   }
 
   protected int getNoOfObjectsInS3() {
-    ListObjectsV2Request req = new ListObjectsV2Request().withBucketName(S3_BUCKET).withMaxKeys(2);
+    ListObjectsV2Request req = new ListObjectsV2Request().withBucketName(S3_BUCKET).withMaxKeys(10);
     ListObjectsV2Result result;
     List<S3Object> records = new ArrayList<>();
 
