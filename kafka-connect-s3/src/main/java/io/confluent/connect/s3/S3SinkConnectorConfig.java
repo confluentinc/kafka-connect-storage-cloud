@@ -165,6 +165,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private final StorageCommonConfig commonConfig;
   private final PartitionerConfig partitionerConfig;
 
+  public static final String UPLOAD_INTEGRITY_CHECK = "upload.integrity.check";
+  public static final boolean UPLOAD_INTEGRITY_CHECK_DEFAULT = false;
+
   private final Map<String, ComposableConfig> propertyToConfig = new HashMap<>();
   private final Set<AbstractConfig> allConfigs = new HashSet<>();
 
@@ -567,6 +570,22 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "Behavior for null-valued records"
       );
 
+      configDef.define(
+              UPLOAD_INTEGRITY_CHECK,
+              Type.BOOLEAN,
+              UPLOAD_INTEGRITY_CHECK_DEFAULT,
+              Importance.LOW,
+              "Enable or disable integrity checks while uploading parts during "
+              + " a multi-part upload. If true, the MD5 digest of each part would be sent "
+              + "which would then be used to verify a successful transfer of the part. "
+              + "Else, no MD5 digest would be sent and the integrity "
+              + "of data during upload cannot be guaranteed.",
+              group,
+              ++orderInGroup,
+              Width.SHORT,
+              "Upload Integrity Check"
+      );
+
     }
     return configDef;
   }
@@ -625,6 +644,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public int getPartSize() {
     return getInt(PART_SIZE_CONFIG);
+  }
+
+  public boolean uploadIntegrityCheck() {
+    return getBoolean(UPLOAD_INTEGRITY_CHECK);
   }
 
   @SuppressWarnings("unchecked")
