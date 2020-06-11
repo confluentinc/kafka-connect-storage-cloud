@@ -97,7 +97,9 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
       @Override
       public void close() {
         try {
-          writer.close();
+          if (writer != null) {
+            writer.close();
+          }
         } catch (IOException e) {
           throw new ConnectException(e);
         }

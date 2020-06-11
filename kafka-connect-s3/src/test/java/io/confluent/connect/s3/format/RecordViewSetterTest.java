@@ -93,4 +93,29 @@ public class RecordViewSetterTest {
     }
   }
 
+  @Test
+  public void testParquetEncodingExtensions() {
+    RecordViewSetter rv = new RecordViewSetter();
+    rv.setRecordView(new HeaderRecordView());
+
+    List<String> givenFilenames1 = new ArrayList<>(Arrays.asList(
+        "x.snappy.parquet",
+        "sample-filename.snappy.parquet",
+        "sample.filename.snappy.parquet",
+        "sample.file.name.snappy.parquet"
+    ));
+
+    List<String> expectedFilenames = new ArrayList<>(Arrays.asList(
+        "x.headers.snappy.parquet",
+        "sample-filename.headers.snappy.parquet",
+        "sample.filename.headers.snappy.parquet",
+        "sample.file.name.headers.snappy.parquet"
+    ));
+
+    for (int i = 0; i < expectedFilenames.size(); i++) {
+      String adjustedFilename = rv.getAdjustedFilename(givenFilenames1.get(i), ".snappy.parquet");
+      assertEquals(expectedFilenames.get(i), adjustedFilename);
+    }
+  }
+
 }
