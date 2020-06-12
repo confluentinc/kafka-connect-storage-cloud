@@ -48,11 +48,21 @@ public class KeyValueHeaderRecordWriterProvider
 
   @Override
   public RecordWriter getRecordWriter(S3SinkConnectorConfig conf, String filename) {
-    RecordWriter valueWriter = valueProvider.getRecordWriter(conf, filename);
+    // Remove extension to allow different formats for value, key and headers
+    // each provider will add its own extension.
+    // The filename comes in with the value file format, ex. a.avro,
+    // but when the format class is different for the keys,
+    // header this needs to be removed.
+    int extensionIndex = filename.indexOf(valueProvider.getExtension());
+    String strippedFilename = extensionIndex > -1
+        ? filename.substring(0, extensionIndex)
+        : filename;
+
+    RecordWriter valueWriter = valueProvider.getRecordWriter(conf, strippedFilename);
     RecordWriter keyWriter =
-        keyProvider == null ? null : keyProvider.getRecordWriter(conf, filename);
+        keyProvider == null ? null : keyProvider.getRecordWriter(conf, strippedFilename);
     RecordWriter headerWriter =
-        headerProvider == null ? null : headerProvider.getRecordWriter(conf, filename);
+        headerProvider == null ? null : headerProvider.getRecordWriter(conf, strippedFilename);
 
     return new RecordWriter() {
       @Override
