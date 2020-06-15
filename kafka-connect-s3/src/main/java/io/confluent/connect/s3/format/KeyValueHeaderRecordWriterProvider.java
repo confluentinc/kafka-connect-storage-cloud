@@ -67,11 +67,11 @@ public class KeyValueHeaderRecordWriterProvider
     return new RecordWriter() {
       @Override
       public void write(SinkRecord sinkRecord) {
-        valueWriter.write(sinkRecord);
-        if (keyWriter != null) {
+        valueWriter.write(sinkRecord); // null check happens in sink task
+        if (keyWriter != null && sinkRecord.key() != null) {
           keyWriter.write(sinkRecord);
         }
-        if (headerWriter != null) {
+        if (headerWriter != null && sinkRecord.headers() != null) {
           headerWriter.write(sinkRecord);
         }
       }
