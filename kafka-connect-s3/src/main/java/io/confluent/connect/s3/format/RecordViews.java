@@ -69,7 +69,7 @@ public final class RecordViews {
 
     @Override
     public Schema getViewSchema(SinkRecord record) {
-      return SchemaBuilder.array(SINGLE_HEADER_SCHEMA);
+      return SchemaBuilder.array(SINGLE_HEADER_SCHEMA).build();
     }
 
     @Override
