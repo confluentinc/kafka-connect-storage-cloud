@@ -20,12 +20,16 @@ package io.confluent.connect.s3.format.parquet;
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.format.RecordViewSetter;
+import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
+import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
 import io.confluent.connect.s3.storage.S3ParquetOutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.parquet.avro.AvroParquetWriter;
@@ -42,6 +46,10 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
     implements RecordWriterProvider<S3SinkConnectorConfig> {
   private static final Logger log = LoggerFactory.getLogger(ParquetRecordWriterProvider.class);
   private static final String EXTENSION = ".parquet";
+  private static final String HEADER_FIELD_NAME = "headers";
+  private static final String KEY_FIELD_NAME = "key";
+  private static final String HEADER_STRUCT_NAME = "RecordHeaders";
+  private static final String KEY_STRUCT_NAME = "RecordKey";
   private static final int PAGE_SIZE = 64 * 1024;
   private final S3Storage storage;
   private final AvroData avroData;
@@ -68,6 +76,15 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
       public void write(SinkRecord record) {
         if (schema == null) {
           schema = recordView.getViewSchema(record);
+          // pad the schema for AvroParquetWriter that only accepts record types
+          if (recordView instanceof HeaderRecordView) {
+            schema = SchemaBuilder.struct().name(HEADER_STRUCT_NAME)
+                .field(HEADER_FIELD_NAME, schema).build();
+          } else if (recordView instanceof KeyRecordView) {
+            schema = SchemaBuilder.struct().name(KEY_STRUCT_NAME)
+                .field(KEY_FIELD_NAME, schema).build();
+          }
+
           try {
             log.info("Opening record writer for: {}", adjustedFilename);
             org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
@@ -86,7 +103,14 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
           }
         }
         log.trace("Sink record with view {}: {}", recordView, record);
-        Object value = avroData.fromConnectData(schema, recordView.getView(record));
+        Object view = recordView.getView(record);
+        // fill the schema if it was padded
+        if (recordView instanceof HeaderRecordView) {
+          view = new Struct(schema).put(HEADER_FIELD_NAME, view);
+        } else if (recordView instanceof KeyRecordView) {
+          view = new Struct(schema).put(KEY_FIELD_NAME, view);
+        }
+        Object value = avroData.fromConnectData(schema, view);
         try {
           writer.write((GenericRecord) value);
         } catch (IOException e) {
