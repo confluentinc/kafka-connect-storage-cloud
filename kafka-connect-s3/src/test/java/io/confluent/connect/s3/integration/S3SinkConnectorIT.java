@@ -25,14 +25,11 @@ import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.DockerComposeContainer;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -55,10 +52,10 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final int FLUSH_SIZE = 200;
   private int totalNoOfRecordsProduced = 0;
 
-  @ClassRule
+  /*@ClassRule
   public static DockerComposeContainer nginx =
     new DockerComposeContainer(
-      new File("src/test/nginx/docker-compose.yml"));
+      new File("src/test/nginx/docker-compose.yml"));*/
 
   /*@ClassRule
   public static DockerComposeContainer pumba =
