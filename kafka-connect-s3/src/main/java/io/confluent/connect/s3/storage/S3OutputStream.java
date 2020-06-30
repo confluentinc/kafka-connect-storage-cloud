@@ -25,6 +25,7 @@ import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PartETag;
+import com.amazonaws.services.s3.model.StorageClass;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
 import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import com.amazonaws.services.s3.model.SSECustomerKey;
@@ -60,6 +61,7 @@ public class S3OutputStream extends PositionOutputStream {
   private final ProgressListener progressListener;
   private final int partSize;
   private final CannedAccessControlList cannedAcl;
+  private final StorageClass s3StorageClass;
   private boolean closed;
   private ByteBuffer buffer;
   private MultipartUpload multiPartUpload;
@@ -81,6 +83,7 @@ public class S3OutputStream extends PositionOutputStream {
     this.sseKmsKeyId = conf.getSseKmsKeyId();
     this.partSize = conf.getPartSize();
     this.cannedAcl = conf.getCannedAcl();
+    this.s3StorageClass = conf.getS3StorageClass();
     this.closed = false;
     this.buffer = ByteBuffer.allocate(this.partSize);
     this.progressListener = new ConnectProgressListener();
@@ -205,6 +208,7 @@ public class S3OutputStream extends PositionOutputStream {
         key,
         newObjectMetadata()
     ).withCannedACL(cannedAcl);
+    initRequest.setStorageClass(this.s3StorageClass);
 
     if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
         && StringUtils.isNotBlank(sseKmsKeyId)) {
