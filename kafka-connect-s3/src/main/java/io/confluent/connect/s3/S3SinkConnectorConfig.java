@@ -530,6 +530,21 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     addToGlobal(partitionerConfig);
     addToGlobal(commonConfig);
     addToGlobal(this);
+    validateTimezone();
+  }
+
+  private void validateTimezone() {
+    String timezone = getString(PartitionerConfig.TIMEZONE_CONFIG);
+    long rotateScheduleIntervalMs = getLong(ROTATE_SCHEDULE_INTERVAL_MS_CONFIG);
+    if (rotateScheduleIntervalMs > 0 && timezone.isEmpty()) {
+      throw new ConfigException(
+          String.format(
+              "%s configuration must be set when using %s",
+              PartitionerConfig.TIMEZONE_CONFIG,
+              ROTATE_SCHEDULE_INTERVAL_MS_CONFIG
+          )
+      );
+    }
   }
 
   private void addToGlobal(AbstractConfig config) {
