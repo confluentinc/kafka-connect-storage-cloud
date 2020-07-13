@@ -12,8 +12,6 @@ import com.amazonaws.auth.policy.Statement;
 import com.amazonaws.auth.policy.actions.S3Actions;
 import com.amazonaws.auth.policy.resources.S3ObjectResource;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.AccessControlList;
-import com.amazonaws.services.s3.model.CanonicalGrantee;
 import com.amazonaws.services.s3.model.CreateBucketRequest;
 import com.amazonaws.services.s3.model.ListVersionsRequest;
 import com.amazonaws.services.s3.model.ObjectListing;
@@ -52,22 +50,16 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final int FLUSH_SIZE = 200;
   private int totalNoOfRecordsProduced = 0;
 
-  /*@ClassRule
-  public static DockerComposeContainer nginx =
-    new DockerComposeContainer(
-      new File("src/test/nginx/docker-compose.yml"));*/
-
-  /*@ClassRule
-  public static DockerComposeContainer pumba =
-    new DockerComposeContainer(
-      new File("src/test/pumba/docker-compose.yml"));*/
-
   @Before
   public void setup() throws IOException {
     startConnect();
     createS3RootClient();
   }
 
+  /**
+   * Creates root client that will be used to change bucket permissions.
+   * Prerequisite : Access key and Secret access key should be set as environment variables
+   */
   private void createS3RootClient() {
     s3RootClient = AmazonS3ClientBuilder.standard()
       .withCredentials(
@@ -84,6 +76,10 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     stopConnect();
   }
 
+  /**
+   * Success scenario : End to end test
+   * @throws Throwable
+   */
   @Test
   public void testToAssertConnectorAndDestinationRecords() throws Throwable {
     String bucketName = "conn-dest-bucket1";
@@ -112,12 +108,20 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     deleteBucket(bucketName);
   }
 
+  /**
+   * Case in which bucket permissions/policies are changed while uploading records
+   * Prerequisite : Access key and Secret access key should be set as environment variables
+   * Blocker : Assert Condition
+   * @throws Exception
+   */
   @Test
   public void testIfBucketPermissionIsChangedWhileUploading() throws Exception {
     String bucketName = "conn-dest-bucket4";
+
     createS3Bucket(bucketName);
     addReadWritePolicyToBucket(bucketName);
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
+
     // send records to kafka
     sendRecordsToKafka();
 
@@ -125,9 +129,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     props.put("s3.bucket.name", bucketName);
     props.put("aws.access.key.id", System.getenv("SECONDARY_USER_ACCESS_KEY_ID"));
     props.put("aws.secret.access.key", System.getenv("SECONDARY_USER_SECRET_ACCESS_KEY"));
-    props.put("retry.backoff.ms", "3000");
-    props.put("s3.retry.backoff.ms","3000");
-    props.put("s3.part.retries", "1");
+
     // start a sink connector
     connect.configureConnector(CONNECTOR_NAME, props);
     // wait for tasks to spin up
@@ -141,7 +143,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
     // produce more records to kafka
     sendRecordsToKafka();
-    Thread.sleep(300000);
+    Thread.sleep(10000);
   }
 
   private void addReadWritePolicyToBucket(String bucketName) {
@@ -155,30 +157,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
       .withStatements(allowRestrictedWriteStatement);
 
     s3RootClient.setBucketPolicy(bucketName, policy.toJson());
-  }
-
-  @Test
-  public void testSink() throws Exception {
-    createS3Bucket(S3_BUCKET);
-    // create topics in Kafka
-    KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
-    // send records to kafka
-    sendRecordsToKafka();
-
-    Map<String, String> props = getProperties();
-    props.put("store.url", "http://localhost:9091");
-    props.put("aws.access.key.id", System.getenv("ROOT_USER_ACCESS_KEY_ID"));
-    props.put("aws.secret.access.key", System.getenv("ROOT_USER_SECRET_ACCESS_KEY"));
-    // start a sink connector
-    connect.configureConnector(CONNECTOR_NAME, props);
-    // wait for tasks to spin up
-    int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
-
-    waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
-    waitForConnectorToCompleteSendingRecords(totalNoOfRecordsProduced, FLUSH_SIZE, S3_BUCKET);
-
-    // assert records
-    assertEquals(getNoOfObjectsInS3(S3_BUCKET), totalNoOfRecordsProduced/FLUSH_SIZE);
   }
 
   private void sendRecordsToKafka() {
@@ -205,7 +183,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     props.put("flush.size", Integer.toString(FLUSH_SIZE));
     props.put("storage.class","io.confluent.connect.s3.storage.S3Storage");
     props.put("partitioner.class", "io.confluent.connect.storage.partitioner.DefaultPartitioner");
-    //props.put("s3.retry.backoff.ms","20000");
+
     // converters
     props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
     props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -259,11 +237,4 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     }
   }
 
-  private void createS3BucketWithNoReadWritePermission(String bucketName) {
-    CreateBucketRequest req = new CreateBucketRequest(bucketName);
-    AccessControlList controlList = new AccessControlList();
-    controlList.revokeAllPermissions(new CanonicalGrantee(s3RootClient.getS3AccountOwner().getId()));
-    req.setAccessControlList(controlList);
-
-  }
 }
