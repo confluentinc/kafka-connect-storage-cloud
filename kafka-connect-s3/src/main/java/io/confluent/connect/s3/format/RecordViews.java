@@ -26,22 +26,6 @@ import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 public final class RecordViews {
-  public static final class KeyRecordView extends BaseRecordView {
-    @Override
-    public Schema getViewSchema(SinkRecord record) {
-      return record.keySchema();
-    }
-
-    @Override
-    public Object getView(SinkRecord record) {
-      return record.key();
-    }
-
-    @Override
-    public String getExtension() {
-      return ".keys";
-    }
-  }
 
   public static final class ValueRecordView extends BaseRecordView {
     @Override
@@ -57,6 +41,23 @@ public final class RecordViews {
     @Override
     public String getExtension() {
       return "";
+    }
+  }
+
+  public static final class KeyRecordView extends BaseRecordView {
+    @Override
+    public Schema getViewSchema(SinkRecord record) {
+      return record.keySchema();
+    }
+
+    @Override
+    public Object getView(SinkRecord record) {
+      return record.key();
+    }
+
+    @Override
+    public String getExtension() {
+      return ".keys";
     }
   }
 

@@ -43,6 +43,7 @@ public class ByteArrayRecordWriterProvider extends RecordViewSetter
   private final ByteArrayConverter converter;
   private final String extension;
   private final byte[] lineSeparatorBytes;
+  private final JsonConverter jsonConverter;
 
   ByteArrayRecordWriterProvider(S3Storage storage, ByteArrayConverter converter) {
     this.storage = storage;
@@ -51,6 +52,7 @@ public class ByteArrayRecordWriterProvider extends RecordViewSetter
     this.lineSeparatorBytes = storage.conf()
         .getFormatByteArrayLineSeparator()
         .getBytes(StandardCharsets.UTF_8);
+    this.jsonConverter = new JsonConverter();
   }
 
   @Override
@@ -71,7 +73,6 @@ public class ByteArrayRecordWriterProvider extends RecordViewSetter
         try {
           byte[] bytes;
           if (recordView instanceof HeaderRecordView) {
-            JsonConverter jsonConverter = new JsonConverter();
             jsonConverter.configure(Collections.singletonMap("schemas.enable", false), false);
             bytes = jsonConverter.fromConnectData(
                 record.topic(), recordView.getViewSchema(record), recordView.getView(record));

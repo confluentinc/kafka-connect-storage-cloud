@@ -16,21 +16,36 @@
 
 package io.confluent.connect.s3.format;
 
+
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static java.util.Objects.requireNonNull;
 
 public class KeyValueHeaderRecordWriterProvider
     implements RecordWriterProvider<S3SinkConnectorConfig> {
 
-  private final RecordWriterProvider<S3SinkConnectorConfig> valueProvider;
-  private final RecordWriterProvider<S3SinkConnectorConfig> keyProvider;
-  private final RecordWriterProvider<S3SinkConnectorConfig> headerProvider;
+  private static final Logger log =
+      LoggerFactory.getLogger(KeyValueHeaderRecordWriterProvider.class);
 
+  /**
+   * valueProvider may not be null.
+   */
+  private final RecordWriterProvider<S3SinkConnectorConfig> valueProvider;
+  /**
+   * keyProvider may be null.
+   */
+  private final RecordWriterProvider<S3SinkConnectorConfig> keyProvider;
+  /**
+   * headerProvider may be null.
+   */
+  private final RecordWriterProvider<S3SinkConnectorConfig> headerProvider;
 
   public KeyValueHeaderRecordWriterProvider(
       RecordWriterProvider<S3SinkConnectorConfig> valueProvider,
@@ -68,10 +83,21 @@ public class KeyValueHeaderRecordWriterProvider
       @Override
       public void write(SinkRecord sinkRecord) {
         valueWriter.write(sinkRecord); // null check happens in sink task
-        if (keyWriter != null && sinkRecord.key() != null) {
+        // keyWriter != null means writing keys is turned on
+        if (keyWriter != null && sinkRecord.key() == null) {
+          throw new ConnectException(
+              String.format("Key cannot be null for SinkRecord: %s", sinkRecord)
+          );
+        } else if (keyWriter != null) {
           keyWriter.write(sinkRecord);
         }
-        if (headerWriter != null && sinkRecord.headers() != null) {
+
+        // headerWriter != null means writing headers is turned on
+        if (headerWriter != null && sinkRecord.headers() == null) {
+          throw new ConnectException(
+              String.format("Headers cannot be null for SinkRecord: %s", sinkRecord)
+          );
+        } else if (headerWriter != null) {
           headerWriter.write(sinkRecord);
         }
       }

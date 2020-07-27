@@ -28,6 +28,7 @@ import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -74,15 +75,19 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
 
       @Override
       public void write(SinkRecord record) {
+        boolean schemaPadded = false;
         if (schema == null) {
           schema = recordView.getViewSchema(record);
           // pad the schema for AvroParquetWriter that only accepts record types
-          if (recordView instanceof HeaderRecordView) {
-            schema = SchemaBuilder.struct().name(HEADER_STRUCT_NAME)
-                .field(HEADER_FIELD_NAME, schema).build();
-          } else if (recordView instanceof KeyRecordView) {
-            schema = SchemaBuilder.struct().name(KEY_STRUCT_NAME)
-                .field(KEY_FIELD_NAME, schema).build();
+          if (schema.type() != Type.STRUCT) {
+            if (recordView instanceof HeaderRecordView) {
+              schema = SchemaBuilder.struct().name(HEADER_STRUCT_NAME)
+                  .field(HEADER_FIELD_NAME, schema).build();
+            } else if (recordView instanceof KeyRecordView) {
+              schema = SchemaBuilder.struct().name(KEY_STRUCT_NAME)
+                  .field(KEY_FIELD_NAME, schema).build();
+            }
+            schemaPadded = true;
           }
 
           try {
@@ -104,11 +109,13 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
         }
         log.trace("Sink record with view {}: {}", recordView, record);
         Object view = recordView.getView(record);
-        // fill the schema if it was padded
-        if (recordView instanceof HeaderRecordView) {
-          view = new Struct(schema).put(HEADER_FIELD_NAME, view);
-        } else if (recordView instanceof KeyRecordView) {
-          view = new Struct(schema).put(KEY_FIELD_NAME, view);
+        if (schemaPadded) {
+          // fill the schema if it was padded
+          if (recordView instanceof HeaderRecordView) {
+            view = new Struct(schema).put(HEADER_FIELD_NAME, view);
+          } else if (recordView instanceof KeyRecordView) {
+            view = new Struct(schema).put(KEY_FIELD_NAME, view);
+          }
         }
         Object value = avroData.fromConnectData(schema, view);
         try {
