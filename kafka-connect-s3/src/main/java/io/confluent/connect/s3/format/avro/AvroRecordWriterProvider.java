@@ -68,7 +68,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
           schema = recordView.getViewSchema(record);
           try {
             log.info("Opening record writer for: {}", adjustedFilename);
-            s3out = storage.create(adjustedFilename, true);
+            s3out = storage.create(adjustedFilename, true, AvroFormat.class);
             org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
             writer.setCodec(CodecFactory.fromString(conf.getAvroCodec()));
             writer.create(avroSchema, s3out);

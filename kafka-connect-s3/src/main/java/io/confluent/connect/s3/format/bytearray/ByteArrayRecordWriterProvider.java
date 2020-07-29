@@ -64,7 +64,7 @@ public class ByteArrayRecordWriterProvider extends RecordViewSetter
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     return new RecordWriter() {
       final String adjustedFilename = getAdjustedFilename(filename, getExtension());
-      final S3OutputStream s3out = storage.create(adjustedFilename, true);
+      final S3OutputStream s3out = storage.create(adjustedFilename, true, ByteArrayFormat.class);
       final OutputStream s3outWrapper = s3out.wrapForCompression();
 
       @Override

@@ -63,7 +63,7 @@ public class JsonRecordWriterProvider extends RecordViewSetter
     try {
       return new RecordWriter() {
         final String adjustedFilename = getAdjustedFilename(filename, getExtension());
-        final S3OutputStream s3out = storage.create(adjustedFilename, true);
+        final S3OutputStream s3out = storage.create(adjustedFilename, true, JsonFormat.class);
         final OutputStream s3outWrapper = s3out.wrapForCompression();
         final JsonGenerator writer = mapper.getFactory()
                                          .createGenerator(s3outWrapper)

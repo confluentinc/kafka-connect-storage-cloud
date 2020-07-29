@@ -111,7 +111,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       private final AtomicInteger retries = new AtomicInteger(0);
 
       @Override
-      public S3OutputStream create(String path, boolean overwrite) {
+      public S3OutputStream create(String path, boolean overwrite, Class<?> formatClass) {
         return new S3OutputStreamFlaky(path, this.conf(), s3, retries);
       }
     };

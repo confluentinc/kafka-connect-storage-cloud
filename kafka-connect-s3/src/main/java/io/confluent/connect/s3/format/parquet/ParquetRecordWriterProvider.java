@@ -163,7 +163,7 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
 
     @Override
     public PositionOutputStream create(long blockSizeHint) {
-      s3out = (S3ParquetOutputStream) storage.create(filename, true);
+      s3out = (S3ParquetOutputStream) storage.create(filename, true, ParquetFormat.class);
       return s3out;
     }
 
