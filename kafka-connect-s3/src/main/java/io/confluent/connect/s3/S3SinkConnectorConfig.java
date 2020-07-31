@@ -969,7 +969,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
     static {
       TYPES_BY_NAME = Arrays.stream(StorageClass.values())
-        .collect(Collectors.toMap(c -> c.toString(), Function.identity()));
+        .collect(Collectors.toMap(StorageClass::toString, Function.identity()));
       ALLOWED_VALUES = new ArrayList<>(TYPES_BY_NAME.keySet());
     }
 
