@@ -27,13 +27,4 @@ public class RecordViewSetter {
     this.recordView = requireNonNull(recordView);
   }
 
-  protected String getAdjustedFilename(String filename, String initialExtension) {
-    if (filename.endsWith(initialExtension)) {
-      int index = filename.indexOf(initialExtension);
-      return filename.substring(0, index) + recordView.getExtension() + initialExtension;
-    } else {
-      // filename is already stripped
-      return filename + recordView.getExtension() + initialExtension;
-    }
-  }
 }

@@ -15,6 +15,8 @@
 
 package io.confluent.connect.s3.format.json;
 
+import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
+
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.data.Struct;
@@ -62,7 +64,7 @@ public class JsonRecordWriterProvider extends RecordViewSetter
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     try {
       return new RecordWriter() {
-        final String adjustedFilename = getAdjustedFilename(filename, getExtension());
+        final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
         final S3OutputStream s3out = storage.create(adjustedFilename, true, JsonFormat.class);
         final OutputStream s3outWrapper = s3out.wrapForCompression();
         final JsonGenerator writer = mapper.getFactory()

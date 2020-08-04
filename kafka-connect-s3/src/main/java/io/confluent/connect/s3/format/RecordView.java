@@ -19,10 +19,32 @@ package io.confluent.connect.s3.format;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.sink.SinkRecord;
 
+/**
+ * An interface to get the schema for all three (Key, Vale, Header) record portions
+ * in a consistent way.
+ */
 public interface RecordView {
+
+  /**
+   * The schema of the record view. eg. record.keySchema when the RecordView is KeyRecordView.
+   *
+   * @param record the SinkRecord to get the view schema on.
+   * @return the schema of the current record view
+   */
   Schema getViewSchema(SinkRecord record);
 
+  /**
+   * The value of the current record view. ed. record.key when the RecordView is KeyRecordView.
+   *
+   * @param record the SinkRecord to get the value from
+   * @return the value based on the current RecordView
+   */
   Object getView(SinkRecord record);
 
+  /**
+   * Get the extension for the current RecordView, eg. .keys for KeyRecordView.
+   *
+   * @return the view's file extension
+   */
   String getExtension();
 }

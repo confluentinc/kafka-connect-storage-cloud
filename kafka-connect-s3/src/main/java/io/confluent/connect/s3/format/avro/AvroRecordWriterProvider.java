@@ -15,6 +15,8 @@
 
 package io.confluent.connect.s3.format.avro;
 
+import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
+
 import org.apache.avro.file.CodecFactory;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -57,7 +59,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     // This is not meant to be a thread-safe writer!
     return new RecordWriter() {
-      final String adjustedFilename = getAdjustedFilename(filename, getExtension());
+      final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
       final DataFileWriter<Object> writer = new DataFileWriter<>(new GenericDatumWriter<>());
       Schema schema = null;
       S3OutputStream s3out;

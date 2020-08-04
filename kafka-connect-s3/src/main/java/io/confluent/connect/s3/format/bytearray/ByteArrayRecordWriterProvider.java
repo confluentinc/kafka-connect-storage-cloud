@@ -15,6 +15,8 @@
 
 package io.confluent.connect.s3.format.bytearray;
 
+import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
+
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.format.RecordViewSetter;
 import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
@@ -63,7 +65,7 @@ public class ByteArrayRecordWriterProvider extends RecordViewSetter
   @Override
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     return new RecordWriter() {
-      final String adjustedFilename = getAdjustedFilename(filename, getExtension());
+      final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
       final S3OutputStream s3out = storage.create(adjustedFilename, true, ByteArrayFormat.class);
       final OutputStream s3outWrapper = s3out.wrapForCompression();
 

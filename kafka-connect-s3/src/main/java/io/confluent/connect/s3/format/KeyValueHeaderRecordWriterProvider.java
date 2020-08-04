@@ -17,6 +17,8 @@
 package io.confluent.connect.s3.format;
 
 
+import javax.annotation.Nullable;
+import javax.validation.constraints.NotNull;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 
@@ -28,29 +30,30 @@ import org.slf4j.LoggerFactory;
 
 import static java.util.Objects.requireNonNull;
 
+/**
+ * A class that adds a record writer layer to manage writing values, keys and headers
+ * with a single call. It provides an abstraction for writing, committing and
+ * closing all three header, key and value files.
+ */
 public class KeyValueHeaderRecordWriterProvider
     implements RecordWriterProvider<S3SinkConnectorConfig> {
 
   private static final Logger log =
       LoggerFactory.getLogger(KeyValueHeaderRecordWriterProvider.class);
 
-  /**
-   * valueProvider may not be null.
-   */
+  @NotNull
   private final RecordWriterProvider<S3SinkConnectorConfig> valueProvider;
-  /**
-   * keyProvider may be null.
-   */
+
+  @Nullable
   private final RecordWriterProvider<S3SinkConnectorConfig> keyProvider;
-  /**
-   * headerProvider may be null.
-   */
+
+  @Nullable
   private final RecordWriterProvider<S3SinkConnectorConfig> headerProvider;
 
   public KeyValueHeaderRecordWriterProvider(
       RecordWriterProvider<S3SinkConnectorConfig> valueProvider,
-      RecordWriterProvider<S3SinkConnectorConfig> keyProvider,
-      RecordWriterProvider<S3SinkConnectorConfig> headerProvider) {
+      @Nullable RecordWriterProvider<S3SinkConnectorConfig> keyProvider,
+      @Nullable RecordWriterProvider<S3SinkConnectorConfig> headerProvider) {
     this.valueProvider = requireNonNull(valueProvider);
     this.keyProvider = keyProvider;
     this.headerProvider = headerProvider;

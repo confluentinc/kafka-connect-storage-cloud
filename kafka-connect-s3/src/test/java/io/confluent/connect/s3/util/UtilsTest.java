@@ -1,5 +1,6 @@
-package io.confluent.connect.s3.format;
+package io.confluent.connect.s3.util;
 
+import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
 import static org.junit.Assert.assertEquals;
 
 import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
@@ -10,7 +11,7 @@ import java.util.Arrays;
 import java.util.List;
 import org.junit.Test;
 
-public class RecordViewSetterTest {
+public class UtilsTest {
 
   private static List<String> givenFilenames = new ArrayList<>(Arrays.asList(
       "x.avro",
@@ -26,9 +27,6 @@ public class RecordViewSetterTest {
 
   @Test
   public void getAdjustedFilenameForValues() {
-    RecordViewSetter rv = new RecordViewSetter();
-    rv.setRecordView(new ValueRecordView());
-
     List<String> expectedFilenames = new ArrayList<>(Arrays.asList(
         "x.avro",
         "asdf.avro",
@@ -42,16 +40,13 @@ public class RecordViewSetterTest {
     ));
 
     for (int i = 0; i < expectedFilenames.size(); i++) {
-      String adjustedFilename = rv.getAdjustedFilename(givenFilenames.get(i), ".avro");
+      String adjustedFilename = getAdjustedFilename(new ValueRecordView(), givenFilenames.get(i), ".avro");
       assertEquals(expectedFilenames.get(i), adjustedFilename);
     }
   }
 
   @Test
   public void getAdjustedFilenameForKeys() {
-    RecordViewSetter rv = new RecordViewSetter();
-    rv.setRecordView(new KeyRecordView());
-
     List<String> expectedFilenames = new ArrayList<>(Arrays.asList(
         "x.keys.avro",
         "asdf.keys.avro",
@@ -65,16 +60,13 @@ public class RecordViewSetterTest {
     ));
 
     for (int i = 0; i < expectedFilenames.size(); i++) {
-      String adjustedFilename = rv.getAdjustedFilename(givenFilenames.get(i), ".avro");
+      String adjustedFilename = getAdjustedFilename(new KeyRecordView(), givenFilenames.get(i), ".avro");
       assertEquals(expectedFilenames.get(i), adjustedFilename);
     }
   }
 
   @Test
   public void getAdjustedFilenameForHeaders() {
-    RecordViewSetter rv = new RecordViewSetter();
-    rv.setRecordView(new HeaderRecordView());
-
     List<String> expectedFilenames = new ArrayList<>(Arrays.asList(
         "x.headers.avro",
         "asdf.headers.avro",
@@ -88,16 +80,13 @@ public class RecordViewSetterTest {
     ));
 
     for (int i = 0; i < expectedFilenames.size(); i++) {
-      String adjustedFilename = rv.getAdjustedFilename(givenFilenames.get(i), ".avro");
+      String adjustedFilename = getAdjustedFilename(new HeaderRecordView(), givenFilenames.get(i), ".avro");
       assertEquals(expectedFilenames.get(i), adjustedFilename);
     }
   }
 
   @Test
   public void testParquetEncodingExtensions() {
-    RecordViewSetter rv = new RecordViewSetter();
-    rv.setRecordView(new HeaderRecordView());
-
     List<String> givenFilenames1 = new ArrayList<>(Arrays.asList(
         "x.snappy.parquet",
         "sample-filename.snappy.parquet",
@@ -113,7 +102,7 @@ public class RecordViewSetterTest {
     ));
 
     for (int i = 0; i < expectedFilenames.size(); i++) {
-      String adjustedFilename = rv.getAdjustedFilename(givenFilenames1.get(i), ".snappy.parquet");
+      String adjustedFilename = getAdjustedFilename(new HeaderRecordView(), givenFilenames1.get(i), ".snappy.parquet");
       assertEquals(expectedFilenames.get(i), adjustedFilename);
     }
   }

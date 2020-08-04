@@ -17,6 +17,8 @@
 
 package io.confluent.connect.s3.format.parquet;
 
+import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
+
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.format.RecordViewSetter;
@@ -68,7 +70,7 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
   @Override
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     return new RecordWriter() {
-      final String adjustedFilename = getAdjustedFilename(filename, getExtension());
+      final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
       Schema schema = null;
       ParquetWriter<GenericRecord> writer;
       S3ParquetOutputFile s3ParquetOutputFile;
