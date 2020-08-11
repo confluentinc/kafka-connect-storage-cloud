@@ -19,12 +19,10 @@ import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.format.RecordViewSetter;
-import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
-import java.util.Collections;
 import org.apache.kafka.connect.converters.ByteArrayConverter;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
@@ -73,15 +71,8 @@ public class ByteArrayRecordWriterProvider extends RecordViewSetter
       public void write(SinkRecord record) {
         log.trace("Sink record with view {}: {}", recordView, record);
         try {
-          byte[] bytes;
-          if (recordView instanceof HeaderRecordView) {
-            jsonConverter.configure(Collections.singletonMap("schemas.enable", false), false);
-            bytes = jsonConverter.fromConnectData(
-                record.topic(), recordView.getViewSchema(record), recordView.getView(record));
-          } else {
-            bytes = converter.fromConnectData(
-              record.topic(), recordView.getViewSchema(record), recordView.getView(record));
-          }
+          byte[] bytes = converter.fromConnectData(record.topic(),
+              recordView.getViewSchema(record, false), recordView.getView(record, false));
           s3outWrapper.write(bytes);
           s3outWrapper.write(lineSeparatorBytes);
         } catch (IOException | DataException e) {

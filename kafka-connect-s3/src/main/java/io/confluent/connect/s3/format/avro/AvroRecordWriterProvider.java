@@ -67,7 +67,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
       @Override
       public void write(SinkRecord record) {
         if (schema == null) {
-          schema = recordView.getViewSchema(record);
+          schema = recordView.getViewSchema(record, false);
           try {
             log.info("Opening record writer for: {}", adjustedFilename);
             s3out = storage.create(adjustedFilename, true, AvroFormat.class);
@@ -79,7 +79,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
           }
         }
         log.trace("Sink record with view {}: {}", recordView, record);
-        Object value = avroData.fromConnectData(schema, recordView.getView(record));
+        Object value = avroData.fromConnectData(schema, recordView.getView(record, false));
         try {
           // AvroData wraps primitive types so their schema can be included. We need to unwrap
           // NonRecordContainers to just their value to properly handle these types

@@ -29,17 +29,21 @@ public interface RecordView {
    * The schema of the record view. eg. record.keySchema when the RecordView is KeyRecordView.
    *
    * @param record the SinkRecord to get the view schema on.
+   * @param enveloped whether the schema should be enveloped in a struct
+   *                  (applicable for keys/headers in Parquet formats)
    * @return the schema of the current record view
    */
-  Schema getViewSchema(SinkRecord record);
+  Schema getViewSchema(SinkRecord record, boolean enveloped);
 
   /**
    * The value of the current record view. ed. record.key when the RecordView is KeyRecordView.
    *
    * @param record the SinkRecord to get the value from
+   * @param enveloped whether the view should be enveloped in a struct
+   *                  (applicable for keys/headers in Parquet formats)
    * @return the value based on the current RecordView
    */
-  Object getView(SinkRecord record);
+  Object getView(SinkRecord record, boolean enveloped);
 
   /**
    * Get the extension for the current RecordView, eg. .keys for KeyRecordView.

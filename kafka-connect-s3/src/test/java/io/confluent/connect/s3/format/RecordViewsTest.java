@@ -40,10 +40,10 @@ public class RecordViewsTest {
   @Test
   public void testRecordKeyValueViews() {
     SinkRecord sampleRecord = getSampleSinkRecord();
-    assertEquals(sampleRecord.key(), new KeyRecordView().getView(sampleRecord));
-    assertEquals(sampleRecord.value(), new ValueRecordView().getView(sampleRecord));
-    assertEquals(sampleRecord.keySchema(), new KeyRecordView().getViewSchema(sampleRecord));
-    assertEquals(sampleRecord.valueSchema(), new ValueRecordView().getViewSchema(sampleRecord));
+    assertEquals(sampleRecord.key(), new KeyRecordView().getView(sampleRecord, false));
+    assertEquals(sampleRecord.value(), new ValueRecordView().getView(sampleRecord, false));
+    assertEquals(sampleRecord.keySchema(), new KeyRecordView().getViewSchema(sampleRecord, false));
+    assertEquals(sampleRecord.valueSchema(), new ValueRecordView().getViewSchema(sampleRecord, false));
   }
 
   @Test
@@ -54,7 +54,7 @@ public class RecordViewsTest {
         new Struct(SINGLE_HEADER_SCHEMA).put("key", "int").put("value", "12"),
         new Struct(SINGLE_HEADER_SCHEMA).put("key", "boolean").put("value", "false"));
 
-    Object headerView = new HeaderRecordView().getView(getSampleSinkRecord());
+    Object headerView = new HeaderRecordView().getView(getSampleSinkRecord(), false);
     assertEquals(expectedHeaders, headerView);
   }
 

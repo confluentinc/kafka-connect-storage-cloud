@@ -75,11 +75,11 @@ public class JsonRecordWriterProvider extends RecordViewSetter
         public void write(SinkRecord record) {
           log.trace("Sink record with view {}: {}", recordView, record);
           try {
-            Object value = recordView.getView(record);
+            Object value = recordView.getView(record, false);
             if (value instanceof Struct) {
               byte[] rawJson = converter.fromConnectData(
                   record.topic(),
-                  recordView.getViewSchema(record),
+                  recordView.getViewSchema(record, false),
                   value
               );
               s3outWrapper.write(rawJson);

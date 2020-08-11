@@ -195,12 +195,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       ParquetFormat.class
   );
 
+  private static final Collection<Object> HEADERS_FORMAT_CLASS_VALID_VALUES = Arrays.<Object>asList(
+      AvroFormat.class,
+      JsonFormat.class,
+      ParquetFormat.class
+  );
+
   private static final ParentValueRecommender KEYS_FORMAT_CLASS_RECOMMENDER =
       new ParentValueRecommender(
           STORE_KAFKA_KEYS_CONFIG, true, FORMAT_CLASS_VALID_VALUES);
   private static final ParentValueRecommender HEADERS_FORMAT_CLASS_RECOMMENDER =
       new ParentValueRecommender(
-          STORE_KAFKA_HEADERS_CONFIG, true, FORMAT_CLASS_VALID_VALUES);
+          STORE_KAFKA_HEADERS_CONFIG, true, HEADERS_FORMAT_CLASS_VALID_VALUES);
 
   static {
     STORAGE_CLASS_RECOMMENDER.addValidValues(
