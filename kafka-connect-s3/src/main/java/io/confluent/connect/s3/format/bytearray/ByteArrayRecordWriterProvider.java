@@ -26,7 +26,6 @@ import io.confluent.connect.storage.format.RecordWriterProvider;
 import org.apache.kafka.connect.converters.ByteArrayConverter;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
-import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,7 +42,6 @@ public class ByteArrayRecordWriterProvider extends RecordViewSetter
   private final ByteArrayConverter converter;
   private final String extension;
   private final byte[] lineSeparatorBytes;
-  private final JsonConverter jsonConverter;
 
   ByteArrayRecordWriterProvider(S3Storage storage, ByteArrayConverter converter) {
     this.storage = storage;
@@ -52,7 +50,6 @@ public class ByteArrayRecordWriterProvider extends RecordViewSetter
     this.lineSeparatorBytes = storage.conf()
         .getFormatByteArrayLineSeparator()
         .getBytes(StandardCharsets.UTF_8);
-    this.jsonConverter = new JsonConverter();
   }
 
   @Override
