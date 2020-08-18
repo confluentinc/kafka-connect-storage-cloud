@@ -195,12 +195,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       ParquetFormat.class
   );
 
+  // ByteArrayFormat for headers is not supported.
+  // Would require undesired JsonConverter configuration in ByteArrayRecordWriterProvider.
   private static final Collection<Object> HEADERS_FORMAT_CLASS_VALID_VALUES = Arrays.<Object>asList(
       AvroFormat.class,
       JsonFormat.class,
       ParquetFormat.class
-      // ByteArrayFormat for headers is not supported.
-      // Would require undesired JsonConverter configuration in ByteArrayRecordWriterProvider.
   );
 
   private static final ParentValueRecommender KEYS_FORMAT_CLASS_RECOMMENDER =
