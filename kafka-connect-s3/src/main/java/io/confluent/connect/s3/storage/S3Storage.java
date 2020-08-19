@@ -17,9 +17,11 @@ package io.confluent.connect.s3.storage;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.PredefinedClientConfigurations;
+import com.amazonaws.SdkClientException;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.retry.PredefinedBackoffStrategies;
@@ -28,11 +30,17 @@ import com.amazonaws.retry.RetryPolicy;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ObjectListing;
-import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import com.amazonaws.services.s3.model.ObjectTagging;
 import com.amazonaws.services.s3.model.SetObjectTaggingRequest;
 import com.amazonaws.services.s3.model.Tag;
-import com.amazonaws.SdkClientException;
+import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClient;
+import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
+import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.format.parquet.ParquetFormat;
+import io.confluent.connect.s3.util.S3ProxyConfig;
+import io.confluent.connect.s3.util.Version;
+import io.confluent.connect.storage.Storage;
+import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.avro.file.SeekableInput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,13 +49,8 @@ import java.io.OutputStream;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import io.confluent.connect.s3.S3SinkConnectorConfig;
-import io.confluent.connect.s3.util.S3ProxyConfig;
-import io.confluent.connect.s3.util.Version;
-import io.confluent.connect.storage.Storage;
-import io.confluent.connect.storage.common.util.StringUtils;
-
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_IAM_ROLE_ARN_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
@@ -72,7 +75,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
    * Construct an S3 storage class given a configuration and an AWS S3 address.
    *
    * @param conf the S3 configuration.
-   * @param url the S3 address.
+   * @param url  the S3 address.
    */
   public S3Storage(S3SinkConnectorConfig conf, String url) {
     this.url = url;
@@ -99,8 +102,8 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     String region = config.getString(REGION_CONFIG);
     if (StringUtils.isBlank(url)) {
       builder = "us-east-1".equals(region)
-                ? builder.withRegion(Regions.US_EAST_1)
-                : builder.withRegion(region);
+          ? builder.withRegion(Regions.US_EAST_1)
+          : builder.withRegion(region);
     } else {
       builder = builder.withEndpointConfiguration(
           new AwsClientBuilder.EndpointConfiguration(url, region)
@@ -176,15 +179,49 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     final String accessKeyId = config.getString(AWS_ACCESS_KEY_ID_CONFIG);
     final String secretKey = config.getPassword(AWS_SECRET_ACCESS_KEY_CONFIG).value();
     if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
+
+      BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
+
+      AWSStaticCredentialsProvider staticCredentialsProvider =
+          new AWSStaticCredentialsProvider(basicCredentials);
+
+      String iamRoleArn = config.getString(AWS_IAM_ROLE_ARN_CONFIG);
+      if (StringUtils.isNotBlank(iamRoleArn)) {
+        return newAssumeRoleCredentialsProvider(config, accessKeyId,
+            secretKey, staticCredentialsProvider, iamRoleArn);
+      }
       log.info("Returning new credentials provider using the access key id and "
           + "the secret access key that were directly supplied through the connector's "
           + "configuration");
-      BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
-      return new AWSStaticCredentialsProvider(basicCredentials);
+      return staticCredentialsProvider;
     }
+
     log.info(
         "Returning new credentials provider based on the configured credentials provider class");
     return config.getCredentialsProvider();
+  }
+
+  private STSAssumeRoleSessionCredentialsProvider newAssumeRoleCredentialsProvider(
+      S3SinkConnectorConfig config, String accessKeyId, String secretKey,
+      AWSStaticCredentialsProvider staticCredentialsProvider, String iamRoleArn) {
+    log.info("Returning a new STSAssumeRoleSessionCredentialsProvider in order to assume the "
+        + "IAM role ARN provided in the connector's config . "
+        + "The role will be assumed with the access key id and secret key also provided. "
+        + "The assumed role with also be scoped down to the necessary permissions.");
+    log.info("Using AWS Access key " + accessKeyId + " and secret key " + secretKey);
+
+    String region = config.getString(REGION_CONFIG);
+
+    AWSSecurityTokenServiceClientBuilder stsBuilder = AWSSecurityTokenServiceClient.builder()
+        .withCredentials(staticCredentialsProvider);
+    stsBuilder = "us-east-1".equals(region)
+          ? stsBuilder.withRegion(Regions.US_EAST_1)
+          : stsBuilder.withRegion(region);
+
+    return new STSAssumeRoleSessionCredentialsProvider
+        .Builder(iamRoleArn, config.getName() + "-S3SinkConnector")
+        .withStsClient(stsBuilder.build())
+        .build();
   }
 
   @Override

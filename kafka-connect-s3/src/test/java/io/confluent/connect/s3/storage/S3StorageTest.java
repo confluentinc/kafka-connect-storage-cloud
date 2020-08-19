@@ -17,8 +17,10 @@ package io.confluent.connect.s3.storage;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
+import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.amazonaws.retry.PredefinedBackoffStrategies;
 import com.amazonaws.retry.PredefinedRetryPolicies;
 import com.amazonaws.retry.RetryPolicy;
@@ -36,6 +38,7 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CON
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_MAX_BACKOFF_TIME_MS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class S3StorageTest extends S3SinkConnectorTestBase {
@@ -154,11 +157,33 @@ public class S3StorageTest extends S3SinkConnectorTestBase {
 
   @Test
   public void testUserSuppliedCredentials() throws Exception {
-    localProps.put(S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG, "foo_key");
-    localProps.put(S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG, "bar_secret");
+    String accessKeyId = "foo_key";
+    String secretAccessKey = "bar_secret";
+    localProps.put(S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG, accessKeyId);
+    localProps.put(S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG, secretAccessKey);
     setUp();
     AWSCredentialsProvider credentialsProvider = storage.newCredentialsProvider(connectorConfig);
     assertTrue(credentialsProvider instanceof AWSStaticCredentialsProvider);
+
+    AWSCredentials actualCredentials = credentialsProvider.getCredentials();
+
+    assertNotNull(actualCredentials);
+    assertEquals(accessKeyId, actualCredentials.getAWSAccessKeyId());
+    assertEquals(secretAccessKey, actualCredentials.getAWSSecretKey());
+  }
+
+  @Test
+  public void testUserSuppliedIAMRoleARNAndCredentials() throws Exception {
+    String accessKeyId = "foo_key";
+    String secretAccessKey = "bar_secret";
+    String iamRoleArn = "dummy-role";
+    localProps.put(S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG, accessKeyId);
+    localProps.put(S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG, secretAccessKey);
+    localProps.put(S3SinkConnectorConfig.AWS_IAM_ROLE_ARN_CONFIG, iamRoleArn);
+    setUp();
+    AWSCredentialsProvider credentialsProvider = storage.newCredentialsProvider(connectorConfig);
+
+    assertTrue(credentialsProvider instanceof STSAssumeRoleSessionCredentialsProvider);
   }
 
   /**
