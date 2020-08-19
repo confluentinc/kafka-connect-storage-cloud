@@ -31,6 +31,7 @@ import com.amazonaws.services.s3.model.SSECustomerKey;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.parquet.io.PositionOutputStream;
 import org.slf4j.Logger;
@@ -41,6 +42,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 /**
@@ -250,6 +252,18 @@ public class S3OutputStream extends PositionOutputStream {
                                             .withPartNumber(currentPartNumber)
                                             .withPartSize(partSize)
                                             .withGeneralProgressListener(progressListener);
+
+      if (connectorConfig.uploadIntegrityCheck()) {
+        try {
+          String digest = Base64.getEncoder().encodeToString(DigestUtils.md5(inputStream));
+          // Reset the marker so that the stream may be read again while uploading
+          inputStream.reset();
+          request.setMd5Digest(digest);
+        } catch (IOException e) {
+          log.warn("Error calculating md5 digest for part {} for id '{}'; skipping check",
+                  currentPartNumber, uploadId);
+        }
+      }
       log.debug("Uploading part {} for id '{}'", currentPartNumber, uploadId);
       partETags.add(s3.uploadPart(request).getPartETag());
     }
