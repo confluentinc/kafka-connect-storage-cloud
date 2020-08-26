@@ -37,6 +37,7 @@ import io.confluent.connect.storage.Storage;
 import io.confluent.connect.storage.common.util.StringUtils;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_MAX_BACKOFF_TIME_MS;
@@ -79,7 +80,9 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
                                         .withAccelerateModeEnabled(
                                             config.getBoolean(WAN_MODE_CONFIG)
                                         )
-                                        .withPathStyleAccessEnabled(true)
+                                        .withPathStyleAccessEnabled(
+                                            config.getBoolean(S3_PATH_STYLE_ACCESS_ENABLED_CONFIG)
+                                        )
                                         .withCredentials(config.getCredentialsProvider())
                                         .withClientConfiguration(clientConfiguration);
 
