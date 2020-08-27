@@ -145,7 +145,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final int S3_RETRY_BACKOFF_DEFAULT = 200;
 
   public static final String S3_PATH_STYLE_ACCESS_ENABLED_CONFIG = "s3.path.style.access.enabled";
-  public static final boolean S3_PATH_STYLE_ACCESS_ENABLED_DEFAULT = false;
+  public static final boolean S3_PATH_STYLE_ACCESS_ENABLED_DEFAULT = true;
 
   private final String name;
 
