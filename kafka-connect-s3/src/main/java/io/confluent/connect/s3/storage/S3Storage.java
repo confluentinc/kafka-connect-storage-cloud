@@ -17,6 +17,7 @@ package io.confluent.connect.s3.storage;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.PredefinedClientConfigurations;
+import com.amazonaws.SdkClientException;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
@@ -28,11 +29,9 @@ import com.amazonaws.retry.RetryPolicy;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ObjectListing;
-import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import com.amazonaws.services.s3.model.ObjectTagging;
 import com.amazonaws.services.s3.model.SetObjectTaggingRequest;
 import com.amazonaws.services.s3.model.Tag;
-import com.amazonaws.SdkClientException;
 import org.apache.avro.file.SeekableInput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,6 +41,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.util.S3ProxyConfig;
 import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.Storage;
@@ -50,6 +50,7 @@ import io.confluent.connect.storage.common.util.StringUtils;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_MAX_BACKOFF_TIME_MS;
@@ -92,7 +93,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     ClientConfiguration clientConfiguration = newClientConfiguration(config);
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
         .withAccelerateModeEnabled(config.getBoolean(WAN_MODE_CONFIG))
-        .withPathStyleAccessEnabled(true)
+        .withPathStyleAccessEnabled(config.getBoolean(S3_PATH_STYLE_ACCESS_ENABLED_CONFIG))
         .withCredentials(newCredentialsProvider(config))
         .withClientConfiguration(clientConfiguration);
 
@@ -193,7 +194,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   }
 
   public boolean bucketExists() {
-    return StringUtils.isNotBlank(bucketName) && s3.doesBucketExist(bucketName);
+    return StringUtils.isNotBlank(bucketName) && s3.doesBucketExistV2(bucketName);
   }
 
   @Override
