@@ -109,7 +109,6 @@ public abstract class BaseConnectorIT {
    */
   private static AmazonS3 getS3Client() {
     if (useMockClient()) {
-      // S3Mock.create(8001, "/tmp/s3");
       S3Mock api = new S3Mock.Builder().withPort(MOCK_S3_PORT).withInMemoryBackend().build();
       api.start();
       /*
@@ -243,14 +242,13 @@ public abstract class BaseConnectorIT {
    * Confirm that the file count in a bucket matches the expected number of files.
    *
    * @param bucketName the name of the bucket containing the files
-   * @param numFiles   the number of files expected
+   * @param expectedNumFiles the number of files expected
    * @return true if the number of files in the bucket match the expected number; false otherwise
    */
-  protected Optional<Boolean> assertFileCountInBucket(String bucketName, int numFiles) {
+  protected Optional<Boolean> assertFileCountInBucket(String bucketName, int expectedNumFiles) {
     try {
       int fileCount = S3Client.listObjectsV2(bucketName).getKeyCount();
-      boolean result = fileCount == numFiles;
-      return Optional.of(result);
+      return Optional.of(fileCount == expectedNumFiles);
     } catch (Exception e) {
       log.warn("Could not check file count in bucket: {}", bucketName);
       return Optional.empty();
@@ -395,7 +393,6 @@ public abstract class BaseConnectorIT {
     List<JsonNode> fileRows = new ArrayList<>();
     while (dataFileReader.hasNext()) {
       GenericRecord row = dataFileReader.next();
-      log.debug("Avro row: {}", row);
       JsonNode jsonNode = jsonMapper.readTree(row.toString());
       fileRows.add(jsonNode);
     }
@@ -417,7 +414,6 @@ public abstract class BaseConnectorIT {
         .fromSchema(metadata.getFileMetaData().getSchema());
     List<JsonNode> fileRows = new ArrayList<>();
     for (SimpleRecord value = reader.read(); value != null; value = reader.read()) {
-      log.debug("Parquet row: {}", formatter.formatRecord(value));
       JsonNode jsonNode = jsonMapper.readTree(formatter.formatRecord(value));
       fileRows.add(jsonNode);
     }
