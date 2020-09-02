@@ -18,6 +18,7 @@ package io.confluent.connect.s3.integration;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
+import static io.confluent.connect.storage.common.StorageCommonConfig.STORE_URL_CONFIG;
 import static org.junit.Assert.assertTrue;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
@@ -32,7 +33,6 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.test.IntegrationTest;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -63,14 +63,12 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
     props.put(STORAGE_CLASS_CONFIG, S3Storage.class.getName());
     props.put(S3_BUCKET_CONFIG, TEST_BUCKET_NAME);
+    if (useMockClient()) {
+      props.put(STORE_URL_CONFIG, MOCK_S3_URL);
+    }
     producer = new ConnectProducer(connect);
     // create topics in Kafka
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
-  }
-
-  @After
-  public void after() {
-    clearBucket(TEST_BUCKET_NAME);
   }
 
   @Test

@@ -382,12 +382,5 @@
                 </plugins>
             </build>
         </profile>
-        <profile>
-            <id>jenkins</id>
-            <properties>
-                <!-- skip integration tests on Jenkins since they require credentials -->
-                <skipIntegrationTests>true</skipIntegrationTests>
-            </properties>
-        </profile>
     </profiles>
 </project>

@@ -22,6 +22,9 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLA
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.AnonymousAWSCredentials;
+import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.GetObjectRequest;
@@ -29,10 +32,12 @@ import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.common.utils.IntegrationTest;
+import io.findify.s3mock.S3Mock;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.net.ConnectException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -62,12 +67,18 @@ import org.apache.parquet.tools.read.SimpleReadSupport;
 import org.apache.parquet.tools.read.SimpleRecord;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @Category(IntegrationTest.class)
 public abstract class BaseConnectorIT {
+
+  protected static final String AWS_CRED_PATH = System.getProperty("user.home") + "/.aws/credentials";
+  protected static final String JENKINS_HOME = "JENKINS_HOME";
+  protected static final String MOCK_S3_URL = "http://localhost:8001";
+  protected static final int MOCK_S3_PORT = 8001;
 
   protected static final String TEST_BUCKET_NAME = "confluent-kafka-connect-s3-testing";
   protected static final String CONNECTOR_CLASS_NAME = "S3SinkConnector";
@@ -81,17 +92,62 @@ public abstract class BaseConnectorIT {
   private static final long CONNECTOR_STARTUP_DURATION_MS = TimeUnit.MINUTES.toMillis(1);
   private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(30);
 
-  protected AmazonS3 S3Client;
+  protected static AmazonS3 S3Client;
   protected EmbeddedConnectCluster connect;
   protected Map<String, String> props;
   private ObjectMapper jsonMapper = new ObjectMapper();
 
+  protected static boolean useMockClient() {
+    File creds = new File(AWS_CRED_PATH);
+    return System.getenv(JENKINS_HOME) != null || !creds.exists();
+  }
+
+  /**
+   * Get an S3 client based on existing credentials, or a mock client if running on jenkins.
+   *
+   * @return an authenticated S3 client
+   */
+  private static AmazonS3 getS3Client() {
+    if (useMockClient()) {
+      // S3Mock.create(8001, "/tmp/s3");
+      S3Mock api = new S3Mock.Builder().withPort(MOCK_S3_PORT).withInMemoryBackend().build();
+      api.start();
+      /*
+       * AWS S3 client setup.
+       * withPathStyleAccessEnabled(true) trick is required to overcome S3 default
+       * DNS-based bucket access scheme
+       * resulting in attempts to connect to addresses like "bucketname.localhost"
+       * which requires specific DNS setup.
+       */
+      EndpointConfiguration endpoint = new EndpointConfiguration(MOCK_S3_URL, AWS_REGION);
+      AmazonS3 mockClient = AmazonS3ClientBuilder
+          .standard()
+          .withPathStyleAccessEnabled(true)
+          .withEndpointConfiguration(endpoint)
+          .withCredentials(new AWSStaticCredentialsProvider(new AnonymousAWSCredentials()))
+          .build();
+
+      mockClient.createBucket(TEST_BUCKET_NAME);
+      log.info("No credentials found, using mock S3 client.");
+      return mockClient;
+    } else {
+      log.info("Credentials found, using real S3 client.");
+      // DefaultAWSCredentialsProviderChain,
+      // assumes .aws/credentials is setup and test bucket exists
+      return AmazonS3ClientBuilder.standard().withRegion(AWS_REGION).build();
+    }
+  }
+
+  @BeforeClass
+  public static void setupClient(){
+    S3Client = getS3Client();
+  }
+
   @Before
-  public void setup() {
+  public void setup() throws ConnectException {
     startConnect();
     setupProperties();
-    // DefaultAWSCredentialsProviderChain, assumes .aws/credentials is setup
-    S3Client = AmazonS3ClientBuilder.standard().withRegion(AWS_REGION).build();
+    // clear in case of an existing bucket
     clearBucket(TEST_BUCKET_NAME);
   }
 
