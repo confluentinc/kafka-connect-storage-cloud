@@ -66,6 +66,7 @@ import org.apache.parquet.tools.json.JsonRecordFormatter;
 import org.apache.parquet.tools.read.SimpleReadSupport;
 import org.apache.parquet.tools.read.SimpleRecord;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.experimental.categories.Category;
@@ -80,7 +81,7 @@ public abstract class BaseConnectorIT {
   protected static final String MOCK_S3_URL = "http://localhost:8001";
   protected static final int MOCK_S3_PORT = 8001;
 
-  protected static final String TEST_BUCKET_NAME = "confluent-kafka-connect-s3-testing";
+  protected static final String TEST_BUCKET_NAME = "kafka-connect-s3-integration-testing";
   protected static final String CONNECTOR_CLASS_NAME = "S3SinkConnector";
   protected static final String CONNECTOR_NAME = "s3-sink";
   protected static final int MAX_TASKS = 3;
@@ -126,7 +127,6 @@ public abstract class BaseConnectorIT {
           .withCredentials(new AWSStaticCredentialsProvider(new AnonymousAWSCredentials()))
           .build();
 
-      mockClient.createBucket(TEST_BUCKET_NAME);
       log.info("No credentials found, using mock S3 client.");
       return mockClient;
     } else {
@@ -140,14 +140,22 @@ public abstract class BaseConnectorIT {
   @BeforeClass
   public static void setupClient(){
     S3Client = getS3Client();
+    if (S3Client.doesBucketExistV2(TEST_BUCKET_NAME)) {
+      clearBucket(TEST_BUCKET_NAME);
+    } else {
+      S3Client.createBucket(TEST_BUCKET_NAME);
+    }
+  }
+
+  @AfterClass
+  public static void deleteBucket(){
+    S3Client.deleteBucket(TEST_BUCKET_NAME);
   }
 
   @Before
-  public void setup() throws ConnectException {
+  public void setup() {
     startConnect();
     setupProperties();
-    // clear in case of an existing bucket
-    clearBucket(TEST_BUCKET_NAME);
   }
 
   @After
@@ -260,7 +268,7 @@ public abstract class BaseConnectorIT {
    *
    * @param bucketName the name of the bucket to clear.
    */
-  protected void clearBucket(String bucketName) {
+  protected static void clearBucket(String bucketName) {
     for (S3ObjectSummary file : S3Client.listObjectsV2(bucketName).getObjectSummaries()) {
       S3Client.deleteObject(bucketName, file.getKey());
     }
