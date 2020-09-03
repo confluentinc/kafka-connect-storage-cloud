@@ -19,7 +19,11 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.storage.common.StorageCommonConfig.STORE_URL_CONFIG;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertTrue;
+
+import io.confluent.connect.formatter.json.JsonFormatter;
+import io.confluent.connect.formatter.json.JsonFormatterProvider;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
@@ -32,6 +36,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
+import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.Before;
 import org.junit.Test;
@@ -53,10 +58,12 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final int FLUSH_SIZE_STANDARD = 3;
   private static final int EXPECTED_PARTITION = 0;
 
-  private ConnectProducer producer;
+  private JsonFormatter formatter;
 
   @Before
   public void before() {
+    JsonFormatterProvider provider = new JsonFormatterProvider();
+    formatter = (JsonFormatter) provider.create(Collections.singletonMap("schemas.enable", true));
     //add class specific props
     props.put(SinkConnectorConfig.TOPICS_CONFIG, String.join(",", KAFKA_TOPICS));
     props.put(FLUSH_SIZE_CONFIG, Integer.toString(FLUSH_SIZE_STANDARD));
@@ -66,7 +73,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     if (useMockClient()) {
       props.put(STORE_URL_CONFIG, MOCK_S3_URL);
     }
-    producer = new ConnectProducer(connect);
     // create topics in Kafka
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
   }
@@ -102,7 +108,10 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     Struct recordValueStruct = getSampleStructVal(recordValueSchema);
     // Send records to Kafka
     for (long i = 0; i < NUM_RECORDS_INSERT; i++) {
-      producer.produce(TEST_TOPIC_NAME, null, null, recordValueSchema, recordValueStruct);
+      SinkRecord record = new SinkRecord(TEST_TOPIC_NAME, 1, Schema.STRING_SCHEMA, null,
+          recordValueSchema, recordValueStruct, i);
+      String kafkaValue = new String(formatter.formatValue(record), UTF_8);
+      connect.kafka().produce(TEST_TOPIC_NAME, null, kafkaValue);
     }
 
     log.info("Waiting for files in S3...");
