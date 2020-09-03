@@ -8,6 +8,5 @@ One of the simplest ways to ensure access to S3 for these tests is by configurin
 the `.aws/credentials` file. 
 
 ## Running the Tests
-By default the tests are ignored when the project is built, they have to be run manually.
-This can be done using the `mvn integration-test` command
+Tests can be run manually using the `mvn integration-test` command 
 or through IntelliJ by running the class.
