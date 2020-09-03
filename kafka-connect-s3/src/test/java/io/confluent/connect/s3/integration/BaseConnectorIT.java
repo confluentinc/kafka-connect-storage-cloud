@@ -78,78 +78,20 @@ public abstract class BaseConnectorIT {
 
   protected static final String AWS_CRED_PATH = System.getProperty("user.home") + "/.aws/credentials";
   protected static final String JENKINS_HOME = "JENKINS_HOME";
-  protected static final String MOCK_S3_URL = "http://localhost:8001";
-  protected static final int MOCK_S3_PORT = 8001;
-
-  protected static final String TEST_BUCKET_NAME = "kafka-connect-s3-integration-testing";
   protected static final String CONNECTOR_CLASS_NAME = "S3SinkConnector";
-  protected static final String CONNECTOR_NAME = "s3-sink";
   protected static final int MAX_TASKS = 3;
 
   private static final Logger log = LoggerFactory.getLogger(BaseConnectorIT.class);
-  private static final String TEST_RESOURCES_PATH = "src/test/resources/";
-  private static final String AWS_REGION = "us-west-2";
-  private static final String TEST_DOWNLOAD_PATH = TEST_RESOURCES_PATH + "downloaded-files/";
   private static final long CONNECTOR_STARTUP_DURATION_MS = TimeUnit.MINUTES.toMillis(1);
   private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(30);
 
   protected static AmazonS3 S3Client;
   protected EmbeddedConnectCluster connect;
   protected Map<String, String> props;
-  private ObjectMapper jsonMapper = new ObjectMapper();
 
   protected static boolean useMockClient() {
     File creds = new File(AWS_CRED_PATH);
     return System.getenv(JENKINS_HOME) != null || !creds.exists();
-  }
-
-  /**
-   * Get an S3 client based on existing credentials, or a mock client if running on jenkins.
-   *
-   * @return an authenticated S3 client
-   */
-  private static AmazonS3 getS3Client() {
-    if (useMockClient()) {
-      S3Mock api = new S3Mock.Builder().withPort(MOCK_S3_PORT).withInMemoryBackend().build();
-      api.start();
-      /*
-       * AWS S3 client setup.
-       * withPathStyleAccessEnabled(true) trick is required to overcome S3 default
-       * DNS-based bucket access scheme
-       * resulting in attempts to connect to addresses like "bucketname.localhost"
-       * which requires specific DNS setup.
-       */
-      EndpointConfiguration endpoint = new EndpointConfiguration(MOCK_S3_URL, AWS_REGION);
-      AmazonS3 mockClient = AmazonS3ClientBuilder
-          .standard()
-          .withPathStyleAccessEnabled(true)
-          .withEndpointConfiguration(endpoint)
-          .withCredentials(new AWSStaticCredentialsProvider(new AnonymousAWSCredentials()))
-          .build();
-
-      log.info("No credentials found, using mock S3 client.");
-      return mockClient;
-    } else {
-      log.info("Credentials found, using real S3 client.");
-      // DefaultAWSCredentialsProviderChain,
-      // assumes .aws/credentials is setup and test bucket exists
-      return AmazonS3ClientBuilder.standard().withRegion(AWS_REGION).build();
-    }
-  }
-
-  @BeforeClass
-  public static void setupClient(){
-    S3Client = getS3Client();
-    if (S3Client.doesBucketExistV2(TEST_BUCKET_NAME)) {
-      clearBucket(TEST_BUCKET_NAME);
-    } else {
-      S3Client.createBucket(TEST_BUCKET_NAME);
-    }
-  }
-
-  @AfterClass
-  public static void deleteBucket(){
-    S3Client.deleteBucket(TEST_BUCKET_NAME);
   }
 
   @Before
@@ -159,12 +101,9 @@ public abstract class BaseConnectorIT {
   }
 
   @After
-  public void close() throws Throwable {
+  public void close() {
     // stop all Connect, Kafka and Zk threads.
     connect.stop();
-    // delete the downloaded test file folder
-    FileUtils.deleteDirectory(new File(TEST_DOWNLOAD_PATH));
-    clearBucket(TEST_BUCKET_NAME);
   }
 
   private void setupProperties() {
@@ -260,228 +199,6 @@ public abstract class BaseConnectorIT {
     } catch (Exception e) {
       log.warn("Could not check file count in bucket: {}", bucketName);
       return Optional.empty();
-    }
-  }
-
-  /**
-   * Clear the given S3 bucket. Removes the contents, keeps the bucket.
-   *
-   * @param bucketName the name of the bucket to clear.
-   */
-  protected static void clearBucket(String bucketName) {
-    for (S3ObjectSummary file : S3Client.listObjectsV2(bucketName).getObjectSummaries()) {
-      S3Client.deleteObject(bucketName, file.getKey());
-    }
-  }
-
-  /**
-   * Check if the file names in the bucket have the expected namings.
-   *
-   * @param bucketName        the name of the bucket with the files
-   * @param expectedTopic     the expected topic in the file path and file name
-   * @param expectedPartition the expected partition number in the file path and name
-   * @param expectedExtension the expected extensions of the files
-   * @return whether all the files in the bucket match the expected values
-   */
-  protected boolean fileNamesValid(String bucketName, String expectedTopic, int expectedPartition,
-      String expectedExtension) {
-    for (S3ObjectSummary file : S3Client.listObjectsV2(bucketName).getObjectSummaries()) {
-      S3FileInfo fileInfo = new S3FileInfo(file.getKey());
-      if (!fileInfo.namingIsValid()
-          || !fileInfo.filenameTopic.equals(expectedTopic)
-          || fileInfo.directoryPartition != expectedPartition
-          || !fileInfo.extension.equals(expectedExtension)
-      ) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /**
-   * Check the contents of the files in the S3 bucket compared to the expected row.
-   *
-   * @param bucketName          the name of the s3 test bucket
-   * @param expectedRowsPerFile the number of rows a file should have
-   * @param expectedRow         the expected row data in each file
-   * @return whether every row of the files read equals the expected row
-   */
-  protected boolean fileContentsAsExpected(String bucketName, int expectedRowsPerFile,
-      Struct expectedRow) throws IOException {
-    log.info("expectedRow: {}", expectedRow);
-    for (S3ObjectSummary file : S3Client.listObjectsV2(bucketName).getObjectSummaries()) {
-      String destinationPath = TEST_DOWNLOAD_PATH + file.getKey();
-      File downloadedFile = new File(destinationPath);
-      log.info("Saving file to : {}", destinationPath);
-      S3Client.getObject(new GetObjectRequest(bucketName, file.getKey()), downloadedFile);
-
-      List<JsonNode> downloadedFileContents = getFileContents(destinationPath);
-      if (!fileContentsMatchExpected(downloadedFileContents, expectedRowsPerFile, expectedRow)) {
-        return false;
-      }
-      downloadedFile.delete();
-    }
-    return true;
-  }
-
-  /**
-   * Check if the contents of a downloaded file match the expected row.
-   *
-   * @param fileContents        the file contents as a list of JsonNodes
-   * @param expectedRowsPerFile the number of rows expected in the file
-   * @param expectedRow         the expected values of each row
-   * @return whether the file contents match the expected row
-   */
-  private boolean fileContentsMatchExpected(List<JsonNode> fileContents, int expectedRowsPerFile,
-      Struct expectedRow) {
-    if (fileContents.size() != expectedRowsPerFile) {
-      log.error("Number of rows in file do not match the expected count, actual: {}, expected: {}",
-          fileContents.size(), expectedRowsPerFile);
-      return false;
-    }
-    for (JsonNode row : fileContents) {
-      if (!fileRowMatchesExpectedRow(row, expectedRow)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /**
-   * Compare the row in the file and its values to the expected row's values.
-   *
-   * @param fileRow     the row read from the file as a JsonNode
-   * @param expectedRow the expected contents of the row
-   * @return whether the file row matches the expected row
-   */
-  private boolean fileRowMatchesExpectedRow(JsonNode fileRow, Struct expectedRow) {
-    log.debug("Comparing rows: file: {}, expected: {}", fileRow, expectedRow);
-    // compare the field values
-    for (Field key : expectedRow.schema().fields()) {
-      String expectedValue = expectedRow.get(key).toString();
-      String rowValue = fileRow.get(key.name()).toString().replaceAll("^\"|\"$", "");
-      log.debug("Comparing values: {}, {}", expectedValue, rowValue);
-      if (!rowValue.equals(expectedValue)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /**
-   * Get the contents of a downloaded file from S3 based on its file extension.
-   *
-   * @param filePath the path of the file to read
-   * @return the rows of the file as JsonNodes
-   */
-  private List<JsonNode> getFileContents(String filePath) throws IOException {
-    if (filePath.endsWith(".avro")) {
-      return getContentsFromAvro(filePath);
-    } else if (filePath.endsWith(".parquet")) {
-      return getContentsFromParquet(filePath);
-    } else if (filePath.endsWith(".json")) {
-      return getContentsFromJson(filePath);
-    } else {
-      throw new InvalidFileTypeException(
-          String.format("Downloaded file has unsupported extension: %s", filePath)
-      );
-    }
-  }
-
-  /**
-   * Get the contents of an AVRO file at a given filepath.
-   *
-   * @param filePath the path of the downloaded file
-   * @return the rows of the file as JsonNodes
-   */
-  private List<JsonNode> getContentsFromAvro(String filePath) throws IOException {
-    DatumReader<GenericRecord> datumReader = new GenericDatumReader<>();
-    DataFileReader<GenericRecord> dataFileReader = new DataFileReader(new File(filePath),
-        datumReader);
-    List<JsonNode> fileRows = new ArrayList<>();
-    while (dataFileReader.hasNext()) {
-      GenericRecord row = dataFileReader.next();
-      JsonNode jsonNode = jsonMapper.readTree(row.toString());
-      fileRows.add(jsonNode);
-    }
-    return fileRows;
-  }
-
-  /**
-   * Get the contents of a parquet file at a given filepath.
-   *
-   * @param filePath the path of the downloaded parquet file
-   * @return the rows of the file as JsonNodes
-   */
-  private List<JsonNode> getContentsFromParquet(String filePath) throws IOException {
-    ParquetReader<SimpleRecord> reader = ParquetReader
-        .builder(new SimpleReadSupport(), new Path(filePath)).build();
-    ParquetMetadata metadata = ParquetFileReader
-        .readFooter(new Configuration(), new Path(filePath));
-    JsonRecordFormatter.JsonGroupFormatter formatter = JsonRecordFormatter
-        .fromSchema(metadata.getFileMetaData().getSchema());
-    List<JsonNode> fileRows = new ArrayList<>();
-    for (SimpleRecord value = reader.read(); value != null; value = reader.read()) {
-      JsonNode jsonNode = jsonMapper.readTree(formatter.formatRecord(value));
-      fileRows.add(jsonNode);
-    }
-    return fileRows;
-  }
-
-  /**
-   * Get the contents of a json file at a given filepath.
-   *
-   * @param filePath the path of the downloaded json file
-   * @return the rows of the file as JsonNodes
-   */
-  private List<JsonNode> getContentsFromJson(String filePath) throws IOException {
-    FileReader fileReader = new FileReader(new File(filePath));
-    BufferedReader bufferedReader = new BufferedReader(fileReader);
-    List<JsonNode> fileRows = new ArrayList<>();
-    String line;
-    while ((line = bufferedReader.readLine()) != null) {
-      fileRows.add(jsonMapper.readTree(line));
-    }
-    return fileRows;
-  }
-
-  /**
-   * A utility class to keep tack of the details about a file in S3.
-   * <p>
-   * Parse an S3 key file into member fields. ex.: /topics/s3_topic/partition=97/s3_topic+97+0000000001.avro
-   */
-  class S3FileInfo {
-
-    /* The topic name parsed from the file path */
-    String directoryTopic;
-    /* The topic name parsed from the file name */
-    String filenameTopic;
-    /* The extension parsed from the file name */
-    String extension;
-    /* The partition number parsed from the path */
-    int directoryPartition;
-    /* The partition number parsed from the file name */
-    int filenamePartition;
-    /* The offset parsed from the file name */
-    long offset;
-
-    public S3FileInfo(String S3FileKey) {
-      String[] path = S3FileKey.trim().split("/");
-      directoryTopic = path[1];
-      directoryPartition = Integer.parseInt(path[2].split("=")[1]);
-      String fileName = path[3];
-      String[] tokens = fileName.split("[+.]");
-      filenameTopic = tokens[0];
-      filenamePartition = Integer.parseInt(tokens[1]);
-      offset = Long.parseLong(tokens[2]);
-      extension = tokens[tokens.length - 1]; //parquets have .snappy.parquet, use last token
-    }
-
-    /**
-     * Check whether the file name is consistent with the namings in the path.
-     */
-    public boolean namingIsValid() {
-      return directoryTopic.equals(filenameTopic) && directoryPartition == filenamePartition;
     }
   }
 }
