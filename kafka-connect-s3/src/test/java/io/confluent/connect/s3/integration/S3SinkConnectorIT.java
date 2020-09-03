@@ -31,6 +31,7 @@ import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableMap;
 import io.confluent.connect.formatter.json.JsonFormatter;
 import io.confluent.connect.formatter.json.JsonFormatterProvider;
 
@@ -47,6 +48,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
@@ -54,7 +57,6 @@ import org.apache.avro.io.DatumReader;
 import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapred.InvalidFileTypeException;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -81,6 +83,7 @@ import org.slf4j.LoggerFactory;
 public class S3SinkConnectorIT extends BaseConnectorIT {
 
   private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorIT.class);
+  private static final ObjectMapper jsonMapper = new ObjectMapper();
   // AWS configs
   private static final String AWS_REGION = "us-west-2";
   private static final String MOCK_S3_URL = "http://localhost:8001";
@@ -101,7 +104,13 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final int FLUSH_SIZE_STANDARD = 3;
   private static final int EXPECTED_PARTITION = 0;
 
-  private final ObjectMapper jsonMapper = new ObjectMapper();
+  private static final Map<String, Function<String, List<JsonNode>> > contentGetters =
+      ImmutableMap.of(
+        JSON_EXTENSION, S3SinkConnectorIT::getContentsFromJson,
+        AVRO_EXTENSION, S3SinkConnectorIT::getContentsFromAvro,
+        PARQUET_EXTENSION, S3SinkConnectorIT::getContentsFromParquet
+      );
+
   private JsonFormatter formatter;
 
   @BeforeClass
@@ -290,7 +299,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * @return whether every row of the files read equals the expected row
    */
   private boolean fileContentsAsExpected(String bucketName, int expectedRowsPerFile,
-      Struct expectedRow) throws IOException {
+      Struct expectedRow) {
     log.info("expectedRow: {}", expectedRow);
     for (S3ObjectSummary file : S3Client.listObjectsV2(bucketName).getObjectSummaries()) {
       String destinationPath = TEST_DOWNLOAD_PATH + file.getKey();
@@ -298,7 +307,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
       log.info("Saving file to : {}", destinationPath);
       S3Client.getObject(new GetObjectRequest(bucketName, file.getKey()), downloadedFile);
 
-      List<JsonNode> downloadedFileContents = getFileContents(destinationPath);
+      String fileExtension = new S3FileInfo(file.getKey()).extension;
+      List<JsonNode> downloadedFileContents = contentGetters.get(fileExtension).apply(destinationPath);
       if (!fileContentsMatchExpected(downloadedFileContents, expectedRowsPerFile, expectedRow)) {
         return false;
       }
@@ -352,42 +362,26 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   /**
-   * Get the contents of a downloaded file from S3 based on its file extension.
-   *
-   * @param filePath the path of the file to read
-   * @return the rows of the file as JsonNodes
-   */
-  private List<JsonNode> getFileContents(String filePath) throws IOException {
-    if (filePath.endsWith(".avro")) {
-      return getContentsFromAvro(filePath);
-    } else if (filePath.endsWith(".parquet")) {
-      return getContentsFromParquet(filePath);
-    } else if (filePath.endsWith(".json")) {
-      return getContentsFromJson(filePath);
-    } else {
-      throw new InvalidFileTypeException(
-          String.format("Downloaded file has unsupported extension: %s", filePath)
-      );
-    }
-  }
-
-  /**
    * Get the contents of an AVRO file at a given filepath.
    *
    * @param filePath the path of the downloaded file
    * @return the rows of the file as JsonNodes
    */
-  private List<JsonNode> getContentsFromAvro(String filePath) throws IOException {
-    DatumReader<GenericRecord> datumReader = new GenericDatumReader<>();
-    DataFileReader<GenericRecord> dataFileReader = new DataFileReader(new File(filePath),
-        datumReader);
-    List<JsonNode> fileRows = new ArrayList<>();
-    while (dataFileReader.hasNext()) {
-      GenericRecord row = dataFileReader.next();
-      JsonNode jsonNode = jsonMapper.readTree(row.toString());
-      fileRows.add(jsonNode);
+  private static List<JsonNode> getContentsFromAvro(String filePath) {
+    try {
+      DatumReader<GenericRecord> datumReader = new GenericDatumReader<>();
+      DataFileReader<GenericRecord> dataFileReader = new DataFileReader(new File(filePath),
+          datumReader);
+      List<JsonNode> fileRows = new ArrayList<>();
+      while (dataFileReader.hasNext()) {
+        GenericRecord row = dataFileReader.next();
+        JsonNode jsonNode = jsonMapper.readTree(row.toString());
+        fileRows.add(jsonNode);
+      }
+      return fileRows;
+    } catch (IOException e){
+      throw new RuntimeException(e);
     }
-    return fileRows;
   }
 
   /**
@@ -396,19 +390,23 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * @param filePath the path of the downloaded parquet file
    * @return the rows of the file as JsonNodes
    */
-  private List<JsonNode> getContentsFromParquet(String filePath) throws IOException {
-    ParquetReader<SimpleRecord> reader = ParquetReader
-        .builder(new SimpleReadSupport(), new Path(filePath)).build();
-    ParquetMetadata metadata = ParquetFileReader
-        .readFooter(new Configuration(), new Path(filePath));
-    JsonRecordFormatter.JsonGroupFormatter formatter = JsonRecordFormatter
-        .fromSchema(metadata.getFileMetaData().getSchema());
-    List<JsonNode> fileRows = new ArrayList<>();
-    for (SimpleRecord value = reader.read(); value != null; value = reader.read()) {
-      JsonNode jsonNode = jsonMapper.readTree(formatter.formatRecord(value));
-      fileRows.add(jsonNode);
+  private static List<JsonNode> getContentsFromParquet(String filePath) {
+    try {
+      ParquetReader<SimpleRecord> reader = ParquetReader
+          .builder(new SimpleReadSupport(), new Path(filePath)).build();
+      ParquetMetadata metadata = ParquetFileReader
+          .readFooter(new Configuration(), new Path(filePath));
+      JsonRecordFormatter.JsonGroupFormatter formatter = JsonRecordFormatter
+          .fromSchema(metadata.getFileMetaData().getSchema());
+      List<JsonNode> fileRows = new ArrayList<>();
+      for (SimpleRecord value = reader.read(); value != null; value = reader.read()) {
+        JsonNode jsonNode = jsonMapper.readTree(formatter.formatRecord(value));
+        fileRows.add(jsonNode);
+      }
+      return fileRows;
+    } catch (IOException e) {
+      throw new RuntimeException(e);
     }
-    return fileRows;
   }
 
   /**
@@ -417,15 +415,19 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * @param filePath the path of the downloaded json file
    * @return the rows of the file as JsonNodes
    */
-  private List<JsonNode> getContentsFromJson(String filePath) throws IOException {
-    FileReader fileReader = new FileReader(new File(filePath));
-    BufferedReader bufferedReader = new BufferedReader(fileReader);
-    List<JsonNode> fileRows = new ArrayList<>();
-    String line;
-    while ((line = bufferedReader.readLine()) != null) {
-      fileRows.add(jsonMapper.readTree(line));
+  private static List<JsonNode> getContentsFromJson(String filePath) {
+    try {
+      FileReader fileReader = new FileReader(new File(filePath));
+      BufferedReader bufferedReader = new BufferedReader(fileReader);
+      List<JsonNode> fileRows = new ArrayList<>();
+      String line;
+      while ((line = bufferedReader.readLine()) != null) {
+        fileRows.add(jsonMapper.readTree(line));
+      }
+      return fileRows;
+    } catch (IOException e) {
+      throw new RuntimeException(e);
     }
-    return fileRows;
   }
 
   /**
