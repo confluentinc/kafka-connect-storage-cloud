@@ -25,6 +25,8 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_C
 import com.amazonaws.services.s3.AmazonS3;
 import io.confluent.common.utils.IntegrationTest;
 import io.confluent.connect.s3.S3SinkConnector;
+
+import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -45,12 +47,21 @@ public abstract class BaseConnectorIT {
 
   private static final Logger log = LoggerFactory.getLogger(BaseConnectorIT.class);
 
+  protected static final String AWS_CRED_PATH = System.getProperty("user.home") + "/.aws/credentials";
+  protected static final String JENKINS_HOME = "JENKINS_HOME";
+  protected static final String CONNECTOR_CLASS_NAME = "S3SinkConnector";
   protected static final int MAX_TASKS = 3;
   private static final long CONNECTOR_STARTUP_DURATION_MS = TimeUnit.MINUTES.toMillis(1);
   private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(30);
 
   protected EmbeddedConnectCluster connect;
   protected Map<String, String> props;
+
+
+  protected static boolean useMockClient() {
+    File creds = new File(AWS_CRED_PATH);
+    return System.getenv(JENKINS_HOME) != null || !creds.exists();
+  }
 
   @Before
   public void setup() {
