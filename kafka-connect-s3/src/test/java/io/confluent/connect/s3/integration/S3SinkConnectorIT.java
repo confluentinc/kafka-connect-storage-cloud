@@ -84,7 +84,9 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorIT.class);
   private static final ObjectMapper jsonMapper = new ObjectMapper();
+  private static final String JENKINS_HOME = "JENKINS_HOME";
   // AWS configs
+  private static final String AWS_CRED_PATH = System.getProperty("user.home") + "/.aws/credentials";
   private static final String AWS_REGION = "us-west-2";
   private static final String MOCK_S3_URL = "http://localhost:8001";
   private static final int MOCK_S3_PORT = 8001;
@@ -104,17 +106,22 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final int FLUSH_SIZE_STANDARD = 3;
   private static final int EXPECTED_PARTITION = 0;
 
-  private static final Map<String, Function<String, List<JsonNode>> > contentGetters =
+  private static final Map<String, Function<String, List<JsonNode>>> contentGetters =
       ImmutableMap.of(
-        JSON_EXTENSION, S3SinkConnectorIT::getContentsFromJson,
-        AVRO_EXTENSION, S3SinkConnectorIT::getContentsFromAvro,
-        PARQUET_EXTENSION, S3SinkConnectorIT::getContentsFromParquet
+          JSON_EXTENSION, S3SinkConnectorIT::getContentsFromJson,
+          AVRO_EXTENSION, S3SinkConnectorIT::getContentsFromAvro,
+          PARQUET_EXTENSION, S3SinkConnectorIT::getContentsFromParquet
       );
 
   private JsonFormatter formatter;
 
+  protected static boolean useMockClient() {
+    File creds = new File(AWS_CRED_PATH);
+    return System.getenv(JENKINS_HOME) != null || !creds.exists();
+  }
+
   @BeforeClass
-  public static void setupClient(){
+  public static void setupClient() {
     S3Client = getS3Client();
     if (S3Client.doesBucketExistV2(TEST_BUCKET_NAME)) {
       clearBucket(TEST_BUCKET_NAME);
@@ -124,7 +131,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   @AfterClass
-  public static void deleteBucket(){
+  public static void deleteBucket() {
     S3Client.deleteBucket(TEST_BUCKET_NAME);
   }
 
@@ -184,8 +191,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     Struct recordValueStruct = getSampleStructVal(recordValueSchema);
     // Send records to Kafka
     for (long i = 0; i < NUM_RECORDS_INSERT; i++) {
-      SinkRecord record = new SinkRecord(TEST_TOPIC_NAME, 1, Schema.STRING_SCHEMA, null,
-          recordValueSchema, recordValueStruct, i);
+      SinkRecord record = getSampleRecordWithOffset(recordValueSchema, recordValueStruct, i);
       String kafkaValue = new String(formatter.formatValue(record), UTF_8);
       connect.kafka().produce(TEST_TOPIC_NAME, null, kafkaValue);
     }
@@ -196,6 +202,19 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
     assertTrue(fileNamesValid(TEST_BUCKET_NAME, TEST_TOPIC_NAME, EXPECTED_PARTITION, expectedFileExtension));
     assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
+  }
+
+  private SinkRecord getSampleRecordWithOffset(Schema recordValueSchema, Struct recordValueStruct,
+      long offset) {
+    return new SinkRecord(
+        TEST_TOPIC_NAME,
+        1,
+        Schema.STRING_SCHEMA,
+        null,
+        recordValueSchema,
+        recordValueStruct,
+        offset
+    );
   }
 
   private Schema getSampleStructSchema() {
@@ -379,7 +398,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
         fileRows.add(jsonNode);
       }
       return fileRows;
-    } catch (IOException e){
+    } catch (IOException e) {
       throw new RuntimeException(e);
     }
   }

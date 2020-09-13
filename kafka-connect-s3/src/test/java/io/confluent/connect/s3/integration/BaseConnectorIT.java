@@ -76,8 +76,6 @@ import org.slf4j.LoggerFactory;
 @Category(IntegrationTest.class)
 public abstract class BaseConnectorIT {
 
-  protected static final String AWS_CRED_PATH = System.getProperty("user.home") + "/.aws/credentials";
-  protected static final String JENKINS_HOME = "JENKINS_HOME";
   protected static final String CONNECTOR_CLASS_NAME = "S3SinkConnector";
   protected static final int MAX_TASKS = 3;
 
@@ -88,11 +86,6 @@ public abstract class BaseConnectorIT {
   protected static AmazonS3 S3Client;
   protected EmbeddedConnectCluster connect;
   protected Map<String, String> props;
-
-  protected static boolean useMockClient() {
-    File creds = new File(AWS_CRED_PATH);
-    return System.getenv(JENKINS_HOME) != null || !creds.exists();
-  }
 
   @Before
   public void setup() {
