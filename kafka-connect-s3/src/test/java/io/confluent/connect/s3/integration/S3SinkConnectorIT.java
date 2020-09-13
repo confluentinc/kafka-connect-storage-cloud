@@ -208,11 +208,9 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
   }
 
-  private SinkRecord getSampleRecordWithOffset(
-      Schema recordValueSchema,
-      Struct recordValueStruct,
-      long offset
-  ) {
+
+  private SinkRecord getSampleRecordWithOffset(Schema recordValueSchema, Struct recordValueStruct,
+      long offset) {
     return new SinkRecord(
         TEST_TOPIC_NAME,
         1,
