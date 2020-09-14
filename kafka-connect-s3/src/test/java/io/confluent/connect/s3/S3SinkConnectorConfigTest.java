@@ -25,15 +25,12 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import io.confluent.connect.s3.auth.AwsAssumeRoleCredentialsProvider;
@@ -58,9 +55,6 @@ import static org.junit.Assert.assertFalse;
 public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
 
   protected Map<String, String> localProps = new HashMap<>();
-
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   @Before
   @Override
@@ -269,11 +263,8 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     assertEquals(false, clientConfig.isUseExpectContinue());
   }
 
-  @Test
+  @Test(expected = ConfigException.class)
   public void testConfigurableCredentialProviderMissingConfigs() {
-
-    thrown.expect(ConfigException.class);
-    thrown.expectMessage("are mandatory configuration properties");
 
     String configPrefix = S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
     properties.put(
@@ -286,13 +277,16 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     );
 
     connectorConfig = new S3SinkConnectorConfig(properties);
-    connectorConfig.getCredentialsProvider();
+    try {
+      connectorConfig.getCredentialsProvider();
+    } catch (ConfigException ex) {
+      assertTrue(ex.getMessage().contains("are mandatory configuration properties"));
+      throw ex;
+    }
   }
 
-  @Test
+  @Test(expected = ConfigException.class)
   public void testConfigurableAwsAssumeRoleCredentialsProviderMissingConfigs() {
-    thrown.expect(ConfigException.class);
-    thrown.expectMessage("Missing required configuration");
 
     properties.put(
         S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
@@ -315,8 +309,12 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
 
     AwsAssumeRoleCredentialsProvider credentialsProvider =
         (AwsAssumeRoleCredentialsProvider) connectorConfig.getCredentialsProvider();
-
-    credentialsProvider.configure(properties);
+    try {
+      credentialsProvider.configure(properties);
+    } catch (ConfigException ex) {
+      ex.getMessage().contains("Missing required configuration");
+      throw ex;
+    }
   }
 
   @Test

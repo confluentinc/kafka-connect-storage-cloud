@@ -21,10 +21,7 @@ import com.amazonaws.services.s3.AmazonS3;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.mockito.ArgumentMatchers;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -33,11 +30,9 @@ import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.S3SinkConnectorTestBase;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class S3ProxyTest extends S3SinkConnectorTestBase {
-
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   protected S3Storage storage;
   protected AmazonS3 s3;
@@ -75,22 +70,28 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
     assertEquals(null, clientConfig.getProxyPassword());
   }
 
-  @Test
+  @Test(expected = ConfigException.class )
   public void testNoProtocolThrowsException() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "localhost");
     setUp();
-    thrown.expect(ConfigException.class);
-    thrown.expectMessage(ArgumentMatchers.contains("no protocol: localhost"));
-    clientConfig = storage.newClientConfiguration(connectorConfig);
+    try {
+      clientConfig = storage.newClientConfiguration(connectorConfig);
+    } catch (ConfigException ex){
+      assertTrue(ex.getMessage().contains("no protocol: localhost"));
+      throw ex;
+    }
   }
 
-  @Test
+  @Test(expected = ConfigException.class)
   public void testUnknownProtocolThrowsException() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "unknown://localhost");
     setUp();
-    thrown.expect(ConfigException.class);
-    thrown.expectMessage(ArgumentMatchers.contains("unknown protocol: localhost"));
-    clientConfig = storage.newClientConfiguration(connectorConfig);
+    try {
+      clientConfig = storage.newClientConfiguration(connectorConfig);
+    } catch (ConfigException ex){
+      assertTrue(ex.getMessage().contains("unknown protocol: unknown"));
+      throw ex;
+    }
   }
 
   @Test

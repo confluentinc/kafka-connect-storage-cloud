@@ -46,7 +46,7 @@ import io.confluent.connect.storage.partitioner.Partitioner;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 public class DataWriterJsonTest extends TestWithMockedS3 {
@@ -82,7 +82,7 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
     format = new JsonFormat(storage);
     s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
+    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
   }
 
   @After

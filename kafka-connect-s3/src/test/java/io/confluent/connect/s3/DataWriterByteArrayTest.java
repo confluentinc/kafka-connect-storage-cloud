@@ -46,7 +46,7 @@ import java.util.zip.Deflater;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 public class DataWriterByteArrayTest extends TestWithMockedS3 {
@@ -80,7 +80,7 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
     format = new ByteArrayFormat(storage);
     s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
+    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
   }
 
   @After
