@@ -463,5 +463,35 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     connectorConfig = new S3SinkConnectorConfig(properties);
     connectorConfig.parquetCompressionCodecName();
   }
+
+  @Test
+  public void testValidTimezoneWithScheduleIntervalAccepted (){
+    properties.put(PartitionerConfig.TIMEZONE_CONFIG, "CET");
+    properties.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "30");
+    new S3SinkConnectorConfig(properties);
+  }
+
+  @Test(expected = ConfigException.class)
+  public void testEmptyTimezoneThrowsExceptionOnScheduleInterval() {
+    properties.put(PartitionerConfig.TIMEZONE_CONFIG, PartitionerConfig.TIMEZONE_DEFAULT);
+    properties.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "30");
+    new S3SinkConnectorConfig(properties);
+  }
+
+  @Test
+  public void testEmptyTimezoneExceptionMessage() {
+    properties.put(PartitionerConfig.TIMEZONE_CONFIG, PartitionerConfig.TIMEZONE_DEFAULT);
+    properties.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "30");
+    String expectedError =  String.format(
+        "%s configuration must be set when using %s",
+        PartitionerConfig.TIMEZONE_CONFIG,
+        S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG
+    );
+    try {
+      new S3SinkConnectorConfig(properties);
+    } catch (ConfigException e) {
+      assertEquals(expectedError, e.getMessage());
+    }
+  }
 }
 

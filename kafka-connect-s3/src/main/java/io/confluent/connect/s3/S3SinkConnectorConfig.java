@@ -160,6 +160,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String S3_RETRY_BACKOFF_CONFIG = "s3.retry.backoff.ms";
   public static final int S3_RETRY_BACKOFF_DEFAULT = 200;
 
+  public static final String S3_PATH_STYLE_ACCESS_ENABLED_CONFIG = "s3.path.style.access.enabled";
+  public static final boolean S3_PATH_STYLE_ACCESS_ENABLED_DEFAULT = true;
+
   private final String name;
 
   private final StorageCommonConfig commonConfig;
@@ -567,6 +570,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "Behavior for null-valued records"
       );
 
+      configDef.define(
+          S3_PATH_STYLE_ACCESS_ENABLED_CONFIG,
+          Type.BOOLEAN,
+          S3_PATH_STYLE_ACCESS_ENABLED_DEFAULT,
+          Importance.LOW,
+          "Specifies whether or not to enable path style access to the bucket used by the "
+              + "connector",
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Enable Path Style Access to S3"
+      );
     }
     return configDef;
   }
@@ -586,6 +601,21 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     addToGlobal(partitionerConfig);
     addToGlobal(commonConfig);
     addToGlobal(this);
+    validateTimezone();
+  }
+
+  private void validateTimezone() {
+    String timezone = getString(PartitionerConfig.TIMEZONE_CONFIG);
+    long rotateScheduleIntervalMs = getLong(ROTATE_SCHEDULE_INTERVAL_MS_CONFIG);
+    if (rotateScheduleIntervalMs > 0 && timezone.isEmpty()) {
+      throw new ConfigException(
+          String.format(
+              "%s configuration must be set when using %s",
+              PartitionerConfig.TIMEZONE_CONFIG,
+              ROTATE_SCHEDULE_INTERVAL_MS_CONFIG
+          )
+      );
+    }
   }
 
   private void addToGlobal(AbstractConfig config) {
