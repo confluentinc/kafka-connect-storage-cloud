@@ -19,7 +19,7 @@ package io.confluent.connect.s3.format;
 
 import javax.annotation.Nullable;
 import javax.validation.constraints.NotNull;
-import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
@@ -86,7 +86,7 @@ public class KeyValueHeaderRecordWriterProvider
         valueWriter.write(sinkRecord); // null check happens in sink task
         // keyWriter != null means writing keys is turned on
         if (keyWriter != null && sinkRecord.key() == null) {
-          throw new ConnectException(
+          throw new DataException(
               String.format("Key cannot be null for SinkRecord: %s", sinkRecord)
           );
         } else if (keyWriter != null) {
@@ -95,7 +95,7 @@ public class KeyValueHeaderRecordWriterProvider
 
         // headerWriter != null means writing headers is turned on
         if (headerWriter != null && sinkRecord.headers() == null) {
-          throw new ConnectException(
+          throw new DataException(
               String.format("Headers cannot be null for SinkRecord: %s", sinkRecord)
           );
         } else if (headerWriter != null) {
