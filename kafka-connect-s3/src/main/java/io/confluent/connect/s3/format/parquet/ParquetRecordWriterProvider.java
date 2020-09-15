@@ -17,8 +17,11 @@
 
 package io.confluent.connect.s3.format.parquet;
 
+import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
+
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.format.RecordViewSetter;
 import io.confluent.connect.s3.storage.S3ParquetOutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
@@ -37,7 +40,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
-public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
+public class ParquetRecordWriterProvider extends RecordViewSetter
+    implements RecordWriterProvider<S3SinkConnectorConfig> {
   private static final Logger log = LoggerFactory.getLogger(ParquetRecordWriterProvider.class);
   private static final String EXTENSION = ".parquet";
   private static final int PAGE_SIZE = 64 * 1024;
@@ -57,6 +61,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
   @Override
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     return new RecordWriter() {
+      final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
       Schema schema = null;
       ParquetWriter<GenericRecord> writer;
       S3ParquetOutputFile s3ParquetOutputFile;
@@ -64,12 +69,12 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
       @Override
       public void write(SinkRecord record) {
         if (schema == null) {
-          schema = record.valueSchema();
+          schema = recordView.getViewSchema(record, true);
           try {
-            log.info("Opening record writer for: {}", filename);
+            log.info("Opening record writer for: {}", adjustedFilename);
             org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
 
-            s3ParquetOutputFile = new S3ParquetOutputFile(storage, filename);
+            s3ParquetOutputFile = new S3ParquetOutputFile(storage, adjustedFilename);
             writer = AvroParquetWriter
                     .<GenericRecord>builder(s3ParquetOutputFile)
                     .withSchema(avroSchema)
@@ -82,8 +87,8 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
             throw new ConnectException(e);
           }
         }
-        log.trace("Sink record: {}", record.toString());
-        Object value = avroData.fromConnectData(schema, record.value());
+        log.trace("Sink record with view {}: {}", recordView, record);
+        Object value = avroData.fromConnectData(schema, recordView.getView(record, true));
         try {
           writer.write((GenericRecord) value);
         } catch (IOException e) {
@@ -94,7 +99,9 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
       @Override
       public void close() {
         try {
-          writer.close();
+          if (writer != null) {
+            writer.close();
+          }
         } catch (IOException e) {
           throw new ConnectException(e);
         }
@@ -127,7 +134,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
 
     @Override
     public PositionOutputStream create(long blockSizeHint) {
-      s3out = (S3ParquetOutputStream) storage.create(filename, true);
+      s3out = (S3ParquetOutputStream) storage.create(filename, true, ParquetFormat.class);
       return s3out;
     }
 

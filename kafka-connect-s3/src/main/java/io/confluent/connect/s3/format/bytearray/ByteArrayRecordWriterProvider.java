@@ -15,7 +15,10 @@
 
 package io.confluent.connect.s3.format.bytearray;
 
+import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
+
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.format.RecordViewSetter;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
@@ -31,7 +34,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
-public class ByteArrayRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
+public class ByteArrayRecordWriterProvider extends RecordViewSetter
+    implements RecordWriterProvider<S3SinkConnectorConfig> {
 
   private static final Logger log = LoggerFactory.getLogger(ByteArrayRecordWriterProvider.class);
   private final S3Storage storage;
@@ -56,15 +60,16 @@ public class ByteArrayRecordWriterProvider implements RecordWriterProvider<S3Sin
   @Override
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     return new RecordWriter() {
-      final S3OutputStream s3out = storage.create(filename, true);
+      final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
+      final S3OutputStream s3out = storage.create(adjustedFilename, true, ByteArrayFormat.class);
       final OutputStream s3outWrapper = s3out.wrapForCompression();
 
       @Override
       public void write(SinkRecord record) {
-        log.trace("Sink record: {}", record);
+        log.trace("Sink record with view {}: {}", recordView, record);
         try {
-          byte[] bytes = converter.fromConnectData(
-              record.topic(), record.valueSchema(), record.value());
+          byte[] bytes = converter.fromConnectData(record.topic(),
+              recordView.getViewSchema(record, false), recordView.getView(record, false));
           s3outWrapper.write(bytes);
           s3outWrapper.write(lineSeparatorBytes);
         } catch (IOException | DataException e) {

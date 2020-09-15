@@ -15,6 +15,8 @@
 
 package io.confluent.connect.s3.format.avro;
 
+import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
+
 import org.apache.avro.file.CodecFactory;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -28,13 +30,15 @@ import java.io.IOException;
 
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.format.RecordViewSetter;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.kafka.serializers.NonRecordContainer;
 
-public class AvroRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
+public class AvroRecordWriterProvider extends RecordViewSetter
+    implements RecordWriterProvider<S3SinkConnectorConfig> {
 
   private static final Logger log = LoggerFactory.getLogger(AvroRecordWriterProvider.class);
   private static final String EXTENSION = ".avro";
@@ -55,6 +59,7 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3SinkConn
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     // This is not meant to be a thread-safe writer!
     return new RecordWriter() {
+      final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
       final DataFileWriter<Object> writer = new DataFileWriter<>(new GenericDatumWriter<>());
       Schema schema = null;
       S3OutputStream s3out;
@@ -62,10 +67,10 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3SinkConn
       @Override
       public void write(SinkRecord record) {
         if (schema == null) {
-          schema = record.valueSchema();
+          schema = recordView.getViewSchema(record, false);
           try {
-            log.info("Opening record writer for: {}", filename);
-            s3out = storage.create(filename, true);
+            log.info("Opening record writer for: {}", adjustedFilename);
+            s3out = storage.create(adjustedFilename, true, AvroFormat.class);
             org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
             writer.setCodec(CodecFactory.fromString(conf.getAvroCodec()));
             writer.create(avroSchema, s3out);
@@ -73,8 +78,8 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3SinkConn
             throw new ConnectException(e);
           }
         }
-        log.trace("Sink record: {}", record);
-        Object value = avroData.fromConnectData(schema, record.value());
+        log.trace("Sink record with view {}: {}", recordView, record);
+        Object value = avroData.fromConnectData(schema, recordView.getView(record, false));
         try {
           // AvroData wraps primitive types so their schema can be included. We need to unwrap
           // NonRecordContainers to just their value to properly handle these types
