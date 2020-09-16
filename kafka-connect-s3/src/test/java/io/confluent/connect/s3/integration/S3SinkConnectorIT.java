@@ -19,6 +19,8 @@ import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.services.s3.model.S3VersionSummary;
 import com.amazonaws.services.s3.model.VersionListing;
 import io.confluent.common.utils.IntegrationTest;
+import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.testcontainers.squid.SquidProxy;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.junit.After;
@@ -37,6 +39,7 @@ import java.util.Map;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.*;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 
 @Category(IntegrationTest.class)
 public class S3SinkConnectorIT extends BaseConnectorIT {
@@ -46,14 +49,18 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final String CONNECTOR_NAME = "s3-sink-connector";
   private static final long NUM_RECORDS_PRODUCED = 1000;
   private static final int TASKS_MAX = 1;
-  private static final List<String> KAFKA_TOPICS = Arrays.asList("kafka1");
+  private static final List<String> KAFKA_TOPICS = Arrays.asList("topic1");
   private static final int FLUSH_SIZE = 200;
   private int totalNoOfRecordsProduced = 0;
+  private static final String S3_TEST_BUCKET_NAME = "conn-dest-test-bucket";
+  private static SquidProxy squid;
 
   @Before
   public void setup() throws IOException {
     startConnect();
     createS3RootClient();
+    // create the test bucket
+    createS3Bucket(S3_TEST_BUCKET_NAME);
   }
 
   /**
@@ -73,6 +80,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   @After
   public void close() {
+    //delete the test bucket
+    deleteBucket(S3_TEST_BUCKET_NAME);
     stopConnect();
   }
 
@@ -82,16 +91,14 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    */
   @Test
   public void testToAssertConnectorAndDestinationRecords() throws Throwable {
-    String bucketName = "conn-dest-bucket1";
-    // create bucket
-    createS3Bucket(bucketName);
+
     // create topics in Kafka
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
     // send records to kafka
     sendRecordsToKafka();
 
-    Map<String, String> props = getProperties();
-    props.put("s3.bucket.name", bucketName);
+    Map<String, String> props = getConnectorProps();
+    props.put("s3.bucket.name", S3_TEST_BUCKET_NAME);
 
     // start a sink connector
     connect.configureConnector(CONNECTOR_NAME, props);
@@ -99,13 +106,10 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
 
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
-    waitForConnectorToCompleteSendingRecords(totalNoOfRecordsProduced, FLUSH_SIZE, bucketName);
+    waitForConnectorToCompleteSendingRecords(totalNoOfRecordsProduced, FLUSH_SIZE, S3_TEST_BUCKET_NAME);
 
     // assert records
-    assertEquals(getNoOfObjectsInS3(bucketName), totalNoOfRecordsProduced/FLUSH_SIZE);
-
-    // delete the bucket
-    deleteBucket(bucketName);
+    assertEquals(totalNoOfRecordsProduced/FLUSH_SIZE, getNoOfObjectsInS3(S3_TEST_BUCKET_NAME));
   }
 
   /**
@@ -115,18 +119,16 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * @throws Exception
    */
   @Test
-  public void testIfBucketPermissionIsChangedWhileUploading() throws Exception {
-    String bucketName = "conn-dest-bucket4";
+  public void testWithRevokedWritePermissions() throws Exception {
 
-    createS3Bucket(bucketName);
-    addReadWritePolicyToBucket(bucketName);
+    addReadWritePolicyToBucket(S3_TEST_BUCKET_NAME);
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
 
     // send records to kafka
     sendRecordsToKafka();
 
-    Map<String, String> props = getProperties();
-    props.put("s3.bucket.name", bucketName);
+    Map<String, String> props = getConnectorProps();
+    props.put("s3.bucket.name", S3_TEST_BUCKET_NAME);
     props.put("aws.access.key.id", System.getenv("SECONDARY_USER_ACCESS_KEY_ID"));
     props.put("aws.secret.access.key", System.getenv("SECONDARY_USER_SECRET_ACCESS_KEY"));
 
@@ -139,11 +141,46 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     Thread.sleep(5000);
 
     // revoke read/write permission
-    s3RootClient.deleteBucketPolicy(bucketName);
+    s3RootClient.deleteBucketPolicy(S3_TEST_BUCKET_NAME);
 
     // produce more records to kafka
     sendRecordsToKafka();
     Thread.sleep(10000);
+  }
+
+  @Test
+  public void testWithNetworkInterruption() throws Throwable {
+    //Setup Squid Proxy Container
+    setupSquidProxy();
+
+    // create topics in Kafka
+    KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
+    // send records to kafka
+    sendRecordsToKafka();
+
+    Map<String, String> props = getConnectorProps();
+    props.put("s3.bucket.name", S3_TEST_BUCKET_NAME);
+    props.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG,"https://"+squid.getContainerIpAddress() + ":" + squid.getMappedPort(3129));
+
+    // start a sink connector
+    connect.configureConnector(CONNECTOR_NAME, props);
+    // wait for tasks to spin up
+    int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
+
+    waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
+    waitForConnectorToCompleteSendingRecords(totalNoOfRecordsProduced, FLUSH_SIZE, S3_TEST_BUCKET_NAME);
+
+    // assert records
+    assertEquals(totalNoOfRecordsProduced/FLUSH_SIZE, getNoOfObjectsInS3(S3_TEST_BUCKET_NAME));
+
+    // Shutting down proxy to emulate network unavailability
+    shutdownSquidProxy();
+
+    sendRecordsToKafka();
+    Thread.sleep(30000);
+    // asserting no additional records are added.
+    assertNotEquals(totalNoOfRecordsProduced/FLUSH_SIZE, getNoOfObjectsInS3(S3_TEST_BUCKET_NAME));
+    assertEquals(NUM_RECORDS_PRODUCED/FLUSH_SIZE, getNoOfObjectsInS3(S3_TEST_BUCKET_NAME));
   }
 
   private void addReadWritePolicyToBucket(String bucketName) {
@@ -171,7 +208,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     }
   }
 
-  private Map<String, String> getProperties() {
+  private Map<String, String> getConnectorProps() {
     Map<String, String> props = new HashMap<>();
     props.put(SinkConnectorConfig.TOPICS_CONFIG, String.join(",", KAFKA_TOPICS));
     props.put(CONNECTOR_CLASS_CONFIG, "io.confluent.connect.s3.S3SinkConnector");
@@ -234,6 +271,17 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private void createS3Bucket(String bucketName) {
     if (!s3RootClient.doesBucketExistV2(bucketName)) {
       s3RootClient.createBucket(new CreateBucketRequest(bucketName));
+    }
+  }
+
+  public static void setupSquidProxy() {
+    squid = new SquidProxy("connect-squid-local:1.0.0", "NONE");
+    squid.start();
+  }
+
+  public static void shutdownSquidProxy() {
+    if (squid != null) {
+      squid.stop();
     }
   }
 

@@ -94,16 +94,16 @@ public abstract class BaseConnectorIT {
 
   protected void waitForConnectorToCompleteSendingRecords(long noOfRecordsProduced, int flushSize, String bucketname) throws InterruptedException {
     TestUtils.waitForCondition(
-      () -> assertConnectorAndDestinationRecords(noOfRecordsProduced, flushSize, bucketname).orElse(false),
+      () -> assertSuccess(noOfRecordsProduced, flushSize, bucketname).orElse(false),
       CONNECTOR_STARTUP_DURATION_MS,
       "Connector could not send all records in time."
     );
   }
 
-  protected Optional<Boolean> assertConnectorAndDestinationRecords(long noOfRecordsProduced, int flushSize, String bucketname) {
+  protected Optional<Boolean> assertSuccess(long noOfRecordsProduced, int flushSize, String bucketname) {
     try {
     int noOfObjectsInS3 = getNoOfObjectsInS3(bucketname);
-    boolean result = noOfObjectsInS3 == noOfRecordsProduced/flushSize;
+    boolean result = noOfObjectsInS3 == Math.ceil(noOfRecordsProduced/flushSize);
     return Optional.of(result);
   } catch (Exception e) {
     log.error("Could not check S3 state", e);
@@ -120,7 +120,7 @@ public abstract class BaseConnectorIT {
       result = s3RootClient.listObjectsV2(req);
 
       for (S3ObjectSummary objectSummary : result.getObjectSummaries()) {
-        if(objectSummary.getSize()>0) {
+        if(objectSummary.getSize() > 0) {
           records.add(s3RootClient.getObject(bucketName, objectSummary.getKey()));
         }
       }
