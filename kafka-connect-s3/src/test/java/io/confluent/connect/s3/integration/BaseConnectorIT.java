@@ -35,7 +35,8 @@ public abstract class BaseConnectorIT {
   protected static final String S3_BUCKET = "sink-test-bucket";
 
   protected static AmazonS3 s3RootClient;
-  protected static AmazonS3 s3OtherCLient;
+
+  protected static PumbaPauseContainer pumbaPauseContainer;
 
   protected EmbeddedConnectCluster connect;
 
@@ -130,6 +131,23 @@ public abstract class BaseConnectorIT {
       req.setContinuationToken(token);
     } while (result.isTruncated());
     return records.size();
+  }
+
+  protected int waitForFetchingStorageObjectsInS3(String bucketName) throws InterruptedException {
+    return waitForFetchingStorageObjectsInS3(bucketName, CONSUME_MAX_DURATION_MS);
+  }
+
+  protected int waitForFetchingStorageObjectsInS3(String bucketName, long maxWaitMs) throws InterruptedException {
+    long startTime = System.currentTimeMillis();
+    while(System.currentTimeMillis() - startTime < maxWaitMs) {
+      Thread.sleep(Math.min(maxWaitMs, 100L));
+    }
+    return getNoOfObjectsInS3(bucketName);
+  }
+
+  protected void startPumbaPauseContainer() {
+    pumbaPauseContainer = new PumbaPauseContainer();
+    pumbaPauseContainer.start();
   }
 
 }
