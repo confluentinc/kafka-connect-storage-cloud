@@ -133,16 +133,21 @@ public abstract class BaseConnectorIT {
     return records.size();
   }
 
-  protected int waitForFetchingStorageObjectsInS3(String bucketName) throws InterruptedException {
-    return waitForFetchingStorageObjectsInS3(bucketName, CONSUME_MAX_DURATION_MS);
+  protected long waitForFetchingStorageObjectsInS3(String bucketName, long expectedObjects) throws InterruptedException {
+    return waitForFetchingStorageObjectsInS3(bucketName, expectedObjects, CONSUME_MAX_DURATION_MS);
   }
 
-  protected int waitForFetchingStorageObjectsInS3(String bucketName, long maxWaitMs) throws InterruptedException {
+  protected long waitForFetchingStorageObjectsInS3(String bucketName, long expectedObjects, long maxWaitMs) throws InterruptedException {
     long startTime = System.currentTimeMillis();
+    long fetchedObjects = -1;
     while(System.currentTimeMillis() - startTime < maxWaitMs) {
-      Thread.sleep(Math.min(maxWaitMs, 100L));
+      Thread.sleep(Math.min(maxWaitMs, 10000L));
+      fetchedObjects = getNoOfObjectsInS3(bucketName);
+      if (fetchedObjects == expectedObjects) {
+        break;
+      }
     }
-    return getNoOfObjectsInS3(bucketName);
+    return fetchedObjects;
   }
 
   protected void startPumbaPauseContainer() {

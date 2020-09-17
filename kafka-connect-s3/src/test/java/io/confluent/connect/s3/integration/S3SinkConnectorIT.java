@@ -163,20 +163,20 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
 
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
-    waitForConnectorToCompleteSendingRecords(totalNoOfRecordsProduced, FLUSH_SIZE, S3_BUCKET);
 
     // assert records
-    int objectCountBeforeInterruption = getNoOfObjectsInS3(S3_BUCKET);
-    assertEquals(totalNoOfRecordsProduced/FLUSH_SIZE, objectCountBeforeInterruption);
+    int objectCountBeforeInterruption = totalNoOfRecordsProduced/FLUSH_SIZE;
+    assertEquals(objectCountBeforeInterruption, waitForFetchingStorageObjectsInS3(S3_BUCKET, objectCountBeforeInterruption));
 
     // Shutting down proxy to emulate network unavailability
     shutdownSquidProxy();
 
     sendRecordsToKafka();
-    int currentObjectCountAfterInterruption = waitForFetchingStorageObjectsInS3(S3_BUCKET);
+    int idealObjectCount = totalNoOfRecordsProduced/FLUSH_SIZE;
+
     // asserting no additional records are added.
-    assertNotEquals(totalNoOfRecordsProduced/FLUSH_SIZE, currentObjectCountAfterInterruption);
-    assertEquals(objectCountBeforeInterruption, currentObjectCountAfterInterruption);
+    assertNotEquals(totalNoOfRecordsProduced/FLUSH_SIZE, waitForFetchingStorageObjectsInS3(S3_BUCKET, idealObjectCount));
+    assertEquals(objectCountBeforeInterruption, waitForFetchingStorageObjectsInS3(S3_BUCKET, idealObjectCount));
   }
 
   @Test
