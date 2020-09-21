@@ -125,7 +125,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     alterReadWritePolicyOfBucket(S3_BUCKET);
     /*
      Intentional sleep added in order for the bucket permission to be altered to read only to
-     come into effect.
+     come into affect.
     */
     Thread.sleep(10000);
     // produce more records to kafka
