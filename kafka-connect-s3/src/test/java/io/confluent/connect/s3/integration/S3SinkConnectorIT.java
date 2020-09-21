@@ -48,7 +48,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final int TASKS_MAX = 1;
   private static final List<String> KAFKA_TOPICS = Arrays.asList("topic1");
   private static final int FLUSH_SIZE = 200;
-  private int totalNoOfRecordsProduced = 0;
   private static SquidProxy squid;
 
   @Before
@@ -74,10 +73,11 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   @Test
   public void testToAssertConnectorAndDestinationRecords() throws Throwable {
 
+    int totalNoOfRecordsProduced;
     // create topics in Kafka
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
     // send records to kafka
-    sendRecordsToKafka();
+    totalNoOfRecordsProduced = sendRecordsToKafka();
 
     Map<String, String> props = getConnectorProps();
 
@@ -102,12 +102,13 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   @Test
   public void testWithRevokedWritePermissions() throws Exception {
 
+    int totalNoOfRecordsProduced;
     long maxFetchObjectCountWaitMs = 10000L;
     addReadWritePolicyToBucket(S3_BUCKET);
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
 
     // send records to kafka
-    sendRecordsToKafka();
+    totalNoOfRecordsProduced = sendRecordsToKafka();
 
     Map<String, String> props = getConnectorProps();
     props.put("aws.access.key.id", System.getenv("SECONDARY_USER_ACCESS_KEY_ID"));
@@ -126,7 +127,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     // Intentional sleep added in order for the bucket permission to be altered to read only.
     Thread.sleep(10000);
     // produce more records to kafka
-    sendRecordsToKafka();
+    totalNoOfRecordsProduced += sendRecordsToKafka();
     assertNotEquals(totalNoOfRecordsProduced / FLUSH_SIZE,
         waitForFetchingStorageObjectsInS3(S3_BUCKET,
             totalNoOfRecordsProduced / FLUSH_SIZE,
@@ -140,12 +141,13 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   @Test
   public void testWithNetworkUnavailability() throws Throwable {
+    int totalNoOfRecordsProduced;
     //Setup Squid Proxy Container
     setupSquidProxy();
     // create topics in Kafka
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
     // send records to kafka
-    sendRecordsToKafka();
+    totalNoOfRecordsProduced = sendRecordsToKafka();
 
     Map<String, String> props = getConnectorProps();
     props.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "https://"
@@ -166,7 +168,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     // Shutting down proxy to emulate network unavailability
     shutdownSquidProxy();
 
-    sendRecordsToKafka();
+    totalNoOfRecordsProduced += sendRecordsToKafka();
     int idealObjectCount = totalNoOfRecordsProduced / FLUSH_SIZE;
 
     // asserting no additional records are added.
@@ -184,12 +186,13 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     */
     int flushSize = 3;
 
+    int totalNoOfRecordsProduced;
     setupSquidProxy();
     startPumbaPauseContainer();
     // create topics in Kafka
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
     // send records to kafka
-    sendRecordsToKafka();
+    totalNoOfRecordsProduced = sendRecordsToKafka();
 
     Map<String, String> props = getConnectorProps();
     props.put("flush.size", Integer.toString(flushSize));
@@ -231,8 +234,9 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     s3RootClient.setBucketPolicy(bucketName, policy.toJson());
   }
 
-  private void sendRecordsToKafka() {
+  private int sendRecordsToKafka() {
     // Send records to Kafka
+    int totalNoOfRecordsProduced = 0;
     for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
       totalNoOfRecordsProduced++;
       String kafkaTopic = KAFKA_TOPICS.get(i % KAFKA_TOPICS.size());
@@ -241,6 +245,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
       log.debug("Sending message {} with topic {} to Kafka broker {}", kafkaTopic, kafkaValue);
       connect.kafka().produce(kafkaTopic, kafkaKey, kafkaValue);
     }
+    return totalNoOfRecordsProduced;
   }
 
   private Map<String, String> getConnectorProps() {

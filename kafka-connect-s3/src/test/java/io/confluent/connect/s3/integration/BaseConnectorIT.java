@@ -43,8 +43,6 @@ public abstract class BaseConnectorIT {
   protected EmbeddedConnectCluster connect;
 
   protected void startConnect() throws IOException {
-    //Map<String, String> props = new HashMap<>();
-    //props.put("consumer.max.poll.records","1");
     connect = new EmbeddedConnectCluster.Builder()
         .name("s3-connect-cluster")
         //.workerProps(props)
@@ -175,6 +173,7 @@ public abstract class BaseConnectorIT {
     long startTime = System.currentTimeMillis();
     long fetchedObjects = -1;
     while (System.currentTimeMillis() - startTime < maxWaitMs) {
+      // add intentional sleep so that we can get a connection from the connection pool.
       Thread.sleep(Math.min(maxWaitMs, 5000L));
       fetchedObjects = getNoOfObjectsInS3(bucketName);
       if (fetchedObjects == expectedObjects) {
