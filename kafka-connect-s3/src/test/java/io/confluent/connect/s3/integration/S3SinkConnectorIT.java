@@ -189,6 +189,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     sendRecordsToKafka();
 
     Map<String, String> props = getConnectorProps();
+    props.put("flush.size", Integer.toString(5));
 
     // start a sink connector
     connect.configureConnector(CONNECTOR_NAME, props);
