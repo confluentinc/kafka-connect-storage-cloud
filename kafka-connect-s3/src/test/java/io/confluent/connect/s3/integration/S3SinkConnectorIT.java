@@ -44,7 +44,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorIT.class);
 
   private static final String CONNECTOR_NAME = "s3-sink-connector";
-  private static final long NUM_RECORDS_PRODUCED = 1000;
+  private static final long NUM_RECORDS_PRODUCED = 10000;
   private static final int TASKS_MAX = 1;
   private static final List<String> KAFKA_TOPICS = Arrays.asList("topic1");
   private static final int FLUSH_SIZE = 200;
@@ -103,7 +103,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   public void testWithRevokedWritePermissions() throws Exception {
 
     int totalNoOfRecordsProduced;
-    long maxFetchObjectCountWaitMs = 10000L;
     addReadWritePolicyToBucket(S3_BUCKET);
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
 
@@ -124,18 +123,19 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
     // revoke read/write permission
     alterReadWritePolicyOfBucket(S3_BUCKET);
-    // Intentional sleep added in order for the bucket permission to be altered to read only.
+    /*
+     Intentional sleep added in order for the bucket permission to be altered to read only to
+     come into effect.
+    */
     Thread.sleep(10000);
     // produce more records to kafka
     totalNoOfRecordsProduced += sendRecordsToKafka();
-    assertNotEquals(totalNoOfRecordsProduced / FLUSH_SIZE,
-        waitForFetchingStorageObjectsInS3(S3_BUCKET,
-            totalNoOfRecordsProduced / FLUSH_SIZE,
-            maxFetchObjectCountWaitMs));
-    assertEquals(NUM_RECORDS_PRODUCED / FLUSH_SIZE,
-        waitForFetchingStorageObjectsInS3(S3_BUCKET,
-            totalNoOfRecordsProduced / FLUSH_SIZE,
-            maxFetchObjectCountWaitMs));
+    int idealObjectCountS3 = totalNoOfRecordsProduced / FLUSH_SIZE;
+    long actualObjectWrittenS3 = NUM_RECORDS_PRODUCED / FLUSH_SIZE;
+    assertNotEquals(idealObjectCountS3,
+        waitForFetchingStorageObjectsInS3(S3_BUCKET, idealObjectCountS3));
+    assertEquals(actualObjectWrittenS3,
+        waitForFetchingStorageObjectsInS3(S3_BUCKET, idealObjectCountS3));
 
   }
 

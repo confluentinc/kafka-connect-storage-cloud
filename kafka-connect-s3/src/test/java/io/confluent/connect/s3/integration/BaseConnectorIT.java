@@ -32,7 +32,7 @@ public abstract class BaseConnectorIT {
   private static final Logger log = LoggerFactory.getLogger(BaseConnectorIT.class);
 
   protected static final long CONSUME_MAX_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
-  protected static final long CONNECTOR_STARTUP_DURATION_MS = TimeUnit.SECONDS.toMillis(300);
+  protected static final long CONNECTOR_STARTUP_DURATION_MS = TimeUnit.SECONDS.toMillis(1200);
   protected static final String JSON_FORMAT_CLASS = "io.confluent.connect.s3.format.json.JsonFormat";
   protected static final String S3_BUCKET = "sink-test-bucket";
 
