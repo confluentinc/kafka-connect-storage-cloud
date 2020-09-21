@@ -38,6 +38,11 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
+/**
+ * Integration test for S3 Sink Connector.<p>
+ * Refer file /bin/README.md to find prerequisites
+ * to run the following tests.
+ */
 @Category(IntegrationTest.class)
 public class S3SinkConnectorIT extends BaseConnectorIT {
 
@@ -96,7 +101,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   /**
    * Case in which bucket permissions/policies are changed while uploading records
    * Prerequisite : Access key and Secret access key should be set as environment variables
-   * Blocker : Assert Condition
    * @throws Exception
    */
   @Test

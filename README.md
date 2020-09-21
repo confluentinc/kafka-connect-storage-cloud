@@ -26,6 +26,19 @@ You can build *kafka-connect-storage-cloud* with Maven using the standard lifecy
 - Source Code: https://github.com/confluentinc/kafka-connect-storage-cloud
 - Issue Tracker: https://github.com/confluentinc/kafka-connect-storage-cloud/issues
 
+# Running Integration Tests
+
+In order to run integration tests, AWS credential of the bucket owner and an addition user.
+
+Add the following Environmental variables :
+
+SECONDARY_USER_ACCOUNT_ID=********;
+SECONDARY_USER_ACCESS_KEY_ID=********;
+SECONDARY_USER_SECRET_ACCESS_KEY=********;
+ROOT_USER_ACCESS_KEY_ID=********;
+ROOT_USER_SECRET_ACCESS_KEY=********;
+
+Run the integration tests: mvn clean integration-test
 
 # License
 
