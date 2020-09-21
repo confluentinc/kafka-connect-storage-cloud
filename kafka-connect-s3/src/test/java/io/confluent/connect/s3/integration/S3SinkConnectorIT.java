@@ -4,14 +4,11 @@
 
 package io.confluent.connect.s3.integration;
 
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.policy.Policy;
 import com.amazonaws.auth.policy.Principal;
 import com.amazonaws.auth.policy.Statement;
 import com.amazonaws.auth.policy.actions.S3Actions;
 import com.amazonaws.auth.policy.resources.S3ObjectResource;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.CreateBucketRequest;
 import com.amazonaws.services.s3.model.ListVersionsRequest;
 import com.amazonaws.services.s3.model.ObjectListing;
@@ -62,20 +59,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     createS3Bucket(S3_BUCKET);
   }
 
-  /**
-   * Creates root client that will be used to change bucket permissions.
-   * Prerequisite : Access key and Secret access key should be set as environment variables
-   */
-  private void createS3RootClient() {
-    s3RootClient = AmazonS3ClientBuilder.standard()
-      .withCredentials(
-          new AWSStaticCredentialsProvider(
-              new BasicAWSCredentials(
-                System.getenv("ROOT_USER_ACCESS_KEY_ID"),
-                System.getenv("ROOT_USER_SECRET_ACCESS_KEY"))))
-      .withRegion("ap-south-1")
-      .build();
-  }
 
   @After
   public void close() {
@@ -107,7 +90,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     waitForConnectorToCompleteSendingRecords(totalNoOfRecordsProduced, FLUSH_SIZE, S3_BUCKET);
 
     // assert records
-    assertEquals(totalNoOfRecordsProduced/FLUSH_SIZE, getNoOfObjectsInS3(S3_BUCKET));
+    assertEquals(totalNoOfRecordsProduced / FLUSH_SIZE, getNoOfObjectsInS3(S3_BUCKET));
   }
 
   /**
@@ -119,6 +102,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   @Test
   public void testWithRevokedWritePermissions() throws Exception {
 
+    long maxFetchObjectCountWaitMs = 10000L;
     addReadWritePolicyToBucket(S3_BUCKET);
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
 
@@ -135,18 +119,27 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
 
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
-    Thread.sleep(5000);
+    waitForConnectorToCompleteSendingRecords(totalNoOfRecordsProduced, FLUSH_SIZE, S3_BUCKET);
 
     // revoke read/write permission
-    s3RootClient.deleteBucketPolicy(S3_BUCKET);
-
+    alterReadWritePolicyOfBucket(S3_BUCKET);
+    // Intentional sleep added in order for the bucket permission to be altered to read only.
+    Thread.sleep(10000);
     // produce more records to kafka
     sendRecordsToKafka();
-    Thread.sleep(10000);
+    assertNotEquals(totalNoOfRecordsProduced / FLUSH_SIZE,
+        waitForFetchingStorageObjectsInS3(S3_BUCKET,
+            totalNoOfRecordsProduced / FLUSH_SIZE,
+            maxFetchObjectCountWaitMs));
+    assertEquals(NUM_RECORDS_PRODUCED / FLUSH_SIZE,
+        waitForFetchingStorageObjectsInS3(S3_BUCKET,
+            totalNoOfRecordsProduced / FLUSH_SIZE,
+            maxFetchObjectCountWaitMs));
+
   }
 
   @Test
-  public void testWithNetworkInterruption() throws Throwable {
+  public void testWithNetworkUnavailability() throws Throwable {
     //Setup Squid Proxy Container
     setupSquidProxy();
     // create topics in Kafka
@@ -155,7 +148,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     sendRecordsToKafka();
 
     Map<String, String> props = getConnectorProps();
-    props.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG,"https://" + squid.getContainerIpAddress() + ":" + squid.getMappedPort(3129));
+    props.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "https://"
+        + squid.getContainerIpAddress() + ":" + squid.getMappedPort(3129));
 
     // start a sink connector
     connect.configureConnector(CONNECTOR_NAME, props);
@@ -165,22 +159,31 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
 
     // assert records
-    int objectCountBeforeInterruption = totalNoOfRecordsProduced/FLUSH_SIZE;
-    assertEquals(objectCountBeforeInterruption, waitForFetchingStorageObjectsInS3(S3_BUCKET, objectCountBeforeInterruption));
+    int objectCountBeforeInterruption = totalNoOfRecordsProduced / FLUSH_SIZE;
+    assertEquals(objectCountBeforeInterruption,
+        waitForFetchingStorageObjectsInS3(S3_BUCKET, objectCountBeforeInterruption));
 
     // Shutting down proxy to emulate network unavailability
     shutdownSquidProxy();
 
     sendRecordsToKafka();
-    int idealObjectCount = totalNoOfRecordsProduced/FLUSH_SIZE;
+    int idealObjectCount = totalNoOfRecordsProduced / FLUSH_SIZE;
 
     // asserting no additional records are added.
-    assertNotEquals(totalNoOfRecordsProduced/FLUSH_SIZE, waitForFetchingStorageObjectsInS3(S3_BUCKET, idealObjectCount));
-    assertEquals(objectCountBeforeInterruption, waitForFetchingStorageObjectsInS3(S3_BUCKET, idealObjectCount));
+    assertNotEquals(totalNoOfRecordsProduced / FLUSH_SIZE,
+        waitForFetchingStorageObjectsInS3(S3_BUCKET, idealObjectCount));
+    assertEquals(objectCountBeforeInterruption,
+        waitForFetchingStorageObjectsInS3(S3_BUCKET, idealObjectCount));
   }
 
   @Test
-  public void testWithNetworkUnavailability() throws Throwable {
+  public void testWithNetworkInterruption() throws Throwable {
+    /*
+     A small value is used to create enough request that the pumba container can cause network
+     interruptions
+    */
+    int flushSize = 3;
+
     setupSquidProxy();
     startPumbaPauseContainer();
     // create topics in Kafka
@@ -189,7 +192,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     sendRecordsToKafka();
 
     Map<String, String> props = getConnectorProps();
-    props.put("flush.size", Integer.toString(5));
+    props.put("flush.size", Integer.toString(flushSize));
 
     // start a sink connector
     connect.configureConnector(CONNECTOR_NAME, props);
@@ -197,10 +200,10 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
 
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
-    waitForConnectorToCompleteSendingRecords(totalNoOfRecordsProduced, FLUSH_SIZE, S3_BUCKET);
+    waitForConnectorToCompleteSendingRecords(totalNoOfRecordsProduced, flushSize, S3_BUCKET);
     pumbaPauseContainer.close();
     // assert records
-    assertEquals(totalNoOfRecordsProduced/FLUSH_SIZE, getNoOfObjectsInS3(S3_BUCKET));
+    assertEquals(totalNoOfRecordsProduced / flushSize, getNoOfObjectsInS3(S3_BUCKET));
     shutdownSquidProxy();
   }
 
@@ -211,8 +214,19 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
       .withActions(S3Actions.GetObject, S3Actions.PutObject)
       .withResources(new S3ObjectResource(bucketName, "*"));
 
-    Policy policy = new Policy()
-      .withStatements(allowRestrictedWriteStatement);
+    Policy policy = new Policy().withStatements(allowRestrictedWriteStatement);
+
+    s3RootClient.setBucketPolicy(bucketName, policy.toJson());
+  }
+
+  private void alterReadWritePolicyOfBucket(String bucketName) {
+
+    Statement allowRestrictedWriteStatement = new Statement(Statement.Effect.Allow)
+      .withPrincipals(new Principal(System.getenv("SECONDARY_USER_ACCOUNT_ID")))
+      .withActions(S3Actions.GetObject)
+      .withResources(new S3ObjectResource(bucketName, "*"));
+
+    Policy policy = new Policy().withStatements(allowRestrictedWriteStatement);
 
     s3RootClient.setBucketPolicy(bucketName, policy.toJson());
   }
@@ -239,7 +253,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     props.put("s3.part.size", "5242880");
     props.put("s3.bucket.name", S3_BUCKET);
     props.put("flush.size", Integer.toString(FLUSH_SIZE));
-    props.put("storage.class","io.confluent.connect.s3.storage.S3Storage");
+    props.put("storage.class", "io.confluent.connect.s3.storage.S3Storage");
     props.put("partitioner.class", "io.confluent.connect.storage.partitioner.DefaultPartitioner");
 
     // converters
