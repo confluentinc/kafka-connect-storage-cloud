@@ -23,7 +23,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-cloud</artifactId>
-        <version>6.0.0-SNAPSHOT</version>
+        <version>10.0.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>kafka-connect-s3</artifactId>
@@ -100,7 +100,7 @@
                         <configuration>
                             <title>Kafka Connect S3</title>
                             <sourceUrl>https://github.com/confluentinc/kafka-connect-storage-cloud</sourceUrl>
-                            <documentationUrl>https://docs.confluent.io/${project.version}/connect/connect-storage-cloud/kafka-connect-s3/docs/index.html</documentationUrl>
+                            <documentationUrl>https://docs.confluent.io/${confluent.version}/connect/connect-storage-cloud/kafka-connect-s3/docs/index.html</documentationUrl>
                             <description>
                                 The S3 connector, currently available as a sink, allows you to export data from Kafka topics to S3 objects in either Avro or JSON formats. In addition, for certain data layouts, S3 connector exports data by guaranteeing exactly-once delivery semantics to consumers of the S3 objects it produces.
 
@@ -118,10 +118,6 @@
                             <ownerName>Confluent, Inc.</ownerName>
                             <ownerUrl>https://confluent.io/</ownerUrl>
                             <ownerLogo>logos/confluent.png</ownerLogo>
-
-                            <dockerNamespace>confluentinc</dockerNamespace>
-                            <dockerName>cp-kafka-connect</dockerName>
-                            <dockerTag>${project.version}</dockerTag>
 
                             <componentTypes>
                                 <componentType>sink</componentType>
