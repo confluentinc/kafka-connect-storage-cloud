@@ -66,7 +66,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   @After
   public void close() {
-    //delete the test bucket
+    // delete the test bucket
     deleteBucket(S3_BUCKET);
     stopConnect();
   }
@@ -78,11 +78,10 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   @Test
   public void testToAssertConnectorAndDestinationRecords() throws Throwable {
 
-    int totalNoOfRecordsProduced;
     // create topics in Kafka
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
     // send records to kafka
-    totalNoOfRecordsProduced = sendRecordsToKafka();
+    int totalNoOfRecordsProduced = sendRecordsToKafka();
 
     Map<String, String> props = getConnectorProps();
 
@@ -106,12 +105,11 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   @Test
   public void testWithRevokedWritePermissions() throws Exception {
 
-    int totalNoOfRecordsProduced;
     addReadWritePolicyToBucket(S3_BUCKET);
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
 
     // send records to kafka
-    totalNoOfRecordsProduced = sendRecordsToKafka();
+    int totalNoOfRecordsProduced = sendRecordsToKafka();
 
     Map<String, String> props = getConnectorProps();
     props.put("aws.access.key.id", System.getenv("SECONDARY_USER_ACCESS_KEY_ID"));
@@ -145,13 +143,12 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   @Test
   public void testWithNetworkUnavailability() throws Throwable {
-    int totalNoOfRecordsProduced;
-    //Setup Squid Proxy Container
+    // Setup Squid Proxy Container
     setupSquidProxy();
     // create topics in Kafka
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
     // send records to kafka
-    totalNoOfRecordsProduced = sendRecordsToKafka();
+    int totalNoOfRecordsProduced = sendRecordsToKafka();
 
     Map<String, String> props = getConnectorProps();
     props.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "https://"
@@ -190,13 +187,12 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     */
     int flushSize = 3;
 
-    int totalNoOfRecordsProduced;
     setupSquidProxy();
     startPumbaPauseContainer();
     // create topics in Kafka
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
     // send records to kafka
-    totalNoOfRecordsProduced = sendRecordsToKafka();
+    int totalNoOfRecordsProduced = sendRecordsToKafka();
 
     Map<String, String> props = getConnectorProps();
     props.put("flush.size", Integer.toString(flushSize));

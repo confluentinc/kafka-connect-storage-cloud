@@ -173,7 +173,7 @@ public abstract class BaseConnectorIT {
     long startTime = System.currentTimeMillis();
     long fetchedObjects = -1;
     while (System.currentTimeMillis() - startTime < maxWaitMs) {
-      // add intentional sleep so that we can get a connection from the connection pool.
+      // added intentional sleep to get a connection from the connection pool.
       Thread.sleep(Math.min(maxWaitMs, 5000L));
       fetchedObjects = getNoOfObjectsInS3(bucketName);
       if (fetchedObjects == expectedObjects) {
