@@ -67,7 +67,6 @@ import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.kafka.serializers.NonRecordContainer;
 
 import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
-import static io.confluent.connect.avro.AvroData.CONNECT_ENUM_DOC_PROP;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
@@ -773,7 +772,6 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   public Schema createEnumSchema() {
     // Enums are just converted to strings, original enum is preserved in parameters
     SchemaBuilder builder = SchemaBuilder.string().name("TestEnum");
-    builder.parameter(CONNECT_ENUM_DOC_PROP, null);
     builder.parameter(AVRO_TYPE_ENUM, "TestEnum");
     for(String enumSymbol : new String[]{"foo", "bar", "baz"}) {
       builder.parameter(AVRO_TYPE_ENUM+"."+enumSymbol, enumSymbol);
