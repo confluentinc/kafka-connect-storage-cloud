@@ -19,11 +19,13 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.services.s3.model.Tag;
 import io.confluent.common.utils.SystemTime;
+import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.easymock.EasyMock;
@@ -898,6 +900,54 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT),
             Arrays.asList(new Tag("startOffset", "6"), new Tag("endOffset", "8"), new Tag("recordCount", "3")));
     verifyTags(expectedTaggedFiles);
+  }
+
+  @Test (expected = DataException.class)
+  public void testExceptionOnEmptyHeaders() throws Exception {
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+
+    RecordWriterProvider<S3SinkConnectorConfig> kvhWriterProvider = new KeyValueHeaderRecordWriterProvider(
+        new AvroFormat(storage).getRecordWriterProvider(),
+        null,
+        new AvroFormat(storage).getRecordWriterProvider()
+    );
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, kvhWriterProvider, partitioner,  connectorConfig, context);
+
+    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
+        Schema.STRING_SCHEMA, "1", 1, 0L, TimestampType.NO_TIMESTAMP_TYPE, Collections.emptyList());
+
+    topicPartitionWriter.buffer(faultyRecord);
+    topicPartitionWriter.write();
+  }
+
+  @Test (expected = DataException.class)
+  public void testExceptionOnNullHeaders() throws Exception {
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+
+    RecordWriterProvider<S3SinkConnectorConfig> kvhWriterProvider = new KeyValueHeaderRecordWriterProvider(
+        new AvroFormat(storage).getRecordWriterProvider(),
+        null,
+        new AvroFormat(storage).getRecordWriterProvider()
+    );
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, kvhWriterProvider, partitioner,  connectorConfig, context);
+
+    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
+        Schema.STRING_SCHEMA, "1", 1, 0L, TimestampType.NO_TIMESTAMP_TYPE, null);
+
+    topicPartitionWriter.buffer(faultyRecord);
+    topicPartitionWriter.write();
   }
 
   private Struct createRecord(Schema schema, int ibase, float fbase) {
