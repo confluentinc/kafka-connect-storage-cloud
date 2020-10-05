@@ -15,6 +15,8 @@
 
 package io.confluent.connect.s3.format.json;
 
+import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
+
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.data.Struct;
@@ -29,12 +31,14 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.format.RecordViewSetter;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 
-public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
+public class JsonRecordWriterProvider extends RecordViewSetter
+    implements RecordWriterProvider<S3SinkConnectorConfig> {
 
   private static final Logger log = LoggerFactory.getLogger(JsonRecordWriterProvider.class);
   private static final String EXTENSION = ".json";
@@ -60,7 +64,8 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     try {
       return new RecordWriter() {
-        final S3OutputStream s3out = storage.create(filename, true);
+        final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
+        final S3OutputStream s3out = storage.create(adjustedFilename, true, JsonFormat.class);
         final OutputStream s3outWrapper = s3out.wrapForCompression();
         final JsonGenerator writer = mapper.getFactory()
                                          .createGenerator(s3outWrapper)
@@ -68,13 +73,13 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
 
         @Override
         public void write(SinkRecord record) {
-          log.trace("Sink record: {}", record);
+          log.trace("Sink record with view {}: {}", recordView, record);
           try {
-            Object value = record.value();
+            Object value = recordView.getView(record, false);
             if (value instanceof Struct) {
               byte[] rawJson = converter.fromConnectData(
                   record.topic(),
-                  record.valueSchema(),
+                  recordView.getViewSchema(record, false),
                   value
               );
               s3outWrapper.write(rawJson);

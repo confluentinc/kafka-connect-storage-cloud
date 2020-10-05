@@ -35,6 +35,10 @@ import java.util.Map;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
+import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
+import io.confluent.connect.s3.format.RecordViewSetter;
+import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
+import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.StorageFactory;
@@ -107,7 +111,7 @@ public class S3SinkTask extends SinkTask {
         throw new DataException("No-existent S3 bucket: " + connectorConfig.getBucketName());
       }
 
-      writerProvider = newFormat().getRecordWriterProvider();
+      writerProvider = newRecordWriterProvider(connectorConfig);
       partitioner = newPartitioner(connectorConfig);
 
       open(context.assignment());
@@ -135,14 +139,37 @@ public class S3SinkTask extends SinkTask {
   }
 
   @SuppressWarnings("unchecked")
-  private Format<S3SinkConnectorConfig, String> newFormat()
+  private Format<S3SinkConnectorConfig, String> newFormat(String formatClassConfig)
       throws ClassNotFoundException, IllegalAccessException, InstantiationException,
              InvocationTargetException, NoSuchMethodException {
     Class<Format<S3SinkConnectorConfig, String>> formatClass =
-        (Class<Format<S3SinkConnectorConfig, String>>) connectorConfig.getClass(
-            S3SinkConnectorConfig.FORMAT_CLASS_CONFIG
-        );
+        (Class<Format<S3SinkConnectorConfig, String>>) connectorConfig.getClass(formatClassConfig);
     return formatClass.getConstructor(S3Storage.class).newInstance(storage);
+  }
+
+  private RecordWriterProvider<S3SinkConnectorConfig> newRecordWriterProvider(
+      S3SinkConnectorConfig config)
+      throws ClassNotFoundException, InvocationTargetException, InstantiationException,
+      NoSuchMethodException, IllegalAccessException {
+
+    RecordWriterProvider<S3SinkConnectorConfig> valueWriterProvider =
+        newFormat(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG).getRecordWriterProvider();
+
+    RecordWriterProvider<S3SinkConnectorConfig> keyWriterProvider = null;
+    if (config.getBoolean(S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG)) {
+      keyWriterProvider = newFormat(S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG)
+          .getRecordWriterProvider();
+      ((RecordViewSetter) keyWriterProvider).setRecordView(new KeyRecordView());
+    }
+    RecordWriterProvider<S3SinkConnectorConfig> headerWriterProvider = null;
+    if (config.getBoolean(S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG)) {
+      headerWriterProvider = newFormat(S3SinkConnectorConfig.HEADERS_FORMAT_CLASS_CONFIG)
+          .getRecordWriterProvider();
+      ((RecordViewSetter) headerWriterProvider).setRecordView(new HeaderRecordView());
+    }
+
+    return new KeyValueHeaderRecordWriterProvider(
+        valueWriterProvider, keyWriterProvider, headerWriterProvider);
   }
 
   private Partitioner<?> newPartitioner(S3SinkConnectorConfig config)

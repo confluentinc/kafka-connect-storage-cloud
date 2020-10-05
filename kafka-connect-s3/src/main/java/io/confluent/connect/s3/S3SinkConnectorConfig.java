@@ -36,6 +36,7 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -61,6 +62,7 @@ import io.confluent.connect.storage.common.ComposableConfig;
 import io.confluent.connect.storage.common.GenericRecommender;
 import io.confluent.connect.storage.common.ParentValueRecommender;
 import io.confluent.connect.storage.common.StorageCommonConfig;
+import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.partitioner.DailyPartitioner;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.FieldPartitioner;
@@ -163,6 +165,13 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String S3_PATH_STYLE_ACCESS_ENABLED_CONFIG = "s3.path.style.access.enabled";
   public static final boolean S3_PATH_STYLE_ACCESS_ENABLED_DEFAULT = true;
 
+  public static final String STORE_KAFKA_KEYS_CONFIG = "store.kafka.keys";
+  public static final String STORE_KAFKA_HEADERS_CONFIG = "store.kafka.headers";
+  public static final String KEYS_FORMAT_CLASS_CONFIG = "keys.format.class";
+  public static final Class<? extends Format> KEYS_FORMAT_CLASS_DEFAULT = AvroFormat.class;
+  public static final String HEADERS_FORMAT_CLASS_CONFIG = "headers.format.class";
+  public static final Class<? extends Format> HEADERS_FORMAT_CLASS_DEFAULT = AvroFormat.class;
+
   private final String name;
 
   private final StorageCommonConfig commonConfig;
@@ -179,19 +188,34 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private static final ParquetCodecRecommender PARQUET_COMPRESSION_RECOMMENDER =
       new ParquetCodecRecommender();
 
+  private static final Collection<Object> FORMAT_CLASS_VALID_VALUES = Arrays.<Object>asList(
+      AvroFormat.class,
+      JsonFormat.class,
+      ByteArrayFormat.class,
+      ParquetFormat.class
+  );
+
+  // ByteArrayFormat for headers is not supported.
+  // Would require undesired JsonConverter configuration in ByteArrayRecordWriterProvider.
+  private static final Collection<Object> HEADERS_FORMAT_CLASS_VALID_VALUES = Arrays.<Object>asList(
+      AvroFormat.class,
+      JsonFormat.class,
+      ParquetFormat.class
+  );
+
+  private static final ParentValueRecommender KEYS_FORMAT_CLASS_RECOMMENDER =
+      new ParentValueRecommender(
+          STORE_KAFKA_KEYS_CONFIG, true, FORMAT_CLASS_VALID_VALUES);
+  private static final ParentValueRecommender HEADERS_FORMAT_CLASS_RECOMMENDER =
+      new ParentValueRecommender(
+          STORE_KAFKA_HEADERS_CONFIG, true, HEADERS_FORMAT_CLASS_VALID_VALUES);
+
   static {
     STORAGE_CLASS_RECOMMENDER.addValidValues(
         Arrays.<Object>asList(S3Storage.class)
     );
 
-    FORMAT_CLASS_RECOMMENDER.addValidValues(
-        Arrays.<Object>asList(
-            AvroFormat.class,
-            JsonFormat.class,
-            ByteArrayFormat.class,
-            ParquetFormat.class
-        )
-    );
+    FORMAT_CLASS_RECOMMENDER.addValidValues(FORMAT_CLASS_VALID_VALUES);
 
     PARTITIONER_CLASS_RECOMMENDER.addValidValues(
         Arrays.<Object>asList(
@@ -568,6 +592,63 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.SHORT,
           "Behavior for null-valued records"
+      );
+    }
+
+    {
+      final String group = "Keys and Headers";
+      int orderInGroup = 0;
+
+      configDef.define(
+          STORE_KAFKA_KEYS_CONFIG,
+          Type.BOOLEAN,
+          false,
+          Importance.LOW,
+          "Enable or disable writing keys to storage.",
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Store kafka keys",
+          Collections.singletonList(KEYS_FORMAT_CLASS_CONFIG)
+      );
+
+      configDef.define(
+          STORE_KAFKA_HEADERS_CONFIG,
+          Type.BOOLEAN,
+          false,
+          Importance.LOW,
+          "Enable or disable writing headers to storage.",
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Store kafka headers",
+          Collections.singletonList(HEADERS_FORMAT_CLASS_CONFIG)
+      );
+
+      configDef.define(
+          KEYS_FORMAT_CLASS_CONFIG,
+          Type.CLASS,
+          KEYS_FORMAT_CLASS_DEFAULT,
+          Importance.LOW,
+          "The format class to use when writing keys to the store.",
+          group,
+          ++orderInGroup,
+          Width.NONE,
+          "Keys format class",
+          KEYS_FORMAT_CLASS_RECOMMENDER
+      );
+
+      configDef.define(
+          HEADERS_FORMAT_CLASS_CONFIG,
+          Type.CLASS,
+          HEADERS_FORMAT_CLASS_DEFAULT,
+          Importance.LOW,
+          "The format class to use when writing headers to the store.",
+          group,
+          ++orderInGroup,
+          Width.NONE,
+          "Headers format class",
+          HEADERS_FORMAT_CLASS_RECOMMENDER
       );
 
       configDef.define(

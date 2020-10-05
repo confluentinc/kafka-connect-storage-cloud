@@ -14,21 +14,20 @@
   ~ WARRANTIES OF ANY KIND, either express or implied.  See the License for the
   ~ specific language governing permissions and limitations under the License.
   -->
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>6.0.0-SNAPSHOT</version>
+        <version>10.0.0-SNAPSHOT</version>
     </parent>
 
     <groupId>io.confluent</groupId>
     <artifactId>kafka-connect-storage-cloud</artifactId>
     <packaging>pom</packaging>
+    <version>10.1.0-SNAPSHOT</version>
     <name>kafka-connect-storage-cloud</name>
     <organization>
         <name>Confluent, Inc.</name>
@@ -60,11 +59,12 @@
 
     <properties>
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
-        <licenses.version>6.0.0-SNAPSHOT</licenses.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <hadoop.version>2.7.7</hadoop.version>
         <kafka.scala.version>2.12</kafka.scala.version>
         <kafka.version>5.3.0-ccs</kafka.version>
+        <maven.release.plugin.version>2.5.3</maven.release.plugin.version>
+
     </properties>
 
     <repositories>

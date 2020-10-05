@@ -14,16 +14,14 @@
   ~ WARRANTIES OF ANY KIND, either express or implied.  See the License for the
   ~ specific language governing permissions and limitations under the License.
   -->
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-cloud</artifactId>
-        <version>6.0.0-SNAPSHOT</version>
+        <version>10.1.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>kafka-connect-s3</artifactId>
@@ -159,7 +157,7 @@
                         <configuration>
                             <title>Kafka Connect S3</title>
                             <sourceUrl>https://github.com/confluentinc/kafka-connect-storage-cloud</sourceUrl>
-                            <documentationUrl>https://docs.confluent.io/${project.version}/connect/connect-storage-cloud/kafka-connect-s3/docs/index.html</documentationUrl>
+                            <documentationUrl>https://docs.confluent.io/${confluent.version}/connect/connect-storage-cloud/kafka-connect-s3/docs/index.html</documentationUrl>
                             <description>
                                 The S3 connector, currently available as a sink, allows you to export data from Kafka topics to S3 objects in either Avro or JSON formats. In addition, for certain data layouts, S3 connector exports data by guaranteeing exactly-once delivery semantics to consumers of the S3 objects it produces.
 
@@ -177,10 +175,6 @@
                             <ownerName>Confluent, Inc.</ownerName>
                             <ownerUrl>https://confluent.io/</ownerUrl>
                             <ownerLogo>logos/confluent.png</ownerLogo>
-
-                            <dockerNamespace>confluentinc</dockerNamespace>
-                            <dockerName>cp-kafka-connect</dockerName>
-                            <dockerTag>${project.version}</dockerTag>
 
                             <componentTypes>
                                 <componentType>sink</componentType>
@@ -237,6 +231,16 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-release-plugin</artifactId>
+                <version>${maven.release.plugin.version}</version>
+                <configuration>
+                    <autoVersionSubmodules>true</autoVersionSubmodules>
+                    <remoteTagging>false</remoteTagging>
+                    <tagNameFormat>v@{project.version}</tagNameFormat>
+                </configuration>
             </plugin>
         </plugins>
 
