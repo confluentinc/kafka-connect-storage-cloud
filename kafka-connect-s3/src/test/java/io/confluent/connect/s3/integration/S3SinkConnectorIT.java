@@ -22,6 +22,7 @@ import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
@@ -76,6 +77,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * @throws Throwable
    */
   @Test
+  @Ignore
   public void testToAssertConnectorAndDestinationRecords() throws Throwable {
 
     // create topics in Kafka
@@ -103,6 +105,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * @throws Exception
    */
   @Test
+  @Ignore
   public void testWithRevokedWritePermissions() throws Exception {
 
     addReadWritePolicyToBucket(S3_BUCKET);
@@ -142,6 +145,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   @Test
+  @Ignore
   public void testWithNetworkUnavailability() throws Throwable {
     // Setup Squid Proxy Container
     setupSquidProxy();
@@ -180,6 +184,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   @Test
+  @Ignore
   public void testWithNetworkInterruption() throws Throwable {
     /*
      A small value is used to create enough request that the pumba container can cause network
