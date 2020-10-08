@@ -21,13 +21,13 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>10.0.0-SNAPSHOT</version>
+        <version>5.5.1</version>
     </parent>
 
     <groupId>io.confluent</groupId>
     <artifactId>kafka-connect-storage-cloud</artifactId>
     <packaging>pom</packaging>
-    <version>10.1.0-SNAPSHOT</version>
+    <version>5.5.1</version>
     <name>kafka-connect-storage-cloud</name>
     <organization>
         <name>Confluent, Inc.</name>
@@ -68,7 +68,7 @@
         <repository>
             <id>confluent</id>
             <name>Confluent</name>
-            <url>${confluent.maven.repo}</url>
+            <url>http://packages.confluent.io/maven/</url>
         </repository>
     </repositories>
 
@@ -143,12 +143,6 @@
                     <artifactId>log4j</artifactId>
                 </exclusion>
             </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>confluent-log4j</artifactId>
-            <version>${confluent-log4j.version}</version>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>commons-beanutils</groupId>
