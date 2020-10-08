@@ -455,29 +455,27 @@ public class TopicPartitionWriter {
       commitFile = commitFiles.get(encodedPartition);
     } else {
       long startOffset = startOffsets.get(encodedPartition);
-      // String prefix = getDirectoryPrefix(encodedPartition);
-      String prefix = "";
-      commitFile = fileKeyToCommit(prefix, startOffset);
+      commitFile = fileKeyToCommit(startOffset);
       commitFiles.put(encodedPartition, commitFile);
     }
     return commitFile;
   }
 
-  private String fileKey(String topicsPrefix, String keyPrefix, String name) {
-    String suffix = keyPrefix + dirDelim + name;
+  private String fileKey(String topicsPrefix, String name) {
+    String suffix =  dirDelim + name;
     return StringUtils.isNotBlank(topicsPrefix)
            ? topicsPrefix + dirDelim + suffix
            : suffix;
   }
 
-  private String fileKeyToCommit(String dirPrefix, long startOffset) {
+  private String fileKeyToCommit(long startOffset) {
     String name = tp.topic()
                       + fileDelim
                       + tp.partition()
                       + fileDelim
                       + String.format(zeroPadOffsetFormat, startOffset)
                       + extension;
-    return fileKey(topicsDir, dirPrefix, name);
+    return fileKey(topicsDir, name);
   }
 
   private void writeRecord(SinkRecord record) {
