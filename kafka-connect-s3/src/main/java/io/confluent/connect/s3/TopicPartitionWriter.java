@@ -476,7 +476,7 @@ public class TopicPartitionWriter {
                       + fileDelim
                       + String.format(zeroPadOffsetFormat, startOffset)
                       + extension;
-    return fileKey(topicsDir, dirPrefix, name);
+    return fileKey(topicsDir, '', name);
   }
 
   private void writeRecord(SinkRecord record) {
