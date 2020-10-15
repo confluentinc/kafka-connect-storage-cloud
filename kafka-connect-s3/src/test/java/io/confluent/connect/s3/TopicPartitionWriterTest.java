@@ -21,7 +21,6 @@ import com.amazonaws.services.s3.model.Tag;
 import io.confluent.common.utils.SystemTime;
 import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
 import io.confluent.connect.s3.format.RecordViewSetter;
-import io.confluent.connect.s3.format.RecordViews;
 import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
 import io.confluent.kafka.serializers.NonRecordContainer;
@@ -76,12 +75,17 @@ import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class TopicPartitionWriterTest extends TestWithMockedS3 {
   // The default
   private static final String ZERO_PAD_FMT = "%010d";
-  private enum KVHType { KEYS, HEADERS, VALUES }
+  private enum RecordElement {
+    KEYS,
+    HEADERS,
+    VALUES
+  }
 
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private S3Storage storage;
@@ -910,25 +914,40 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     verifyTags(expectedTaggedFiles);
   }
 
-  @Test (expected = DataException.class)
-  public void testExceptionOnNullKeys() throws Exception {
+  @Test
+  public void testExceptionOnNullKeys() {
+    String recordValue = "1";
+    int kafkaOffset = 1;
     SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, null,
-        Schema.STRING_SCHEMA, "1", 1, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
-    writeRecordWithKeysAndHeaders(faultyRecord);
+        Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
+
+    Exception thrownException = assertThrows(DataException.class, () -> writeRecordWithKeysAndHeaders(faultyRecord));
+    String expectedMessage = String.format("Key cannot be null for SinkRecord: %s", faultyRecord);
+    assertEquals(expectedMessage, thrownException.getMessage());
   }
 
-  @Test (expected = DataException.class)
-  public void testExceptionOnEmptyHeaders() throws Exception {
+  @Test
+  public void testExceptionOnEmptyHeaders() {
+    String recordValue = "1";
+    int kafkaOffset = 1;
     SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
-        Schema.STRING_SCHEMA, "1", 1, 0L, TimestampType.NO_TIMESTAMP_TYPE, Collections.emptyList());
-    writeRecordWithKeysAndHeaders(faultyRecord);
+        Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, Collections.emptyList());
+
+    Exception thrownException = assertThrows(DataException.class, () -> writeRecordWithKeysAndHeaders(faultyRecord));
+    String expectedMessage = String.format("Headers cannot be null for SinkRecord: %s", faultyRecord);
+    assertEquals(expectedMessage, thrownException.getMessage());
   }
 
-  @Test (expected = DataException.class)
-  public void testExceptionOnNullHeaders() throws Exception {
+  @Test
+  public void testExceptionOnNullHeaders() {
+    String recordValue = "1";
+    int kafkaOffset = 1;
     SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
-        Schema.STRING_SCHEMA, "1", 1, 0L, TimestampType.NO_TIMESTAMP_TYPE, null);
-    writeRecordWithKeysAndHeaders(faultyRecord);
+        Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, null);
+
+    Exception thrownException = assertThrows(DataException.class, () -> writeRecordWithKeysAndHeaders(faultyRecord));
+    String expectedMessage = String.format("Headers cannot be null for SinkRecord: %s", faultyRecord);
+    assertEquals(expectedMessage, thrownException.getMessage());
   }
 
   @Test
@@ -951,14 +970,14 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         new AvroFormat(storage).getRecordWriterProvider();
     ((RecordViewSetter) headerWriterProvider).setRecordView(new HeaderRecordView());
     // initialize the KVHWriterProvider with header and key writers turned on.
-    RecordWriterProvider<S3SinkConnectorConfig> kvhWriterProvider = new KeyValueHeaderRecordWriterProvider(
+    RecordWriterProvider<S3SinkConnectorConfig> writerProvider = new KeyValueHeaderRecordWriterProvider(
         new AvroFormat(storage).getRecordWriterProvider(),
         keyWriterProvider,
         headerWriterProvider
     );
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, kvhWriterProvider, partitioner,  connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
 
     Schema schema = createSchema();
     List<Struct> records = createRecordBatches(schema, 3, 3);
@@ -982,19 +1001,19 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     expectedValueFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
     expectedValueFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
     expectedValueFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
-    verifyKVH(expectedValueFiles, 3, sinkRecords, KVHType.VALUES);
+    verifyRecordElement(expectedValueFiles, 3, sinkRecords, RecordElement.VALUES);
 
     List<String> expectedHeaderFiles = new ArrayList<>();
     expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, ".headers.avro", ZERO_PAD_FMT));
     expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, ".headers.avro", ZERO_PAD_FMT));
     expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, ".headers.avro", ZERO_PAD_FMT));
-    verifyKVH(expectedHeaderFiles, 3, sinkRecords, KVHType.HEADERS);
+    verifyRecordElement(expectedHeaderFiles, 3, sinkRecords, RecordElement.HEADERS);
 
     List<String> expectedKeyFiles = new ArrayList<>();
     expectedKeyFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, ".keys.avro", ZERO_PAD_FMT));
     expectedKeyFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, ".keys.avro", ZERO_PAD_FMT));
     expectedKeyFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, ".keys.avro", ZERO_PAD_FMT));
-    verifyKVH(expectedKeyFiles, 3, sinkRecords, KVHType.KEYS);
+    verifyRecordElement(expectedKeyFiles, 3, sinkRecords, RecordElement.KEYS);
   }
 
   private Struct createRecord(Schema schema, int ibase, float fbase) {
@@ -1100,7 +1119,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   // based on verify()
-  private void verifyKVH(List<String> expectedFileKeys, int expectedSize, List<SinkRecord> records, KVHType fileType)
+  private void verifyRecordElement(List<String> expectedFileKeys, int expectedSize, List<SinkRecord> records, RecordElement fileType)
       throws IOException {
 
     List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
