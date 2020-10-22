@@ -19,12 +19,21 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.services.s3.model.Tag;
 import io.confluent.common.utils.SystemTime;
+import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
+import io.confluent.connect.s3.format.RecordViewSetter;
+import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
+import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
+import io.confluent.kafka.serializers.NonRecordContainer;
+import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
+import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.easymock.EasyMock;
 import org.joda.time.DateTime;
@@ -44,7 +53,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.confluent.common.utils.MockTime;
-import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.storage.S3OutputStream;
@@ -67,11 +75,17 @@ import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class TopicPartitionWriterTest extends TestWithMockedS3 {
   // The default
   private static final String ZERO_PAD_FMT = "%010d";
+  private enum RecordElement {
+    KEYS,
+    HEADERS,
+    VALUES
+  }
 
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private S3Storage storage;
@@ -900,6 +914,108 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     verifyTags(expectedTaggedFiles);
   }
 
+  @Test
+  public void testExceptionOnNullKeys() {
+    String recordValue = "1";
+    int kafkaOffset = 1;
+    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, null,
+        Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
+
+    Exception thrownException = assertThrows(DataException.class, () -> writeRecordWithKeysAndHeaders(faultyRecord));
+    String expectedMessage = String.format("Key cannot be null for SinkRecord: %s", faultyRecord);
+    assertEquals(expectedMessage, thrownException.getMessage());
+  }
+
+  @Test
+  public void testExceptionOnEmptyHeaders() {
+    String recordValue = "1";
+    int kafkaOffset = 1;
+    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
+        Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, Collections.emptyList());
+
+    Exception thrownException = assertThrows(DataException.class, () -> writeRecordWithKeysAndHeaders(faultyRecord));
+    String expectedMessage = String.format("Headers cannot be null for SinkRecord: %s", faultyRecord);
+    assertEquals(expectedMessage, thrownException.getMessage());
+  }
+
+  @Test
+  public void testExceptionOnNullHeaders() {
+    String recordValue = "1";
+    int kafkaOffset = 1;
+    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
+        Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, null);
+
+    Exception thrownException = assertThrows(DataException.class, () -> writeRecordWithKeysAndHeaders(faultyRecord));
+    String expectedMessage = String.format("Headers cannot be null for SinkRecord: %s", faultyRecord);
+    assertEquals(expectedMessage, thrownException.getMessage());
+  }
+
+  @Test
+  public void testRecordKeysAnsHeadersWritten() throws Exception {
+    writeRecordWithKeysAndHeaders(null);
+  }
+
+  private void writeRecordWithKeysAndHeaders(SinkRecord faultyRecord) throws Exception {
+    setUp();
+    // Define the partitioner
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+
+    // setup key record provider for writing record key files.
+    RecordWriterProvider<S3SinkConnectorConfig> keyWriterProvider =
+        new AvroFormat(storage).getRecordWriterProvider();
+    ((RecordViewSetter) keyWriterProvider).setRecordView(new KeyRecordView());
+    // setup header record provider for writing record header files.
+    RecordWriterProvider<S3SinkConnectorConfig> headerWriterProvider =
+        new AvroFormat(storage).getRecordWriterProvider();
+    ((RecordViewSetter) headerWriterProvider).setRecordView(new HeaderRecordView());
+    // initialize the KVHWriterProvider with header and key writers turned on.
+    RecordWriterProvider<S3SinkConnectorConfig> writerProvider = new KeyValueHeaderRecordWriterProvider(
+        new AvroFormat(storage).getRecordWriterProvider(),
+        keyWriterProvider,
+        headerWriterProvider
+    );
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
+
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 3);
+    List<SinkRecord> sinkRecords = createSinkRecordsWithHeaders(records, "key", schema);
+
+    if (faultyRecord != null) {
+      topicPartitionWriter.buffer(faultyRecord);
+    }
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
+
+    List<String> expectedValueFiles = new ArrayList<>();
+    expectedValueFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    expectedValueFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
+    expectedValueFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
+    verifyRecordElement(expectedValueFiles, 3, sinkRecords, RecordElement.VALUES);
+
+    List<String> expectedHeaderFiles = new ArrayList<>();
+    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, ".headers.avro", ZERO_PAD_FMT));
+    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, ".headers.avro", ZERO_PAD_FMT));
+    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, ".headers.avro", ZERO_PAD_FMT));
+    verifyRecordElement(expectedHeaderFiles, 3, sinkRecords, RecordElement.HEADERS);
+
+    List<String> expectedKeyFiles = new ArrayList<>();
+    expectedKeyFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, ".keys.avro", ZERO_PAD_FMT));
+    expectedKeyFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, ".keys.avro", ZERO_PAD_FMT));
+    expectedKeyFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, ".keys.avro", ZERO_PAD_FMT));
+    verifyRecordElement(expectedKeyFiles, 3, sinkRecords, RecordElement.KEYS);
+  }
+
   private Struct createRecord(Schema schema, int ibase, float fbase) {
     return new Struct(schema)
                .put("boolean", true)
@@ -936,6 +1052,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   // Given a list of records, create a list of sink records with contiguous offsets.
+  private List<SinkRecord> createSinkRecordsWithHeaders(List<Struct> records, String key, Schema schema) {
+    return createSinkRecordsWithHeaders(records, key, schema, 0);
+  }
+
+  // Given a list of records, create a list of sink records with contiguous offsets.
   private List<SinkRecord> createSinkRecords(List<Struct> records, String key, Schema schema, int startOffset) {
     ArrayList<SinkRecord> sinkRecords = new ArrayList<>();
     for (int i = 0; i < records.size(); ++i) {
@@ -943,6 +1064,23 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
                                      i + startOffset));
     }
     return sinkRecords;
+  }
+
+  // Given a list of records, create a list of sink records with contiguous offsets.
+  private List<SinkRecord> createSinkRecordsWithHeaders(List<Struct> records, String key, Schema schema, int startOffset) {
+    ArrayList<SinkRecord> sinkRecords = new ArrayList<>();
+    for (int i = 0; i < records.size(); ++i) {
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(i),
+          i + startOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders()));
+    }
+    return sinkRecords;
+  }
+
+  private Iterable<Header> sampleHeaders() {
+    return new ConnectHeaders()
+        .addString("first-header-key", "first-header-value")
+        .addLong("second-header-key", 8L)
+        .addFloat("third-header-key", 6.5f);
   }
 
   // Given a list of records, create a list of sink records with contiguous offsets.
@@ -978,6 +1116,94 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         assertEquals(expectedRecord, avroRecord);
       }
     }
+  }
+
+  // based on verify()
+  private void verifyRecordElement(List<String> expectedFileKeys, int expectedSize, List<SinkRecord> records, RecordElement fileType)
+      throws IOException {
+
+    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<String> actualFiles;
+    switch (fileType) {
+      case KEYS:
+        actualFiles = getS3FileListKeys(summaries);
+        break;
+      case HEADERS:
+        actualFiles = getS3FileListHeaders(summaries);
+        break;
+      default:
+        actualFiles = getS3FileListValues(summaries);
+        break;
+    }
+
+    Collections.sort(actualFiles);
+    Collections.sort(expectedFileKeys);
+    assertEquals(actualFiles, expectedFileKeys);
+
+    int index = 0;
+    for (String fileKey : actualFiles) {
+      Collection<Object> actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3);
+      assertEquals(expectedSize, actualRecords.size());
+      for (Object avroRecord : actualRecords) {
+
+        SinkRecord currentRecord = records.get(index++);
+        Object expectedRecord;
+        if (fileKey.endsWith(".headers.avro")) {
+          Schema headerSchema = new HeaderRecordView().getViewSchema(currentRecord, false);
+          Object value = new HeaderRecordView().getView(currentRecord, false);
+          expectedRecord = ((NonRecordContainer) format.getAvroData().fromConnectData(headerSchema, value)).getValue();
+        } else if (fileKey.endsWith(".keys.avro")) {
+          expectedRecord = ((NonRecordContainer) format.getAvroData().fromConnectData(currentRecord.keySchema(), currentRecord.key())).getValue();
+          expectedRecord = new Utf8((String) expectedRecord); // fix assert conflicts due to java string and avro utf8
+        } else {
+          expectedRecord = format.getAvroData().fromConnectData(currentRecord.valueSchema(), currentRecord.value());
+        }
+        assertEquals(expectedRecord, avroRecord);
+      }
+    }
+  }
+
+  // whether a filename contains any of the extensions
+  private boolean filenameContainsExtensions(String filename, List<String> extensions) {
+    for (String extension : extensions){
+      if (filename.contains(extension)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // filter for values only.
+  private List<String> getS3FileListValues(List<S3ObjectSummary> summaries) {
+    List<String> excludeExtensions = Arrays.asList(".headers.avro", ".keys.avro");
+    List<String> filteredFiles = new ArrayList<>();
+    for (S3ObjectSummary summary : summaries) {
+      String fileKey = summary.getKey();
+      if (!filenameContainsExtensions(fileKey, excludeExtensions)) {
+        filteredFiles.add(fileKey);
+      }
+    }
+    return filteredFiles;
+  }
+
+  private List<String> getS3FileListHeaders(List<S3ObjectSummary> summaries) {
+    return getS3FileListFilter(summaries, ".headers.avro");
+  }
+
+  private List<String> getS3FileListKeys(List<S3ObjectSummary> summaries) {
+    return getS3FileListFilter(summaries, ".keys.avro");
+  }
+
+  // filter for keys or headers
+  private List<String> getS3FileListFilter(List<S3ObjectSummary> summaries, String extension) {
+    List<String> filteredFiles = new ArrayList<>();
+    for (S3ObjectSummary summary : summaries) {
+      String fileKey = summary.getKey();
+      if (fileKey.contains(extension)) {
+        filteredFiles.add(fileKey);
+      }
+    }
+    return filteredFiles;
   }
 
   private void verifyTags(Map<String, List<Tag>> expectedTaggedFiles)
