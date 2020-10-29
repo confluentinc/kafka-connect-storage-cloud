@@ -60,19 +60,13 @@ public abstract class BaseConnectorIT {
   protected Map<String, String> props;
 
 
-  @Before
-  public void setup() {
-    startConnect();
-    setupProperties();
-  }
-
   @After
   public void close() {
     // stop all Connect, Kafka and Zk threads.
     connect.stop();
   }
 
-  private void setupProperties() {
+  protected void setupProperties() {
     props = new HashMap<>();
     props.put(CONNECTOR_CLASS_CONFIG, S3SinkConnector.class.getName());
     props.put(TASKS_MAX_CONFIG, Integer.toString(MAX_TASKS));

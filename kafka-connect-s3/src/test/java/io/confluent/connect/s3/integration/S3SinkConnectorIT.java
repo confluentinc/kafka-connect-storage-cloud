@@ -138,6 +138,12 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   @Before
+  public void setup() {
+    startConnect();
+    setupProperties();
+  }
+
+  @Before
   public void before() {
     JsonFormatterProvider provider = new JsonFormatterProvider();
     formatter = (JsonFormatter) provider.create(Collections.singletonMap("schemas.enable", true));

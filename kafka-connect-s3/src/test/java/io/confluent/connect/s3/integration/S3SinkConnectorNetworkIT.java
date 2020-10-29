@@ -69,7 +69,6 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   public void close() {
     // delete the test bucket
     deleteBucket(S3_BUCKET);
-    stopConnect();
   }
 
   /**
@@ -77,7 +76,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
    * @throws Throwable
    */
   @Test
-  //@Ignore
+  @Ignore
   public void testToAssertConnectorAndDestinationRecords() throws Throwable {
 
     // create topics in Kafka
@@ -105,7 +104,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
    * @throws Exception
    */
   @Test
-//  @Ignore
+  @Ignore
   public void testWithRevokedWritePermissions() throws Exception {
 
     addReadWritePolicyToBucket(S3_BUCKET);
@@ -145,7 +144,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   }
 
   @Test
-  //@Ignore
+  @Ignore
   public void testWithNetworkUnavailability() throws Throwable {
     // Setup Squid Proxy Container
     setupSquidProxy();
@@ -184,7 +183,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   }
 
   @Test
-  //@Ignore
+  @Ignore
   public void testWithNetworkInterruption() throws Throwable {
     /*
      A small value is used to create enough request that the pumba container can cause network
