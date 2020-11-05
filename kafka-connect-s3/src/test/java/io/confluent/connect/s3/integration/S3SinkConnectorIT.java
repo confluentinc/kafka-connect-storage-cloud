@@ -20,6 +20,7 @@ import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.storage.common.StorageCommonConfig.STORE_URL_CONFIG;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
@@ -38,6 +39,7 @@ import io.confluent.connect.formatter.json.JsonFormatterProvider;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
+import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.findify.s3mock.S3Mock;
 import java.io.BufferedReader;
@@ -99,7 +101,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final String TEST_TOPIC_NAME = "TestTopic";
   private static final String STORAGE_CLASS_CONFIG = "storage.class";
   private static final String AVRO_EXTENSION = "avro";
-  private static final String PARQUET_EXTENSION = "parquet";
+  private static final String PARQUET_EXTENSION = "snappy.parquet";
   private static final String JSON_EXTENSION = "json";
   private static final List<String> KAFKA_TOPICS = Collections.singletonList(TEST_TOPIC_NAME);
   private static final long NUM_RECORDS_INSERT = 20;
@@ -200,7 +202,10 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     int expectedFileCount = (int) NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
     waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
 
-    assertTrue(fileNamesValid(TEST_BUCKET_NAME, TEST_TOPIC_NAME, EXPECTED_PARTITION, expectedFileExtension));
+    List<String> expectedFilenames = getExpectedFilenames(TEST_TOPIC_NAME, EXPECTED_PARTITION,
+        FLUSH_SIZE_STANDARD, NUM_RECORDS_INSERT, expectedFileExtension);
+    assertTrue(fileNamesValid(TEST_BUCKET_NAME, TEST_TOPIC_NAME, EXPECTED_PARTITION,
+        expectedFileExtension, expectedFilenames));
     assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
   }
 
@@ -238,6 +243,37 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
         .put("myFloat32", 3.2f)
         .put("myFloat64", 64.64)
         .put("myString", "theStringVal");
+  }
+
+  /**
+   * Get a list of the expected filenames for the bucket.
+   * Format: topics/s3_topic/partition=97/s3_topic+97+0000000001.avro
+   *
+   * @param topic       the test kafka topic
+   * @param partition   the expected partition for the tests
+   * @param flushSize   the flush size connector config
+   * @param numRecords  the number of records produced in the test
+   * @param extension   the expected extensions of the files
+                        including compression (snappy.parquet)
+   * @return the list of expected filenames
+   */
+  private List<String> getExpectedFilenames(String topic, int partition,
+      int flushSize, long numRecords, String extension) {
+    int expectedFileCount = (int) numRecords / flushSize;
+    List <String> expectedFiles = new ArrayList<>();
+    for (int offset = 0; offset < expectedFileCount * flushSize; offset+=flushSize) {
+      String filepath = String.format(
+          "topics/%s/partition=%d/%s+%d+%010d.%s",
+          topic,
+          partition,
+          topic,
+          partition,
+          offset,
+          extension
+      );
+      expectedFiles.add(filepath);
+    }
+    return expectedFiles;
   }
 
   /**
@@ -292,10 +328,13 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * @param expectedTopic     the expected topic in the file path and file name
    * @param expectedPartition the expected partition number in the file path and name
    * @param expectedExtension the expected extensions of the files
+   *                          including compression (snappy.parquet)
+   * @param expectedFiles     the list of expected filenames for exact comparison
    * @return whether all the files in the bucket match the expected values
    */
   private boolean fileNamesValid(String bucketName, String expectedTopic, int expectedPartition,
-      String expectedExtension) {
+      String expectedExtension, List<String> expectedFiles) {
+    List<String> actualFiles = new ArrayList<>();
     for (S3ObjectSummary file : S3Client.listObjectsV2(bucketName).getObjectSummaries()) {
       S3FileInfo fileInfo = new S3FileInfo(file.getKey());
       if (!fileInfo.namingIsValid()
@@ -305,8 +344,9 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
       ) {
         return false;
       }
+      actualFiles.add(file.getKey());
     }
-    return true;
+    return expectedFiles.equals(actualFiles);
   }
 
   /**
@@ -478,7 +518,11 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
       filenameTopic = tokens[0];
       filenamePartition = Integer.parseInt(tokens[1]);
       offset = Long.parseLong(tokens[2]);
-      extension = tokens[tokens.length - 1]; //parquets have .snappy.parquet, use last token
+      extension = tokens[3];
+      //parquets have .snappy.parquet or .[compression].parquet
+      if (tokens.length == 5) {
+        extension += "." + tokens[4];
+      }
     }
 
     /**
