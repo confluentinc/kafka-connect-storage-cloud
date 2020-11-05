@@ -23,21 +23,21 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.ListObjectsV2Request;
+import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import io.confluent.common.utils.IntegrationTest;
-import io.confluent.connect.s3.S3SinkConnector;
-
-import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+
+import io.confluent.connect.s3.S3SinkConnector;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
-import org.junit.Before;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,20 +45,14 @@ import org.slf4j.LoggerFactory;
 @Category(IntegrationTest.class)
 public abstract class BaseConnectorIT {
 
-
   private static final Logger log = LoggerFactory.getLogger(BaseConnectorIT.class);
-
-  protected static final String AWS_CRED_PATH = System.getProperty("user.home") + "/.aws/credentials";
-  protected static final String JENKINS_HOME = "JENKINS_HOME";
-
-  protected static final String CONNECTOR_CLASS_NAME = "S3SinkConnector";
   protected static final int MAX_TASKS = 3;
   private static final long CONNECTOR_STARTUP_DURATION_MS = TimeUnit.MINUTES.toMillis(1);
   private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(30);
 
+  protected static AmazonS3 S3Client;
   protected EmbeddedConnectCluster connect;
   protected Map<String, String> props;
-
 
   @After
   public void close() {
@@ -109,19 +103,14 @@ public abstract class BaseConnectorIT {
    * Wait up to {@link #S3_TIMEOUT_MS maximum time limit} for the connector with the given name to
    * write the specified number of files.
    *
-   * @param S3Client   the S3 client connection
    * @param bucketName the name of the S3 destination bucket
    * @param numFiles   the number of files expected
    * @return the time this method discovered the connector has written the files
    * @throws InterruptedException if this was interrupted
    */
-  protected long waitForFilesInBucket(
-      AmazonS3 S3Client,
-      String bucketName,
-      int numFiles
-  ) throws InterruptedException {
+  protected long waitForFilesInBucket(String bucketName, int numFiles) throws InterruptedException {
     TestUtils.waitForCondition(
-        () -> assertFileCountInBucket(S3Client, bucketName, numFiles).orElse(false),
+        () -> assertFileCountInBucket(bucketName, numFiles).orElse(false),
         S3_TIMEOUT_MS,
         "Files not written to S3 bucket in time."
     );
@@ -157,13 +146,19 @@ public abstract class BaseConnectorIT {
    * @param expectedNumFiles the number of files expected
    * @return true if the number of files in the bucket match the expected number; false otherwise
    */
-  protected Optional<Boolean> assertFileCountInBucket(
-      AmazonS3 S3Client,
-      String bucketName,
-      int expectedNumFiles
-  ) {
+  protected Optional<Boolean> assertFileCountInBucket(String bucketName, int expectedNumFiles) {
+
+    int fileCount = 0;
+    ListObjectsV2Request request = new ListObjectsV2Request().withBucketName(bucketName);
+    ListObjectsV2Result result;
     try {
-      int fileCount = S3Client.listObjectsV2(bucketName).getKeyCount();
+      do {
+        result = S3Client.listObjectsV2(request);
+        fileCount += result.getKeyCount();
+        String token = result.getNextContinuationToken();
+        // To get the next batch of files.
+        request.setContinuationToken(token);
+      } while(result.isTruncated());
       return Optional.of(fileCount == expectedNumFiles);
     } catch (Exception e) {
       log.warn("Could not check file count in bucket: {}", bucketName);

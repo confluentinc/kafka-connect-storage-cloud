@@ -31,13 +31,18 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.PART_SIZE_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
+import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
+import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
+import static io.confluent.connect.storage.partitioner.PartitionerConfig.PARTITIONER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.*;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Integration test for S3 Sink Connector.<p>
@@ -50,7 +55,8 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorIT.class);
 
   private static final String CONNECTOR_NAME = "s3-sink-connector";
-  private static final long NUM_RECORDS_PRODUCED = 1000;
+  private static final String STORAGE_CLASS_CONFIG = "storage.class";
+  private static final int NUM_RECORDS_PRODUCED = 1000;
   private static final int TASKS_MAX = 1;
   private static final List<String> KAFKA_TOPICS = Arrays.asList("topic1");
   private static final int FLUSH_SIZE = 200;
@@ -92,10 +98,11 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
 
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
-    waitForConnectorToCompleteSendingRecords(totalNoOfRecordsProduced, FLUSH_SIZE, S3_BUCKET);
+    int expectedFileCount = totalNoOfRecordsProduced / FLUSH_SIZE;
+    waitForFilesInBucket(S3_BUCKET, expectedFileCount);
 
     // assert records
-    assertEquals(totalNoOfRecordsProduced / FLUSH_SIZE, getNoOfObjectsInS3(S3_BUCKET));
+    assertFileCountInBucket(S3_BUCKET, expectedFileCount);
   }
 
   /**
@@ -105,7 +112,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
    */
   @Test
   @Ignore
-  public void testWithRevokedWritePermissions() throws Exception {
+  public void testWithRevokedWritePermissions() throws InterruptedException {
 
     addReadWritePolicyToBucket(S3_BUCKET);
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
@@ -123,7 +130,9 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
 
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
-    waitForConnectorToCompleteSendingRecords(totalNoOfRecordsProduced, FLUSH_SIZE, S3_BUCKET);
+    int expectedFileCount = totalNoOfRecordsProduced / FLUSH_SIZE;
+    waitForFilesInBucket(S3_BUCKET, expectedFileCount);
+    int fileCountBeforeRevokingPermission = expectedFileCount;
 
     // revoke read/write permission
     alterReadWritePolicyOfBucket(S3_BUCKET);
@@ -134,13 +143,9 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     Thread.sleep(10000);
     // produce more records to kafka
     totalNoOfRecordsProduced += sendRecordsToKafka();
-    int idealObjectCountS3 = totalNoOfRecordsProduced / FLUSH_SIZE;
-    long actualObjectWrittenS3 = NUM_RECORDS_PRODUCED / FLUSH_SIZE;
-    assertNotEquals(idealObjectCountS3,
-        waitForFetchingStorageObjectsInS3(S3_BUCKET, idealObjectCountS3));
-    assertEquals(actualObjectWrittenS3,
-        waitForFetchingStorageObjectsInS3(S3_BUCKET, idealObjectCountS3));
-
+    expectedFileCount = totalNoOfRecordsProduced / FLUSH_SIZE;
+    assertFalse(assertFileCountInBucket(S3_BUCKET, expectedFileCount).get());
+    assertTrue(assertFileCountInBucket(S3_BUCKET, fileCountBeforeRevokingPermission).get());
   }
 
   @Test
@@ -163,23 +168,21 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
 
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
+    int expectedFileCount = totalNoOfRecordsProduced / FLUSH_SIZE;
+    waitForFilesInBucket(S3_BUCKET, expectedFileCount);
 
     // assert records
-    int objectCountBeforeInterruption = totalNoOfRecordsProduced / FLUSH_SIZE;
-    assertEquals(objectCountBeforeInterruption,
-        waitForFetchingStorageObjectsInS3(S3_BUCKET, objectCountBeforeInterruption));
+    int objectCountBeforeInterruption = expectedFileCount;
+    assertTrue(assertFileCountInBucket(S3_BUCKET, objectCountBeforeInterruption).get());
 
     // Shutting down proxy to emulate network unavailability
     shutdownSquidProxy();
 
     totalNoOfRecordsProduced += sendRecordsToKafka();
-    int idealObjectCount = totalNoOfRecordsProduced / FLUSH_SIZE;
+    expectedFileCount = totalNoOfRecordsProduced / FLUSH_SIZE;
 
-    // asserting no additional records are added.
-    assertNotEquals(totalNoOfRecordsProduced / FLUSH_SIZE,
-        waitForFetchingStorageObjectsInS3(S3_BUCKET, idealObjectCount));
-    assertEquals(objectCountBeforeInterruption,
-        waitForFetchingStorageObjectsInS3(S3_BUCKET, idealObjectCount));
+    assertFalse(assertFileCountInBucket(S3_BUCKET, expectedFileCount).get());
+    assertTrue(assertFileCountInBucket(S3_BUCKET, objectCountBeforeInterruption).get());
   }
 
   @Test
@@ -199,7 +202,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     int totalNoOfRecordsProduced = sendRecordsToKafka();
 
     Map<String, String> props = getConnectorProps();
-    props.put("flush.size", Integer.toString(flushSize));
+    props.put(FLUSH_SIZE_CONFIG, Integer.toString(flushSize));
 
     // start a sink connector
     connect.configureConnector(CONNECTOR_NAME, props);
@@ -207,35 +210,36 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
 
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
-    waitForConnectorToCompleteSendingRecords(totalNoOfRecordsProduced, flushSize, S3_BUCKET);
+    int expectedFileCount = totalNoOfRecordsProduced / flushSize;
+    waitForFilesInBucket(S3_BUCKET, expectedFileCount);
     pumbaPauseContainer.close();
     // assert records
-    assertEquals(totalNoOfRecordsProduced / flushSize, getNoOfObjectsInS3(S3_BUCKET));
+    assertTrue(assertFileCountInBucket(S3_BUCKET, expectedFileCount ).get());
     shutdownSquidProxy();
   }
 
   private void addReadWritePolicyToBucket(String bucketName) {
 
     Statement allowRestrictedWriteStatement = new Statement(Statement.Effect.Allow)
-      .withPrincipals(new Principal(System.getenv("SECONDARY_USER_ACCOUNT_ID")))
-      .withActions(S3Actions.GetObject, S3Actions.PutObject)
-      .withResources(new S3ObjectResource(bucketName, "*"));
+        .withPrincipals(new Principal(System.getenv("SECONDARY_USER_ACCOUNT_ID")))
+        .withActions(S3Actions.GetObject, S3Actions.PutObject)
+        .withResources(new S3ObjectResource(bucketName, "*"));
 
     Policy policy = new Policy().withStatements(allowRestrictedWriteStatement);
 
-    s3RootClient.setBucketPolicy(bucketName, policy.toJson());
+    S3Client.setBucketPolicy(bucketName, policy.toJson());
   }
 
   private void alterReadWritePolicyOfBucket(String bucketName) {
 
     Statement allowRestrictedWriteStatement = new Statement(Statement.Effect.Allow)
-      .withPrincipals(new Principal(System.getenv("SECONDARY_USER_ACCOUNT_ID")))
-      .withActions(S3Actions.GetObject)
-      .withResources(new S3ObjectResource(bucketName, "*"));
+        .withPrincipals(new Principal(System.getenv("SECONDARY_USER_ACCOUNT_ID")))
+        .withActions(S3Actions.GetObject)
+        .withResources(new S3ObjectResource(bucketName, "*"));
 
     Policy policy = new Policy().withStatements(allowRestrictedWriteStatement);
 
-    s3RootClient.setBucketPolicy(bucketName, policy.toJson());
+    S3Client.setBucketPolicy(bucketName, policy.toJson());
   }
 
   private int sendRecordsToKafka() {
@@ -258,18 +262,18 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     props.put(CONNECTOR_CLASS_CONFIG, "io.confluent.connect.s3.S3SinkConnector");
     props.put(TASKS_MAX_CONFIG, Integer.toString(TASKS_MAX));
 
-    props.put("s3.region", "ap-south-1");
-    props.put("s3.part.size", "5242880");
-    props.put("s3.bucket.name", S3_BUCKET);
-    props.put("flush.size", Integer.toString(FLUSH_SIZE));
-    props.put("storage.class", "io.confluent.connect.s3.storage.S3Storage");
-    props.put("partitioner.class", "io.confluent.connect.storage.partitioner.DefaultPartitioner");
+    props.put(REGION_CONFIG, "ap-south-1");
+    props.put(PART_SIZE_CONFIG, "5242880");
+    props.put(S3_BUCKET_CONFIG, S3_BUCKET);
+    props.put(FLUSH_SIZE_CONFIG , Integer.toString(FLUSH_SIZE));
+    props.put(STORAGE_CLASS_CONFIG, "io.confluent.connect.s3.storage.S3Storage");
+    props.put(PARTITIONER_CLASS_CONFIG, "io.confluent.connect.storage.partitioner.DefaultPartitioner");
 
     // converters
     props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
     props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
 
-    props.put("format.class", JSON_FORMAT_CLASS);
+    props.put(FORMAT_CLASS_CONFIG, JSON_FORMAT_CLASS);
     // license properties
     return props;
   }
@@ -277,35 +281,32 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   private void deleteBucket(String bucketName) {
     emptyBucket(bucketName);
     // After all objects are deleted, delete the bucket.
-    s3RootClient.deleteBucket(bucketName);
+    S3Client.deleteBucket(bucketName);
   }
 
   private void emptyBucket(String bucketName) {
     // delete all objects to empty bucket
-    ObjectListing objectListing = s3RootClient.listObjects(bucketName);
+    ObjectListing objectListing = S3Client.listObjects(bucketName);
     while (true) {
-      Iterator<S3ObjectSummary> objIter = objectListing.getObjectSummaries().iterator();
-      while (objIter.hasNext()) {
-        s3RootClient.deleteObject(bucketName, objIter.next().getKey());
+      for (S3ObjectSummary s3ObjectSummary : objectListing.getObjectSummaries()) {
+        S3Client.deleteObject(bucketName, s3ObjectSummary.getKey());
       }
 
       if (objectListing.isTruncated()) {
-        objectListing = s3RootClient.listNextBatchOfObjects(objectListing);
+        objectListing = S3Client.listNextBatchOfObjects(objectListing);
       } else {
         break;
       }
     }
     // delete versioned objects
-    VersionListing versionList = s3RootClient.listVersions(new ListVersionsRequest().withBucketName(bucketName));
+    VersionListing versionList = S3Client.listVersions(new ListVersionsRequest().withBucketName(bucketName));
     while (true) {
-      Iterator<S3VersionSummary> versionIter = versionList.getVersionSummaries().iterator();
-      while (versionIter.hasNext()) {
-        S3VersionSummary vs = versionIter.next();
-        s3RootClient.deleteVersion(bucketName, vs.getKey(), vs.getVersionId());
+      for (S3VersionSummary vs : versionList.getVersionSummaries()) {
+        S3Client.deleteVersion(bucketName, vs.getKey(), vs.getVersionId());
       }
 
       if (versionList.isTruncated()) {
-        versionList = s3RootClient.listNextBatchOfVersions(versionList);
+        versionList = S3Client.listNextBatchOfVersions(versionList);
       } else {
         break;
       }
@@ -313,18 +314,17 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   }
 
   private void createS3Bucket(String bucketName) {
-    if (!s3RootClient.doesBucketExistV2(bucketName)) {
-      s3RootClient.createBucket(new CreateBucketRequest(bucketName));
+    if (!S3Client.doesBucketExistV2(bucketName)) {
+      S3Client.createBucket(new CreateBucketRequest(bucketName));
     }
   }
 
-  public static void setupSquidProxy() {
-    //squid = new SquidProxy("confluent-docker-internal.jfrog.io/confluentinc/connect-squid:1.0.0", "NONE");
-    squid = new SquidProxy("connect-squid-local:1.0.0", "NONE");
+  private static void setupSquidProxy() {
+    squid = new SquidProxy("confluent-docker-internal.jfrog.io/confluentinc/connect-squid:1.0.0", "NONE");
     squid.start();
   }
 
-  public static void shutdownSquidProxy() {
+  private static void shutdownSquidProxy() {
     if (squid != null) {
       squid.stop();
     }

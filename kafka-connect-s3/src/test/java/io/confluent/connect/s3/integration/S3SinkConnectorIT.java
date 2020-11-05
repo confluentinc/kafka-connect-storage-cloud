@@ -83,7 +83,6 @@ import org.slf4j.LoggerFactory;
 public class S3SinkConnectorIT extends BaseConnectorIT {
 
   private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorIT.class);
-  private static AmazonS3 S3Client;
   private static final ObjectMapper jsonMapper = new ObjectMapper();
   private static final String JENKINS_HOME = "JENKINS_HOME";
   // AWS configs
@@ -206,7 +205,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
     log.info("Waiting for files in S3...");
     int expectedFileCount = (int) NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
-    waitForFilesInBucket(S3Client, TEST_BUCKET_NAME, expectedFileCount);
+    waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
 
     List<String> expectedFilenames = getExpectedFilenames(TEST_TOPIC_NAME, EXPECTED_PARTITION,
         FLUSH_SIZE_STANDARD, NUM_RECORDS_INSERT, expectedFileExtension);
