@@ -203,8 +203,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
     List<String> expectedFilenames = getExpectedFilenames(TEST_TOPIC_NAME, EXPECTED_PARTITION,
         FLUSH_SIZE_STANDARD, NUM_RECORDS_INSERT, expectedFileExtension);
-    assertTrue(fileNamesValid(TEST_BUCKET_NAME, TEST_TOPIC_NAME, EXPECTED_PARTITION,
-        expectedFileExtension, expectedFilenames));
+    assertTrue(fileNamesValid(TEST_BUCKET_NAME, expectedFilenames));
     assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
   }
 
@@ -332,25 +331,12 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * Check if the file names in the bucket have the expected namings.
    *
    * @param bucketName        the name of the bucket with the files
-   * @param expectedTopic     the expected topic in the file path and file name
-   * @param expectedPartition the expected partition number in the file path and name
-   * @param expectedExtension the expected extensions of the files
-   *                          including compression (snappy.parquet)
    * @param expectedFiles     the list of expected filenames for exact comparison
    * @return whether all the files in the bucket match the expected values
    */
-  private boolean fileNamesValid(String bucketName, String expectedTopic, int expectedPartition,
-      String expectedExtension, List<String> expectedFiles) {
+  private boolean fileNamesValid(String bucketName, List<String> expectedFiles) {
     List<String> actualFiles = new ArrayList<>();
     for (S3ObjectSummary file : S3Client.listObjectsV2(bucketName).getObjectSummaries()) {
-      S3FileInfo fileInfo = new S3FileInfo(file.getKey());
-      if (!fileInfo.namingIsValid()
-          || !fileInfo.filenameTopic.equals(expectedTopic)
-          || fileInfo.directoryPartition != expectedPartition
-          || !fileInfo.extension.equals(expectedExtension)
-      ) {
-        return false;
-      }
       actualFiles.add(file.getKey());
     }
     return expectedFiles.equals(actualFiles);
@@ -533,13 +519,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
       if (tokens.length == 5) {
         extension += "." + tokens[4];
       }
-    }
-
-    /**
-     * Check whether the file name is consistent with the namings in the path.
-     */
-    public boolean namingIsValid() {
-      return directoryTopic.equals(filenameTopic) && directoryPartition == filenamePartition;
     }
   }
 }
