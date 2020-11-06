@@ -351,8 +351,11 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * @param expectedRow         the expected row data in each file
    * @return whether every row of the files read equals the expected row
    */
-  private boolean fileContentsAsExpected(String bucketName, int expectedRowsPerFile,
-      Struct expectedRow) {
+  private boolean fileContentsAsExpected(
+      String bucketName,
+      int expectedRowsPerFile,
+      Struct expectedRow
+  ) {
     log.info("expectedRow: {}", expectedRow);
     for (S3ObjectSummary file : S3Client.listObjectsV2(bucketName).getObjectSummaries()) {
       String destinationPath = TEST_DOWNLOAD_PATH + file.getKey();
