@@ -91,7 +91,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final String AWS_REGION = "us-west-2";
   private static final String MOCK_S3_URL = "http://localhost:8001";
   private static final int MOCK_S3_PORT = 8001;
-  private static final String TEST_BUCKET_NAME = "connect-s3-integration-testing-" + System.currentTimeMillis();
+  private static final String TEST_BUCKET_NAME =
+      "connect-s3-integration-testing-" + System.currentTimeMillis();
   // local dir configs
   private static final String TEST_RESOURCES_PATH = "src/test/resources/";
   private static final String TEST_DOWNLOAD_PATH = TEST_RESOURCES_PATH + "downloaded-files/";
@@ -248,14 +249,14 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   /**
    * Get a list of the expected filenames for the bucket.
+   * <p>
    * Format: topics/s3_topic/partition=97/s3_topic+97+0000000001.avro
    *
-   * @param topic       the test kafka topic
-   * @param partition   the expected partition for the tests
-   * @param flushSize   the flush size connector config
-   * @param numRecords  the number of records produced in the test
-   * @param extension   the expected extensions of the files
-                        including compression (snappy.parquet)
+   * @param topic      the test kafka topic
+   * @param partition  the expected partition for the tests
+   * @param flushSize  the flush size connector config
+   * @param numRecords the number of records produced in the test
+   * @param extension  the expected extensions of the files including compression (snappy.parquet)
    * @return the list of expected filenames
    */
   private List<String> getExpectedFilenames(
@@ -266,8 +267,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
       String extension
   ) {
     int expectedFileCount = (int) numRecords / flushSize;
-    List <String> expectedFiles = new ArrayList<>();
-    for (int offset = 0; offset < expectedFileCount * flushSize; offset+=flushSize) {
+    List<String> expectedFiles = new ArrayList<>();
+    for (int offset = 0; offset < expectedFileCount * flushSize; offset += flushSize) {
       String filepath = String.format(
           "topics/%s/partition=%d/%s+%d+%010d.%s",
           topic,
@@ -330,8 +331,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   /**
    * Check if the file names in the bucket have the expected namings.
    *
-   * @param bucketName        the name of the bucket with the files
-   * @param expectedFiles     the list of expected filenames for exact comparison
+   * @param bucketName    the name of the bucket with the files
+   * @param expectedFiles the list of expected filenames for exact comparison
    * @return whether all the files in the bucket match the expected values
    */
   private boolean fileNamesValid(String bucketName, List<String> expectedFiles) {
@@ -359,8 +360,9 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
       log.info("Saving file to : {}", destinationPath);
       S3Client.getObject(new GetObjectRequest(bucketName, file.getKey()), downloadedFile);
 
-      String fileExtension = new S3FileInfo(file.getKey()).extension;
-      List<JsonNode> downloadedFileContents = contentGetters.get(fileExtension).apply(destinationPath);
+      String fileExtension = getExtensionFromKey(file.getKey());
+      List<JsonNode> downloadedFileContents = contentGetters.get(fileExtension)
+          .apply(destinationPath);
       if (!fileContentsMatchExpected(downloadedFileContents, expectedRowsPerFile, expectedRow)) {
         return false;
       }
@@ -486,39 +488,25 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   /**
-   * A utility class to keep tack of the details about a file in S3.
+   * Get the file extension from the S3 Object key
    * <p>
-   * Parse an S3 key file into member fields. ex.: /topics/s3_topic/partition=97/s3_topic+97+0000000001.avro
+   * ex.: /topics/s3_topic/partition=97/s3_topic+97+0000000001.avro
+   *
+   * @param S3FileKey the object file key
+   * @return the extension, may be .avro, .json, or .snappy.parquet,
    */
-  static class S3FileInfo {
-
-    /* The topic name parsed from the file path */
-    String directoryTopic;
-    /* The topic name parsed from the file name */
-    String filenameTopic;
-    /* The extension parsed from the file name */
-    String extension;
-    /* The partition number parsed from the path */
-    int directoryPartition;
-    /* The partition number parsed from the file name */
-    int filenamePartition;
-    /* The offset parsed from the file name */
-    long offset;
-
-    public S3FileInfo(String S3FileKey) {
-      String[] path = S3FileKey.trim().split("/");
-      directoryTopic = path[1];
-      directoryPartition = Integer.parseInt(path[2].split("=")[1]);
-      String fileName = path[3];
-      String[] tokens = fileName.split("[+.]");
-      filenameTopic = tokens[0];
-      filenamePartition = Integer.parseInt(tokens[1]);
-      offset = Long.parseLong(tokens[2]);
-      extension = tokens[3];
-      //parquets have .snappy.parquet or .[compression].parquet
-      if (tokens.length == 5) {
-        extension += "." + tokens[4];
-      }
+  private String getExtensionFromKey(String S3FileKey) {
+    String[] tokens = S3FileKey.split("\\.");
+    if (tokens.length < 2) {
+      throw new RuntimeException("Could not parse extension from filename.");
     }
+
+    String extension = tokens[1];
+    // parquets have .snappy.parquet or .[compression].parquet
+    if (tokens.length == 3) {
+      extension += "." + tokens[2];
+    }
+
+    return extension;
   }
 }
