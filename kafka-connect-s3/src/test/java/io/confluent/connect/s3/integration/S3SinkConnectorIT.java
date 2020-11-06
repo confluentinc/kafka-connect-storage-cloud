@@ -20,7 +20,6 @@ import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.storage.common.StorageCommonConfig.STORE_URL_CONFIG;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
@@ -39,7 +38,6 @@ import io.confluent.connect.formatter.json.JsonFormatterProvider;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
-import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.findify.s3mock.S3Mock;
 import java.io.BufferedReader;
@@ -85,6 +83,7 @@ import org.slf4j.LoggerFactory;
 public class S3SinkConnectorIT extends BaseConnectorIT {
 
   private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorIT.class);
+  private static AmazonS3 S3Client;
   private static final ObjectMapper jsonMapper = new ObjectMapper();
   private static final String JENKINS_HOME = "JENKINS_HOME";
   // AWS configs
@@ -163,21 +162,21 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   @Test
-  public void testBasicFilesWrittenToBucketAvro() throws Throwable {
+  public void testFilesWrittenToBucketAvro() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
     testBasicRecordsWritten(AVRO_EXTENSION);
   }
 
   @Test
-  public void testBasicFilesWrittenToBucketParquet() throws Throwable {
+  public void testFilesWrittenToBucketParquet() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
     testBasicRecordsWritten(PARQUET_EXTENSION);
   }
 
   @Test
-  public void testBasicFilesWrittenToBucketJson() throws Throwable {
+  public void testFilesWrittenToBucketJson() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
     testBasicRecordsWritten(JSON_EXTENSION);
@@ -200,7 +199,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
     log.info("Waiting for files in S3...");
     int expectedFileCount = (int) NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
-    waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
+    waitForFilesInBucket(S3Client, TEST_BUCKET_NAME, expectedFileCount);
 
     List<String> expectedFilenames = getExpectedFilenames(TEST_TOPIC_NAME, EXPECTED_PARTITION,
         FLUSH_SIZE_STANDARD, NUM_RECORDS_INSERT, expectedFileExtension);
@@ -209,8 +208,11 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
   }
 
-  private SinkRecord getSampleRecordWithOffset(Schema recordValueSchema, Struct recordValueStruct,
-      long offset) {
+  private SinkRecord getSampleRecordWithOffset(
+      Schema recordValueSchema,
+      Struct recordValueStruct,
+      long offset
+  ) {
     return new SinkRecord(
         TEST_TOPIC_NAME,
         1,
@@ -257,8 +259,13 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
                         including compression (snappy.parquet)
    * @return the list of expected filenames
    */
-  private List<String> getExpectedFilenames(String topic, int partition,
-      int flushSize, long numRecords, String extension) {
+  private List<String> getExpectedFilenames(
+      String topic,
+      int partition,
+      int flushSize,
+      long numRecords,
+      String extension
+  ) {
     int expectedFileCount = (int) numRecords / flushSize;
     List <String> expectedFiles = new ArrayList<>();
     for (int offset = 0; offset < expectedFileCount * flushSize; offset+=flushSize) {
@@ -384,8 +391,11 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * @param expectedRow         the expected values of each row
    * @return whether the file contents match the expected row
    */
-  private boolean fileContentsMatchExpected(List<JsonNode> fileContents, int expectedRowsPerFile,
-      Struct expectedRow) {
+  private boolean fileContentsMatchExpected(
+      List<JsonNode> fileContents,
+      int expectedRowsPerFile,
+      Struct expectedRow
+  ) {
     if (fileContents.size() != expectedRowsPerFile) {
       log.error("Number of rows in file do not match the expected count, actual: {}, expected: {}",
           fileContents.size(), expectedRowsPerFile);
