@@ -496,17 +496,10 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * @return the extension, may be .avro, .json, or .snappy.parquet,
    */
   private String getExtensionFromKey(String S3FileKey) {
-    String[] tokens = S3FileKey.split("\\.");
+    String[] tokens = S3FileKey.split("\\.", 2);
     if (tokens.length < 2) {
       throw new RuntimeException("Could not parse extension from filename.");
     }
-
-    String extension = tokens[1];
-    // parquets have .snappy.parquet or .[compression].parquet
-    if (tokens.length == 3) {
-      extension += "." + tokens[2];
-    }
-
-    return extension;
+    return tokens[1];
   }
 }
