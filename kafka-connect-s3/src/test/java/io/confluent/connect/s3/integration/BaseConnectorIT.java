@@ -51,6 +51,8 @@ public abstract class BaseConnectorIT {
   private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(30);
 
   protected static AmazonS3 S3Client;
+  protected static final String TEST_BUCKET_NAME =
+      "connect-s3-integration-testing-" + System.currentTimeMillis();
   protected EmbeddedConnectCluster connect;
   protected Map<String, String> props;
 

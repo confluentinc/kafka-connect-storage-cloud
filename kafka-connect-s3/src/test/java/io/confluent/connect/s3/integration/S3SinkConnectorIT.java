@@ -90,8 +90,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final String AWS_REGION = "us-west-2";
   private static final String MOCK_S3_URL = "http://localhost:8001";
   private static final int MOCK_S3_PORT = 8001;
-  private static final String TEST_BUCKET_NAME =
-      "connect-s3-integration-testing-" + System.currentTimeMillis();
   // local dir configs
   private static final String TEST_RESOURCES_PATH = "src/test/resources/";
   private static final String TEST_DOWNLOAD_PATH = TEST_RESOURCES_PATH + "downloaded-files/";

@@ -67,14 +67,14 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     startConnect();
     createS3RootClient();
     // create the test bucket
-    createS3Bucket(S3_BUCKET);
+    createS3Bucket(TEST_BUCKET_NAME);
   }
 
 
   @After
   public void close() {
     // delete the test bucket
-    deleteBucket(S3_BUCKET);
+    deleteBucket(TEST_BUCKET_NAME);
   }
 
   /**
@@ -99,10 +99,10 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
 
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
     int expectedFileCount = totalNoOfRecordsProduced / FLUSH_SIZE;
-    waitForFilesInBucket(S3_BUCKET, expectedFileCount);
+    waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
 
     // assert records
-    assertFileCountInBucket(S3_BUCKET, expectedFileCount);
+    assertFileCountInBucket(TEST_BUCKET_NAME, expectedFileCount);
   }
 
   /**
@@ -114,7 +114,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   @Ignore
   public void testWithRevokedWritePermissions() throws InterruptedException {
 
-    addReadWritePolicyToBucket(S3_BUCKET);
+    addReadWritePolicyToBucket(TEST_BUCKET_NAME);
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
 
     // send records to kafka
@@ -131,11 +131,11 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
 
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
     int expectedFileCount = totalNoOfRecordsProduced / FLUSH_SIZE;
-    waitForFilesInBucket(S3_BUCKET, expectedFileCount);
+    waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
     int fileCountBeforeRevokingPermission = expectedFileCount;
 
     // revoke read/write permission
-    alterReadWritePolicyOfBucket(S3_BUCKET);
+    alterReadWritePolicyOfBucket(TEST_BUCKET_NAME);
     /*
      Intentional sleep added in order for the bucket permission to be altered to read only to
      come into affect.
@@ -144,8 +144,8 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     // produce more records to kafka
     totalNoOfRecordsProduced += sendRecordsToKafka();
     expectedFileCount = totalNoOfRecordsProduced / FLUSH_SIZE;
-    assertFalse(assertFileCountInBucket(S3_BUCKET, expectedFileCount).get());
-    assertTrue(assertFileCountInBucket(S3_BUCKET, fileCountBeforeRevokingPermission).get());
+    assertFalse(assertFileCountInBucket(TEST_BUCKET_NAME, expectedFileCount).get());
+    assertTrue(assertFileCountInBucket(TEST_BUCKET_NAME, fileCountBeforeRevokingPermission).get());
   }
 
   @Test
@@ -169,11 +169,11 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
 
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
     int expectedFileCount = totalNoOfRecordsProduced / FLUSH_SIZE;
-    waitForFilesInBucket(S3_BUCKET, expectedFileCount);
+    waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
 
     // assert records
     int objectCountBeforeInterruption = expectedFileCount;
-    assertTrue(assertFileCountInBucket(S3_BUCKET, objectCountBeforeInterruption).get());
+    assertTrue(assertFileCountInBucket(TEST_BUCKET_NAME, objectCountBeforeInterruption).get());
 
     // Shutting down proxy to emulate network unavailability
     shutdownSquidProxy();
@@ -181,8 +181,8 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     totalNoOfRecordsProduced += sendRecordsToKafka();
     expectedFileCount = totalNoOfRecordsProduced / FLUSH_SIZE;
 
-    assertFalse(assertFileCountInBucket(S3_BUCKET, expectedFileCount).get());
-    assertTrue(assertFileCountInBucket(S3_BUCKET, objectCountBeforeInterruption).get());
+    assertFalse(assertFileCountInBucket(TEST_BUCKET_NAME, expectedFileCount).get());
+    assertTrue(assertFileCountInBucket(TEST_BUCKET_NAME, objectCountBeforeInterruption).get());
   }
 
   @Test
@@ -211,10 +211,10 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
 
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
     int expectedFileCount = totalNoOfRecordsProduced / flushSize;
-    waitForFilesInBucket(S3_BUCKET, expectedFileCount);
+    waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
     pumbaPauseContainer.close();
     // assert records
-    assertTrue(assertFileCountInBucket(S3_BUCKET, expectedFileCount ).get());
+    assertTrue(assertFileCountInBucket(TEST_BUCKET_NAME, expectedFileCount ).get());
     shutdownSquidProxy();
   }
 
@@ -264,7 +264,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
 
     props.put(REGION_CONFIG, "ap-south-1");
     props.put(PART_SIZE_CONFIG, "5242880");
-    props.put(S3_BUCKET_CONFIG, S3_BUCKET);
+    props.put(S3_BUCKET_CONFIG, TEST_BUCKET_NAME);
     props.put(FLUSH_SIZE_CONFIG , Integer.toString(FLUSH_SIZE));
     props.put(STORAGE_CLASS_CONFIG, "io.confluent.connect.s3.storage.S3Storage");
     props.put(PARTITIONER_CLASS_CONFIG, "io.confluent.connect.storage.partitioner.DefaultPartitioner");

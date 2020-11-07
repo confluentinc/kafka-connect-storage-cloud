@@ -23,7 +23,6 @@ public abstract class BaseConnectorNetworkIT extends BaseConnectorIT {
 
   protected static final long CONSUME_MAX_DURATION_MS = TimeUnit.MINUTES.toMillis(8);
   protected static final String JSON_FORMAT_CLASS = "io.confluent.connect.s3.format.json.JsonFormat";
-  protected static final String S3_BUCKET = "sink-test-bucket";
 
   protected static PumbaPauseContainer pumbaPauseContainer;
 
