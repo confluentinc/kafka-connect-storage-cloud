@@ -26,12 +26,11 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import io.confluent.common.utils.IntegrationTest;
+import io.confluent.connect.s3.S3SinkConnector;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
-
-import io.confluent.connect.s3.S3SinkConnector;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -46,6 +45,7 @@ import org.slf4j.LoggerFactory;
 public abstract class BaseConnectorIT {
 
   private static final Logger log = LoggerFactory.getLogger(BaseConnectorIT.class);
+
   protected static final int MAX_TASKS = 3;
   private static final long CONNECTOR_STARTUP_DURATION_MS = TimeUnit.MINUTES.toMillis(1);
   private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(30);

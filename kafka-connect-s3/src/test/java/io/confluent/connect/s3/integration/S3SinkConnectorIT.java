@@ -212,8 +212,11 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
 
-  private SinkRecord getSampleRecordWithOffset(Schema recordValueSchema, Struct recordValueStruct,
-      long offset) {
+  private SinkRecord getSampleRecordWithOffset(
+      Schema recordValueSchema,
+      Struct recordValueStruct,
+      long offset
+  ) {
     return new SinkRecord(
         TEST_TOPIC_NAME,
         1,
