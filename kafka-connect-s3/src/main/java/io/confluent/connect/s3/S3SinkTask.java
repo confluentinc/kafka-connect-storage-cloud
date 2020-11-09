@@ -124,7 +124,8 @@ public class S3SinkTask extends SinkTask {
         }
       } catch (NoSuchMethodError | NoClassDefFoundError | UnsupportedOperationException e) {
         // Will occur in Connect runtimes earlier than 2.6
-        log.warn("AK versions prior to 2.6 do not support the errant record reporter");
+        log.warn("Connect versions prior to Apache Kafka 2.6 do not support "
+            + "the errant record reporter");
       }
 
       log.info("Started S3 connector task with assigned partitions: {}",
