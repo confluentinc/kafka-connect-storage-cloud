@@ -22,6 +22,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
 import org.apache.kafka.connect.errors.SchemaProjectorException;
+import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.joda.time.DateTime;
@@ -91,24 +92,31 @@ public class TopicPartitionWriter {
   private DateTimeZone timeZone;
   private final S3SinkConnectorConfig connectorConfig;
   private static final Time SYSTEM_TIME = new SystemTime();
+  private ErrantRecordReporter reporter;
 
-  public TopicPartitionWriter(TopicPartition tp,
-                              S3Storage storage,
-                              RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
-                              Partitioner<?> partitioner,
-                              S3SinkConnectorConfig connectorConfig,
-                              SinkTaskContext context) {
-    this(tp, storage, writerProvider, partitioner, connectorConfig, context, SYSTEM_TIME);
+  public TopicPartitionWriter(
+      TopicPartition tp,
+      S3Storage storage,
+      RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
+      Partitioner<?> partitioner,
+      S3SinkConnectorConfig connectorConfig,
+      SinkTaskContext context,
+      ErrantRecordReporter reporter
+  ) {
+    this(tp, storage, writerProvider, partitioner, connectorConfig, context, SYSTEM_TIME, reporter);
   }
 
   // Visible for testing
-  TopicPartitionWriter(TopicPartition tp,
-                       S3Storage storage,
-                       RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
-                       Partitioner<?> partitioner,
-                       S3SinkConnectorConfig connectorConfig,
-                       SinkTaskContext context,
-                       Time time) {
+  TopicPartitionWriter(
+      TopicPartition tp,
+      S3Storage storage,
+      RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
+      Partitioner<?> partitioner,
+      S3SinkConnectorConfig connectorConfig,
+      SinkTaskContext context,
+      Time time,
+      ErrantRecordReporter reporter
+  ) {
     this.connectorConfig = connectorConfig;
     this.time = time;
     this.tp = tp;
@@ -116,6 +124,7 @@ public class TopicPartitionWriter {
     this.context = context;
     this.writerProvider = writerProvider;
     this.partitioner = partitioner;
+    this.reporter = reporter;
     this.timestampExtractor = partitioner instanceof TimeBasedPartitioner
                                   ? ((TimeBasedPartitioner) partitioner).getTimestampExtractor()
                                   : null;
