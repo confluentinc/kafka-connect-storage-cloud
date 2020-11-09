@@ -34,7 +34,6 @@ import com.amazonaws.services.s3.model.UploadPartRequest;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.errors.DataException;
 import org.apache.parquet.io.PositionOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -169,7 +168,9 @@ public class S3OutputStream extends PositionOutputStream {
       log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
     } catch (IOException e) {
       log.error("Multipart upload failed to complete for bucket '{}' key '{}'", bucket, key);
-      throw new DataException("Multipart upload failed to complete.", e);
+      throw new ConnectException(
+          String.format("Multipart upload failed to complete: %s", e.getMessage())
+      );
     } finally {
       buffer.clear();
       multiPartUpload = null;

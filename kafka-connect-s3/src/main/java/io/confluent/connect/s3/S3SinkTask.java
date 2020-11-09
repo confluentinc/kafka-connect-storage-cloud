@@ -20,7 +20,6 @@ import io.confluent.connect.s3.S3SinkConnectorConfig.BehaviorOnNullValues;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -108,7 +107,7 @@ public class S3SinkTask extends SinkTask {
           url
       );
       if (!storage.bucketExists()) {
-        throw new DataException("No-existent S3 bucket: " + connectorConfig.getBucketName());
+        throw new ConnectException("No-existent S3 bucket: " + connectorConfig.getBucketName());
       }
 
       writerProvider = newRecordWriterProvider(connectorConfig);
