@@ -72,7 +72,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     createS3RootClient();
     // create the test bucket
     createS3Bucket(TEST_BUCKET_NAME);
-    getConnectorProps();
+    setupConnectorProps();
   }
 
   @After
@@ -91,7 +91,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
    * @throws InterruptedException
    */
   @Test
-  //@Ignore
+  @Ignore
   public void testToAssertConnectorAndDestinationRecords() throws InterruptedException {
 
     // create topics in Kafka
@@ -120,7 +120,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
    * @throws InterruptedException
    */
   @Test
-  //@Ignore
+  @Ignore
   public void testWithRevokedWritePermissions() throws InterruptedException {
 
     addReadWritePolicyToBucket(TEST_BUCKET_NAME);
@@ -160,7 +160,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   }
 
   @Test
-  //@Ignore
+  @Ignore
   public void testWithNetworkUnavailability() throws Throwable {
     // Setup Squid Proxy Container
     setupSquidProxy();
@@ -196,7 +196,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   }
 
   @Test
-  //@Ignore
+  @Ignore
   public void testWithNetworkInterruption() throws Throwable {
     /*
      A small value is used to create enough request that the pumba container can cause network
@@ -258,7 +258,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     }
   }
 
-  private void getConnectorProps() {
+  private void setupConnectorProps() {
     props = new HashMap<>();
     props.put(SinkConnectorConfig.TOPICS_CONFIG, String.join(",", KAFKA_TOPICS));
     props.put(CONNECTOR_CLASS_CONFIG, S3SinkConnector.class.getName());
@@ -322,7 +322,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   }
 
   private static void setupSquidProxy() {
-    squid = new SquidProxy("connect-squid-local:1.0.0", "NONE");
+    squid = new SquidProxy("confluent-docker-internal.jfrog.io/confluentinc/connect-squid:1.0.0", "NONE");
     squid.start();
   }
 
