@@ -19,7 +19,13 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.storage.common.StorageCommonConfig.STORE_URL_CONFIG;
+import static io.confluent.connect.utils.licensing.LicenseConfigUtil.CONFLUENT_TOPIC_BOOTSTRAP_SERVERS_CONFIG;
+import static io.confluent.connect.utils.licensing.LicenseConfigUtil.CONFLUENT_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.junit.Assert.assertTrue;
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
@@ -35,6 +41,7 @@ import com.google.common.collect.ImmutableMap;
 import io.confluent.connect.formatter.json.JsonFormatter;
 import io.confluent.connect.formatter.json.JsonFormatterProvider;
 
+import io.confluent.connect.s3.S3SinkConnector;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
@@ -47,6 +54,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -61,6 +69,7 @@ import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.test.IntegrationTest;
@@ -83,7 +92,6 @@ import org.slf4j.LoggerFactory;
 public class S3SinkConnectorIT extends BaseConnectorIT {
 
   private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorIT.class);
-  private static AmazonS3 S3Client;
   private static final ObjectMapper jsonMapper = new ObjectMapper();
   private static final String JENKINS_HOME = "JENKINS_HOME";
   // AWS configs
@@ -91,8 +99,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final String AWS_REGION = "us-west-2";
   private static final String MOCK_S3_URL = "http://localhost:8001";
   private static final int MOCK_S3_PORT = 8001;
-  private static final String TEST_BUCKET_NAME =
-      "connect-s3-integration-testing-" + System.currentTimeMillis();
   // local dir configs
   private static final String TEST_RESOURCES_PATH = "src/test/resources/";
   private static final String TEST_DOWNLOAD_PATH = TEST_RESOURCES_PATH + "downloaded-files/";
@@ -141,6 +147,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   public void before() {
     JsonFormatterProvider provider = new JsonFormatterProvider();
     formatter = (JsonFormatter) provider.create(Collections.singletonMap("schemas.enable", true));
+    setupProperties();
     //add class specific props
     props.put(SinkConnectorConfig.TOPICS_CONFIG, String.join(",", KAFKA_TOPICS));
     props.put(FLUSH_SIZE_CONFIG, Integer.toString(FLUSH_SIZE_STANDARD));
@@ -200,7 +207,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
     log.info("Waiting for files in S3...");
     int expectedFileCount = (int) NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
-    waitForFilesInBucket(S3Client, TEST_BUCKET_NAME, expectedFileCount);
+    waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
 
     List<String> expectedFilenames = getExpectedFilenames(TEST_TOPIC_NAME, EXPECTED_PARTITION,
         FLUSH_SIZE_STANDARD, NUM_RECORDS_INSERT, expectedFileExtension);
@@ -248,42 +255,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   /**
-   * Get a list of the expected filenames for the bucket.
-   * <p>
-   * Format: topics/s3_topic/partition=97/s3_topic+97+0000000001.avro
-   *
-   * @param topic      the test kafka topic
-   * @param partition  the expected partition for the tests
-   * @param flushSize  the flush size connector config
-   * @param numRecords the number of records produced in the test
-   * @param extension  the expected extensions of the files including compression (snappy.parquet)
-   * @return the list of expected filenames
-   */
-  private List<String> getExpectedFilenames(
-      String topic,
-      int partition,
-      int flushSize,
-      long numRecords,
-      String extension
-  ) {
-    int expectedFileCount = (int) numRecords / flushSize;
-    List<String> expectedFiles = new ArrayList<>();
-    for (int offset = 0; offset < expectedFileCount * flushSize; offset += flushSize) {
-      String filepath = String.format(
-          "topics/%s/partition=%d/%s+%d+%010d.%s",
-          topic,
-          partition,
-          topic,
-          partition,
-          offset,
-          extension
-      );
-      expectedFiles.add(filepath);
-    }
-    return expectedFiles;
-  }
-
-  /**
    * Get an S3 client based on existing credentials, or a mock client if running on jenkins.
    *
    * @return an authenticated S3 client
@@ -326,21 +297,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     for (S3ObjectSummary file : S3Client.listObjectsV2(bucketName).getObjectSummaries()) {
       S3Client.deleteObject(bucketName, file.getKey());
     }
-  }
-
-  /**
-   * Check if the file names in the bucket have the expected namings.
-   *
-   * @param bucketName    the name of the bucket with the files
-   * @param expectedFiles the list of expected filenames for exact comparison
-   * @return whether all the files in the bucket match the expected values
-   */
-  private boolean fileNamesValid(String bucketName, List<String> expectedFiles) {
-    List<String> actualFiles = new ArrayList<>();
-    for (S3ObjectSummary file : S3Client.listObjectsV2(bucketName).getObjectSummaries()) {
-      actualFiles.add(file.getKey());
-    }
-    return expectedFiles.equals(actualFiles);
   }
 
   /**
@@ -504,5 +460,17 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
       throw new RuntimeException("Could not parse extension from filename.");
     }
     return tokens[1];
+  }
+
+  private void setupProperties() {
+    props = new HashMap<>();
+    props.put(CONNECTOR_CLASS_CONFIG, S3SinkConnector.class.getName());
+    props.put(TASKS_MAX_CONFIG, Integer.toString(MAX_TASKS));
+    // converters
+    props.put(KEY_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
+    props.put(VALUE_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
+    // license properties
+    props.put(CONFLUENT_TOPIC_BOOTSTRAP_SERVERS_CONFIG, connect.kafka().bootstrapServers());
+    props.put(CONFLUENT_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
   }
 }
