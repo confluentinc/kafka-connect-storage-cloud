@@ -16,11 +16,15 @@ import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.services.s3.model.S3VersionSummary;
 import com.amazonaws.services.s3.model.VersionListing;
 import io.confluent.common.utils.IntegrationTest;
+import io.confluent.connect.s3.S3SinkConnector;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.format.json.JsonFormat;
+import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.testcontainers.squid.SquidProxy;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.storage.StringConverter;
-import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -60,20 +64,19 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   private static final String EXPECTED_FILE_EXTENSION = "json";
   private static final List<String> KAFKA_TOPICS = Arrays.asList(TEST_TOPIC_NAME);
   private static final int FLUSH_SIZE = 200;
-  private static final int EXPECTED_PARTITION = 0 ;
+  private static final int EXPECTED_PARTITION = 0;
   private static SquidProxy squid;
 
   @Before
-  public void setup() {
-    startConnect();
+  public void initializeResources() {
     createS3RootClient();
     // create the test bucket
     createS3Bucket(TEST_BUCKET_NAME);
   }
 
 
-  @After
-  public void close() {
+  @AfterClass
+  public static void deleteBucket() {
     // delete the test bucket
     deleteBucket(TEST_BUCKET_NAME);
   }
@@ -91,10 +94,8 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     // send records to kafka
     sendRecordsToKafka(NUM_RECORDS_PRODUCED);
 
-    Map<String, String> props = getConnectorProps();
-
     // start a sink connector
-    connect.configureConnector(CONNECTOR_NAME, props);
+    connect.configureConnector(CONNECTOR_NAME, getConnectorProps());
     // wait for tasks to spin up
     int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
 
@@ -123,7 +124,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     // send records to kafka
     sendRecordsToKafka(NUM_RECORDS_PRODUCED);
 
-    Map<String, String> props = getConnectorProps();
+    props = getConnectorProps();
     props.put("aws.access.key.id", System.getenv("SECONDARY_USER_ACCESS_KEY_ID"));
     props.put("aws.secret.access.key", System.getenv("SECONDARY_USER_SECRET_ACCESS_KEY"));
 
@@ -164,7 +165,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     // send records to kafka
     sendRecordsToKafka(NUM_RECORDS_PRODUCED);
 
-    Map<String, String> props = getConnectorProps();
+    props = getConnectorProps();
     props.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "https://"
         + squid.getContainerIpAddress() + ":" + squid.getMappedPort(3129));
 
@@ -207,7 +208,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     // send records to kafka
     sendRecordsToKafka(NUM_RECORDS_PRODUCED);
 
-    Map<String, String> props = getConnectorProps();
+    props = getConnectorProps();
     props.put(FLUSH_SIZE_CONFIG, Integer.toString(flushSize));
 
     // start a sink connector
@@ -227,26 +228,20 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   }
 
   private void addReadWritePolicyToBucket(String bucketName) {
-
     Statement allowRestrictedWriteStatement = new Statement(Statement.Effect.Allow)
         .withPrincipals(new Principal(System.getenv("SECONDARY_USER_ACCOUNT_ID")))
         .withActions(S3Actions.GetObject, S3Actions.PutObject)
         .withResources(new S3ObjectResource(bucketName, "*"));
-
     Policy policy = new Policy().withStatements(allowRestrictedWriteStatement);
-
     S3Client.setBucketPolicy(bucketName, policy.toJson());
   }
 
   private void alterReadWritePolicyOfBucket(String bucketName) {
-
     Statement allowRestrictedWriteStatement = new Statement(Statement.Effect.Allow)
         .withPrincipals(new Principal(System.getenv("SECONDARY_USER_ACCOUNT_ID")))
         .withActions(S3Actions.GetObject)
         .withResources(new S3ObjectResource(bucketName, "*"));
-
     Policy policy = new Policy().withStatements(allowRestrictedWriteStatement);
-
     S3Client.setBucketPolicy(bucketName, policy.toJson());
   }
 
@@ -264,32 +259,31 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   private Map<String, String> getConnectorProps() {
     Map<String, String> props = new HashMap<>();
     props.put(SinkConnectorConfig.TOPICS_CONFIG, String.join(",", KAFKA_TOPICS));
-    props.put(CONNECTOR_CLASS_CONFIG, "io.confluent.connect.s3.S3SinkConnector");
+    props.put(CONNECTOR_CLASS_CONFIG, S3SinkConnector.class.getName());
     props.put(TASKS_MAX_CONFIG, Integer.toString(TASKS_MAX));
 
     props.put(REGION_CONFIG, "ap-south-1");
     props.put(PART_SIZE_CONFIG, "5242880");
     props.put(S3_BUCKET_CONFIG, TEST_BUCKET_NAME);
     props.put(FLUSH_SIZE_CONFIG , Integer.toString(FLUSH_SIZE));
-    props.put(STORAGE_CLASS_CONFIG, "io.confluent.connect.s3.storage.S3Storage");
-    props.put(PARTITIONER_CLASS_CONFIG, "io.confluent.connect.storage.partitioner.DefaultPartitioner");
+    props.put(STORAGE_CLASS_CONFIG, S3Storage.class.getName());
+    props.put(PARTITIONER_CLASS_CONFIG, DefaultPartitioner.class.getName());
 
     // converters
     props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
     props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
 
-    props.put(FORMAT_CLASS_CONFIG, JSON_FORMAT_CLASS);
-    // license properties
+    props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
     return props;
   }
 
-  private void deleteBucket(String bucketName) {
+  private static void deleteBucket(String bucketName) {
     emptyBucket(bucketName);
     // After all objects are deleted, delete the bucket.
     S3Client.deleteBucket(bucketName);
   }
 
-  private void emptyBucket(String bucketName) {
+  private static void emptyBucket(String bucketName) {
     // delete all objects to empty bucket
     ObjectListing objectListing = S3Client.listObjects(bucketName);
     while (true) {
@@ -319,7 +313,9 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   }
 
   private void createS3Bucket(String bucketName) {
-    if (!S3Client.doesBucketExistV2(bucketName)) {
+    if (S3Client.doesBucketExistV2(bucketName)) {
+      emptyBucket(bucketName);
+    } else {
       S3Client.createBucket(new CreateBucketRequest(bucketName));
     }
   }

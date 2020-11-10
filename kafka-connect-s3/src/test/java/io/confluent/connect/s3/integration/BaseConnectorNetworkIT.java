@@ -22,8 +22,6 @@ public abstract class BaseConnectorNetworkIT extends BaseConnectorIT {
   private static final Logger log = LoggerFactory.getLogger(BaseConnectorNetworkIT.class);
 
   protected static final long CONSUME_MAX_DURATION_MS = TimeUnit.MINUTES.toMillis(8);
-  protected static final String JSON_FORMAT_CLASS = "io.confluent.connect.s3.format.json.JsonFormat";
-
   protected static PumbaPauseContainer pumbaPauseContainer;
 
 

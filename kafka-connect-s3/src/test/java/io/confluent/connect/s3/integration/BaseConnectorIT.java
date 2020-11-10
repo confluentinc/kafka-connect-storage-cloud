@@ -40,6 +40,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,22 +60,15 @@ public abstract class BaseConnectorIT {
   protected EmbeddedConnectCluster connect;
   protected Map<String, String> props;
 
+  @Before
+  public void setup() {
+    startConnect();
+  }
+
   @After
   public void close() {
     // stop all Connect, Kafka and Zk threads.
     connect.stop();
-  }
-
-  protected void setupProperties() {
-    props = new HashMap<>();
-    props.put(CONNECTOR_CLASS_CONFIG, S3SinkConnector.class.getName());
-    props.put(TASKS_MAX_CONFIG, Integer.toString(MAX_TASKS));
-    // converters
-    props.put(KEY_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
-    props.put(VALUE_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
-    // license properties
-    props.put(CONFLUENT_TOPIC_BOOTSTRAP_SERVERS_CONFIG, connect.kafka().bootstrapServers());
-    props.put(CONFLUENT_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
   }
 
   protected void startConnect() {
@@ -109,7 +103,7 @@ public abstract class BaseConnectorIT {
    * number of files.
    *
    * @param bucketName  S3 bucket name
-   * @param numFiles   expected number of files in the bucket
+   * @param numFiles    expected number of files in the bucket
    * @return the time this method discovered the connector has written the files
    * @throws InterruptedException if this was interrupted
    */
@@ -161,7 +155,7 @@ public abstract class BaseConnectorIT {
   }
 
   /**
-   * To recursively query the bucket to get the total number of that exist in the bucket.
+   * Recursively query the bucket to get the total number of files that exist in the bucket.
    *
    * @param bucketName the name of the bucket containing the files.
    * @return the number of files in the bucket
@@ -173,7 +167,7 @@ public abstract class BaseConnectorIT {
     do {
       /*
        Need the result object to extract the continuation token from the request as each request
-       to `listObjectsV2() returns a maximum of 1000 files.
+       to listObjectsV2() returns a maximum of 1000 files.
        */
       result = S3Client.listObjectsV2(request);
       totalFilesInBucket += result.getKeyCount();
@@ -233,10 +227,10 @@ public abstract class BaseConnectorIT {
   }
 
   /**
-   * To recursively query the bucket to get the total number of that exist in the bucket.
+   * Recursively query the bucket to get a list of filenames that exist in the bucket.
    *
    * @param bucketName the name of the bucket containing the files.
-   * @return list of names of files present in the bucket.
+   * @return list of filenames present in the bucket.
    */
   private List<String> getBucketFileNames(String bucketName) {
     List<String> actualFiles = new ArrayList<>();
@@ -245,7 +239,7 @@ public abstract class BaseConnectorIT {
     do {
       /*
        Need the result object to extract the continuation token from the request as each request
-       to `listObjectsV2() returns a maximum of 1000 files.
+       to listObjectsV2() returns a maximum of 1000 files.
        */
       result = S3Client.listObjectsV2(request);
       for (S3ObjectSummary file : result.getObjectSummaries()) {
