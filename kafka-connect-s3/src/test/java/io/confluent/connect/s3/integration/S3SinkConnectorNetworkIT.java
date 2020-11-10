@@ -155,6 +155,8 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     // produce more records to kafka
     sendRecordsToKafka(NUM_RECORDS_PRODUCED);
 
+    // Intentional sleep added to assure no additional files are created.
+    Thread.sleep(10000);
     // assert files in bucket remains same as earlier since the Write policy has been revoked.
     assertTrue(fileNamesValid(TEST_BUCKET_NAME, expectedFilenames));
   }
@@ -191,6 +193,8 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
 
     sendRecordsToKafka(NUM_RECORDS_PRODUCED);
 
+    // Intentional sleep added to assure no additional files are created.
+    Thread.sleep(10000);
     // assert files in bucket remains same as earlier since the connection is unavailable.
     assertTrue(fileNamesValid(TEST_BUCKET_NAME, expectedFilenames));
   }
