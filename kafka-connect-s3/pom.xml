@@ -40,6 +40,8 @@
         <parquet.tools.version>1.11.1</parquet.tools.version>
         <confluent.licensing.version>0.5.2</confluent.licensing.version>
         <formatters.version>0.2.2</formatters.version>
+        <confluent.connect.testcontainers.version>1.0.1</confluent.connect.testcontainers.version>
+        <org.testcontainer.version>1.11.4</org.testcontainer.version>
     </properties>
 
     <dependencyManagement>
@@ -139,6 +141,17 @@
             <artifactId>scala-library</artifactId>
             <version>2.12.10</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent.testcontainers</groupId>
+            <artifactId>squid-proxy</artifactId>
+            <version>${confluent.connect.testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <version>${org.testcontainer.version}</version>
         </dependency>
     </dependencies>
 
