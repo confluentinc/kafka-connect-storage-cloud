@@ -24,6 +24,7 @@ import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.testcontainers.squid.SquidProxy;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.storage.StringConverter;
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -35,7 +36,6 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.PART_SIZE_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
@@ -72,8 +72,13 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     createS3RootClient();
     // create the test bucket
     createS3Bucket(TEST_BUCKET_NAME);
+    getConnectorProps();
   }
 
+  @After
+  public void after(){
+    emptyBucket(TEST_BUCKET_NAME);
+  }
 
   @AfterClass
   public static void deleteBucket() {
@@ -86,7 +91,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
    * @throws InterruptedException
    */
   @Test
-  @Ignore
+  //@Ignore
   public void testToAssertConnectorAndDestinationRecords() throws InterruptedException {
 
     // create topics in Kafka
@@ -95,7 +100,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     sendRecordsToKafka(NUM_RECORDS_PRODUCED);
 
     // start a sink connector
-    connect.configureConnector(CONNECTOR_NAME, getConnectorProps());
+    connect.configureConnector(CONNECTOR_NAME, props);
     // wait for tasks to spin up
     int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
 
@@ -115,7 +120,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
    * @throws InterruptedException
    */
   @Test
-  @Ignore
+  //@Ignore
   public void testWithRevokedWritePermissions() throws InterruptedException {
 
     addReadWritePolicyToBucket(TEST_BUCKET_NAME);
@@ -124,7 +129,6 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     // send records to kafka
     sendRecordsToKafka(NUM_RECORDS_PRODUCED);
 
-    props = getConnectorProps();
     props.put("aws.access.key.id", System.getenv("SECONDARY_USER_ACCESS_KEY_ID"));
     props.put("aws.secret.access.key", System.getenv("SECONDARY_USER_SECRET_ACCESS_KEY"));
 
@@ -156,7 +160,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   }
 
   @Test
-  @Ignore
+  //@Ignore
   public void testWithNetworkUnavailability() throws Throwable {
     // Setup Squid Proxy Container
     setupSquidProxy();
@@ -165,7 +169,6 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     // send records to kafka
     sendRecordsToKafka(NUM_RECORDS_PRODUCED);
 
-    props = getConnectorProps();
     props.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "https://"
         + squid.getContainerIpAddress() + ":" + squid.getMappedPort(3129));
 
@@ -193,7 +196,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   }
 
   @Test
-  @Ignore
+  //@Ignore
   public void testWithNetworkInterruption() throws Throwable {
     /*
      A small value is used to create enough request that the pumba container can cause network
@@ -208,7 +211,6 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     // send records to kafka
     sendRecordsToKafka(NUM_RECORDS_PRODUCED);
 
-    props = getConnectorProps();
     props.put(FLUSH_SIZE_CONFIG, Integer.toString(flushSize));
 
     // start a sink connector
@@ -256,8 +258,8 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     }
   }
 
-  private Map<String, String> getConnectorProps() {
-    Map<String, String> props = new HashMap<>();
+  private void getConnectorProps() {
+    props = new HashMap<>();
     props.put(SinkConnectorConfig.TOPICS_CONFIG, String.join(",", KAFKA_TOPICS));
     props.put(CONNECTOR_CLASS_CONFIG, S3SinkConnector.class.getName());
     props.put(TASKS_MAX_CONFIG, Integer.toString(TASKS_MAX));
@@ -274,7 +276,6 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
 
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
-    return props;
   }
 
   private static void deleteBucket(String bucketName) {
@@ -321,7 +322,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   }
 
   private static void setupSquidProxy() {
-    squid = new SquidProxy("confluent-docker-internal.jfrog.io/confluentinc/connect-squid:1.0.0", "NONE");
+    squid = new SquidProxy("connect-squid-local:1.0.0", "NONE");
     squid.start();
   }
 
