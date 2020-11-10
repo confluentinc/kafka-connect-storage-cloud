@@ -105,11 +105,11 @@ public abstract class BaseConnectorIT {
   }
 
   /**
-   * Wait up to {@link #S3_TIMEOUT_MS maximum time limit} for the connector with the given name to
-   * write the specified number of files.
+   * Wait up to {@link #S3_TIMEOUT_MS maximum time limit} for the connector to write the specified
+   * number of files.
    *
-   * @param bucketName the name of the S3 destination bucket
-   * @param numFiles   the number of files expected
+   * @param bucketName  S3 bucket name
+   * @param numFiles   expected number of files in the bucket
    * @return the time this method discovered the connector has written the files
    * @throws InterruptedException if this was interrupted
    */
@@ -153,8 +153,7 @@ public abstract class BaseConnectorIT {
    */
   protected Optional<Boolean> assertFileCountInBucket(String bucketName, int expectedNumFiles) {
     try {
-      int fileCount = getBucketFileCount(bucketName);
-      return Optional.of(fileCount == expectedNumFiles);
+      return Optional.of(getBucketFileCount(bucketName) == expectedNumFiles);
     } catch (Exception e) {
       log.warn("Could not check file count in bucket: {}", bucketName);
       return Optional.empty();
