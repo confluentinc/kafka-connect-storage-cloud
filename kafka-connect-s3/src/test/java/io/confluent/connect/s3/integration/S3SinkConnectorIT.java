@@ -251,42 +251,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   /**
-   * Get a list of the expected filenames for the bucket.
-   * <p>
-   * Format: topics/s3_topic/partition=97/s3_topic+97+0000000001.avro
-   *
-   * @param topic      the test kafka topic
-   * @param partition  the expected partition for the tests
-   * @param flushSize  the flush size connector config
-   * @param numRecords the number of records produced in the test
-   * @param extension  the expected extensions of the files including compression (snappy.parquet)
-   * @return the list of expected filenames
-   */
-  private List<String> getExpectedFilenames(
-      String topic,
-      int partition,
-      int flushSize,
-      long numRecords,
-      String extension
-  ) {
-    int expectedFileCount = (int) numRecords / flushSize;
-    List<String> expectedFiles = new ArrayList<>();
-    for (int offset = 0; offset < expectedFileCount * flushSize; offset += flushSize) {
-      String filepath = String.format(
-          "topics/%s/partition=%d/%s+%d+%010d.%s",
-          topic,
-          partition,
-          topic,
-          partition,
-          offset,
-          extension
-      );
-      expectedFiles.add(filepath);
-    }
-    return expectedFiles;
-  }
-
-  /**
    * Get an S3 client based on existing credentials, or a mock client if running on jenkins.
    *
    * @return an authenticated S3 client
@@ -329,21 +293,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     for (S3ObjectSummary file : S3Client.listObjectsV2(bucketName).getObjectSummaries()) {
       S3Client.deleteObject(bucketName, file.getKey());
     }
-  }
-
-  /**
-   * Check if the file names in the bucket have the expected namings.
-   *
-   * @param bucketName    the name of the bucket with the files
-   * @param expectedFiles the list of expected filenames for exact comparison
-   * @return whether all the files in the bucket match the expected values
-   */
-  private boolean fileNamesValid(String bucketName, List<String> expectedFiles) {
-    List<String> actualFiles = new ArrayList<>();
-    for (S3ObjectSummary file : S3Client.listObjectsV2(bucketName).getObjectSummaries()) {
-      actualFiles.add(file.getKey());
-    }
-    return expectedFiles.equals(actualFiles);
   }
 
   /**

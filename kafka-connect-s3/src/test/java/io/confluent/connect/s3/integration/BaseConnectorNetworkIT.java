@@ -43,6 +43,10 @@ public abstract class BaseConnectorNetworkIT extends BaseConnectorIT {
         .build();
   }
 
+  /*
+   Overridden this method to use a more suitable maxWaitMs since the Network IT test take a longer
+   time to run.
+  */
   @Override
   protected long waitForFilesInBucket(
       String bucketName,

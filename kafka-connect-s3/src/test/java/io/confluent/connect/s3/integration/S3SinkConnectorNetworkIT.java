@@ -28,7 +28,6 @@ import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -41,7 +40,6 @@ import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.storage.partitioner.PartitionerConfig.PARTITIONER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.*;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -58,12 +56,15 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
   private static final String STORAGE_CLASS_CONFIG = "storage.class";
   private static final int NUM_RECORDS_PRODUCED = 1000;
   private static final int TASKS_MAX = 1;
-  private static final List<String> KAFKA_TOPICS = Arrays.asList("topic1");
+  private static final String TEST_TOPIC_NAME = "topic1";
+  private static final String EXPECTED_FILE_EXTENSION = "json";
+  private static final List<String> KAFKA_TOPICS = Arrays.asList(TEST_TOPIC_NAME);
   private static final int FLUSH_SIZE = 200;
+  private static final int EXPECTED_PARTITION = 0 ;
   private static SquidProxy squid;
 
   @Before
-  public void setup() throws IOException {
+  public void setup() {
     startConnect();
     createS3RootClient();
     // create the test bucket
@@ -79,16 +80,16 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
 
   /**
    * Success scenario : End to end test
-   * @throws Throwable
+   * @throws InterruptedException
    */
   @Test
   @Ignore
-  public void testToAssertConnectorAndDestinationRecords() throws Throwable {
+  public void testToAssertConnectorAndDestinationRecords() throws InterruptedException {
 
     // create topics in Kafka
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
     // send records to kafka
-    int totalNoOfRecordsProduced = sendRecordsToKafka();
+    sendRecordsToKafka(NUM_RECORDS_PRODUCED);
 
     Map<String, String> props = getConnectorProps();
 
@@ -98,17 +99,19 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
 
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
-    int expectedFileCount = totalNoOfRecordsProduced / FLUSH_SIZE;
+    int expectedFileCount = NUM_RECORDS_PRODUCED / FLUSH_SIZE;
     waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
 
-    // assert records
-    assertFileCountInBucket(TEST_BUCKET_NAME, expectedFileCount);
+    // assert files in bucket
+    List<String> expectedFilenames = getExpectedFilenames(TEST_TOPIC_NAME, EXPECTED_PARTITION,
+        FLUSH_SIZE, NUM_RECORDS_PRODUCED, EXPECTED_FILE_EXTENSION);
+    assertTrue(fileNamesValid(TEST_BUCKET_NAME, expectedFilenames));
   }
 
   /**
    * Case in which bucket permissions/policies are changed while uploading records
    * Prerequisite : Access key and Secret access key should be set as environment variables
-   * @throws Exception
+   * @throws InterruptedException
    */
   @Test
   @Ignore
@@ -118,7 +121,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
 
     // send records to kafka
-    int totalNoOfRecordsProduced = sendRecordsToKafka();
+    sendRecordsToKafka(NUM_RECORDS_PRODUCED);
 
     Map<String, String> props = getConnectorProps();
     props.put("aws.access.key.id", System.getenv("SECONDARY_USER_ACCESS_KEY_ID"));
@@ -130,9 +133,12 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
 
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
-    int expectedFileCount = totalNoOfRecordsProduced / FLUSH_SIZE;
+    int expectedFileCount = NUM_RECORDS_PRODUCED / FLUSH_SIZE;
     waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
-    int fileCountBeforeRevokingPermission = expectedFileCount;
+    // assert files in bucket
+    List<String> expectedFilenames = getExpectedFilenames(TEST_TOPIC_NAME, EXPECTED_PARTITION,
+        FLUSH_SIZE, NUM_RECORDS_PRODUCED, EXPECTED_FILE_EXTENSION);
+    assertTrue(fileNamesValid(TEST_BUCKET_NAME, expectedFilenames));
 
     // revoke read/write permission
     alterReadWritePolicyOfBucket(TEST_BUCKET_NAME);
@@ -142,10 +148,10 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     */
     Thread.sleep(10000);
     // produce more records to kafka
-    totalNoOfRecordsProduced += sendRecordsToKafka();
-    expectedFileCount = totalNoOfRecordsProduced / FLUSH_SIZE;
-    assertFalse(assertFileCountInBucket(TEST_BUCKET_NAME, expectedFileCount).get());
-    assertTrue(assertFileCountInBucket(TEST_BUCKET_NAME, fileCountBeforeRevokingPermission).get());
+    sendRecordsToKafka(NUM_RECORDS_PRODUCED);
+
+    // assert files in bucket remains same as earlier since the Write policy has been revoked.
+    assertTrue(fileNamesValid(TEST_BUCKET_NAME, expectedFilenames));
   }
 
   @Test
@@ -156,7 +162,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     // create topics in Kafka
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
     // send records to kafka
-    int totalNoOfRecordsProduced = sendRecordsToKafka();
+    sendRecordsToKafka(NUM_RECORDS_PRODUCED);
 
     Map<String, String> props = getConnectorProps();
     props.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "https://"
@@ -168,21 +174,21 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
 
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
-    int expectedFileCount = totalNoOfRecordsProduced / FLUSH_SIZE;
+    int expectedFileCount = NUM_RECORDS_PRODUCED / FLUSH_SIZE;
     waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
 
-    // assert records
-    int objectCountBeforeInterruption = expectedFileCount;
-    assertTrue(assertFileCountInBucket(TEST_BUCKET_NAME, objectCountBeforeInterruption).get());
+    // assert files in bucket
+    List<String> expectedFilenames = getExpectedFilenames(TEST_TOPIC_NAME, EXPECTED_PARTITION,
+        FLUSH_SIZE, NUM_RECORDS_PRODUCED, EXPECTED_FILE_EXTENSION);
+    assertTrue(fileNamesValid(TEST_BUCKET_NAME, expectedFilenames));
 
     // Shutting down proxy to emulate network unavailability
     shutdownSquidProxy();
 
-    totalNoOfRecordsProduced += sendRecordsToKafka();
-    expectedFileCount = totalNoOfRecordsProduced / FLUSH_SIZE;
+    sendRecordsToKafka(NUM_RECORDS_PRODUCED);
 
-    assertFalse(assertFileCountInBucket(TEST_BUCKET_NAME, expectedFileCount).get());
-    assertTrue(assertFileCountInBucket(TEST_BUCKET_NAME, objectCountBeforeInterruption).get());
+    // assert files in bucket remains same as earlier since the connection is unavailable.
+    assertTrue(fileNamesValid(TEST_BUCKET_NAME, expectedFilenames));
   }
 
   @Test
@@ -199,7 +205,7 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     // create topics in Kafka
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
     // send records to kafka
-    int totalNoOfRecordsProduced = sendRecordsToKafka();
+    sendRecordsToKafka(NUM_RECORDS_PRODUCED);
 
     Map<String, String> props = getConnectorProps();
     props.put(FLUSH_SIZE_CONFIG, Integer.toString(flushSize));
@@ -210,11 +216,13 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     int minimumNumTasks = Math.min(KAFKA_TOPICS.size(), TASKS_MAX);
 
     waitForConnectorToStart(CONNECTOR_NAME, minimumNumTasks);
-    int expectedFileCount = totalNoOfRecordsProduced / flushSize;
+    int expectedFileCount = NUM_RECORDS_PRODUCED / flushSize;
     waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
     pumbaPauseContainer.close();
-    // assert records
-    assertTrue(assertFileCountInBucket(TEST_BUCKET_NAME, expectedFileCount ).get());
+    // assert files in bucket
+    List<String> expectedFilenames = getExpectedFilenames(TEST_TOPIC_NAME, EXPECTED_PARTITION,
+        flushSize, NUM_RECORDS_PRODUCED, EXPECTED_FILE_EXTENSION);
+    assertTrue(fileNamesValid(TEST_BUCKET_NAME, expectedFilenames));
     shutdownSquidProxy();
   }
 
@@ -242,18 +250,15 @@ public class S3SinkConnectorNetworkIT extends BaseConnectorNetworkIT {
     S3Client.setBucketPolicy(bucketName, policy.toJson());
   }
 
-  private int sendRecordsToKafka() {
+  private void sendRecordsToKafka(int numRecords) {
     // Send records to Kafka
-    int totalNoOfRecordsProduced = 0;
-    for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
-      totalNoOfRecordsProduced++;
+    for (int i = 0; i < numRecords; i++) {
       String kafkaTopic = KAFKA_TOPICS.get(i % KAFKA_TOPICS.size());
       String kafkaKey = "simple-key-" + i;
       String kafkaValue = "simple-message-" + i;
       log.debug("Sending message {} with topic {} to Kafka broker {}", kafkaTopic, kafkaValue);
       connect.kafka().produce(kafkaTopic, kafkaKey, kafkaValue);
     }
-    return totalNoOfRecordsProduced;
   }
 
   private Map<String, String> getConnectorProps() {

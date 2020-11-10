@@ -25,9 +25,12 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_C
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.confluent.common.utils.IntegrationTest;
 import io.confluent.connect.s3.S3SinkConnector;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -149,22 +152,110 @@ public abstract class BaseConnectorIT {
    * @return true if the number of files in the bucket match the expected number; false otherwise
    */
   protected Optional<Boolean> assertFileCountInBucket(String bucketName, int expectedNumFiles) {
-
-    int fileCount = 0;
-    ListObjectsV2Request request = new ListObjectsV2Request().withBucketName(bucketName);
-    ListObjectsV2Result result;
     try {
-      do {
-        result = S3Client.listObjectsV2(request);
-        fileCount += result.getKeyCount();
-        String token = result.getNextContinuationToken();
-        // To get the next batch of files.
-        request.setContinuationToken(token);
-      } while(result.isTruncated());
+      int fileCount = getBucketFileCount(bucketName);
       return Optional.of(fileCount == expectedNumFiles);
     } catch (Exception e) {
       log.warn("Could not check file count in bucket: {}", bucketName);
       return Optional.empty();
     }
+  }
+
+  /**
+   * To recursively query the bucket to get the total number of that exist in the bucket.
+   *
+   * @param bucketName the name of the bucket containing the files.
+   * @return the number of files in the bucket
+   */
+  private int getBucketFileCount(String bucketName) {
+    int totalFilesInBucket = 0;
+    ListObjectsV2Request request = new ListObjectsV2Request().withBucketName(bucketName);
+    ListObjectsV2Result result;
+    do {
+      /*
+       Need the result object to extract the continuation token from the request as each request
+       to `listObjectsV2() returns a maximum of 1000 files.
+       */
+      result = S3Client.listObjectsV2(request);
+      totalFilesInBucket += result.getKeyCount();
+      String token = result.getNextContinuationToken();
+      // To get the next batch of files.
+      request.setContinuationToken(token);
+    } while(result.isTruncated());
+    return totalFilesInBucket;
+  }
+
+  /**
+   * Get a list of the expected filenames for the bucket.
+   * <p>
+   * Format: topics/s3_topic/partition=97/s3_topic+97+0000000001.avro
+   *
+   * @param topic      the test kafka topic
+   * @param partition  the expected partition for the tests
+   * @param flushSize  the flush size connector config
+   * @param numRecords the number of records produced in the test
+   * @param extension  the expected extensions of the files including compression (snappy.parquet)
+   * @return the list of expected filenames
+   */
+  protected List<String> getExpectedFilenames(
+      String topic,
+      int partition,
+      int flushSize,
+      long numRecords,
+      String extension
+  ) {
+    int expectedFileCount = (int) numRecords / flushSize;
+    List<String> expectedFiles = new ArrayList<>();
+    for (int offset = 0; offset < expectedFileCount * flushSize; offset += flushSize) {
+      String filepath = String.format(
+          "topics/%s/partition=%d/%s+%d+%010d.%s",
+          topic,
+          partition,
+          topic,
+          partition,
+          offset,
+          extension
+      );
+      expectedFiles.add(filepath);
+    }
+    return expectedFiles;
+  }
+
+  /**
+   * Check if the file names in the bucket have the expected namings.
+   *
+   * @param bucketName    the name of the bucket with the files
+   * @param expectedFiles the list of expected filenames for exact comparison
+   * @return whether all the files in the bucket match the expected values
+   */
+  protected boolean fileNamesValid(String bucketName, List<String> expectedFiles) {
+    List<String> actualFiles = getBucketFileNames(bucketName);
+    return expectedFiles.equals(actualFiles);
+  }
+
+  /**
+   * To recursively query the bucket to get the total number of that exist in the bucket.
+   *
+   * @param bucketName the name of the bucket containing the files.
+   * @return list of names of files present in the bucket.
+   */
+  private List<String> getBucketFileNames(String bucketName) {
+    List<String> actualFiles = new ArrayList<>();
+    ListObjectsV2Request request = new ListObjectsV2Request().withBucketName(bucketName);
+    ListObjectsV2Result result;
+    do {
+      /*
+       Need the result object to extract the continuation token from the request as each request
+       to `listObjectsV2() returns a maximum of 1000 files.
+       */
+      result = S3Client.listObjectsV2(request);
+      for (S3ObjectSummary file : result.getObjectSummaries()) {
+        actualFiles.add(file.getKey());
+      }
+      String token = result.getNextContinuationToken();
+      // To get the next batch of files.
+      request.setContinuationToken(token);
+    } while(result.isTruncated());
+    return actualFiles;
   }
 }
