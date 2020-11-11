@@ -195,8 +195,15 @@ public class TopicPartitionWriter {
     while (!buffer.isEmpty()) {
       try {
         executeState(now);
-      } catch (SchemaProjectorException | IllegalWorkerStateException e) {
+      } catch (IllegalWorkerStateException e) {
         throw new ConnectException(e);
+      } catch (SchemaProjectorException e) {
+        if (reporter != null) {
+          reporter.report(buffer.poll(), e);
+          log.warn("Errant record written to DLQ due to: {}", e.getMessage());
+        } else {
+          throw e;
+        }
       }
     }
     commitOnTimeIfNoData(now);
