@@ -1098,7 +1098,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     ArgumentCaptor<T> exceptionCaptor = ArgumentCaptor.forClass(exceptionType);
     Mockito.verify(mockReporter, times(2)).report(any(), exceptionCaptor.capture());
     assertEquals(exceptionMessage, exceptionCaptor.getValue().getMessage());
-    StackTraceElement[] e = exceptionCaptor.getValue().getStackTrace();
 
     String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
 
