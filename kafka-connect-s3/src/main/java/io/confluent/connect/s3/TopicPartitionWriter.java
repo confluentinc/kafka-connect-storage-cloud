@@ -20,6 +20,7 @@ import io.confluent.connect.s3.storage.S3Storage;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
 import org.apache.kafka.connect.errors.SchemaProjectorException;
 import org.apache.kafka.connect.sink.ErrantRecordReporter;
@@ -265,6 +266,15 @@ public class TopicPartitionWriter {
       String encodedPartition,
       long now
   ) {
+    if (recordProducesDataException(record)) {
+      buffer.poll(); // remove faulty record
+      if (recordCount > 0) {
+        return false;
+      } else {
+        return true; // rotate if no records (default behavior)
+      }
+    }
+
     if (compatibility.shouldChangeSchema(record, null, currentValueSchema)
         && recordCount > 0) {
       // This branch is never true for the first record read by this TopicPartitionWriter
@@ -302,6 +312,30 @@ public class TopicPartitionWriter {
       }
     }
     return true;
+  }
+
+  /**
+   * Use a temporary writer to check the record for DataExceptions ahead of writing.
+   *
+   * @param record the record intended to write
+   * @return whether the record produced a DataException and should be skipped
+   */
+  private boolean recordProducesDataException(SinkRecord record) {
+    RecordWriter tempWriter = writerProvider.getRecordWriter(connectorConfig, "");
+    try {
+      tempWriter.write(record);
+      tempWriter.close();
+      return false;
+    } catch (DataException e) {
+      if (reporter != null) {
+        reporter.report(record, e);
+        log.warn("Errant record written to DLQ due to: {}", e.getMessage());
+        tempWriter.close();
+        return true;
+      } else {
+        throw new ConnectException(e);
+      }
+    }
   }
 
   private void commitOnTimeIfNoData(long now) {
