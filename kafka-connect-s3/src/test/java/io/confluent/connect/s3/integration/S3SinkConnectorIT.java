@@ -105,6 +105,10 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final String AVRO_EXTENSION = "avro";
   private static final String PARQUET_EXTENSION = "snappy.parquet";
   private static final String JSON_EXTENSION = "json";
+  // DLQ Tests
+  private static final String DLQ_TOPIC_CONFIG = "errors.deadletterqueue.topic.name";
+  private static final String DLQ_TOPIC_NAME = "DLQ-topic";
+
   private static final List<String> KAFKA_TOPICS = Collections.singletonList(TEST_TOPIC_NAME);
   private static final long NUM_RECORDS_INSERT = 20;
   private static final int FLUSH_SIZE_STANDARD = 3;
@@ -210,6 +214,47 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     assertTrue(fileNamesValid(TEST_BUCKET_NAME, expectedFilenames));
     assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
   }
+
+//  @Test
+//  public void testFaultyRecordReportedToDLQ() throws Throwable {
+//    props.put(DLQ_TOPIC_CONFIG, DLQ_TOPIC_NAME);
+//
+//    // start sink connector
+//    connect.configureConnector(CONNECTOR_NAME, props);
+//    // wait for tasks to spin up
+//    waitForConnectorToStart(CONNECTOR_NAME, Math.min(KAFKA_TOPICS.size(), MAX_TASKS));
+//
+//    Schema recordValueSchema = getSampleStructSchema();
+//    Struct recordValueStruct = getSampleStructVal(recordValueSchema);
+//    // Send first batch of valid records to Kafka
+//    for (long i = 0; i < NUM_RECORDS_INSERT; i++) {
+//      SinkRecord record = getSampleRecordWithOffset(recordValueSchema, recordValueStruct, i);
+//      String kafkaValue = new String(formatter.formatValue(record), UTF_8);
+//      connect.kafka().produce(TEST_TOPIC_NAME, null, kafkaValue);
+//    }
+//    long currentOffset = NUM_RECORDS_INSERT - 1;
+//
+//    // send two faulty records
+//    getSampleRecordWithOffset(Schema.STRING_SCHEMA, null, ++currentOffset);
+//    getSampleRecordWithOffset(Schema.STRING_SCHEMA, null, ++currentOffset);
+//
+//    currentOffset++;
+//    // Send second batch of valid records to Kafka
+//    for (long i = currentOffset; i < currentOffset + NUM_RECORDS_INSERT; i++) {
+//      SinkRecord record = getSampleRecordWithOffset(recordValueSchema, recordValueStruct, i);
+//      String kafkaValue = new String(formatter.formatValue(record), UTF_8);
+//      connect.kafka().produce(TEST_TOPIC_NAME, null, kafkaValue);
+//    }
+//
+//    log.info("Waiting for files in S3...");
+//    int expectedFileCount = (int) (NUM_RECORDS_INSERT * 2) / FLUSH_SIZE_STANDARD;
+//    waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
+//
+//    List<String> expectedFilenames = getExpectedFilenames(TEST_TOPIC_NAME, EXPECTED_PARTITION,
+//        FLUSH_SIZE_STANDARD, NUM_RECORDS_INSERT * 2, AVRO_EXTENSION);
+//    assertTrue(fileNamesValid(TEST_BUCKET_NAME, expectedFilenames));
+//    assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
+//  }
 
   private SinkRecord getSampleRecordWithOffset(
       Schema recordValueSchema,
