@@ -15,7 +15,10 @@
 
 package io.confluent.connect.s3.integration;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.storage.common.StorageCommonConfig.STORE_URL_CONFIG;
@@ -24,6 +27,8 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_C
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
+import static org.hamcrest.core.StringStartsWith.startsWith;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
@@ -38,6 +43,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
 
 import io.confluent.connect.s3.S3SinkConnector;
+import io.confluent.connect.s3.S3SinkConnectorConfig.BehaviorOnNullValues;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
@@ -48,11 +54,13 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
@@ -61,13 +69,23 @@ import org.apache.avro.io.DatumReader;
 import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
@@ -110,9 +128,11 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final String DLQ_TOPIC_NAME = "DLQ-topic";
 
   private static final List<String> KAFKA_TOPICS = Collections.singletonList(TEST_TOPIC_NAME);
-  private static final long NUM_RECORDS_INSERT = 20;
+  private static final long CONSUME_MAX_DURATION_MS = TimeUnit.SECONDS.toMillis(10);
+  private static final int NUM_RECORDS_INSERT = 30;
   private static final int FLUSH_SIZE_STANDARD = 3;
-  private static final int EXPECTED_PARTITION = 0;
+  private static final int TOPIC_PARTITION = 0;
+  private static final int DEFAULT_OFFSET = 0;
 
   private static final Map<String, Function<String, List<JsonNode>>> contentGetters =
       ImmutableMap.of(
@@ -122,6 +142,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
       );
 
   private JsonConverter jsonConverter;
+  // custom producer to enable sending records with headers
+  private Producer<byte[], byte[]> producer;
 
   protected static boolean useMockClient() {
     File creds = new File(AWS_CRED_PATH);
@@ -146,6 +168,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   @Before
   public void before() {
     initializeJsonConverter();
+    initializeCustomProducer();
     setupProperties();
     //add class specific props
     props.put(SinkConnectorConfig.TOPICS_CONFIG, String.join(",", KAFKA_TOPICS));
@@ -161,11 +184,13 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   @After
-  public void after() throws IOException {
+  public void after() throws Exception {
     // delete the downloaded test file folder
     FileUtils.deleteDirectory(new File(TEST_DOWNLOAD_PATH));
     // clear for next test
     clearBucket(TEST_BUCKET_NAME);
+    // wait for bucket to clear
+    waitForFilesInBucket(TEST_BUCKET_NAME, 0);
   }
 
   @Test
@@ -197,78 +222,157 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
     Schema recordValueSchema = getSampleStructSchema();
     Struct recordValueStruct = getSampleStructVal(recordValueSchema);
+    SinkRecord sampleRecord = getSampleRecord(recordValueSchema, recordValueStruct);
     // Send records to Kafka
-    for (long i = 0; i < NUM_RECORDS_INSERT; i++) {
-      SinkRecord record = getSampleRecordWithOffset(recordValueSchema, recordValueStruct, i);
-      byte[] value = jsonConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
-      String kafkaValue = new String(value, UTF_8);
-      connect.kafka().produce(TEST_TOPIC_NAME, null, kafkaValue);
-    }
+    produceRecordsNoHeaders(NUM_RECORDS_INSERT, sampleRecord);
 
     log.info("Waiting for files in S3...");
-    int expectedFileCount = (int) NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
+    int expectedFileCount = NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
     waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
 
-    List<String> expectedFilenames = getExpectedFilenames(TEST_TOPIC_NAME, EXPECTED_PARTITION,
+    List<String> expectedFilenames = getExpectedFilenames(TEST_TOPIC_NAME, TOPIC_PARTITION,
         FLUSH_SIZE_STANDARD, NUM_RECORDS_INSERT, expectedFileExtension);
     assertTrue(fileNamesValid(TEST_BUCKET_NAME, expectedFilenames));
     assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
   }
 
-//  @Test
-//  public void testFaultyRecordReportedToDLQ() throws Throwable {
-//    props.put(DLQ_TOPIC_CONFIG, DLQ_TOPIC_NAME);
-//
-//    // start sink connector
-//    connect.configureConnector(CONNECTOR_NAME, props);
-//    // wait for tasks to spin up
-//    waitForConnectorToStart(CONNECTOR_NAME, Math.min(KAFKA_TOPICS.size(), MAX_TASKS));
-//
-//    Schema recordValueSchema = getSampleStructSchema();
-//    Struct recordValueStruct = getSampleStructVal(recordValueSchema);
-//    // Send first batch of valid records to Kafka
-//    for (long i = 0; i < NUM_RECORDS_INSERT; i++) {
-//      SinkRecord record = getSampleRecordWithOffset(recordValueSchema, recordValueStruct, i);
-//      String kafkaValue = new String(formatter.formatValue(record), UTF_8);
-//      connect.kafka().produce(TEST_TOPIC_NAME, null, kafkaValue);
-//    }
-//    long currentOffset = NUM_RECORDS_INSERT - 1;
-//
-//    // send two faulty records
-//    getSampleRecordWithOffset(Schema.STRING_SCHEMA, null, ++currentOffset);
-//    getSampleRecordWithOffset(Schema.STRING_SCHEMA, null, ++currentOffset);
-//
-//    currentOffset++;
-//    // Send second batch of valid records to Kafka
-//    for (long i = currentOffset; i < currentOffset + NUM_RECORDS_INSERT; i++) {
-//      SinkRecord record = getSampleRecordWithOffset(recordValueSchema, recordValueStruct, i);
-//      String kafkaValue = new String(formatter.formatValue(record), UTF_8);
-//      connect.kafka().produce(TEST_TOPIC_NAME, null, kafkaValue);
-//    }
-//
-//    log.info("Waiting for files in S3...");
-//    int expectedFileCount = (int) (NUM_RECORDS_INSERT * 2) / FLUSH_SIZE_STANDARD;
-//    waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
-//
-//    List<String> expectedFilenames = getExpectedFilenames(TEST_TOPIC_NAME, EXPECTED_PARTITION,
-//        FLUSH_SIZE_STANDARD, NUM_RECORDS_INSERT * 2, AVRO_EXTENSION);
-//    assertTrue(fileNamesValid(TEST_BUCKET_NAME, expectedFilenames));
-//    assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
-//  }
+  @Test
+  public void testFaultyRecordsReportedToDLQ() throws Throwable {
+    props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+    props.put(BEHAVIOR_ON_NULL_VALUES_CONFIG, BehaviorOnNullValues.IGNORE.toString());
+    props.put(STORE_KAFKA_KEYS_CONFIG, "true");
+    props.put(STORE_KAFKA_HEADERS_CONFIG, "true");
+    props.put(DLQ_TOPIC_CONFIG, DLQ_TOPIC_NAME);
+    props.put("errors.deadletterqueue.context.headers.enable", "true");
+    props.put("errors.tolerance", "all");
+    props.put("errors.deadletterqueue.topic.replication.factor", "1");
 
-  private SinkRecord getSampleRecordWithOffset(
-      Schema recordValueSchema,
-      Struct recordValueStruct,
-      long offset
+    // start sink connector
+    connect.configureConnector(CONNECTOR_NAME, props);
+    // wait for tasks to spin up
+    waitForConnectorToStart(CONNECTOR_NAME, Math.min(KAFKA_TOPICS.size(), MAX_TASKS));
+
+    Schema recordValueSchema = getSampleStructSchema();
+    Struct recordValueStruct = getSampleStructVal(recordValueSchema);
+    SinkRecord sampleRecord = getSampleRecord(recordValueSchema, recordValueStruct);
+
+    // Send first batch of valid records to Kafka
+    produceRecordsWithHeaders(TEST_TOPIC_NAME, NUM_RECORDS_INSERT, sampleRecord);
+
+    // wait for values keys and headers from first batch
+    int expectedFileCount = (NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD) * 3;
+    waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
+
+    // send faulty records
+    int numberOfFaultyRecords = 1;
+    produceRecordsWithHeadersNoKey(TEST_TOPIC_NAME, numberOfFaultyRecords, sampleRecord);
+    produceRecordsWithHeadersNoValue(TEST_TOPIC_NAME, numberOfFaultyRecords, sampleRecord);
+    produceRecordsNoHeaders(numberOfFaultyRecords, sampleRecord);
+
+    // Send second batch of valid records to Kafka
+    produceRecordsWithHeaders(TEST_TOPIC_NAME, NUM_RECORDS_INSERT, sampleRecord);
+
+    log.info("Waiting for files in S3...");
+    expectedFileCount = expectedFileCount * 2;
+    waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
+
+    // verify records in DLQ topic by consuming from topic and checking header messages
+    int expectedDLQRecordCount = 3;
+    ConsumerRecords<byte[], byte[]> dlqRecords =
+        connect.kafka().consume(expectedDLQRecordCount, CONSUME_MAX_DURATION_MS, DLQ_TOPIC_NAME);
+    List<String> expectedErrors = Arrays.asList(
+        "Key cannot be null for SinkRecord",
+        "Cannot write null value record",
+        "Headers cannot be null for SinkRecord"
+    );
+
+    assertEquals(expectedDLQRecordCount, dlqRecords.count());
+    assertDLQRecordMessages(expectedErrors, dlqRecords);
+  }
+
+  /**
+   * Verify the error messages in the DLQ record headers.
+   *
+   * @param expectedMessages    the expected list of error messages
+   * @param consumedDLQRecords  the records consumed from the DLQ topic
+   */
+  private void assertDLQRecordMessages(
+      List<String> expectedMessages,
+      ConsumerRecords<byte[], byte[]> consumedDLQRecords
   ) {
+
+    List<String> actualMessages = new ArrayList<>();
+    for (ConsumerRecord<byte[], byte[]> dlqRecord : consumedDLQRecords.records(DLQ_TOPIC_NAME)) {
+      Header r = dlqRecord.headers().headers("__connect.errors.exception.message").iterator().next();
+      String headerErrorMessage = new StringDeserializer().deserialize(DLQ_TOPIC_NAME, r.value());
+      actualMessages.add(headerErrorMessage);
+    }
+    Collections.sort(actualMessages);
+    Collections.sort(expectedMessages);
+
+    for (int i = 0; i < expectedMessages.size(); i++) {
+      String actualMessage = actualMessages.get(i); // includes record after
+      String expectedMessage = expectedMessages.get(i); // message only
+      org.hamcrest.MatcherAssert.assertThat(actualMessage, startsWith(expectedMessage));
+    }
+  }
+
+  private void produceRecordsNoHeaders(int recordCount, SinkRecord record) {
+    // Send records to Kafka
+    for (long i = 0; i < recordCount; i++) {
+      byte[] value = jsonConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
+      String kafkaValue = new String(value, UTF_8);
+      connect.kafka().produce(TEST_TOPIC_NAME, null, kafkaValue);
+    }
+  }
+
+  private void produceRecordsWithHeaders(String topic, int recordCount, SinkRecord record) throws Exception {
+    // Send records to Kafka
+    for (long i = 0; i < recordCount; i++) {
+      byte[] kafkaKey = jsonConverter.fromConnectData(topic, Schema.STRING_SCHEMA, record.key());
+      byte[] kafkaValue = jsonConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
+      ProducerRecord<byte[],byte[]> producerRecord =
+          new ProducerRecord<>(topic, TOPIC_PARTITION, kafkaKey, kafkaValue, sampleHeaders());
+      producer.send(producerRecord).get();
+    }
+  }
+
+  private void produceRecordsWithHeadersNoKey(String topic, int recordCount, SinkRecord record) throws Exception {
+    // Send records to Kafka
+    for (long i = 0; i < recordCount; i++) {
+      byte[] kafkaValue = jsonConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
+      ProducerRecord<byte[],byte[]> producerRecord =
+          new ProducerRecord<byte[],byte[]>(topic, TOPIC_PARTITION, null, kafkaValue, sampleHeaders());
+      producer.send(producerRecord).get();
+    }
+  }
+
+  private void produceRecordsWithHeadersNoValue(String topic, int recordCount, SinkRecord record) throws Exception{
+    // Send records to Kafka
+    for (long i = 0; i < recordCount; i++) {
+      byte[] kafkaKey = jsonConverter.fromConnectData(topic, Schema.STRING_SCHEMA, record.key());
+      ProducerRecord<byte[],byte[]> producerRecord =
+          new ProducerRecord<>(topic, TOPIC_PARTITION, kafkaKey, null, sampleHeaders());
+      producer.send(producerRecord).get();
+    }
+  }
+
+  private SinkRecord getSampleRecord(Schema recordValueSchema, Struct recordValueStruct ) {
     return new SinkRecord(
         TEST_TOPIC_NAME,
-        1,
+        TOPIC_PARTITION,
         Schema.STRING_SCHEMA,
-        null,
+        "key",
         recordValueSchema,
         recordValueStruct,
-        offset
+        DEFAULT_OFFSET
+    );
+  }
+
+  private Iterable<Header> sampleHeaders() {
+    return Arrays.asList(
+        new RecordHeader("first-header-key", "first-header-value".getBytes()),
+        new RecordHeader("second-header-key", "second-header-value".getBytes())
     );
   }
 
@@ -509,6 +613,16 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     jsonConverterProps.put("converter.type", "value");
     jsonConverter = new JsonConverter();
     jsonConverter.configure(jsonConverterProps);
+  }
+
+  private void initializeCustomProducer() {
+    Map<String, Object> producerProps = new HashMap<>();
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, connect.kafka().bootstrapServers());
+    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+        org.apache.kafka.common.serialization.ByteArraySerializer.class.getName());
+    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+        org.apache.kafka.common.serialization.ByteArraySerializer.class.getName());
+    producer = new KafkaProducer<>(producerProps);
   }
 
   private void setupProperties() {
