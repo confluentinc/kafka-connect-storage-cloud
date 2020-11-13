@@ -288,6 +288,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
     assertEquals(expectedDLQRecordCount, dlqRecords.count());
     assertDLQRecordMessages(expectedErrors, dlqRecords);
+    assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
   }
 
   /**
@@ -445,7 +446,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   /**
-   * Check the contents of the files in the S3 bucket compared to the expected row.
+   * Check the contents of the record value files in the S3 bucket compared to the expected row.
    *
    * @param bucketName          the name of the s3 test bucket
    * @param expectedRowsPerFile the number of rows a file should have
@@ -458,13 +459,14 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
       Struct expectedRow
   ) {
     log.info("expectedRow: {}", expectedRow);
-    for (S3ObjectSummary file : S3Client.listObjectsV2(bucketName).getObjectSummaries()) {
-      String destinationPath = TEST_DOWNLOAD_PATH + file.getKey();
+    for (String fileName :
+        getS3FileListValues(S3Client.listObjectsV2(bucketName).getObjectSummaries())) {
+      String destinationPath = TEST_DOWNLOAD_PATH + fileName;
       File downloadedFile = new File(destinationPath);
       log.info("Saving file to : {}", destinationPath);
-      S3Client.getObject(new GetObjectRequest(bucketName, file.getKey()), downloadedFile);
+      S3Client.getObject(new GetObjectRequest(bucketName, fileName), downloadedFile);
 
-      String fileExtension = getExtensionFromKey(file.getKey());
+      String fileExtension = getExtensionFromKey(fileName);
       List<JsonNode> downloadedFileContents = contentGetters.get(fileExtension)
           .apply(destinationPath);
       if (!fileContentsMatchExpected(downloadedFileContents, expectedRowsPerFile, expectedRow)) {
@@ -613,6 +615,29 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     jsonConverterProps.put("converter.type", "value");
     jsonConverter = new JsonConverter();
     jsonConverter.configure(jsonConverterProps);
+  }
+
+  // whether a filename contains any of the extensions
+  private boolean filenameContainsExtensions(String filename, List<String> extensions) {
+    for (String extension : extensions){
+      if (filename.contains(extension)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // filter for values only.
+  private List<String> getS3FileListValues(List<S3ObjectSummary> summaries) {
+    List<String> excludeExtensions = Arrays.asList(".headers.avro", ".keys.avro");
+    List<String> filteredFiles = new ArrayList<>();
+    for (S3ObjectSummary summary : summaries) {
+      String fileKey = summary.getKey();
+      if (!filenameContainsExtensions(fileKey, excludeExtensions)) {
+        filteredFiles.add(fileKey);
+      }
+    }
+    return filteredFiles;
   }
 
   private void initializeCustomProducer() {
