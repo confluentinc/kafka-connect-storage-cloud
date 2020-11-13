@@ -219,6 +219,10 @@ public class TopicPartitionWriter {
         // fallthrough
       case WRITE_PARTITION_PAUSED:
         SinkRecord record = buffer.peek();
+        if (recordProducesDataException(record)){
+          buffer.poll(); // remove faulty record
+          break;
+        }
         if (timestampExtractor != null) {
           currentTimestamp = timestampExtractor.extract(record, now);
           if (baseRecordTimestamp == null) {
@@ -266,15 +270,6 @@ public class TopicPartitionWriter {
       String encodedPartition,
       long now
   ) {
-    if (recordProducesDataException(record)) {
-      buffer.poll(); // remove faulty record
-      if (recordCount > 0) {
-        return false;
-      } else {
-        return true; // rotate if no records (default behavior)
-      }
-    }
-
     if (compatibility.shouldChangeSchema(record, null, currentValueSchema)
         && recordCount > 0) {
       // This branch is never true for the first record read by this TopicPartitionWriter
