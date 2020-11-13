@@ -219,7 +219,7 @@ public class TopicPartitionWriter {
         // fallthrough
       case WRITE_PARTITION_PAUSED:
         SinkRecord record = buffer.peek();
-        if (recordProducesDataException(record)){
+        if (recordProducesDataException(record)) {
           buffer.poll(); // remove faulty record
           break;
         }
