@@ -110,7 +110,7 @@ public class S3SinkTask extends SinkTask {
           url
       );
       if (!storage.bucketExists()) {
-        throw new ConnectException("No-existent S3 bucket: " + connectorConfig.getBucketName());
+        throw new ConnectException("Non-existent S3 bucket: " + connectorConfig.getBucketName());
       }
 
       writerProvider = newRecordWriterProvider(connectorConfig);
