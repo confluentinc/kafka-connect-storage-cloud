@@ -125,12 +125,6 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.confluent.testcontainers</groupId>
-            <artifactId>squid-proxy</artifactId>
-            <version>${confluent.connect.testcontainers.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers</artifactId>
             <version>${org.testcontainer.version}</version>
