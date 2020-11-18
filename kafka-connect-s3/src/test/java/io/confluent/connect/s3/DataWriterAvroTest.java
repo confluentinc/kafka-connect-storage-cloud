@@ -72,9 +72,9 @@ import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
 import static io.confluent.connect.avro.AvroData.CONNECT_ENUM_DOC_PROP;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 public class DataWriterAvroTest extends TestWithMockedS3 {
@@ -109,7 +109,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     format = new AvroFormat(storage);
 
     s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
+    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
   }
 
   //@Before should be omitted in order to be able to add properties per test.
@@ -132,7 +132,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     format = new AvroFormat(storage);
 
     s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
+    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
   }
 
   @After
@@ -924,7 +924,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     verifyFileListing(expectedFiles);
   }
 
-  protected void verifyFileListing(List<String> expectedFiles) throws IOException {
+  protected void verifyFileListing(List<String> expectedFiles) {
     List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
     List<String> actualFiles = new ArrayList<>();
     for (S3ObjectSummary summary : summaries) {
