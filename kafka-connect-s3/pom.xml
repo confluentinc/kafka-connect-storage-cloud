@@ -40,7 +40,6 @@
         <apache.httpclient.version>4.5.9</apache.httpclient.version>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <parquet.tools.version>1.11.1</parquet.tools.version>
-        <confluent.licensing.version>0.5.2</confluent.licensing.version>
         <formatters.version>0.2.2</formatters.version>
         <confluent.connect.testcontainers.version>1.0.1</confluent.connect.testcontainers.version>
         <org.testcontainer.version>1.11.4</org.testcontainer.version>
@@ -89,19 +88,6 @@
                 </exclusion>
             </exclusions>
         </dependency>
-
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>connect-licensing-extensions</artifactId>
-            <version>${confluent.licensing.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>connect-formatters-json</artifactId>
-            <version>${formatters.version}</version>
-            <scope>test</scope>
-        </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>connect-runtime</artifactId>
@@ -112,13 +98,13 @@
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
-            <artifactId>kafka_${kafka.scala.version}</artifactId>
+            <artifactId>kafka_2.12</artifactId>
             <version>${kafka.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
-            <artifactId>kafka_${kafka.scala.version}</artifactId>
+            <artifactId>kafka_2.12</artifactId>
             <version>${kafka.version}</version>
             <type>test-jar</type>
             <classifier>test</classifier>
