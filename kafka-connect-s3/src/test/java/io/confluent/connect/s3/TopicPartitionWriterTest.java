@@ -64,8 +64,8 @@ import io.confluent.connect.storage.partitioner.TimestampExtractor;
 
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
 
 public class TopicPartitionWriterTest extends TestWithMockedS3 {
   // The default
@@ -638,7 +638,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test(expected = RetriableException.class)
-  public void testPropagateErrorsDuringTimeBasedCommits() throws Exception {
+  public void testPropagateRetriableErrorsDuringTimeBasedCommits() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
     localProps.put(
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
