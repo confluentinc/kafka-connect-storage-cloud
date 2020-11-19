@@ -16,9 +16,9 @@
 
 package io.confluent.connect.s3.storage;
 
+import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.AmazonServiceException.ErrorType;
-import com.amazonaws.SdkClientException;
 import com.amazonaws.event.ProgressEvent;
 import com.amazonaws.event.ProgressListener;
 import com.amazonaws.services.s3.AmazonS3;
@@ -216,7 +216,7 @@ public class S3OutputStream extends OutputStream {
         throw new ConnectException("Unable to initiate MultipartUpload", e);
       }
       throw new IOException("Unable to initiate MultipartUpload.", e);
-    } catch (SdkClientException e) {
+    } catch (AmazonClientException e) {
       throw new IOException("Unable to initiate MultipartUpload.", e);
     }
   }

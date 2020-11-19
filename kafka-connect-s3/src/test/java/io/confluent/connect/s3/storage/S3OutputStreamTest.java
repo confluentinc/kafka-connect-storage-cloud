@@ -5,9 +5,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.AmazonServiceException.ErrorType;
-import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.AmazonS3;
 import io.confluent.connect.s3.S3SinkConnectorTestBase;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -47,7 +47,7 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
 
   @Test
   public void testPropagateOtherRetriableS3Exceptions() {
-    when(s3Mock.initiateMultipartUpload(any())).thenThrow(new SdkClientException("this is an other s3 exception"));
+    when(s3Mock.initiateMultipartUpload(any())).thenThrow(new AmazonClientException("this is an other s3 exception"));
     assertThrows("Multipart upload failed to complete.", DataException.class, () -> stream.commit());
   }
 }
