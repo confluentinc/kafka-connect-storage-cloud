@@ -215,7 +215,6 @@ public class S3OutputStream extends OutputStream {
         // Therefore, the connector should propagate this exception and fail.
         throw new ConnectException("Unable to initiate MultipartUpload", e);
       }
-
       throw new IOException("Unable to initiate MultipartUpload.", e);
     } catch (SdkClientException e) {
       throw new IOException("Unable to initiate MultipartUpload.", e);
