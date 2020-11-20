@@ -16,6 +16,8 @@
 package io.confluent.connect.s3.storage;
 
 import com.amazonaws.AmazonClientException;
+import com.amazonaws.AmazonServiceException;
+import com.amazonaws.AmazonServiceException.ErrorType;
 import com.amazonaws.event.ProgressEvent;
 import com.amazonaws.event.ProgressListener;
 import com.amazonaws.services.s3.AmazonS3;
@@ -31,6 +33,7 @@ import com.amazonaws.services.s3.model.SSECustomerKey;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.parquet.io.PositionOutputStream;
 import org.slf4j.Logger;
@@ -164,7 +167,7 @@ public class S3OutputStream extends PositionOutputStream {
       }
       multiPartUpload.complete();
       log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
-    } catch (Exception e) {
+    } catch (IOException e) {
       log.error("Multipart upload failed to complete for bucket '{}' key '{}'", bucket, key);
       throw new DataException("Multipart upload failed to complete.", e);
     } finally {
@@ -217,10 +220,17 @@ public class S3OutputStream extends PositionOutputStream {
 
     try {
       return new MultipartUpload(s3.initiateMultipartUpload(initRequest).getUploadId());
+    } catch (AmazonServiceException e) {
+      if (e.getErrorType() == ErrorType.Client) {
+        // S3 documentation states that this error type means there is a problem with the request
+        // and that retrying this request will not result in a successful response. This includes
+        // errors such as incorrect access keys, invalid parameter values, missing parameters, etc.
+        // Therefore, the connector should propagate this exception and fail.
+        throw new ConnectException("Unable to initiate MultipartUpload", e);
+      }
+      throw new IOException("Unable to initiate MultipartUpload.", e);
     } catch (AmazonClientException e) {
-      // TODO: elaborate on the exception interpretation. If this is an AmazonServiceException,
-      // there's more info to be extracted.
-      throw new IOException("Unable to initiate MultipartUpload: " + e, e);
+      throw new IOException("Unable to initiate MultipartUpload.", e);
     }
   }
 
