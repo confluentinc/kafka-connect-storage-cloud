@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
-import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.errors.SchemaProjectorException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -508,20 +507,16 @@ public class TopicPartitionWriter {
 
   private void commitFiles() {
     currentStartOffset = minStartOffset();
-    try {
-      for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
-        String encodedPartition = entry.getKey();
-        commitFile(encodedPartition);
-        if (isTaggingEnabled) {
-          tagFile(encodedPartition, entry.getValue());
-        }
-        startOffsets.remove(encodedPartition);
-        endOffsets.remove(encodedPartition);
-        recordCounts.remove(encodedPartition);
-        log.debug("Committed {} for {}", entry.getValue(), tp);
+    for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
+      String encodedPartition = entry.getKey();
+      commitFile(encodedPartition);
+      if (isTaggingEnabled) {
+        tagFile(encodedPartition, entry.getValue());
       }
-    } catch (ConnectException e) {
-      throw new RetriableException(e);
+      startOffsets.remove(encodedPartition);
+      endOffsets.remove(encodedPartition);
+      recordCounts.remove(encodedPartition);
+      log.debug("Committed {} for {}", entry.getValue(), tp);
     }
 
     offsetToCommit = currentOffset + 1;
