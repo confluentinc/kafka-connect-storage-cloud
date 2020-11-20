@@ -20,6 +20,7 @@ import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -96,7 +97,7 @@ public class AvroRecordWriterProvider implements RecordWriterProvider<S3SinkConn
           s3out.commit();
           writer.close();
         } catch (IOException e) {
-          throw new ConnectException(e);
+          throw new RetriableException(e);
         }
       }
 
