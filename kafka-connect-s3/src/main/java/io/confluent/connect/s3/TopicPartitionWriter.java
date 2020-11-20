@@ -19,7 +19,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
-import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.errors.SchemaProjectorException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -488,13 +487,9 @@ public class TopicPartitionWriter {
 
   private void commitFiles() {
     currentStartOffset = minStartOffset();
-    try {
-      for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
-        commitFile(entry.getKey());
-        log.debug("Committed {} for {}", entry.getValue(), tp);
-      }
-    } catch (ConnectException e) {
-      throw new RetriableException(e);
+    for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
+      commitFile(entry.getKey());
+      log.debug("Committed {} for {}", entry.getValue(), tp);
     }
 
     offsetToCommit = currentOffset + 1;
