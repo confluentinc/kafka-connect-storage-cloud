@@ -43,8 +43,8 @@ import java.util.Set;
 import java.util.zip.Deflater;
 
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 public class DataWriterByteArrayTest extends TestWithMockedS3 {
@@ -78,7 +78,7 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
     format = new ByteArrayFormat(storage);
     s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
+    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
   }
 
   @After
@@ -194,7 +194,7 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
   }
 
   protected String getDirectory(String topic, int partition) {
-    String encodedPartition = "partition=" + String.valueOf(partition);
+    String encodedPartition = "partition=" + partition;
     return partitioner.generatePartitionedPath(topic, encodedPartition);
   }
 
@@ -208,7 +208,7 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
     return expectedFiles;
   }
 
-  protected void verifyFileListing(long[] validOffsets, Set<TopicPartition> partitions, String extension) throws IOException {
+  protected void verifyFileListing(long[] validOffsets, Set<TopicPartition> partitions, String extension) {
     List<String> expectedFiles = new ArrayList<>();
     for (TopicPartition tp : partitions) {
       expectedFiles.addAll(getExpectedFiles(validOffsets, tp, extension));
@@ -216,7 +216,7 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
     verifyFileListing(expectedFiles);
   }
 
-  protected void verifyFileListing(List<String> expectedFiles) throws IOException {
+  protected void verifyFileListing(List<String> expectedFiles) {
     List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
     List<String> actualFiles = new ArrayList<>();
     for (S3ObjectSummary summary : summaries) {
@@ -229,8 +229,7 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
     assertThat(actualFiles, is(expectedFiles));
   }
 
-  protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records)
-      throws IOException{
+  protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records) {
     for (Object record : records) {
       byte[] bytes = (byte[]) record;
       SinkRecord expectedRecord = expectedRecords.get(startIndex++);
