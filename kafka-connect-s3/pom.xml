@@ -42,7 +42,7 @@
         <parquet.tools.version>1.11.1</parquet.tools.version>
         <formatters.version>0.2.2</formatters.version>
         <confluent.connect.testcontainers.version>1.0.1</confluent.connect.testcontainers.version>
-        <org.testcontainer.version>1.11.4</org.testcontainer.version>
+        <org.testcontainer.version>1.15.0</org.testcontainer.version>
     </properties>
 
     <dependencyManagement>
