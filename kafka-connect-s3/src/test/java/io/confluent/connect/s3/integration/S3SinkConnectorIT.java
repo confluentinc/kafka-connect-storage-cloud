@@ -19,8 +19,6 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.storage.common.StorageCommonConfig.STORE_URL_CONFIG;
-import static io.confluent.connect.utils.licensing.LicenseConfigUtil.CONFLUENT_TOPIC_BOOTSTRAP_SERVERS_CONFIG;
-import static io.confluent.connect.utils.licensing.LicenseConfigUtil.CONFLUENT_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
@@ -38,8 +36,6 @@ import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
-import io.confluent.connect.formatter.json.JsonFormatter;
-import io.confluent.connect.formatter.json.JsonFormatterProvider;
 
 import io.confluent.connect.s3.S3SinkConnector;
 import io.confluent.connect.s3.format.avro.AvroFormat;
@@ -121,7 +117,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
           PARQUET_EXTENSION, S3SinkConnectorIT::getContentsFromParquet
       );
 
-  private JsonFormatter formatter;
+  private JsonConverter jsonConverter;
 
   protected static boolean useMockClient() {
     File creds = new File(AWS_CRED_PATH);
@@ -145,8 +141,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   @Before
   public void before() {
-    JsonFormatterProvider provider = new JsonFormatterProvider();
-    formatter = (JsonFormatter) provider.create(Collections.singletonMap("schemas.enable", true));
+    initializeJsonConverter();
     setupProperties();
     //add class specific props
     props.put(SinkConnectorConfig.TOPICS_CONFIG, String.join(",", KAFKA_TOPICS));
@@ -201,7 +196,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     // Send records to Kafka
     for (long i = 0; i < NUM_RECORDS_INSERT; i++) {
       SinkRecord record = getSampleRecordWithOffset(recordValueSchema, recordValueStruct, i);
-      String kafkaValue = new String(formatter.formatValue(record), UTF_8);
+      byte[] value = jsonConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
+      String kafkaValue = new String(value, UTF_8);
       connect.kafka().produce(TEST_TOPIC_NAME, null, kafkaValue);
     }
 
@@ -462,6 +458,14 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     return tokens[1];
   }
 
+  private void initializeJsonConverter() {
+    Map<String, Object> jsonConverterProps = new HashMap<>();
+    jsonConverterProps.put("schemas.enable", "true");
+    jsonConverterProps.put("converter.type", "value");
+    jsonConverter = new JsonConverter();
+    jsonConverter.configure(jsonConverterProps);
+  }
+
   private void setupProperties() {
     props = new HashMap<>();
     props.put(CONNECTOR_CLASS_CONFIG, S3SinkConnector.class.getName());
@@ -469,8 +473,5 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     // converters
     props.put(KEY_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
     props.put(VALUE_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
-    // license properties
-    props.put(CONFLUENT_TOPIC_BOOTSTRAP_SERVERS_CONFIG, connect.kafka().bootstrapServers());
-    props.put(CONFLUENT_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
   }
 }
