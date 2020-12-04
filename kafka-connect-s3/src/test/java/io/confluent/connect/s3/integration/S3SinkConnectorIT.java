@@ -321,9 +321,11 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private void produceRecordsNoHeaders(int recordCount, SinkRecord record) {
     // Send records to Kafka
     for (long i = 0; i < recordCount; i++) {
+      byte[] key = jsonConverter.fromConnectData(record.topic(), Schema.STRING_SCHEMA, record.key());
       byte[] value = jsonConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
+      String kafkaKey = new String(value, UTF_8);
       String kafkaValue = new String(value, UTF_8);
-      connect.kafka().produce(TEST_TOPIC_NAME, null, kafkaValue);
+      connect.kafka().produce(TEST_TOPIC_NAME, kafkaKey, kafkaValue);
     }
   }
 
