@@ -218,7 +218,7 @@ public class S3SinkTask extends SinkTask {
 
       if (maybeSkipOnNullValue(record)) {
         if (reporter != null) {
-          reporter.report(record, new DataException("Cannot write null value record"));
+          reporter.report(record, new DataException("Skipping null value record."));
         }
         continue;
       }
