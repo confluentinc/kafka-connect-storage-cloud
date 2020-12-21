@@ -83,7 +83,7 @@ public class TopicPartitionWriter {
   private final String zeroPadOffsetFormat;
   private final String dirDelim;
   private final String fileDelim;
-  private boolean isAllowedUppercase;
+  private boolean isUppercaseAllowed;
   private final Time time;
   private DateTimeZone timeZone;
   private final S3SinkConnectorConfig connectorConfig;
@@ -158,7 +158,7 @@ public class TopicPartitionWriter {
     zeroPadOffsetFormat = "%0"
         + connectorConfig.getInt(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG)
         + "d";
-    isAllowedUppercase = connectorConfig.getBoolean(S3SinkConnectorConfig.S3_PATH_ALLOW_UPPERCASE_CONFIG);
+    isUppercaseAllowed = connectorConfig.getBoolean(S3SinkConnectorConfig.S3_PATH_ALLOW_UPPERCASE_CONFIG);
 
     // Initialize scheduled rotation timer if applicable
     setNextScheduledRotation();
@@ -212,7 +212,7 @@ public class TopicPartitionWriter {
         }
         Schema valueSchema = record.valueSchema();
         String encodedPartition = partitioner.encodePartition(record, now);
-        if (!isAllowedUppercase)
+        if (!isUppercaseAllowed)
           encodedPartition = encodedPartition.toLowerCase();
         Schema currentValueSchema = currentSchemas.get(encodedPartition);
         if (currentValueSchema == null) {
