@@ -166,7 +166,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   }
 
   public boolean bucketExists() {
-    return StringUtils.isNotBlank(bucketName) && s3.doesBucketExist(bucketName);
+    return StringUtils.isNotBlank(bucketName) && s3.doesBucketExistV2(bucketName);
   }
 
   @Override

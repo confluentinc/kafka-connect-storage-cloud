@@ -136,6 +136,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String BEHAVIOR_ON_NULL_VALUES_CONFIG = "behavior.on.null.values";
   public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = BehaviorOnNullValues.FAIL.toString();
 
+  public static final String S3_PATH_ALLOW_UPPERCASE_CONFIG = "s3.path.allow.uppercase";
+  public static final boolean S3_PATH_ALLOW_UPPERCASE_DEFAULT = true;
+
   /**
    * Maximum back-off time when retrying failed requests.
    */
@@ -487,6 +490,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.SHORT,
           "Behavior for null-valued records"
+      );
+
+      configDef.define(
+          S3_PATH_ALLOW_UPPERCASE_CONFIG,
+          Type.BOOLEAN,
+          S3_PATH_ALLOW_UPPERCASE_DEFAULT,
+          Importance.LOW,
+          "Allow to contain uppercase character in s3 path string.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Path's Letter Case"
       );
 
     }
