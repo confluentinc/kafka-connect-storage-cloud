@@ -80,7 +80,7 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
     format = new ByteArrayFormat(storage);
     s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
+    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
   }
 
   @After
@@ -228,7 +228,7 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
 
     Collections.sort(actualFiles);
     Collections.sort(expectedFiles);
-    assertThat(actualFiles, is(expectedFiles));
+    assertEquals(actualFiles, expectedFiles);
   }
 
   protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records)

@@ -93,7 +93,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     format = new AvroFormat(storage);
 
     s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
+    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
 
     Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
     writerProvider = format.getRecordWriterProvider();
@@ -926,7 +926,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     Collections.sort(actualFiles);
     Collections.sort(expectedFileKeys);
-    assertThat(actualFiles, is(expectedFileKeys));
+    assertEquals(actualFiles, expectedFileKeys);
 
     int index = 0;
     for (String fileKey : actualFiles) {
