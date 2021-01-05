@@ -328,8 +328,7 @@ public class TopicPartitionWriter {
       } else {
         throw new ConnectException(e);
       }
-    }
-    finally {
+    } finally {
       tempWriter.close();
     }
   }
