@@ -319,17 +319,18 @@ public class TopicPartitionWriter {
     RecordWriter tempWriter = writerProvider.getRecordWriter(connectorConfig, "");
     try {
       tempWriter.write(record);
-      tempWriter.close();
       return false;
     } catch (DataException e) {
       if (reporter != null) {
         reporter.report(record, e);
         log.warn("Errant record written to DLQ due to: {}", e.getMessage());
-        tempWriter.close();
         return true;
       } else {
         throw new ConnectException(e);
       }
+    }
+    finally {
+      tempWriter.close();
     }
   }
 

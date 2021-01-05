@@ -22,7 +22,6 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_KEYS_CON
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.storage.common.StorageCommonConfig.STORE_URL_CONFIG;
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -60,8 +59,10 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
@@ -282,7 +283,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
         connect.kafka().consume(expectedDLQRecordCount, CONSUME_MAX_DURATION_MS, DLQ_TOPIC_NAME);
     List<String> expectedErrors = Arrays.asList(
         "Key cannot be null for SinkRecord",
-        "Cannot write null value record",
+        "Skipping null value record",
         "Headers cannot be null for SinkRecord"
     );
 
@@ -318,44 +319,46 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     }
   }
 
-  private void produceRecordsNoHeaders(int recordCount, SinkRecord record) {
-    // Send records to Kafka
-    for (long i = 0; i < recordCount; i++) {
-      byte[] key = jsonConverter.fromConnectData(record.topic(), Schema.STRING_SCHEMA, record.key());
-      byte[] value = jsonConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
-      String kafkaKey = new String(value, UTF_8);
-      String kafkaValue = new String(value, UTF_8);
-      connect.kafka().produce(TEST_TOPIC_NAME, kafkaKey, kafkaValue);
-    }
+  private void produceRecordsNoHeaders(int recordCount, SinkRecord record)
+      throws ExecutionException, InterruptedException {
+    produceRecords(record.topic(), recordCount, record, true, true, false);
   }
 
   private void produceRecordsWithHeaders(String topic, int recordCount, SinkRecord record) throws Exception {
-    // Send records to Kafka
-    for (long i = 0; i < recordCount; i++) {
-      byte[] kafkaKey = jsonConverter.fromConnectData(topic, Schema.STRING_SCHEMA, record.key());
-      byte[] kafkaValue = jsonConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
-      ProducerRecord<byte[],byte[]> producerRecord =
-          new ProducerRecord<>(topic, TOPIC_PARTITION, kafkaKey, kafkaValue, sampleHeaders());
-      producer.send(producerRecord).get();
-    }
+   produceRecords(topic, recordCount, record, true, true, true);
   }
 
   private void produceRecordsWithHeadersNoKey(String topic, int recordCount, SinkRecord record) throws Exception {
-    // Send records to Kafka
-    for (long i = 0; i < recordCount; i++) {
-      byte[] kafkaValue = jsonConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
-      ProducerRecord<byte[],byte[]> producerRecord =
-          new ProducerRecord<byte[],byte[]>(topic, TOPIC_PARTITION, null, kafkaValue, sampleHeaders());
-      producer.send(producerRecord).get();
-    }
+    produceRecords(topic, recordCount, record, false, true, true);
   }
 
   private void produceRecordsWithHeadersNoValue(String topic, int recordCount, SinkRecord record) throws Exception{
-    // Send records to Kafka
+    produceRecords(topic, recordCount, record, true, false, true);
+  }
+
+  private void produceRecords(
+      String topic,
+      int recordCount,
+      SinkRecord record,
+      boolean withKey,
+      boolean withValue,
+      boolean withHeaders
+  ) throws ExecutionException, InterruptedException {
+    byte[] kafkaKey = null;
+    byte[] kafkaValue = null;
+    Iterable<Header> headers = Collections.emptyList();
+    if (withKey) {
+      kafkaKey = jsonConverter.fromConnectData(topic, Schema.STRING_SCHEMA, record.key());
+    }
+    if (withValue) {
+     kafkaValue = jsonConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
+    }
+    if (withHeaders) {
+      headers = sampleHeaders();
+    }
+    ProducerRecord<byte[],byte[]> producerRecord =
+        new ProducerRecord<>(topic, TOPIC_PARTITION, kafkaKey, kafkaValue, headers);
     for (long i = 0; i < recordCount; i++) {
-      byte[] kafkaKey = jsonConverter.fromConnectData(topic, Schema.STRING_SCHEMA, record.key());
-      ProducerRecord<byte[],byte[]> producerRecord =
-          new ProducerRecord<>(topic, TOPIC_PARTITION, kafkaKey, null, sampleHeaders());
       producer.send(producerRecord).get();
     }
   }
@@ -622,7 +625,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   // whether a filename contains any of the extensions
   private boolean filenameContainsExtensions(String filename, List<String> extensions) {
     for (String extension : extensions){
-      if (filename.contains(extension)) {
+      if (filename.endsWith(extension)) {
         return true;
       }
     }
@@ -632,14 +635,10 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   // filter for values only.
   private List<String> getS3FileListValues(List<S3ObjectSummary> summaries) {
     List<String> excludeExtensions = Arrays.asList(".headers.avro", ".keys.avro");
-    List<String> filteredFiles = new ArrayList<>();
-    for (S3ObjectSummary summary : summaries) {
-      String fileKey = summary.getKey();
-      if (!filenameContainsExtensions(fileKey, excludeExtensions)) {
-        filteredFiles.add(fileKey);
-      }
-    }
-    return filteredFiles;
+    return summaries.stream()
+        .filter(summary -> !filenameContainsExtensions(summary.getKey(), excludeExtensions))
+        .map(S3ObjectSummary::getKey)
+        .collect(Collectors.toList());
   }
 
   private void initializeCustomProducer() {
