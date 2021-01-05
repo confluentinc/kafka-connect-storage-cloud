@@ -101,7 +101,7 @@
                         <configuration>
                             <title>Kafka Connect S3</title>
                             <sourceUrl>https://github.com/confluentinc/kafka-connect-storage-cloud</sourceUrl>
-                            <documentationUrl>https://docs.confluent.io/${project.version}/connect/connect-storage-cloud/kafka-connect-s3/docs/index.html</documentationUrl>
+                            <documentationUrl>https://docs.confluent.io/kafka-connect-s3-sink/current/index.html</documentationUrl>
                             <description>
                                 The S3 connector, currently available as a sink, allows you to export data from Kafka topics to S3 objects in either Avro or JSON formats. In addition, for certain data layouts, S3 connector exports data by guaranteeing exactly-once delivery semantics to consumers of the S3 objects it produces.
 
