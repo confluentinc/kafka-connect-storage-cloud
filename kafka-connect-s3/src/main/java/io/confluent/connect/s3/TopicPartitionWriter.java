@@ -219,10 +219,6 @@ public class TopicPartitionWriter {
         // fallthrough
       case WRITE_PARTITION_PAUSED:
         SinkRecord record = buffer.peek();
-        if (recordProducesDataException(record)) {
-          buffer.poll(); // remove faulty record
-          break;
-        }
         if (timestampExtractor != null) {
           currentTimestamp = timestampExtractor.extract(record, now);
           if (baseRecordTimestamp == null) {
@@ -286,13 +282,12 @@ public class TopicPartitionWriter {
       setNextScheduledRotation();
       nextState();
     } else {
-      currentEncodedPartition = encodedPartition;
       SinkRecord projectedRecord = compatibility.project(
           record,
           null,
           currentValueSchema
       );
-      writeRecord(projectedRecord);
+      writeRecord(projectedRecord, encodedPartition);
       buffer.poll();
       if (rotateOnSize()) {
         log.info(
@@ -307,30 +302,6 @@ public class TopicPartitionWriter {
       }
     }
     return true;
-  }
-
-  /**
-   * Use a temporary writer to check the record for DataExceptions ahead of writing.
-   *
-   * @param record the record intended to write
-   * @return whether the record produced a DataException and should be skipped
-   */
-  private boolean recordProducesDataException(SinkRecord record) {
-    RecordWriter tempWriter = writerProvider.getRecordWriter(connectorConfig, "");
-    try {
-      tempWriter.write(record);
-      return false;
-    } catch (DataException e) {
-      if (reporter != null) {
-        reporter.report(record, e);
-        log.warn("Errant record written to DLQ due to: {}", e.getMessage());
-        return true;
-      } else {
-        throw new ConnectException(e);
-      }
-    } finally {
-      tempWriter.close();
-    }
   }
 
   private void commitOnTimeIfNoData(long now) {
@@ -477,11 +448,8 @@ public class TopicPartitionWriter {
     context.resume(tp);
   }
 
-  private RecordWriter getWriter(SinkRecord record, String encodedPartition)
+  private RecordWriter newWriter(SinkRecord record, String encodedPartition)
       throws ConnectException {
-    if (writers.containsKey(encodedPartition)) {
-      return writers.get(encodedPartition);
-    }
     String commitFilename = getCommitFilename(encodedPartition);
     log.debug(
         "Creating new writer encodedPartition='{}' filename='{}'",
@@ -523,10 +491,56 @@ public class TopicPartitionWriter {
     return fileKey(topicsDir, dirPrefix, name);
   }
 
-  private void writeRecord(SinkRecord record) {
-    currentOffset = record.kafkaOffset();
+  private void writeRecord(SinkRecord record, String encodedPartition) {
+    RecordWriter writer = writers.get(encodedPartition);
+    long currentOffsetIfSuccessful = record.kafkaOffset();
+    boolean shouldRemoveWriter = false;
+    boolean shouldRemoveStartOffset = false;
+    boolean shouldRemoveCommitFilename = false;
+    try {
+      if (!startOffsets.containsKey(encodedPartition)) {
+        log.trace(
+            "Setting writer's start offset for '{}' to {}",
+            encodedPartition,
+            currentOffsetIfSuccessful
+        );
+        startOffsets.put(encodedPartition, currentOffsetIfSuccessful);
+        shouldRemoveStartOffset = true;
+      }
+      if (writer == null) {
+        if (!commitFiles.containsKey(encodedPartition)) {
+          shouldRemoveCommitFilename = true;
+        }
+        writer = newWriter(record, encodedPartition);
+        shouldRemoveWriter = true;
+      }
+      // potentially revert:
+      // * startOffsets
+      // * commitFilenames
+      // * writers
+      writer.write(record);
+    } catch (DataException e) {
+      if (reporter != null) {
+        if (shouldRemoveStartOffset) {
+          startOffsets.remove(encodedPartition);
+        }
+        if (shouldRemoveWriter) {
+          writers.remove(encodedPartition);
+        }
+        if (shouldRemoveCommitFilename) {
+          commitFiles.remove(encodedPartition);
+        }
+        reporter.report(record, e);
+        log.warn("Errant record written to DLQ due to: {}", e.getMessage());
+        return;
+      } else {
+        throw new ConnectException(e);
+      }
+    }
 
-    if (!startOffsets.containsKey(currentEncodedPartition)) {
+    currentEncodedPartition = encodedPartition;
+    currentOffset = record.kafkaOffset();
+    if (shouldRemoveStartOffset) {
       log.trace(
           "Setting writer's start offset for '{}' to {}",
           currentEncodedPartition,
@@ -537,13 +551,9 @@ public class TopicPartitionWriter {
       // value, we know that we have at least one record. This allows us
       // to initialize all our maps at the same time, and saves future
       // checks on the existence of keys
-      startOffsets.put(currentEncodedPartition, currentOffset);
       recordCounts.put(currentEncodedPartition, 0L);
       endOffsets.put(currentEncodedPartition, 0L);
     }
-
-    RecordWriter writer = getWriter(record, currentEncodedPartition);
-    writer.write(record);
     ++recordCount;
 
     recordCounts.put(currentEncodedPartition, recordCounts.get(currentEncodedPartition) + 1);

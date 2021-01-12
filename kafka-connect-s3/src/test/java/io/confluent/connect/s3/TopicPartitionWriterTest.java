@@ -925,7 +925,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @Test
   public void testExceptionOnNullKeysReported() throws Exception {
     String recordValue = "1";
-    int kafkaOffset = 1;
+    int kafkaOffset = 2;
     SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, null,
         Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
 
@@ -1078,7 +1078,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       topicPartitionWriter.buffer(faultyRecord);
       topicPartitionWriter.buffer(faultyRecord); // send second to verify file rotation as expected
       // write rest of records
-      for (int i = 2; i < sinkRecords.size(); i++) {
+      for (int i = 4; i < sinkRecords.size(); i++) {
         topicPartitionWriter.buffer(sinkRecords.get(i));
       }
     } else {
