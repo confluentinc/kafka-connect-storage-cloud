@@ -266,8 +266,30 @@ public class TopicPartitionWriter {
       String encodedPartition,
       long now
   ) {
-    if (compatibility.shouldChangeSchema(record, null, currentValueSchema)
-        && recordCount > 0) {
+    // rotateOnTime check must go before writeRecord due to ms delay.
+    if (rotateOnTime(encodedPartition, currentTimestamp, now)) {
+      setNextScheduledRotation();
+      nextState();
+      return true;
+    }
+
+    // this check must happen ahead of projecting the record for the writer,
+    // otherwise a SchemaProjectionException is missed.
+    boolean shouldChangeSchema = compatibility.shouldChangeSchema(record, null, currentValueSchema);
+
+    // writeRecord attempt must be after rotateOnTime check due to ms delay.
+    // writeRecord attempt must be before the shouldChangeSchema behavior so
+    // a faulty record does not cause a rotation before getting to writeRecord
+    // where we would get the DataException.
+    SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
+    boolean goodRecord = writeRecord(projectedRecord, encodedPartition);
+    if (!goodRecord) {
+      // skip the faulty record and don't rotate
+      buffer.poll();
+      return false;
+    }
+
+    if (shouldChangeSchema && recordCount > 0) {
       // This branch is never true for the first record read by this TopicPartitionWriter
       log.trace(
           "Incompatible change of schema detected for record '{}' with encoded partition "
@@ -278,30 +300,21 @@ public class TopicPartitionWriter {
       );
       currentSchemas.put(encodedPartition, valueSchema);
       nextState();
-    } else if (rotateOnTime(encodedPartition, currentTimestamp, now)) {
-      setNextScheduledRotation();
-      nextState();
-    } else {
-      SinkRecord projectedRecord = compatibility.project(
-          record,
-          null,
-          currentValueSchema
-      );
-      writeRecord(projectedRecord, encodedPartition);
-      buffer.poll();
-      if (rotateOnSize()) {
-        log.info(
-            "Starting commit and rotation for topic partition {} with start offset {}",
-            tp,
-            startOffsets
-        );
-        nextState();
-        // Fall through and try to rotate immediately
-      } else {
-        return false;
-      }
+      return true;
     }
-    return true;
+
+    buffer.poll();
+    if (rotateOnSize()) {
+      log.info(
+          "Starting commit and rotation for topic partition {} with start offset {}",
+          tp,
+          startOffsets
+      );
+      nextState();
+      return true;
+    }
+
+    return false;
   }
 
   private void commitOnTimeIfNoData(long now) {
@@ -491,7 +504,7 @@ public class TopicPartitionWriter {
     return fileKey(topicsDir, dirPrefix, name);
   }
 
-  private void writeRecord(SinkRecord record, String encodedPartition) {
+  private boolean writeRecord(SinkRecord record, String encodedPartition) {
     RecordWriter writer = writers.get(encodedPartition);
     long currentOffsetIfSuccessful = record.kafkaOffset();
     boolean shouldRemoveWriter = false;
@@ -532,7 +545,7 @@ public class TopicPartitionWriter {
         }
         reporter.report(record, e);
         log.warn("Errant record written to DLQ due to: {}", e.getMessage());
-        return;
+        return false;
       } else {
         throw new ConnectException(e);
       }
@@ -558,6 +571,7 @@ public class TopicPartitionWriter {
 
     recordCounts.put(currentEncodedPartition, recordCounts.get(currentEncodedPartition) + 1);
     endOffsets.put(currentEncodedPartition, currentOffset);
+    return true;
   }
 
   private void commitFiles() {

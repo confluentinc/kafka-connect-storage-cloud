@@ -939,7 +939,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @Test
   public void testExceptionOnEmptyHeadersReported() throws Exception{
     String recordValue = "1";
-    int kafkaOffset = 1;
+    int kafkaOffset = 2;
     SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
         Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, Collections.emptyList());
 
@@ -978,12 +978,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   // test DLQ for lower level exception coming from AvroData
   @Test
   public void testDataExceptionReportedIncorrectSchema() throws Exception {
-    String recordValue = "1";
+    Schema sampleValueSchema = createSchema();
     int kafkaOffset = 1;
     SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
-        Schema.BOOLEAN_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
+        sampleValueSchema, "1", kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
 
-    String exceptionMessage = "Invalid type for BOOLEAN: class java.lang.String";
+    String exceptionMessage = "Invalid type for STRUCT: class java.lang.String";
     testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, false);
     tearDown(); // clear mock S3 port for follow up test
     // test with faulty being first in batch
@@ -1078,7 +1078,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       topicPartitionWriter.buffer(faultyRecord);
       topicPartitionWriter.buffer(faultyRecord); // send second to verify file rotation as expected
       // write rest of records
-      for (int i = 4; i < sinkRecords.size(); i++) {
+      for (int i = 2; i < sinkRecords.size(); i++) {
         topicPartitionWriter.buffer(sinkRecords.get(i));
       }
     } else {
