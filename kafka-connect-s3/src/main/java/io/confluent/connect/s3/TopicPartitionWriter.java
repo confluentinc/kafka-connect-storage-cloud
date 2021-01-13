@@ -266,34 +266,24 @@ public class TopicPartitionWriter {
       String encodedPartition,
       long now
   ) {
-    // rotateOnTime check must go before writeRecord due to ms delay.
+    // rotateOnTime check must go before writeRecord.
     if (rotateOnTime(encodedPartition, currentTimestamp, now)) {
       setNextScheduledRotation();
       nextState();
       return true;
     }
 
-    // this check must happen ahead of projecting the record for the writer,
-    // otherwise a SchemaProjectionException is missed.
-    boolean shouldChangeSchema = compatibility.shouldChangeSchema(record, null, currentValueSchema);
-
-    // writeRecord attempt must be after rotateOnTime check due to ms delay.
-    // writeRecord attempt must be before the shouldChangeSchema behavior so
-    // a faulty record does not cause a rotation before getting to writeRecord
-    // where we would get the DataException.
-    SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
-    boolean goodRecord = writeRecord(projectedRecord, encodedPartition);
-    if (!goodRecord) {
-      // skip the faulty record and don't rotate
-      buffer.poll();
-      return false;
-    }
-
-    if (shouldChangeSchema && recordCount > 0) {
+    // Conflict 1:
+    // If shouldChangeSchema is true, a rotation must be performed before writeRecord
+    // to avoid mismatching schemas in the writer.
+    // Additionally, this check must happen ahead of writeRecord,
+    // otherwise a SchemaProjectionException may be missed.
+    if (compatibility.shouldChangeSchema(record, null, currentValueSchema)
+        && recordCount > 0) {
       // This branch is never true for the first record read by this TopicPartitionWriter
       log.trace(
           "Incompatible change of schema detected for record '{}' with encoded partition "
-          + "'{}' and current offset: '{}'",
+              + "'{}' and current offset: '{}'",
           record,
           encodedPartition,
           currentOffset
@@ -303,7 +293,18 @@ public class TopicPartitionWriter {
       return true;
     }
 
+    // Conflict 2:
+    // A writeRecord attempt must be before the shouldChangeSchema file rotation behavior so
+    // a faulty record does not cause a rotation before getting to writeRecord
+    // where we would get the DataException.
+    SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
+    boolean validRecord = writeRecord(projectedRecord, encodedPartition);
     buffer.poll();
+    if (!validRecord) {
+      // skip the faulty record and don't rotate
+      return false;
+    }
+
     if (rotateOnSize()) {
       log.info(
           "Starting commit and rotation for topic partition {} with start offset {}",
