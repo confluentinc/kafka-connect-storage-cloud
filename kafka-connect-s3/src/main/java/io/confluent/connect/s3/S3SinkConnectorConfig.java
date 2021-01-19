@@ -154,8 +154,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String S3_PATH_STYLE_ACCESS_ENABLED_CONFIG = "s3.path.style.access.enabled";
   public static final boolean S3_PATH_STYLE_ACCESS_ENABLED_DEFAULT = true;
 
-  public static final String S3_PATH_ALLOW_UPPERCASE_CONFIG = "s3.path.allow.uppercase";
-  public static final boolean S3_PATH_ALLOW_UPPERCASE_DEFAULT = true;
+  public static final String S3_PATH_FORCE_LOWERCASE_CONFIG = "s3.path.force.lowercase";
+  public static final boolean S3_PATH_FORCE_LOWERCASE_DEFAULT = false;
 
   private final String name;
 
@@ -531,11 +531,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       );
 
       configDef.define(
-          S3_PATH_ALLOW_UPPERCASE_CONFIG,
+          S3_PATH_FORCE_LOWERCASE_CONFIG,
           Type.BOOLEAN,
-          S3_PATH_ALLOW_UPPERCASE_DEFAULT,
+          S3_PATH_FORCE_LOWERCASE_DEFAULT,
           Importance.LOW,
-          "Allow to contain uppercase character in s3 path string.",
+          "Force s3 path string to be lower cases.",
           group,
           ++orderInGroup,
           Width.LONG,

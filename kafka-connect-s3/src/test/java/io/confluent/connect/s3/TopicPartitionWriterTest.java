@@ -859,22 +859,24 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
-  public void testNotAllowedUppercasePath() throws Exception {
-    localProps.put(S3SinkConnectorConfig.S3_PATH_ALLOW_UPPERCASE_CONFIG, "false");
+  public void testPathLowercaseForcePath() throws Exception {
+    localProps.put(S3SinkConnectorConfig.S3_PATH_FORCE_LOWERCASE_CONFIG, "true");
     setUp();
 
     // Define the partitioner
     Partitioner<?> partitioner = new FieldPartitioner<>();
+    parsedConfig.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG, Collections.singletonList("string"));
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, writerProvider, partitioner, connectorConfig, context);
 
-    String key = "key";
-    Schema schema = createSchema();
-    List<Struct> records = createRecordBatches(schema, 1, 1);
+    String key = "Key";
+    Schema schema = createNewSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 3);
     Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
     for (SinkRecord record : sinkRecords) {
+      ((Struct) record.value()).put("string", "ABC");   // convert to uppercase.
       topicPartitionWriter.buffer(record);
     }
 
@@ -882,15 +884,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     topicPartitionWriter.write();
     topicPartitionWriter.close();
 
-    @SuppressWarnings("unchecked")
-    List<String> partitionFields = (List<String>) parsedConfig.get(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG);
-    String partitionField = partitionFields.get(0).toUpperCase();   // path will contain uppercase letter.
-    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + 16);
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "string=ABC");
     String uppercaseContainedFile = FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT);
 
     List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
     for (S3ObjectSummary summary : summaries) {
-      assertNotEquals(uppercaseContainedFile, summary.getKey());
+      assertNotEquals(uppercaseContainedFile, summary.getKey());    // uppercase value is not found
     }
   }
 
@@ -900,7 +899,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
                .put("int", ibase)
                .put("long", (long) ibase)
                .put("float", fbase)
-               .put("double", (double) fbase);
+               .put("double", (double) fbase)
+               .put("string", "abc");
   }
 
   // Create a batch of records with incremental numeric field values. Total number of records is given by 'size'.
