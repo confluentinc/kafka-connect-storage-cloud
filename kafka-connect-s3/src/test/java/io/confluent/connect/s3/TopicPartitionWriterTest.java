@@ -899,8 +899,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
                .put("int", ibase)
                .put("long", (long) ibase)
                .put("float", fbase)
-               .put("double", (double) fbase)
-               .put("string", "abc");
+               .put("double", (double) fbase);
   }
 
   // Create a batch of records with incremental numeric field values. Total number of records is given by 'size'.
