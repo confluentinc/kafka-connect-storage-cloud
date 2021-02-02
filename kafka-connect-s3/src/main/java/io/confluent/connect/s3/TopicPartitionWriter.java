@@ -106,15 +106,14 @@ public class TopicPartitionWriter {
   }
 
   // Visible for testing
-  TopicPartitionWriter(
-      TopicPartition tp,
-      S3Storage storage,
-      RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
-      Partitioner<?> partitioner,
-      S3SinkConnectorConfig connectorConfig,
-      SinkTaskContext context,
-      Time time,
-      ErrantRecordReporter reporter
+  TopicPartitionWriter(TopicPartition tp,
+                       S3Storage storage,
+                       RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
+                       Partitioner<?> partitioner,
+                       S3SinkConnectorConfig connectorConfig,
+                       SinkTaskContext context,
+                       Time time,
+                       ErrantRecordReporter reporter
   ) {
     this.connectorConfig = connectorConfig;
     this.time = time;
