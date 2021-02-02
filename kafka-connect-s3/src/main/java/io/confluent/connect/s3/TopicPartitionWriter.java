@@ -95,15 +95,13 @@ public class TopicPartitionWriter {
   private static final Time SYSTEM_TIME = new SystemTime();
   private ErrantRecordReporter reporter;
 
-  public TopicPartitionWriter(
-      TopicPartition tp,
-      S3Storage storage,
-      RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
-      Partitioner<?> partitioner,
-      S3SinkConnectorConfig connectorConfig,
-      SinkTaskContext context,
-      ErrantRecordReporter reporter
-  ) {
+  public TopicPartitionWriter(TopicPartition tp,
+                              S3Storage storage,
+                              RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
+                              Partitioner<?> partitioner,
+                              S3SinkConnectorConfig connectorConfig,
+                              SinkTaskContext context,
+                              ErrantRecordReporter reporter) {
     this(tp, storage, writerProvider, partitioner, connectorConfig, context, SYSTEM_TIME, reporter);
   }
 
@@ -266,24 +264,20 @@ public class TopicPartitionWriter {
       String encodedPartition,
       long now
   ) {
-    // rotateOnTime check must go before writeRecord.
+    // rotateOnTime is safe to go before writeRecord, because it is acceptable
+    // even for a faulty record to trigger time-based rotation if it applies
     if (rotateOnTime(encodedPartition, currentTimestamp, now)) {
       setNextScheduledRotation();
       nextState();
       return true;
     }
 
-    // Conflict 1:
-    // If shouldChangeSchema is true, a rotation must be performed before writeRecord
-    // to avoid mismatching schemas in the writer.
-    // Additionally, this check must happen ahead of writeRecord,
-    // otherwise a SchemaProjectionException may be missed.
     if (compatibility.shouldChangeSchema(record, null, currentValueSchema)
         && recordCount > 0) {
       // This branch is never true for the first record read by this TopicPartitionWriter
       log.trace(
           "Incompatible change of schema detected for record '{}' with encoded partition "
-              + "'{}' and current offset: '{}'",
+          + "'{}' and current offset: '{}'",
           record,
           encodedPartition,
           currentOffset
@@ -293,10 +287,6 @@ public class TopicPartitionWriter {
       return true;
     }
 
-    // Conflict 2:
-    // A writeRecord attempt must be before the shouldChangeSchema file rotation behavior so
-    // a faulty record does not cause a rotation before getting to writeRecord
-    // where we would get the DataException.
     SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
     boolean validRecord = writeRecord(projectedRecord, encodedPartition);
     buffer.poll();
@@ -528,10 +518,6 @@ public class TopicPartitionWriter {
         writer = newWriter(record, encodedPartition);
         shouldRemoveWriter = true;
       }
-      // potentially revert:
-      // * startOffsets
-      // * commitFilenames
-      // * writers
       writer.write(record);
     } catch (DataException e) {
       if (reporter != null) {
