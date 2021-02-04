@@ -32,9 +32,12 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
+import org.apache.kafka.connect.errors.SchemaProjectorException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Header;
+import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.easymock.EasyMock;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -70,13 +73,18 @@ import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.connect.storage.partitioner.TimestampExtractor;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
+import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 
 public class TopicPartitionWriterTest extends TestWithMockedS3 {
   // The default
@@ -153,7 +161,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -186,7 +194,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -212,7 +220,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   @Test
   public void testWriteRecordFieldPartitioner() throws Exception {
-    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "9");
+    localProps.put(FLUSH_SIZE_CONFIG, "9");
     setUp();
 
     // Define the partitioner
@@ -220,7 +228,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -277,7 +285,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -321,7 +329,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   @Test
   public void testWriteRecordTimeBasedPartitionWallclockMocked() throws Exception {
-    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(FLUSH_SIZE_CONFIG, "1000");
     localProps.put(
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
         String.valueOf(TimeUnit.HOURS.toMillis(1))
@@ -335,7 +343,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockedWallclockTimestampExtractor.class.getName());
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -393,7 +401,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @Test
   public void testWriteRecordTimeBasedPartitionRecordTimestampHours() throws Exception {
     // Do not roll on size, only based on time.
-    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(FLUSH_SIZE_CONFIG, "1000");
     localProps.put(
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
         String.valueOf(TimeUnit.MINUTES.toMillis(1))
@@ -407,7 +415,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -450,7 +458,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   @Test
   public void testWriteRecordTimeBasedPartitionRecordTimestampDays() throws Exception {
-    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(FLUSH_SIZE_CONFIG, "1000");
     localProps.put(
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
         String.valueOf(TimeUnit.MINUTES.toMillis(1))
@@ -464,7 +472,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -521,7 +529,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -538,7 +546,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   @Test
   public void testWallclockUsesBatchTimePartitionBoundary() throws Exception {
-    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "6");
+    localProps.put(FLUSH_SIZE_CONFIG, "6");
     setUp();
 
     // Define the partitioner
@@ -552,7 +560,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Time systemTime = EasyMock.createMock(SystemTime.class);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, systemTime);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, systemTime, null);
 
     // Freeze clock passed into topicPartitionWriter, so we know what time it will use for "now"
     long freezeTime = 3599000L;
@@ -580,7 +588,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @Test
   public void testWriteRecordTimeBasedPartitionWallclockMockedWithScheduleRotation()
       throws Exception {
-    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(FLUSH_SIZE_CONFIG, "1000");
     localProps.put(
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
         String.valueOf(TimeUnit.HOURS.toMillis(1))
@@ -603,7 +611,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Bring the clock to present.
     time.sleep(SYSTEM.milliseconds());
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -658,7 +666,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   @Test(expected = RetriableException.class)
   public void testPropagateRetriableErrorsDuringTimeBasedCommits() throws Exception {
-    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(FLUSH_SIZE_CONFIG, "1000");
     localProps.put(
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
         String.valueOf(TimeUnit.HOURS.toMillis(1))
@@ -681,7 +689,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Bring the clock to present.
     time.sleep(SYSTEM.milliseconds());
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -704,7 +712,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @Test
   public void testWriteRecordTimeBasedPartitionFieldTimestampHours() throws Exception {
     // Do not roll on size, only based on time.
-    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(FLUSH_SIZE_CONFIG, "1000");
     localProps.put(
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
         String.valueOf(TimeUnit.MINUTES.toMillis(1))
@@ -717,7 +725,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchemaWithTimestampField();
@@ -782,14 +790,14 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @Test
   public void testNoFilesWrittenWithoutCommit() throws Exception {
     // Setting size-based rollup to 10 but will produce fewer records. Commit should not happen.
-    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10");
+    localProps.put(FLUSH_SIZE_CONFIG, "10");
     setUp();
 
     // Define the partitioner
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -812,7 +820,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @Test
   public void testRotateIntervalIsIgnoredWhenUsedWithNoTimeBasedPartitioner() throws Exception {
     // Setting size-based rollup to 10 but will produce fewer records. Commit should not happen.
-    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10");
+    localProps.put(FLUSH_SIZE_CONFIG, "10");
     localProps.put(
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
         String.valueOf(TimeUnit.MINUTES.toMillis(1))
@@ -823,7 +831,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -852,7 +860,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -886,7 +894,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
+            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -915,77 +923,97 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
-  public void testExceptionOnNullKeys() {
+  public void testExceptionOnNullKeysReported() throws Exception {
     String recordValue = "1";
-    int kafkaOffset = 1;
+    int kafkaOffset = 2;
     SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, null,
         Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
 
-    Exception thrownException = assertThrows(DataException.class, () -> writeRecordWithKeysAndHeaders(faultyRecord));
-    String expectedMessage = String.format("Key cannot be null for SinkRecord: %s", faultyRecord);
-    assertEquals(expectedMessage, thrownException.getMessage());
+    String exceptionMessage = String.format("Key cannot be null for SinkRecord: %s", faultyRecord.toString());
+    testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, false, false);
+    tearDown(); // clear mock S3 port for follow up test
+    // test with faulty being first in batch
+    testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, true, false);
   }
 
   @Test
-  public void testExceptionOnEmptyHeaders() {
+  public void testExceptionOnEmptyHeadersReported() throws Exception{
     String recordValue = "1";
-    int kafkaOffset = 1;
+    int kafkaOffset = 2;
     SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
         Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, Collections.emptyList());
 
-    Exception thrownException = assertThrows(DataException.class, () -> writeRecordWithKeysAndHeaders(faultyRecord));
-    String expectedMessage = String.format("Headers cannot be null for SinkRecord: %s", faultyRecord);
-    assertEquals(expectedMessage, thrownException.getMessage());
+    String exceptionMessage = String.format("Headers cannot be null for SinkRecord: %s", faultyRecord.toString());
+    testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, false, false);
+    tearDown(); // clear mock S3 port for follow up test
+    // test with faulty being first in batch
+    testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, true, false);
   }
 
   @Test
-  public void testExceptionOnNullHeaders() {
+  public void testExceptionOnNullHeadersReported() throws Exception {
     String recordValue = "1";
     int kafkaOffset = 1;
     SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
         Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, null);
 
-    Exception thrownException = assertThrows(DataException.class, () -> writeRecordWithKeysAndHeaders(faultyRecord));
-    String expectedMessage = String.format("Headers cannot be null for SinkRecord: %s", faultyRecord);
-    assertEquals(expectedMessage, thrownException.getMessage());
+    String exceptionMessage = String.format("Headers cannot be null for SinkRecord: %s", faultyRecord.toString());
+    testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, false, false);
+    tearDown(); // clear mock S3 port for follow up test
+    // test with faulty being first in batch
+    testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, true, false);
   }
 
   @Test
-  public void testRecordKeysAnsHeadersWritten() throws Exception {
-    writeRecordWithKeysAndHeaders(null);
+  public void testSchemaProjectionExceptionReported() throws Exception {
+    String recordValue = "1";
+    int kafkaOffset = 1;
+    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
+        null, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
+
+    String exceptionMessage = "Switch between schema-based and schema-less data is not supported";
+    testExceptionReportedToDLQ(faultyRecord, SchemaProjectorException.class, exceptionMessage, false, true);
   }
 
-  private void writeRecordWithKeysAndHeaders(SinkRecord faultyRecord) throws Exception {
+  // test DLQ for lower level exception coming from AvroData
+  @Test
+  public void testDataExceptionReportedIncorrectSchema() throws Exception {
+    int kafkaOffset = 1;
+    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
+        createSchema(), "1", kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
+
+    String exceptionMessage = "Invalid type for STRUCT: class java.lang.String";
+    testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, false, true);
+    tearDown(); // clear mock S3 port for follow up test
+    // test with faulty being first in batch
+    testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, true, true);
+  }
+
+  // test DLQ for lower level exception coming from AvroData
+  @Test
+  public void testDataExceptionReportedNullValueForNonOptionalSchema() throws Exception {
+    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
+        createSchema(), null, 1, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
+
+    String exceptionMessage = "Found null value for non-optional schema";
+    testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, false, true);
+    tearDown(); // clear mock S3 port for follow up test
+    // test with faulty being first in batch
+    testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, true, true);
+  }
+
+  @Test
+  public void testRecordKeysAndHeadersWritten() throws Exception {
     setUp();
     // Define the partitioner
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
-
-    // setup key record provider for writing record key files.
-    RecordWriterProvider<S3SinkConnectorConfig> keyWriterProvider =
-        new AvroFormat(storage).getRecordWriterProvider();
-    ((RecordViewSetter) keyWriterProvider).setRecordView(new KeyRecordView());
-    // setup header record provider for writing record header files.
-    RecordWriterProvider<S3SinkConnectorConfig> headerWriterProvider =
-        new AvroFormat(storage).getRecordWriterProvider();
-    ((RecordViewSetter) headerWriterProvider).setRecordView(new HeaderRecordView());
-    // initialize the KVHWriterProvider with header and key writers turned on.
-    RecordWriterProvider<S3SinkConnectorConfig> writerProvider = new KeyValueHeaderRecordWriterProvider(
-        new AvroFormat(storage).getRecordWriterProvider(),
-        keyWriterProvider,
-        headerWriterProvider
-    );
-
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context);
+        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(), partitioner,  connectorConfig, context, null);
 
     Schema schema = createSchema();
     List<Struct> records = createRecordBatches(schema, 3, 3);
     List<SinkRecord> sinkRecords = createSinkRecordsWithHeaders(records, "key", schema);
-
-    if (faultyRecord != null) {
-      topicPartitionWriter.buffer(faultyRecord);
-    }
 
     for (SinkRecord record : sinkRecords) {
       topicPartitionWriter.buffer(record);
@@ -1014,6 +1042,103 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     expectedKeyFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, ".keys.avro", ZERO_PAD_FMT));
     expectedKeyFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, ".keys.avro", ZERO_PAD_FMT));
     verifyRecordElement(expectedKeyFiles, 3, sinkRecords, RecordElement.KEYS);
+  }
+
+  // Test if a given exception type was reported to the DLQ
+  private <T extends DataException> void testExceptionReportedToDLQ(
+      SinkRecord faultyRecord,
+      Class<T> exceptionType,
+      String exceptionMessage,
+      boolean faultyFirst,
+      boolean performFileCheck
+  ) throws Exception {
+    setUp();
+    // Define the partitioner
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+
+    SinkTaskContext mockContext = mock(SinkTaskContext.class);
+    ErrantRecordReporter mockReporter = mock(ErrantRecordReporter.class);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(), partitioner,  connectorConfig, mockContext, mockReporter);
+
+    // create sample records to write
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 3);
+    List<SinkRecord> sinkRecords = createSinkRecordsWithHeaders(records, "key", schema);
+
+    // write a few valid records before the faulty one
+    // enables DLQ testing for mid-batch errors
+    if (!faultyFirst) {
+      topicPartitionWriter.buffer(sinkRecords.get(0));
+      topicPartitionWriter.buffer(sinkRecords.get(1));
+      // should throw exception and get reported
+      topicPartitionWriter.buffer(faultyRecord);
+      topicPartitionWriter.buffer(faultyRecord); // send second to verify file rotation as expected
+      // write rest of records
+      for (int i = 2; i < sinkRecords.size(); i++) {
+        topicPartitionWriter.buffer(sinkRecords.get(i));
+      }
+    } else {
+      topicPartitionWriter.buffer(faultyRecord);
+      topicPartitionWriter.buffer(faultyRecord); // send second to verify file rotation as expected
+      // write valid records
+      for (SinkRecord record : sinkRecords) {
+        topicPartitionWriter.buffer(record);
+      }
+    }
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    // Verify exception was reported
+    ArgumentCaptor<T> exceptionCaptor = ArgumentCaptor.forClass(exceptionType);
+    Mockito.verify(mockReporter, times(2)).report(any(), exceptionCaptor.capture());
+    assertEquals(exceptionMessage, exceptionCaptor.getValue().getMessage());
+
+    // the file check below asserts for file names and contents for cases when a faulty
+    // record does not cause an extra rotation, needs to be turned off for special faulty record
+    // test cases to pass, the extra rotation is currently expected behavior.
+    if (performFileCheck) {
+      String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
+
+      List<String> expectedFiles = new ArrayList<>();
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
+      verifyRecordElement(expectedFiles, 3, sinkRecords, RecordElement.VALUES);
+
+      List<String> expectedHeaderFiles = new ArrayList<>();
+      expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, ".headers.avro", ZERO_PAD_FMT));
+      expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, ".headers.avro", ZERO_PAD_FMT));
+      expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, ".headers.avro", ZERO_PAD_FMT));
+      verifyRecordElement(expectedHeaderFiles, 3, sinkRecords, RecordElement.HEADERS);
+
+      List<String> expectedKeyFiles = new ArrayList<>();
+      expectedKeyFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, ".keys.avro", ZERO_PAD_FMT));
+      expectedKeyFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, ".keys.avro", ZERO_PAD_FMT));
+      expectedKeyFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, ".keys.avro", ZERO_PAD_FMT));
+      verifyRecordElement(expectedKeyFiles, 3, sinkRecords, RecordElement.KEYS);
+    }
+  }
+
+  private RecordWriterProvider<S3SinkConnectorConfig> getKeyHeaderValueProvider() {
+    // setup key record provider for writing record key files.
+    RecordWriterProvider<S3SinkConnectorConfig> keyWriterProvider =
+        new AvroFormat(storage).getRecordWriterProvider();
+    ((RecordViewSetter) keyWriterProvider).setRecordView(new KeyRecordView());
+    // setup header record provider for writing record header files.
+    RecordWriterProvider<S3SinkConnectorConfig> headerWriterProvider =
+        new AvroFormat(storage).getRecordWriterProvider();
+    ((RecordViewSetter) headerWriterProvider).setRecordView(new HeaderRecordView());
+    // initialize the KVHWriterProvider with header and key writers turned on.
+    return new KeyValueHeaderRecordWriterProvider(
+        new AvroFormat(storage).getRecordWriterProvider(),
+        keyWriterProvider,
+        headerWriterProvider
+    );
   }
 
   private Struct createRecord(Schema schema, int ibase, float fbase) {
@@ -1138,7 +1263,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     Collections.sort(actualFiles);
     Collections.sort(expectedFileKeys);
-    assertEquals(actualFiles, expectedFileKeys);
+    assertEquals(expectedFileKeys, actualFiles);
 
     int index = 0;
     for (String fileKey : actualFiles) {

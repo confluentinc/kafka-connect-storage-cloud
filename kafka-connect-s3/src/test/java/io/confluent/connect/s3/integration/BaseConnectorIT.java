@@ -42,7 +42,7 @@ public abstract class BaseConnectorIT {
 
   protected static final int MAX_TASKS = 3;
   private static final long CONNECTOR_STARTUP_DURATION_MS = TimeUnit.MINUTES.toMillis(1);
-  private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(30);
+  private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
 
   protected static AmazonS3 S3Client;
   protected static final String TEST_BUCKET_NAME =

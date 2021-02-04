@@ -84,24 +84,29 @@ public class KeyValueHeaderRecordWriterProvider
     return new RecordWriter() {
       @Override
       public void write(SinkRecord sinkRecord) {
-        valueWriter.write(sinkRecord); // null check happens in sink task
+        // The two data exceptions below must be caught before writing the value
+        // to avoid misaligned K/V/H files.
+
         // keyWriter != null means writing keys is turned on
-        if (keyWriter != null) {
-          if (sinkRecord.key() == null) {
-            throw new DataException(
-                String.format("Key cannot be null for SinkRecord: %s", sinkRecord)
-            );
-          }
-          keyWriter.write(sinkRecord);
+        if (keyWriter != null && sinkRecord.key() == null) {
+          throw new DataException(
+              String.format("Key cannot be null for SinkRecord: %s", sinkRecord)
+          );
         }
 
         // headerWriter != null means writing headers is turned on
+        if (headerWriter != null
+            && (sinkRecord.headers() == null || sinkRecord.headers().isEmpty())) {
+          throw new DataException(
+              String.format("Headers cannot be null for SinkRecord: %s", sinkRecord)
+          );
+        }
+
+        valueWriter.write(sinkRecord); // null check happens in sink task
+        if (keyWriter != null) {
+          keyWriter.write(sinkRecord);
+        }
         if (headerWriter != null) {
-          if (sinkRecord.headers() == null || sinkRecord.headers().isEmpty()) {
-            throw new DataException(
-                String.format("Headers cannot be null for SinkRecord: %s", sinkRecord)
-            );
-          }
           headerWriter.write(sinkRecord);
         }
       }

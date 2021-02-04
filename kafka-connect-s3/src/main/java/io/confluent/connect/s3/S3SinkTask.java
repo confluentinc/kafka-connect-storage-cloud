@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
+import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -60,6 +61,7 @@ public class S3SinkTask extends SinkTask {
   private Format<S3SinkConnectorConfig, String> format;
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private final Time time;
+  private ErrantRecordReporter reporter;
 
   /**
    * No-arg constructor. Used by Connect framework.
@@ -108,13 +110,24 @@ public class S3SinkTask extends SinkTask {
           url
       );
       if (!storage.bucketExists()) {
-        throw new DataException("No-existent S3 bucket: " + connectorConfig.getBucketName());
+        throw new ConnectException("Non-existent S3 bucket: " + connectorConfig.getBucketName());
       }
 
       writerProvider = newRecordWriterProvider(connectorConfig);
       partitioner = newPartitioner(connectorConfig);
 
       open(context.assignment());
+      try {
+        reporter = context.errantRecordReporter();
+        if (reporter == null) {
+          log.info("Errant record reporter not configured.");
+        }
+      } catch (NoSuchMethodError | NoClassDefFoundError | UnsupportedOperationException e) {
+        // Will occur in Connect runtimes earlier than 2.6
+        log.warn("Connect versions prior to Apache Kafka 2.6 do not support "
+            + "the errant record reporter");
+      }
+
       log.info("Started S3 connector task with assigned partitions: {}",
           topicPartitionWriters.keySet()
       );
@@ -204,6 +217,9 @@ public class S3SinkTask extends SinkTask {
       TopicPartition tp = new TopicPartition(topic, partition);
 
       if (maybeSkipOnNullValue(record)) {
+        if (reporter != null) {
+          reporter.report(record, new DataException("Skipping null value record."));
+        }
         continue;
       }
       topicPartitionWriters.get(tp).buffer(record);
@@ -305,7 +321,8 @@ public class S3SinkTask extends SinkTask {
         partitioner,
         connectorConfig,
         context,
-        time
+        time,
+        reporter
     );
   }
 
