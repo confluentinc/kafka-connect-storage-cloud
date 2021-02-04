@@ -11,7 +11,6 @@ import com.amazonaws.AmazonServiceException.ErrorType;
 import com.amazonaws.services.s3.AmazonS3;
 import io.confluent.connect.s3.S3SinkConnectorTestBase;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.errors.DataException;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -42,12 +41,12 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
     e.setErrorType(ErrorType.Service);
 
     when(s3Mock.initiateMultipartUpload(any())).thenThrow(e);
-    assertThrows("Multipart upload failed to complete.", DataException.class, () -> stream.commit());
+    assertThrows("Multipart upload failed to complete.", ConnectException.class, () -> stream.commit());
   }
 
   @Test
   public void testPropagateOtherRetriableS3Exceptions() {
     when(s3Mock.initiateMultipartUpload(any())).thenThrow(new AmazonClientException("this is an other s3 exception"));
-    assertThrows("Multipart upload failed to complete.", DataException.class, () -> stream.commit());
+    assertThrows("Multipart upload failed to complete.", ConnectException.class, () -> stream.commit());
   }
 }

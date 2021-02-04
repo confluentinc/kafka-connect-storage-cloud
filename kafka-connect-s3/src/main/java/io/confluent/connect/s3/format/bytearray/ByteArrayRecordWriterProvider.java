@@ -25,7 +25,6 @@ import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import org.apache.kafka.connect.converters.ByteArrayConverter;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
@@ -73,7 +72,7 @@ public class ByteArrayRecordWriterProvider extends RecordViewSetter
               recordView.getViewSchema(record, false), recordView.getView(record, false));
           s3outWrapper.write(bytes);
           s3outWrapper.write(lineSeparatorBytes);
-        } catch (IOException | DataException e) {
+        } catch (IOException e) {
           throw new ConnectException(e);
         }
       }

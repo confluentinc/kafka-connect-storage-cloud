@@ -17,14 +17,18 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mockito;
 import org.powermock.api.easymock.PowerMock;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
@@ -44,6 +48,10 @@ import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.when;
 import static org.powermock.api.easymock.PowerMock.replayAll;
 import static org.powermock.api.easymock.PowerMock.verifyAll;
 
@@ -107,7 +115,12 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     setUp();
     replayAll();
     task = new S3SinkTask();
-    task.initialize(context);
+    SinkTaskContext mockContext = mock(SinkTaskContext.class);
+    ErrantRecordReporter reporter = mock(ErrantRecordReporter.class);
+    when(mockContext.errantRecordReporter()).thenReturn(reporter);
+    when(mockContext.assignment()).thenReturn(Collections.singleton(TOPIC_PARTITION));
+    task.initialize(mockContext);
+
     properties.put(S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG,
         S3SinkConnectorConfig.BehaviorOnNullValues.IGNORE.toString());
     task.start(properties);
@@ -122,7 +135,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     sinkRecords.addAll(createRecordsWithPrimitive(4, 3,
         Collections.singleton(new TopicPartition(TOPIC, PARTITION))));
     task.put(sinkRecords);
-    task.close(context.assignment());
+    task.close(mockContext.assignment());
     task.stop();
 
     long[] validOffsets = {0, 3, 6};
@@ -133,6 +146,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     expectedSinkRecords.addAll(createRecordsWithPrimitive(4, 3,
         Collections.singleton(new TopicPartition(TOPIC, PARTITION))));
     verify(expectedSinkRecords, validOffsets);
+    Mockito.verify(reporter, times(2)).report(any(), any(DataException.class));
   }
 
   @Test
