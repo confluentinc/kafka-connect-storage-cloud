@@ -59,12 +59,14 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
       ).define(
           BASE_ROLE_SESSION_NAME_CONFIG,
           ConfigDef.Type.STRING,
-          ConfigDef.Importance.HIGH,
+          "",
+          ConfigDef.Importance.MEDIUM,
           "Base Role session name to use when starting a session"
       ).define(
           BASE_ROLE_ARN_CONFIG,
           ConfigDef.Type.STRING,
-          ConfigDef.Importance.HIGH,
+          "",
+          ConfigDef.Importance.MEDIUM,
           "Base Role ARN to use when starting a session"
       );
 
@@ -100,10 +102,12 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
 
   public AWSSecurityTokenService getBaseSecurityTokenService() {
     if (this.baseRoleArn != null && !this.baseRoleArn.isEmpty()) {
-      AWSCredentialsProvider baseCredentials = new STSAssumeRoleSessionCredentialsProvider.Builder(baseRoleArn, baseRoleSessionName)
-              .withStsClient(AWSSecurityTokenServiceClientBuilder.defaultClient())
-              .build();
-      return AWSSecurityTokenServiceClientBuilder.standard().withCredentials(baseCredentials).build();
+      AWSCredentialsProvider baseCredentials =
+              new STSAssumeRoleSessionCredentialsProvider.Builder(baseRoleArn, baseRoleSessionName)
+                .withStsClient(AWSSecurityTokenServiceClientBuilder.defaultClient())
+                .build();
+      return AWSSecurityTokenServiceClientBuilder.standard()
+              .withCredentials(baseCredentials).build();
     } else {
       return AWSSecurityTokenServiceClientBuilder.defaultClient();
     }
