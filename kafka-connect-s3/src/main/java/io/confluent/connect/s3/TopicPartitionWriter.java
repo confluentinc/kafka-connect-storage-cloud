@@ -223,7 +223,18 @@ public class TopicPartitionWriter {
           }
         }
         Schema valueSchema = record.valueSchema();
-        String encodedPartition = partitioner.encodePartition(record, now);
+        String encodedPartition;
+        try {
+          encodedPartition = partitioner.encodePartition(record, now);
+        } catch (ConnectException e) {
+          if (reporter != null) {
+            reporter.report(record, e);
+            buffer.poll();
+            break;
+          } else {
+            throw e;
+          }
+        }
         Schema currentValueSchema = currentSchemas.get(encodedPartition);
         if (currentValueSchema == null) {
           currentSchemas.put(encodedPartition, valueSchema);
