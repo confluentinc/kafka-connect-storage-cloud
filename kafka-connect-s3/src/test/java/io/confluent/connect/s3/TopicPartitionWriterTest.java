@@ -28,6 +28,7 @@ import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
@@ -77,6 +78,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
+import static io.confluent.connect.storage.partitioner.PartitionerConfig.PARTITION_FIELD_NAME_CONFIG;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -245,7 +247,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     topicPartitionWriter.close();
 
     @SuppressWarnings("unchecked")
-    List<String> partitionFields = (List<String>) parsedConfig.get(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG);
+    List<String> partitionFields = (List<String>) parsedConfig.get(PARTITION_FIELD_NAME_CONFIG);
     String partitionField = partitionFields.get(0);
     String dirPrefix1 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(16));
     String dirPrefix2 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(17));
@@ -973,6 +975,37 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     String exceptionMessage = "Switch between schema-based and schema-less data is not supported";
     testExceptionReportedToDLQ(faultyRecord, SchemaProjectorException.class, exceptionMessage, false, true);
+  }
+
+  @Test
+  public void testPartitioningExceptionReported() throws Exception {
+    String field = "field";
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new FieldPartitioner<>();
+    parsedConfig.put(PARTITION_FIELD_NAME_CONFIG, Arrays.asList(field));
+    partitioner.configure(parsedConfig);
+
+    SinkTaskContext mockContext = mock(SinkTaskContext.class);
+    ErrantRecordReporter mockReporter = mock(ErrantRecordReporter.class);
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, mockContext, mockReporter);
+
+    Schema schema = SchemaBuilder.struct().field(field, Schema.STRING_SCHEMA);
+    Struct struct = new Struct(schema).put(field, "a");
+
+    topicPartitionWriter.buffer(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key", schema, struct, 0));
+    // non-struct record should throw exception and get reported
+    topicPartitionWriter.buffer(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key", schema, "not a struct", 1));
+
+    // Test actual write
+    topicPartitionWriter.write();
+    ArgumentCaptor<Throwable> exceptionCaptor = ArgumentCaptor.forClass(ConnectException.class);
+    Mockito.verify(mockReporter, times(1)).report(any(), exceptionCaptor.capture());
+    assertEquals("Error encoding partition.", exceptionCaptor.getValue().getMessage());
+
+    topicPartitionWriter.close();
   }
 
   // test DLQ for lower level exception coming from AvroData
