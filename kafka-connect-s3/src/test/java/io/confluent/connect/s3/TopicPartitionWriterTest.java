@@ -23,6 +23,7 @@ import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
 import io.confluent.connect.s3.format.RecordViewSetter;
 import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
+import io.confluent.connect.storage.errors.PartitionException;
 import io.confluent.kafka.serializers.NonRecordContainer;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.record.TimestampType;
@@ -1001,7 +1002,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     // Test actual write
     topicPartitionWriter.write();
-    ArgumentCaptor<Throwable> exceptionCaptor = ArgumentCaptor.forClass(ConnectException.class);
+    ArgumentCaptor<Throwable> exceptionCaptor = ArgumentCaptor.forClass(PartitionException.class);
     Mockito.verify(mockReporter, times(1)).report(any(), exceptionCaptor.capture());
     assertEquals("Error encoding partition.", exceptionCaptor.getValue().getMessage());
 
