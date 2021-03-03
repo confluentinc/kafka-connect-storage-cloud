@@ -17,6 +17,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.SdkClientException;
 import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.storage.errors.PartitionException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -226,7 +227,7 @@ public class TopicPartitionWriter {
         String encodedPartition;
         try {
           encodedPartition = partitioner.encodePartition(record, now);
-        } catch (ConnectException e) {
+        } catch (PartitionException e) {
           if (reporter != null) {
             reporter.report(record, e);
             buffer.poll();
