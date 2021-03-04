@@ -32,7 +32,7 @@ import java.util.Map;
  * temporary, short-lived session to use for authentication.  This credentials provider does not
  * support refreshing the credentials in a background thread.
  */
-public class AwsDoubleAssumeRoleCredentialsProvider implements AWSCredentialsProvider, Configurable {
+public class AwsCustRoleCredentialsProvider implements AWSCredentialsProvider, Configurable {
 
   public static final String ROLE_EXTERNAL_ID_CONFIG = "sts.role.external.id";
   public static final String ROLE_ARN_CONFIG = "sts.role.arn";
