@@ -15,17 +15,17 @@
 
 package io.confluent.connect.s3.format.csv;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.connect.storage.ConverterConfig;
 
 import java.util.Map;
 
-public class CsvConverterConfig extends ConverterConfig {
+public class CsvConverterConfig extends AbstractConfig {
 
   private static final ConfigDef CONFIG;
 
   static {
-    CONFIG = ConverterConfig.newConfigDef();
+    CONFIG = new ConfigDef();
     CONFIG.define("csv.field.sep",
             ConfigDef.Type.STRING,
             ",",
