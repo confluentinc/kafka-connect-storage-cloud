@@ -117,8 +117,10 @@ public class CsvConverter implements Converter, HeaderConverter {
         throw new DataException("Map is not supported");
       default:
         if (value != null) {
-          addQuotes(value);
-        } else return "";
+          return addQuotes(value);
+        } else {
+          return "";
+        }
     }
   }
 
