@@ -79,7 +79,9 @@ public class CsvConverter implements Converter, HeaderConverter {
           if (builder.length() > 0) {
             builder.append(this.fieldSeparator);
           }
+          builder.append('"');
           builder.append(schemaToHeader(toSnakeCase(f.name()), f.schema()));
+          builder.append('"');
         }
         return builder.toString();
       default:
@@ -91,9 +93,6 @@ public class CsvConverter implements Converter, HeaderConverter {
     }
   }
 
-  private String toSnakeCase(String name) {
-    return CASE_CHANGE_PATTERN.matcher(name).replaceAll("$1_$2").toLowerCase();
-  }
 
   private String toCsvData(Schema schema, Object value) {
     this.lastSchema = schema;
@@ -113,13 +112,14 @@ public class CsvConverter implements Converter, HeaderConverter {
           }
           buf.append(toCsvData(f.schema(), struct.get(f)));
         }
-        return buf.toString().replaceAll("\"", "\"\"");
+        return buf.toString();
       case MAP:
         throw new DataException("Map is not supported");
       default:
-        return "\"" + value + "\"";
+        if (value != null) {
+          addQuotes(value);
+        } else return "";
     }
-
   }
 
   public SchemaAndValue toConnectData(String topic, byte[] value) {
@@ -136,5 +136,15 @@ public class CsvConverter implements Converter, HeaderConverter {
   }
 
   public void close() {
+    // do nothing
   }
+
+  private String toSnakeCase(String name) {
+    return CASE_CHANGE_PATTERN.matcher(name).replaceAll("$1_$2").toLowerCase();
+  }
+
+  private String addQuotes(Object value) {
+    return "\"" + String.valueOf(value).replaceAll("\"", "\"\"") + "\"";
+  }
+
 }
