@@ -100,6 +100,7 @@ public class TopicPartitionWriter {
   private final S3SinkConnectorConfig connectorConfig;
   private static final Time SYSTEM_TIME = new SystemTime();
   private ErrantRecordReporter reporter;
+  private final String filenamePattern;
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
@@ -175,6 +176,7 @@ public class TopicPartitionWriter {
     currentOffset = -1L;
     dirDelim = connectorConfig.getString(StorageCommonConfig.DIRECTORY_DELIM_CONFIG);
     fileDelim = connectorConfig.getString(StorageCommonConfig.FILE_DELIM_CONFIG);
+    filenamePattern = connectorConfig.getString(S3SinkConnectorConfig.S3_FILENAME_PATTERN_CONFIG);
     extension = writerProvider.getExtension();
     zeroPadOffsetFormat = "%0"
         + connectorConfig.getInt(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG)
@@ -520,7 +522,11 @@ public class TopicPartitionWriter {
     } else {
       long startOffset = startOffsets.get(encodedPartition);
       String prefix = getDirectoryPrefix(encodedPartition);
-      commitFile = fileKeyToCommit(prefix, startOffset);
+      if (this.filenamePattern != null && !this.filenamePattern.isEmpty()) {
+        commitFile = patternBasedFileKeyToCommit(topicsDir, startOffset);
+      } else {
+        commitFile = fileKeyToCommit(prefix, startOffset);
+      }
       commitFiles.put(encodedPartition, commitFile);
     }
     return commitFile;
@@ -543,6 +549,14 @@ public class TopicPartitionWriter {
     return fileKey(topicsDir, dirPrefix, name);
   }
 
+  private String patternBasedFileKeyToCommit(String dirPrefix, long startOffset) {
+    String name = this.filenamePattern
+            .replaceAll("%t", tp.topic())
+            .replaceAll("%p", String.valueOf(tp.partition()))
+            .replaceAll("%o", String.format(zeroPadOffsetFormat, startOffset))
+            + extension;
+    return fileKey(topicsDir, dirPrefix, name);
+  }
   private boolean writeRecord(SinkRecord record, String encodedPartition) {
     RecordWriter writer = writers.get(encodedPartition);
     long currentOffsetIfSuccessful = record.kafkaOffset();

@@ -132,6 +132,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String COMPRESSION_TYPE_CONFIG = "s3.compression.type";
   public static final String COMPRESSION_TYPE_DEFAULT = "none";
 
+
   public static final String COMPRESSION_LEVEL_CONFIG = "s3.compression.level";
   public static final int COMPRESSION_LEVEL_DEFAULT = Deflater.DEFAULT_COMPRESSION;
   private static final CompressionLevelValidator COMPRESSION_LEVEL_VALIDATOR =
@@ -162,6 +163,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String BEHAVIOR_ON_NULL_VALUES_CONFIG = "behavior.on.null.values";
   public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = OutputWriteBehavior.FAIL.toString();
+
+  public static final String S3_FILENAME_PATTERN_CONFIG = "s3.path.filename.format";
+  public static final String S3_FILENAME_PATTERN_DEFAULT = "";
 
   /**
    * Maximum back-off time when retrying failed requests.
@@ -735,6 +739,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.NONE,
           "Headers format class",
           HEADERS_FORMAT_CLASS_RECOMMENDER
+      );
+
+      configDef.define(
+              S3_FILENAME_PATTERN_CONFIG,
+              Type.STRING,
+              S3_FILENAME_PATTERN_DEFAULT,
+              Importance.LOW,
+              "Specifies filename pattern (use %t for topic, %p for partition and %o for offset",
+              group,
+              ++orderInGroup,
+              Width.SHORT,
+              "Filename pattern"
       );
 
       configDef.define(
