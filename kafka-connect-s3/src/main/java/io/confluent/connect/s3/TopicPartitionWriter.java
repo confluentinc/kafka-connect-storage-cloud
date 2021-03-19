@@ -33,7 +33,6 @@ import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.connect.storage.partitioner.TimestampExtractor;
 import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
 import io.confluent.connect.storage.util.DateTimeUtils;
-import org.apache.directory.api.util.Strings;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -201,7 +200,7 @@ public class TopicPartitionWriter {
     zeroPadOffsetFormat = "%0"
         + connectorConfig.getInt(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG)
         + "d";
-    if (Strings.isNotEmpty(connectorConfig.getString(
+    if (StringUtils.isNotBlank(connectorConfig.getString(
             S3SinkConnectorConfig.S3_FILENAME_DATE_FORMAT_CONFIG))) {
       filenameDateTimeFormatter = DateTimeFormatter.ofPattern(
               connectorConfig.getString(S3SinkConnectorConfig.S3_FILENAME_DATE_FORMAT_CONFIG));
