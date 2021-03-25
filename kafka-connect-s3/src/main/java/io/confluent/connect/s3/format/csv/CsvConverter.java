@@ -102,7 +102,7 @@ public class CsvConverter implements Converter, HeaderConverter {
 
 
   private String toCsvData(Schema schema, Object value) {
-    if (schema == null || value == null) {
+    if (schema == null) {
       return "";
     }
     switch (schema.type()) {
@@ -128,11 +128,12 @@ public class CsvConverter implements Converter, HeaderConverter {
 
   private String structToString(Schema schema, Object value) {
     Struct struct = (Struct) value;
-    if (struct.schema() == null || !struct.schema().equals(schema)) {
+    if (!schema.isOptional() && (struct == null
+        || struct.schema() == null || !struct.schema().equals(schema))) {
       throw new DataException("Missing or mismatching schema.");
     }
     StringBuilder buf = new StringBuilder();
-    for (Field f : struct.schema().fields()) {
+    for (Field f : schema.fields()) {
       if (buf.length() > 0) {
         buf.append(this.fieldSeparator);
       }

@@ -23,17 +23,16 @@ public class CSVConverterTest {
             .put("dateField", testDate)
             .put("timeField", testTime);
     CsvConverter converter = new CsvConverter();
-    assertEquals("\"test\"\"Value\",\"123\",\""
+    assertEquals("\"test\"\"Value\",,\"123\",\""
                     +testDate.toInstant()+"\",\""
                     +testTime.toInstant()+"\"",
             new String(converter.fromConnectData("topic", simpleSchema, value)));
-    assertEquals("\"text_field\",\"numeric_field\",\"date_field\",\"time_field\"",
+    assertEquals("\"text_field\",\"null_field\",\"numeric_field\",\"date_field\",\"time_field\"",
             new String(converter.getHeader()));
   }
 
   @Test
   public void headerAndDataForNestedSchema() {
-    Schema simpleSchema = getSimpleSchema();
     Schema nestedSchema = getNestedSchema();
     Date testDate = new Date(333333333L);
     Date testTime = new Date(111111111L);
@@ -46,11 +45,12 @@ public class CSVConverterTest {
     nestedValue.put("nested",value);
     nestedValue.put("textField", "randomValue");
     CsvConverter converter = new CsvConverter();
-    assertEquals("\"randomValue\",\"test\"\"Value\",\"123\",\""
+    assertEquals("\"randomValue\",\"test\"\"Value\",,\"123\",\""
                     +testDate.toInstant()+"\",\""
                     +testTime.toInstant()+"\"",
             new String(converter.fromConnectData("topic", nestedSchema, nestedValue)));
-    assertEquals("\"text_field\",\"nested_text_field\",\"nested_numeric_field\"," +
+    assertEquals("\"text_field\",\"nested_text_field\",\"nested_null_field\"," +
+                    "\"nested_numeric_field\"," +
                     "\"nested_date_field\",\"nested_time_field\"",
             new String(converter.getHeader()));
   }
@@ -61,6 +61,7 @@ public class CSVConverterTest {
             .name("TestSchema")
             .parameter("namespace", "com.test")
             .field("textField", Schema.STRING_SCHEMA)
+            .field("nullField", SchemaBuilder.string().optional())
             .field("numericField", Schema.INT64_SCHEMA)
             .field("dateField", org.apache.kafka.connect.data.Date.SCHEMA)
             .field("timeField", org.apache.kafka.connect.data.Timestamp.SCHEMA)
