@@ -40,6 +40,7 @@
         <formatters.version>0.2.2</formatters.version>
         <confluent.connect.testcontainers.version>1.0.1</confluent.connect.testcontainers.version>
         <org.testcontainer.version>1.15.0</org.testcontainer.version>
+        <skipIntegrationTests>false</skipIntegrationTests>
     </properties>
 
     <dependencyManagement>
@@ -234,6 +235,27 @@
                     <tagNameFormat>v@{project.version}</tagNameFormat>
                 </configuration>
             </plugin>
+            <plugin>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.apache.maven.surefire</groupId>
+                        <artifactId>surefire-junit47</artifactId>
+                        <version>${surefire-junit47.version}</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <skip>${skipIntegrationTests}</skip>
+                    <groups>org.apache.kafka.test.IntegrationTest</groups>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                        </goals>
+                    </execution>
+                </executions>
+             </plugin>
         </plugins>
 
         <resources>
@@ -391,6 +413,13 @@
                     </plugin>
                 </plugins>
             </build>
+        </profile>
+        <profile>
+            <id>jenkins</id>
+            <properties>
+                <!-- skip integration tests on Jenkins since they require docker -->
+                <skipIntegrationTests>${skipIntegrationTests}</skipIntegrationTests>
+            </properties>
         </profile>
     </profiles>
 </project>
