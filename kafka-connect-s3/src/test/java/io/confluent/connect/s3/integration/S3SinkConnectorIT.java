@@ -399,7 +399,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    */
   private static AmazonS3 getS3Client() {
      // DefaultAWSCredentialsProviderChain,
-     // For locall testing,  ~/.aws/credentials needs to be defined
+     // For locall testing,  ~/.aws/credentials needs to be defined or other environment variables
      // For Jenkins testing, AWS_CREDENTIAL_PROFILES_FILE is setup with credentials read from vault
      return AmazonS3ClientBuilder.standard().withRegion(AWS_REGION).build();
   }
