@@ -62,6 +62,9 @@
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <hadoop.version>2.7.7</hadoop.version>
         <maven.release.plugin.version>2.5.3</maven.release.plugin.version>
+        <maven.failsafe.plugin.version>2.22.1</maven.failsafe.plugin.version>
+        <skipIntegrationTests>false</skipIntegrationTests>
+        <surefire-junit47.version>2.22.1</surefire-junit47.version>
     </properties>
 
     <repositories>
@@ -217,15 +220,37 @@
               <plugin>
                   <groupId>org.apache.maven.plugins</groupId>
                   <artifactId>maven-surefire-plugin</artifactId>
+                  <version>${maven-surefire-plugin.version}</version>
                   <configuration>
-                      <argLine>@{argLine} -Djava.awt.headless=true</argLine>
-                      <reuseForks>false</reuseForks>
-                      <forkCount>1</forkCount>
+                      <!-- Skip the Integration tests as part of surefire run -->
+                      <excludedGroups>org.apache.kafka.test.IntegrationTest</excludedGroups>
                   </configuration>
               </plugin>
               <plugin>
                   <groupId>org.apache.maven.plugins</groupId>
                   <artifactId>maven-assembly-plugin</artifactId>
+              </plugin>
+              <plugin>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>${maven.failsafe.plugin.version}</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.apache.maven.surefire</groupId>
+                            <artifactId>surefire-junit47</artifactId>
+                            <version>${surefire-junit47.version}</version>
+                        </dependency>
+                    </dependencies>
+                    <configuration>
+                      <skip>${skipIntegrationTests}</skip>
+                      <groups>org.apache.kafka.test.IntegrationTest</groups>
+                    </configuration>
+                    <executions>
+                      <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                        </goals>
+                      </execution>
+                    </executions>
               </plugin>
            </plugins>
         </pluginManagement>

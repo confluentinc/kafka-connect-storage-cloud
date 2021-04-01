@@ -47,7 +47,6 @@ import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.storage.S3Storage;
-import io.findify.s3mock.S3Mock;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -108,12 +107,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorIT.class);
   private static final ObjectMapper jsonMapper = new ObjectMapper();
-  private static final String JENKINS_HOME = "JENKINS_HOME";
   // AWS configs
-  private static final String AWS_CRED_PATH = System.getProperty("user.home") + "/.aws/credentials";
   private static final String AWS_REGION = "us-west-2";
-  private static final String MOCK_S3_URL = "http://localhost:8001";
-  private static final int MOCK_S3_PORT = 8001;
   // local dir configs
   private static final String TEST_RESOURCES_PATH = "src/test/resources/";
   private static final String TEST_DOWNLOAD_PATH = TEST_RESOURCES_PATH + "downloaded-files/";
@@ -146,11 +141,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   // custom producer to enable sending records with headers
   private Producer<byte[], byte[]> producer;
 
-  protected static boolean useMockClient() {
-    File creds = new File(AWS_CRED_PATH);
-    return System.getenv(JENKINS_HOME) != null || !creds.exists();
-  }
-
   @BeforeClass
   public static void setupClient() {
     S3Client = getS3Client();
@@ -177,9 +167,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
     props.put(STORAGE_CLASS_CONFIG, S3Storage.class.getName());
     props.put(S3_BUCKET_CONFIG, TEST_BUCKET_NAME);
-    if (useMockClient()) {
-      props.put(STORE_URL_CONFIG, MOCK_S3_URL);
-    }
     // create topics in Kafka
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
   }
@@ -411,32 +398,10 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * @return an authenticated S3 client
    */
   private static AmazonS3 getS3Client() {
-    if (useMockClient()) {
-      S3Mock api = new S3Mock.Builder().withPort(MOCK_S3_PORT).withInMemoryBackend().build();
-      api.start();
-      /*
-       * AWS S3 client setup.
-       * withPathStyleAccessEnabled(true) trick is required to overcome S3 default
-       * DNS-based bucket access scheme
-       * resulting in attempts to connect to addresses like "bucketname.localhost"
-       * which requires specific DNS setup.
-       */
-      EndpointConfiguration endpoint = new EndpointConfiguration(MOCK_S3_URL, AWS_REGION);
-      AmazonS3 mockClient = AmazonS3ClientBuilder
-          .standard()
-          .withPathStyleAccessEnabled(true)
-          .withEndpointConfiguration(endpoint)
-          .withCredentials(new AWSStaticCredentialsProvider(new AnonymousAWSCredentials()))
-          .build();
-
-      log.info("No credentials found, using mock S3 client.");
-      return mockClient;
-    } else {
-      log.info("Credentials found, using real S3 client.");
-      // DefaultAWSCredentialsProviderChain,
-      // assumes .aws/credentials is setup and test bucket exists
-      return AmazonS3ClientBuilder.standard().withRegion(AWS_REGION).build();
-    }
+     // DefaultAWSCredentialsProviderChain,
+     // For locall testing,  ~/.aws/credentials needs to be defined
+     // For Jenkins testing, AWS_CREDENTIAL_PROFILES_FILE is setup with credentials read from vault
+     return AmazonS3ClientBuilder.standard().withRegion(AWS_REGION).build();
   }
 
   /**
@@ -659,4 +624,5 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     props.put(KEY_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
     props.put(VALUE_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
   }
+
 }
