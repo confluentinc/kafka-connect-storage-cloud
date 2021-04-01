@@ -624,5 +624,4 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     props.put(KEY_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
     props.put(VALUE_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
   }
-
 }
