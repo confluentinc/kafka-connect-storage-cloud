@@ -7,7 +7,7 @@
  */
 
 def getVaultSecretsList() {
-  return [["aws/connect_s3sink_it", "creds", "${env.WORKSPACE}/aws_creds.json", "AWS_CREDENTIAL_PROFILES_FILE"]]
+  return [["connect/s3sink_it", "creds", "${env.WORKSPACE}/aws_credentials", "AWS_CREDENTIAL_PROFILES_FILE"]]
 }
 
 common {
