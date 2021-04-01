@@ -395,7 +395,6 @@
         <profile>
             <id>jenkins</id>
             <properties>
-                <!-- skip integration tests on Jenkins since they require docker -->
                 <skipIntegrationTests>${skipIntegrationTests}</skipIntegrationTests>
             </properties>
         </profile>
