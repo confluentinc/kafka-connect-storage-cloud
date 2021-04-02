@@ -38,8 +38,8 @@ e.g. the following script will create the json file using the environment variab
 ```
 cat << EOF > s3_credentials.json
 {
-"aws_access_key_id": "$CONNECT_AWS_ACCESS_KEY_ID",
-"aws_secret_access_key": "$CONNECT_AWS_SECRET_ACCESS_KEY"
+"aws_access_key_id": "$AWS_ACCESS_KEY_ID",
+"aws_secret_access_key": "$AWS_SECRET_ACCESS_KEY"
 }
 EOF
 ```
