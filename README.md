@@ -30,10 +30,11 @@ The following resources need to be setup to run integration tests with a real S3
 
 The integration tests follow the `DefaultAWSCredentialsProviderChain` for S3 authentication. 
 One of the simplest ways to test locally is to configure the `.aws/credentials` file. 
+
 You can also define environment variable as described [here](https://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/credentials.html)
 
-To test on Jenkins, create a json format credential file and define `AWS_CREDENTIALS_PATH` to point it.
-e.g. the following script will create the json file using the environment variable values.
+We also support defining `AWS_CREDENTIALS_PATH` to point a json format credential file. This is used in Jenkins.
+e.g. the following script will create the json file using the known environment variables.
 
 ```
 cat << EOF > s3_credentials.json
