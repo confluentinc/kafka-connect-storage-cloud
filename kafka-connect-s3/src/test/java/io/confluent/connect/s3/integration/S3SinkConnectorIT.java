@@ -19,6 +19,8 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VAL
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.storage.common.StorageCommonConfig.STORE_URL_CONFIG;
@@ -32,6 +34,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.AnonymousAWSCredentials;
+import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
@@ -109,6 +112,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final ObjectMapper jsonMapper = new ObjectMapper();
   // AWS configs
   private static final String AWS_REGION = "us-west-2";
+  private static final String AWS_CREDENTIALS_PATH = "AWS_CREDENTIALS_PATH";
   // local dir configs
   private static final String TEST_RESOURCES_PATH = "src/test/resources/";
   private static final String TEST_DOWNLOAD_PATH = TEST_RESOURCES_PATH + "downloaded-files/";
@@ -392,15 +396,27 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
         .put("myString", "theStringVal");
   }
 
+  private static boolean hasCredentialPath() {
+      return System.getenv().containsKey(AWS_CREDENTIALS_PATH);
+  }
+
   /**
    * Get an S3 client based on existing credentials, or a mock client if running on jenkins.
    *
    * @return an authenticated S3 client
    */
   private static AmazonS3 getS3Client() {
+     if (hasCredentialPath()) {
+         Map<String, String> creds = getAWSCredential();
+         BasicAWSCredentials awsCreds = new BasicAWSCredentials(
+             creds.get("aws_access_key_id"),
+             creds.get("aws_secret_access_key"));
+         return AmazonS3ClientBuilder.standard()
+             .withCredentials(new AWSStaticCredentialsProvider(awsCreds))
+             .build();
+     }
      // DefaultAWSCredentialsProviderChain,
      // For locall testing,  ~/.aws/credentials needs to be defined or other environment variables
-     // For Jenkins testing, AWS_CREDENTIAL_PROFILES_FILE is setup with credentials read from vault
      return AmazonS3ClientBuilder.standard().withRegion(AWS_REGION).build();
   }
 
@@ -623,5 +639,31 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     // converters
     props.put(KEY_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
     props.put(VALUE_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
+    // aws credential
+    if (hasCredentialPath()) {
+      props.putAll(getAWSCredential());
+    }
+  }
+
+  private static Map<String, String> getAWSCredential() {
+    Map<String, String> map = new HashMap<String, String>();
+    String path = System.getenv().get(AWS_CREDENTIALS_PATH);
+    try {
+        Map<String, String> creds = new ObjectMapper()
+            .readValue(new FileReader(path), Map.class);
+        map.put(
+            AWS_ACCESS_KEY_ID_CONFIG,
+            creds.get("aws_access_key_id"));
+        map.put(
+            AWS_SECRET_ACCESS_KEY_CONFIG,
+            creds.get("aws_secret_access_key"));
+    } catch (Exception e)
+    {
+        e.printStackTrace();
+        throw new IllegalArgumentException(
+                "AWS credentials file not found." + AWS_CREDENTIALS_PATH
+            );
+    }
+    return map;
   }
 }

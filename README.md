@@ -27,10 +27,22 @@ You can build *kafka-connect-storage-cloud* with Maven using the standard lifecy
 The following resources need to be setup to run integration tests with a real S3 instance. 
 
 ### AWS Credentials
+
 The integration tests follow the `DefaultAWSCredentialsProviderChain` for S3 authentication. 
-One of the simplest ways to ensure access to S3 for these tests is by configuring 
-the `.aws/credentials` file. 
-Or define environment variable as described [here](https://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/credentials.html)
+One of the simplest ways to test locally is to configure the `.aws/credentials` file. 
+You can also define environment variable as described [here](https://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/credentials.html)
+
+To test on Jenkins, create a json format credential file and define `AWS_CREDENTIALS_PATH` to point it.
+e.g. the following script will create the json file using the environment variable values.
+
+```
+cat << EOF > s3_credentials.json
+{
+"aws_access_key_id": "$CONNECT_AWS_ACCESS_KEY_ID",
+"aws_secret_access_key": "$CONNECT_AWS_SECRET_ACCESS_KEY"
+}
+EOF
+```
 
 ## Running the Tests
 Tests can be run manually using the `mvn integration-test` command 
