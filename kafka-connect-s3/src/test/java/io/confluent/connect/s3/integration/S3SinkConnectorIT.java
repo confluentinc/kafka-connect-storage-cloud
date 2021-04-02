@@ -401,7 +401,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   /**
-   * Get an S3 client based on existing credentials, or a mock client if running on jenkins.
+   * Get an S3 client based on existing credentials
    *
    * @return an authenticated S3 client
    */
