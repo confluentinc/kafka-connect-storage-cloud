@@ -1,7 +1,7 @@
 #!/usr/bin/env groovy
 
 def getVaultSecretsList() {
-  return [["connect/s3sink_it", "creds", "s3_sink_aws_credentials.json", "AWS_CREDENTIALS_PATH"]]
+  return [["connect/s3sink_it", "creds", "${env.WORKSPACE}/s3_sink_aws_credentials.json", "AWS_CREDENTIALS_PATH"]]
 }
 
 common {
