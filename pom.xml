@@ -225,35 +225,11 @@
                       <argLine>@{argLine} -Djava.awt.headless=true</argLine>
                       <reuseForks>false</reuseForks>
                       <forkCount>1</forkCount>
-                      <!-- Skip the Integration tests as part of surefire run -->
-                      <excludedGroups>org.apache.kafka.test.IntegrationTest</excludedGroups>
                   </configuration>
               </plugin>
               <plugin>
                   <groupId>org.apache.maven.plugins</groupId>
                   <artifactId>maven-assembly-plugin</artifactId>
-              </plugin>
-              <plugin>
-                    <artifactId>maven-failsafe-plugin</artifactId>
-                    <version>${maven.failsafe.plugin.version}</version>
-                    <dependencies>
-                        <dependency>
-                            <groupId>org.apache.maven.surefire</groupId>
-                            <artifactId>surefire-junit47</artifactId>
-                            <version>${surefire-junit47.version}</version>
-                        </dependency>
-                    </dependencies>
-                    <configuration>
-                      <skip>${skipIntegrationTests}</skip>
-                      <groups>org.apache.kafka.test.IntegrationTest</groups>
-                    </configuration>
-                    <executions>
-                      <execution>
-                        <goals>
-                            <goal>integration-test</goal>
-                        </goals>
-                      </execution>
-                    </executions>
               </plugin>
            </plugins>
         </pluginManagement>
