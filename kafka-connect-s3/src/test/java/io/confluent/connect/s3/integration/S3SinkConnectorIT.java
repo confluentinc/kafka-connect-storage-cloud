@@ -410,7 +410,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
          Map<String, String> creds = getAWSCredential();
          BasicAWSCredentials awsCreds = new BasicAWSCredentials(
              creds.get(AWS_ACCESS_KEY_ID_CONFIG),
-             creds.get(AWS_SECRET_ACCESS_KEY_CONFIG);
+             creds.get(AWS_SECRET_ACCESS_KEY_CONFIG));
          return AmazonS3ClientBuilder.standard()
              .withCredentials(new AWSStaticCredentialsProvider(awsCreds))
              .build();
