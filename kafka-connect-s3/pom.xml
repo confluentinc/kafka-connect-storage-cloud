@@ -428,7 +428,7 @@
         <profile>
             <id>jenkins</id>
             <properties>
-                <skipIntegrationTests>${skipIntegrationTests}</skipIntegrationTests>
+                <skipIntegrationTests>false</skipIntegrationTests>
             </properties>
         </profile>
     </profiles>
