@@ -657,8 +657,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
         if (value != null && !value.isEmpty()) {
           map.put(AWS_SECRET_ACCESS_KEY_CONFIG,value);
         }
-    } catch (Exception e)
-    {
+    } catch (Exception e) {
         e.printStackTrace();
         throw new IllegalArgumentException(
                 "AWS credentials file not found." + AWS_CREDENTIALS_PATH
