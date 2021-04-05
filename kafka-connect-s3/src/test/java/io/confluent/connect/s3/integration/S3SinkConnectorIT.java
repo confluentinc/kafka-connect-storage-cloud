@@ -16,6 +16,8 @@
 package io.confluent.connect.s3.integration;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.storage.common.StorageCommonConfig.STORE_URL_CONFIG;
@@ -28,6 +30,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.AnonymousAWSCredentials;
+import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
@@ -42,7 +45,6 @@ import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.storage.S3Storage;
-import io.findify.s3mock.S3Mock;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -89,12 +91,9 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorIT.class);
   private static final ObjectMapper jsonMapper = new ObjectMapper();
-  private static final String JENKINS_HOME = "JENKINS_HOME";
   // AWS configs
-  private static final String AWS_CRED_PATH = System.getProperty("user.home") + "/.aws/credentials";
   private static final String AWS_REGION = "us-west-2";
-  private static final String MOCK_S3_URL = "http://localhost:8001";
-  private static final int MOCK_S3_PORT = 8001;
+  private static final String AWS_CREDENTIALS_PATH = "AWS_CREDENTIALS_PATH";
   // local dir configs
   private static final String TEST_RESOURCES_PATH = "src/test/resources/";
   private static final String TEST_DOWNLOAD_PATH = TEST_RESOURCES_PATH + "downloaded-files/";
@@ -119,13 +118,9 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   private JsonConverter jsonConverter;
 
-  protected static boolean useMockClient() {
-    File creds = new File(AWS_CRED_PATH);
-    return System.getenv(JENKINS_HOME) != null || !creds.exists();
-  }
-
   @BeforeClass
   public static void setupClient() {
+    log.info("Starting ITs...");
     S3Client = getS3Client();
     if (S3Client.doesBucketExistV2(TEST_BUCKET_NAME)) {
       clearBucket(TEST_BUCKET_NAME);
@@ -137,6 +132,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   @AfterClass
   public static void deleteBucket() {
     S3Client.deleteBucket(TEST_BUCKET_NAME);
+    log.info("Finished ITs, removed S3 bucket");
   }
 
   @Before
@@ -149,9 +145,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
     props.put(STORAGE_CLASS_CONFIG, S3Storage.class.getName());
     props.put(S3_BUCKET_CONFIG, TEST_BUCKET_NAME);
-    if (useMockClient()) {
-      props.put(STORE_URL_CONFIG, MOCK_S3_URL);
-    }
     // create topics in Kafka
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
   }
@@ -251,37 +244,24 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   /**
-   * Get an S3 client based on existing credentials, or a mock client if running on jenkins.
+   * Get an S3 client based on existing credentials
    *
    * @return an authenticated S3 client
    */
   private static AmazonS3 getS3Client() {
-    if (useMockClient()) {
-      S3Mock api = new S3Mock.Builder().withPort(MOCK_S3_PORT).withInMemoryBackend().build();
-      api.start();
-      /*
-       * AWS S3 client setup.
-       * withPathStyleAccessEnabled(true) trick is required to overcome S3 default
-       * DNS-based bucket access scheme
-       * resulting in attempts to connect to addresses like "bucketname.localhost"
-       * which requires specific DNS setup.
-       */
-      EndpointConfiguration endpoint = new EndpointConfiguration(MOCK_S3_URL, AWS_REGION);
-      AmazonS3 mockClient = AmazonS3ClientBuilder
-          .standard()
-          .withPathStyleAccessEnabled(true)
-          .withEndpointConfiguration(endpoint)
-          .withCredentials(new AWSStaticCredentialsProvider(new AnonymousAWSCredentials()))
-          .build();
-
-      log.info("No credentials found, using mock S3 client.");
-      return mockClient;
-    } else {
-      log.info("Credentials found, using real S3 client.");
-      // DefaultAWSCredentialsProviderChain,
-      // assumes .aws/credentials is setup and test bucket exists
-      return AmazonS3ClientBuilder.standard().withRegion(AWS_REGION).build();
-    }
+     Map<String, String> creds = getAWSCredentialFromPath();
+     // If AWS credentials found on AWS_CREDENTIALS_PATH, use them (Jenkins)
+     if (creds.size() == 2) {
+         BasicAWSCredentials awsCreds = new BasicAWSCredentials(
+             creds.get(AWS_ACCESS_KEY_ID_CONFIG),
+             creds.get(AWS_SECRET_ACCESS_KEY_CONFIG));
+         return AmazonS3ClientBuilder.standard()
+             .withCredentials(new AWSStaticCredentialsProvider(awsCreds))
+             .build();
+     }
+     // DefaultAWSCredentialsProviderChain,
+     // For local testing,  ~/.aws/credentials needs to be defined or other environment variables
+     return AmazonS3ClientBuilder.standard().withRegion(AWS_REGION).build();
   }
 
   /**
@@ -473,5 +453,33 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     // converters
     props.put(KEY_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
     props.put(VALUE_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
+    // aws credential if exists
+    props.putAll(getAWSCredentialFromPath());
+  }
+
+  private static Map<String, String> getAWSCredentialFromPath() {
+    Map<String, String> map = new HashMap<String, String>();
+    if  (!System.getenv().containsKey(AWS_CREDENTIALS_PATH)) {
+        return map;
+    }
+    String path = System.getenv().get(AWS_CREDENTIALS_PATH);
+    try {
+        Map<String, String> creds = new ObjectMapper()
+            .readValue(new FileReader(path), Map.class);
+        String value = creds.get("aws_access_key_id");
+        if (value != null && !value.isEmpty()) {
+          map.put(AWS_ACCESS_KEY_ID_CONFIG, value);
+        }
+        value = creds.get("aws_secret_access_key");
+        if (value != null && !value.isEmpty()) {
+          map.put(AWS_SECRET_ACCESS_KEY_CONFIG,value);
+        }
+    } catch (Exception e) {
+        e.printStackTrace();
+        throw new IllegalArgumentException(
+                "AWS credentials file not found." + AWS_CREDENTIALS_PATH
+            );
+    }
+    return map;
   }
 }
