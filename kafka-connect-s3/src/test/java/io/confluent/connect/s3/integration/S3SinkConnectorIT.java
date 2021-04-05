@@ -403,7 +403,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    */
   private static AmazonS3 getS3Client() {
      Map<String, String> creds = getAWSCredentialFromPath();
-     // If got AWS credentials from path, use it
+     // If AWS credentials found on AWS_CREDENTIALS_PATH, use them (Jenkins)
      if (creds.size() == 2) {
          BasicAWSCredentials awsCreds = new BasicAWSCredentials(
              creds.get(AWS_ACCESS_KEY_ID_CONFIG),
@@ -413,7 +413,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
              .build();
      }
      // DefaultAWSCredentialsProviderChain,
-     // For locall testing,  ~/.aws/credentials needs to be defined or other environment variables
+     // For local testing,  ~/.aws/credentials needs to be defined or other environment variables
      return AmazonS3ClientBuilder.standard().withRegion(AWS_REGION).build();
   }
 
