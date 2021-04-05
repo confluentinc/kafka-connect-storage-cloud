@@ -6,7 +6,7 @@ def getVaultSecretsList() {
 
 common {
   slackChannel = '#connect-warn'
-  upstreamProjects = ['confluentinc/schema-registry','confluentinc/common']
+  upstreamProjects = 'confluentinc/kafka-connect-storage-common-parent'
   nodeLabel = 'docker-oraclejdk8'
   pintMerge = true
   twistlockCveScan = true
