@@ -650,11 +650,11 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
         Map<String, String> creds = new ObjectMapper()
             .readValue(new FileReader(path), Map.class);
         String value = creds.get("aws_access_key_id");
-        if (value != null && value.length()>0) {
+        if (value != null && !value.isEmpty()) {
           map.put(AWS_ACCESS_KEY_ID_CONFIG, value);
         }
         value = creds.get("aws_secret_access_key");
-        if (value != null && value.length()>0) {
+        if (value != null && !value.isEmpty()) {
           map.put(AWS_SECRET_ACCESS_KEY_CONFIG,value);
         }
     } catch (Exception e)
