@@ -237,15 +237,15 @@
                     <tagNameFormat>v@{project.version}</tagNameFormat>
                 </configuration>
             </plugin>
-              <plugin>
+            <plugin>
                   <groupId>org.apache.maven.plugins</groupId>
                   <artifactId>maven-surefire-plugin</artifactId>
                   <configuration>
                       <!-- Skip the Integration tests as part of surefire run -->
                       <excludedGroups>org.apache.kafka.test.IntegrationTest</excludedGroups>
                   </configuration>
-              </plugin>
-              <plugin>
+            </plugin>
+            <plugin>
                     <artifactId>maven-failsafe-plugin</artifactId>
                     <version>${maven.failsafe.plugin.version}</version>
                     <dependencies>
@@ -266,7 +266,7 @@
                         </goals>
                       </execution>
                     </executions>
-              </plugin>
+            </plugin>
         </plugins>
 
         <resources>
@@ -433,3 +433,4 @@
         </profile>
     </profiles>
 </project>
+
