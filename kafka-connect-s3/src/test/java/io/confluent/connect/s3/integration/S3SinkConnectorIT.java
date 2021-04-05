@@ -147,6 +147,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   @BeforeClass
   public static void setupClient() {
+    log.info("Starting ITs...");
     S3Client = getS3Client();
     if (S3Client.doesBucketExistV2(TEST_BUCKET_NAME)) {
       clearBucket(TEST_BUCKET_NAME);
@@ -158,6 +159,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   @AfterClass
   public static void deleteBucket() {
     S3Client.deleteBucket(TEST_BUCKET_NAME);
+    log.info("Finished ITs, removed S3 bucket");
   }
 
   @Before
