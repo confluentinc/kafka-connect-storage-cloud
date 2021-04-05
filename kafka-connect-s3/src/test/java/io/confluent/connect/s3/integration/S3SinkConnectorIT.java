@@ -396,18 +396,15 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
         .put("myString", "theStringVal");
   }
 
-  private static boolean hasCredentialPath() {
-      return System.getenv().containsKey(AWS_CREDENTIALS_PATH);
-  }
-
   /**
    * Get an S3 client based on existing credentials
    *
    * @return an authenticated S3 client
    */
   private static AmazonS3 getS3Client() {
-     if (hasCredentialPath()) {
-         Map<String, String> creds = getAWSCredential();
+     Map<String, String> creds = getAWSCredentialFromPath();
+     // If got AWS credentials from path, use it
+     if (creds.size() == 2) {
          BasicAWSCredentials awsCreds = new BasicAWSCredentials(
              creds.get(AWS_ACCESS_KEY_ID_CONFIG),
              creds.get(AWS_SECRET_ACCESS_KEY_CONFIG));
@@ -639,24 +636,27 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     // converters
     props.put(KEY_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
     props.put(VALUE_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
-    // aws credential
-    if (hasCredentialPath()) {
-      props.putAll(getAWSCredential());
-    }
+    // aws credential if exists
+    props.putAll(getAWSCredentialFromPath());
   }
 
-  private static Map<String, String> getAWSCredential() {
+  private static Map<String, String> getAWSCredentialFromPath() {
     Map<String, String> map = new HashMap<String, String>();
+    if  (!System.getenv().containsKey(AWS_CREDENTIALS_PATH)) {
+        return map;
+    }
     String path = System.getenv().get(AWS_CREDENTIALS_PATH);
     try {
         Map<String, String> creds = new ObjectMapper()
             .readValue(new FileReader(path), Map.class);
-        map.put(
-            AWS_ACCESS_KEY_ID_CONFIG,
-            creds.get("aws_access_key_id"));
-        map.put(
-            AWS_SECRET_ACCESS_KEY_CONFIG,
-            creds.get("aws_secret_access_key"));
+        String value = creds.get("aws_access_key_id");
+        if (value != null && value.length()>0) {
+          map.put(AWS_ACCESS_KEY_ID_CONFIG, value);
+        }
+        value = creds.get("aws_secret_access_key");
+        if (value != null && value.length()>0) {
+          map.put(AWS_SECRET_ACCESS_KEY_CONFIG,value);
+        }
     } catch (Exception e)
     {
         e.printStackTrace();
