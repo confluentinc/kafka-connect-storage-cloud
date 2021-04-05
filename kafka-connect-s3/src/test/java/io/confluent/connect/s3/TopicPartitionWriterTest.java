@@ -1042,7 +1042,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Define the partitioner
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
-
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, getKeyHeaderValueProvider(), partitioner,  connectorConfig, context, null);
 

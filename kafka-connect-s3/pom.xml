@@ -21,7 +21,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-cloud</artifactId>
-        <version>10.0.1-SNAPSHOT</version>
+        <version>10.1.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>kafka-connect-s3</artifactId>
@@ -40,6 +40,9 @@
         <formatters.version>0.2.2</formatters.version>
         <confluent.connect.testcontainers.version>1.0.1</confluent.connect.testcontainers.version>
         <org.testcontainer.version>1.15.0</org.testcontainer.version>
+        <maven.failsafe.plugin.version>2.22.1</maven.failsafe.plugin.version>
+        <skipIntegrationTests>false</skipIntegrationTests>
+        <surefire-junit47.version>2.22.1</surefire-junit47.version>
     </properties>
 
     <dependencyManagement>
@@ -234,6 +237,36 @@
                     <tagNameFormat>v@{project.version}</tagNameFormat>
                 </configuration>
             </plugin>
+            <plugin>
+                  <groupId>org.apache.maven.plugins</groupId>
+                  <artifactId>maven-surefire-plugin</artifactId>
+                  <configuration>
+                      <!-- Skip the Integration tests as part of surefire run -->
+                      <excludedGroups>org.apache.kafka.test.IntegrationTest</excludedGroups>
+                  </configuration>
+            </plugin>
+            <plugin>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>${maven.failsafe.plugin.version}</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.apache.maven.surefire</groupId>
+                            <artifactId>surefire-junit47</artifactId>
+                            <version>${surefire-junit47.version}</version>
+                        </dependency>
+                    </dependencies>
+                    <configuration>
+                      <skip>${skipIntegrationTests}</skip>
+                      <groups>org.apache.kafka.test.IntegrationTest</groups>
+                    </configuration>
+                    <executions>
+                      <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                        </goals>
+                      </execution>
+                    </executions>
+            </plugin>
         </plugins>
 
         <resources>
@@ -392,5 +425,12 @@
                 </plugins>
             </build>
         </profile>
+        <profile>
+            <id>jenkins</id>
+            <properties>
+                <skipIntegrationTests>false</skipIntegrationTests>
+            </properties>
+        </profile>
     </profiles>
 </project>
+
