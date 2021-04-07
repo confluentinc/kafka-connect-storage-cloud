@@ -137,7 +137,9 @@ public class CsvConverter implements Converter, HeaderConverter {
       if (buf.length() > 0) {
         buf.append(this.fieldSeparator);
       }
-      buf.append(toCsvData(f.schema(), struct.get(f)));
+      if (struct != null) {
+        buf.append(toCsvData(f.schema(), struct.get(f)));
+      }
     }
     return buf.toString();
   }
