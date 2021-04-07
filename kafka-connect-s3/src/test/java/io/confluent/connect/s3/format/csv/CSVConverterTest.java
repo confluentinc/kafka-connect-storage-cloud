@@ -45,13 +45,15 @@ public class CSVConverterTest {
     nestedValue.put("nested",value);
     nestedValue.put("textField", "randomValue");
     CsvConverter converter = new CsvConverter();
-    assertEquals("\"randomValue\",\"test\"\"Value\",,\"123\",\""
+    assertEquals("\"randomValue\",,,,,,\"test\"\"Value\",,\"123\",\""
                     +testDate.toInstant()+"\",\""
                     +testTime.toInstant()+"\"",
             new String(converter.fromConnectData("topic", nestedSchema, nestedValue)));
-    assertEquals("\"text_field\",\"nested_text_field\",\"nested_null_field\"," +
-                    "\"nested_numeric_field\"," +
-                    "\"nested_date_field\",\"nested_time_field\"",
+    assertEquals("\"text_field\","
+                    +"\"missing_field_text_field\",\"missing_field_null_field\","
+                    +"\"missing_field_numeric_field\",\"missing_field_date_field\","
+                    +"\"missing_field_time_field\",\"nested_text_field\",\"nested_null_field\","
+                    +"\"nested_numeric_field\",\"nested_date_field\",\"nested_time_field\"",
             new String(converter.getHeader()));
   }
 
@@ -74,6 +76,7 @@ public class CSVConverterTest {
             .name("NestedSchema")
             .parameter("namespace", "com.test")
             .field("textField", Schema.STRING_SCHEMA)
+            .field("missingField", getSimpleSchema()).optional()
             .field("nested", getSimpleSchema())
             .build();
   }

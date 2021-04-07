@@ -128,14 +128,16 @@ public class CsvConverter implements Converter, HeaderConverter {
 
   private String structToString(Schema schema, Object value) {
     Struct struct = (Struct) value;
-    StringBuilder buf = new StringBuilder();
+    StringBuilder buf = null;
     for (Field f : schema.fields()) {
-      if (buf.length() > 0) {
+      if (buf == null) {
+        buf = new StringBuilder();
+      } else {
         buf.append(this.fieldSeparator);
       }
       buf.append(toCsvData(f.schema(), struct != null ? struct.get(f) : null));
     }
-    return buf.toString();
+    return buf == null ? "" : buf.toString();
   }
 
   private String intToString(Schema schema, Object value) {
