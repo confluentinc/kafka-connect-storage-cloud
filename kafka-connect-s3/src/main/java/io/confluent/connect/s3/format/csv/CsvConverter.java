@@ -28,8 +28,11 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 
 import java.nio.charset.Charset;
-import java.util.Date;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
+import java.util.Date;
+import java.util.StringJoiner;
 import java.util.regex.Pattern;
 
 public class CsvConverter implements Converter, HeaderConverter {
@@ -38,7 +41,10 @@ public class CsvConverter implements Converter, HeaderConverter {
   private static final Pattern CASE_CHANGE_PATTERN = Pattern.compile("([a-z])([A-Z])");
   private CsvConverterConfig config;
   private String fieldSeparator = ",";
+  private List<String> fieldsList = null;
+  private String fixedHeader = null;
   private Schema lastSchema;
+
 
   public CsvConverter() {
   }
@@ -50,6 +56,8 @@ public class CsvConverter implements Converter, HeaderConverter {
   public void configure(Map<String, ?> configs) {
     this.config = new CsvConverterConfig(configs);
     this.fieldSeparator = config.getString("csv.field.sep");
+    this.fieldsList = config.getList("csv.fields.list");
+    this.fixedHeader = prepareConfiguredHeader();
   }
 
   public void configure(Map<String, ?> configs, boolean isKey) {
@@ -60,6 +68,9 @@ public class CsvConverter implements Converter, HeaderConverter {
     if (value != null && schema == null) {
       throw new DataException("CSVConverter requires schema to be set");
     } else {
+      if (this.fixedHeader != null) {
+        return toCsvDataList(value).getBytes(Charset.defaultCharset());
+      }
       // TODO: allow to specify charset if needed.
       if (schema.type() == Schema.Type.STRUCT) {
         this.lastSchema = schema;
@@ -70,10 +81,24 @@ public class CsvConverter implements Converter, HeaderConverter {
   }
 
   public byte[] getHeader() {
+    if (this.fixedHeader != null) {
+      return this.fixedHeader.getBytes(Charset.defaultCharset());
+    }
     if (lastSchema == null) {
       return null;
     }
     return schemaToHeader("", lastSchema).getBytes(Charset.defaultCharset());
+  }
+
+  private String prepareConfiguredHeader() {
+    if (this.fieldsList != null) {
+      StringJoiner joiner = new StringJoiner(this.fieldSeparator);
+      this.fieldsList.forEach(h -> joiner.add(
+              addQuotes(toSnakeCase(h.replace('.','_')))));
+      return joiner.toString();
+    } else {
+      return null;
+    }
   }
 
   private String schemaToHeader(String prefix, Schema schema) {
@@ -100,6 +125,28 @@ public class CsvConverter implements Converter, HeaderConverter {
     }
   }
 
+  private String toCsvDataList(Object value) {
+    StringJoiner joiner = new StringJoiner(this.fieldSeparator);
+    for (String header : this.fieldsList) {
+      String[] parts = header.split("\\.");
+      joiner.add(getValue(parts, value, null));
+    }
+    return joiner.toString();
+  }
+
+  private String getValue(String[] path, Object value, Schema schema) {
+    if (value instanceof Struct && path.length > 0 && value != null) {
+      Struct str = (Struct)value;
+      Field fld = str.schema().field(path[0]);
+      return getValue(Arrays.copyOfRange(path, 1, path.length), str.get(fld), fld.schema());
+    } else {
+      if (path.length == 0 && schema != null) {
+        return toCsvData(schema, value);
+      } else {
+        return "";
+      }
+    }
+  }
 
   private String toCsvData(Schema schema, Object value) {
     if (schema == null) {

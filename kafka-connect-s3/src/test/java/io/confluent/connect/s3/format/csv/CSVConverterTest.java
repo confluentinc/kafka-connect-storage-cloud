@@ -4,9 +4,10 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.junit.Test;
+import org.testcontainers.shaded.com.google.common.collect.Lists;
 
 
-import java.util.Date;
+import java.util.*;
 
 import static org.junit.Assert.assertEquals;
 
@@ -55,6 +56,32 @@ public class CSVConverterTest {
                     +"\"missing_field_time_field\",\"nested_text_field\",\"nested_null_field\","
                     +"\"nested_numeric_field\",\"nested_date_field\",\"nested_time_field\"",
             new String(converter.getHeader()));
+  }
+
+  @Test
+  public void fixedRowHeader() {
+    Schema nestedSchema = getNestedSchema();
+    Date testDate = new Date(333333333L);
+    Date testTime = new Date(111111111L);
+    Struct value = new Struct(nestedSchema.field("nested").schema())
+            .put("textField", "test\"Value")
+            .put("numericField", 123L)
+            .put("dateField", testDate)
+            .put("timeField", testTime);
+    Struct nestedValue = new Struct(nestedSchema);
+    nestedValue.put("nested",value);
+    nestedValue.put("textField", "randomValue");
+    CsvConverter converter = new CsvConverter();
+    Map<String, List<String>> config = new HashMap<>();
+    List<String> headers = Lists.newArrayList("nested.dateField","textField");
+    config.put("csv.fields.list", headers);
+    converter.configure(config);
+    assertEquals("\""+testDate.toInstant()+"\",\"randomValue\"",
+            new String(converter.fromConnectData("topic", nestedSchema, nestedValue)));
+    assertEquals("\"nested_date_field\",\"text_field\"",
+            new String(converter.getHeader()));
+
+    // TODO: fix this
   }
 
   private Schema getSimpleSchema() {

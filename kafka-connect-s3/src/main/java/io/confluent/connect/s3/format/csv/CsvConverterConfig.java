@@ -38,6 +38,13 @@ public class CsvConverterConfig extends AbstractConfig {
             ConfigDef.Importance.HIGH,
             "CSV line separator character(s)"
     );
+    CONFIG.define("csv.fields.list",
+            ConfigDef.Type.LIST,
+            "",
+            ConfigDef.Importance.MEDIUM,
+            "Defines header and order of fields. If the field is not mentioned "
+                + "it will be skipped."
+    );
   }
 
   public CsvConverterConfig(Map<String, ?> props) {
