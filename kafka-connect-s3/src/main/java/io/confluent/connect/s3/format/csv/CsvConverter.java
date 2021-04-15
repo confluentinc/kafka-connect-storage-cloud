@@ -91,11 +91,15 @@ public class CsvConverter implements Converter, HeaderConverter {
   }
 
   private String prepareConfiguredHeader() {
-    if (this.fieldsList != null) {
+    if (this.fieldsList != null && !this.fieldsList.isEmpty()) {
       StringJoiner joiner = new StringJoiner(this.fieldSeparator);
       this.fieldsList.forEach(h -> joiner.add(
               addQuotes(toSnakeCase(h.replace('.','_')))));
-      return joiner.toString();
+      if (joiner.length() > 0) {
+        return joiner.toString();
+      } else {
+        return null;
+      }
     } else {
       return null;
     }
