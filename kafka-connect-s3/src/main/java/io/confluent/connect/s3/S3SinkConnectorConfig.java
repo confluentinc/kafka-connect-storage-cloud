@@ -22,6 +22,7 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
+import io.confluent.connect.s3.format.csv.CsvFormat;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -236,6 +237,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       new ParquetCodecRecommender();
 
   private static final Collection<Object> FORMAT_CLASS_VALID_VALUES = Arrays.<Object>asList(
+      CsvFormat.class,
       AvroFormat.class,
       JsonFormat.class,
       ByteArrayFormat.class,
@@ -245,6 +247,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   // ByteArrayFormat for headers is not supported.
   // Would require undesired JsonConverter configuration in ByteArrayRecordWriterProvider.
   private static final Collection<Object> HEADERS_FORMAT_CLASS_VALID_VALUES = Arrays.<Object>asList(
+      CsvFormat.class,
       AvroFormat.class,
       JsonFormat.class,
       ParquetFormat.class

@@ -51,6 +51,7 @@ public class CsvRecordWriterProvider extends RecordViewSetter
   public CsvRecordWriterProvider(S3Storage storage, CsvConverter converter) {
     this.storage = storage;
     this.converter = converter;
+    this.converter.configure(this.storage.conf().originals());
   }
 
   @Override

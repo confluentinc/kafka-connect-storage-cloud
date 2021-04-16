@@ -33,7 +33,7 @@ public class CsvFormat implements Format<S3SinkConnectorConfig, String> {
     this.storage = storage;
     this.converter = new CsvConverter();
     Map<String, Object> converterConfig = new HashMap<>();
-    this.converter.configure(converterConfig, false);
+    this.converter.configure(storage.conf().originals() != null ? storage.conf().originals() : converterConfig, false);
   }
 
   @Override
