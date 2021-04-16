@@ -18,6 +18,7 @@ package io.confluent.connect.s3;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
+import io.confluent.connect.s3.format.csv.CsvFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
@@ -103,6 +104,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   public void testRecommendedValues() {
     List<Object> expectedStorageClasses = Arrays.<Object>asList(S3Storage.class);
     List<Object> expectedFormatClasses = Arrays.<Object>asList(
+        CsvFormat.class,
         AvroFormat.class,
         JsonFormat.class,
         ByteArrayFormat.class,
