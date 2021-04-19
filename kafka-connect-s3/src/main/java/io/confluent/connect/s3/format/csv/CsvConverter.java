@@ -147,7 +147,11 @@ public class CsvConverter implements Converter, HeaderConverter {
     if (value instanceof Struct && path.length > 0 && value != null) {
       Struct str = (Struct)value;
       Field fld = str.schema().field(path[0]);
-      return getValue(Arrays.copyOfRange(path, 1, path.length), str.get(fld), fld.schema());
+      if (fld != null) {
+        return getValue(Arrays.copyOfRange(path, 1, path.length), str.get(fld), fld.schema());
+      } else {
+        return "";
+      }
     } else {
       if (path.length == 0 && schema != null) {
         return toCsvData(schema, value);

@@ -73,12 +73,12 @@ public class CSVConverterTest {
     nestedValue.put("textField", "randomValue");
     CsvConverter converter = new CsvConverter();
     Map<String, List<String>> config = new HashMap<>();
-    List<String> headers = Lists.newArrayList("nested.dateField","textField");
+    List<String> headers = Lists.newArrayList("nested.dateField","textField","nothing");
     config.put("csv.fields.list", headers);
     converter.configure(config);
-    assertEquals("\""+testDate.toInstant()+"\",\"randomValue\"",
+    assertEquals("\""+testDate.toInstant()+"\",\"randomValue\",",
             new String(converter.fromConnectData("topic", nestedSchema, nestedValue)));
-    assertEquals("\"nested_date_field\",\"text_field\"",
+    assertEquals("\"nested_date_field\",\"text_field\",\"nothing\"",
             new String(converter.getHeader()));
 
     // TODO: fix this
