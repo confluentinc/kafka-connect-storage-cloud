@@ -42,7 +42,8 @@ public class CsvConverter implements Converter, HeaderConverter {
 
   private static final ConfigDef CONFIG_DEF = CsvConverterConfig.configDef();
   private static final Pattern CASE_CHANGE_PATTERN = Pattern.compile("([a-z])([A-Z])");
-  public static final DateTimeFormatter COMPAT_FORMAT = DateTimeFormatter.ofPattern("YYYY-MM-dd HH:mm:ss");
+  public static final DateTimeFormatter COMPAT_FORMAT =
+          DateTimeFormatter.ofPattern("YYYY-MM-dd HH:mm:ss");
   private CsvConverterConfig config;
   private String fieldSeparator = ",";
   private List<String> fieldsList = null;
@@ -184,21 +185,25 @@ public class CsvConverter implements Converter, HeaderConverter {
           return "";
         }
       case BOOLEAN:
-        if (value != null) {
-          if (this.compatFlag) {
-            return addQuotes((Boolean)value == true ? 1 : 0);
-          } else {
-            addQuotes(value);
-          }
-        } else {
-          return "";
-        }
+        return booleanToString(schema, value);
       default:
         if (value != null) {
           return addQuotes(value);
         } else {
           return "";
         }
+    }
+  }
+
+  private String booleanToString(Schema schema, Object value) {
+    if (value != null) {
+      if (this.compatFlag) {
+        return addQuotes((Boolean)value == true ? 1 : 0);
+      } else {
+        return addQuotes(value);
+      }
+    } else {
+      return "";
     }
   }
 
@@ -223,7 +228,8 @@ public class CsvConverter implements Converter, HeaderConverter {
             || schema.name().equals(org.apache.kafka.connect.data.Date.LOGICAL_NAME)
         )) {
       if (compatFlag) {
-        return addQuotes(LocalDateTime.from(((Date)value).toInstant().atZone(ZoneId.systemDefault())).format(COMPAT_FORMAT));
+        return addQuotes(LocalDateTime.from(((Date)value).toInstant()
+                .atZone(ZoneId.systemDefault())).format(COMPAT_FORMAT));
       } else {
         return addQuotes(((Date) value).toInstant());
       }
