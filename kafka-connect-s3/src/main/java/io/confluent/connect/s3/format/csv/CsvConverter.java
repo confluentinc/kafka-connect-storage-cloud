@@ -28,6 +28,9 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 
 import java.nio.charset.Charset;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -39,10 +42,12 @@ public class CsvConverter implements Converter, HeaderConverter {
 
   private static final ConfigDef CONFIG_DEF = CsvConverterConfig.configDef();
   private static final Pattern CASE_CHANGE_PATTERN = Pattern.compile("([a-z])([A-Z])");
+  public static final DateTimeFormatter COMPAT_FORMAT = DateTimeFormatter.ofPattern("YYYY-MM-dd HH:mm:ss");
   private CsvConverterConfig config;
   private String fieldSeparator = ",";
   private List<String> fieldsList = null;
   private String fixedHeader = null;
+  private Boolean compatFlag = false;
   private Schema lastSchema;
 
 
@@ -56,6 +61,7 @@ public class CsvConverter implements Converter, HeaderConverter {
   public void configure(CsvConverterConfig config) {
     this.config = config;
     this.fieldSeparator = config.getString("csv.field.sep");
+    this.compatFlag = config.getBoolean("csv.compat");
     this.fieldsList = config.getList("csv.fields.list");
     this.fixedHeader = prepareConfiguredHeader();
   }
@@ -177,6 +183,16 @@ public class CsvConverter implements Converter, HeaderConverter {
         } else {
           return "";
         }
+      case BOOLEAN:
+        if (value != null) {
+          if (this.compatFlag) {
+            return addQuotes((Boolean)value == true ? 1 : 0);
+          } else {
+            addQuotes(value);
+          }
+        } else {
+          return "";
+        }
       default:
         if (value != null) {
           return addQuotes(value);
@@ -206,7 +222,11 @@ public class CsvConverter implements Converter, HeaderConverter {
             || schema.name().equals(Time.LOGICAL_NAME)
             || schema.name().equals(org.apache.kafka.connect.data.Date.LOGICAL_NAME)
         )) {
-      return addQuotes(((Date)value).toInstant());
+      if (compatFlag) {
+        return addQuotes(LocalDateTime.from(((Date)value).toInstant().atZone(ZoneId.systemDefault())).format(COMPAT_FORMAT));
+      } else {
+        return addQuotes(((Date) value).toInstant());
+      }
     } else {
       return addQuotes(value);
     }

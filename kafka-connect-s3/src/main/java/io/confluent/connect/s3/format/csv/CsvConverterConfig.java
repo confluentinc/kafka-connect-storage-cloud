@@ -27,6 +27,7 @@ public class CsvConverterConfig extends AbstractConfig {
   static CsvConverterConfig csvConverterConfig(S3SinkConnectorConfig config) {
     Map<String, Object> props = new HashMap();
     props.put("csv.field.sep", config.get("csv.field.sep"));
+    props.put("csv.compat", config.get("csv.compat"));
     props.put("csv.line.sep", config.get("csv.line.sep"));
     props.put("csv.fields.list", config.get("csv.fields.list"));
     return new CsvConverterConfig(props);
@@ -38,6 +39,12 @@ public class CsvConverterConfig extends AbstractConfig {
             ",",
             ConfigDef.Importance.HIGH,
             "CSV field separator character(s)"
+    );
+    configDef.define("csv.compat",
+            ConfigDef.Type.BOOLEAN,
+            false,
+            ConfigDef.Importance.MEDIUM,
+            "CSV compatibility mode"
     );
     configDef.define("csv.line.sep",
             ConfigDef.Type.STRING,
