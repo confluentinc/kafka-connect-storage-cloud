@@ -168,7 +168,6 @@
         <dependency>
             <groupId>com.fasterxml.jackson.dataformat</groupId>
             <artifactId>jackson-dataformat-cbor</artifactId>
-            <version>${jackson.cbor.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.hadoop</groupId>
