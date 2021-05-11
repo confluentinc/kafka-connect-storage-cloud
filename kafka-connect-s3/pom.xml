@@ -35,7 +35,7 @@
     </description>
 
     <properties>
-        <aws.version>1.11.725</aws.version>
+        <aws.version>1.11.1015</aws.version>
         <s3mock.version>0.2.5</s3mock.version>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <parquet.tools.version>1.11.1</parquet.tools.version>
@@ -68,6 +68,14 @@
         <dependency>
             <groupId>com.amazonaws</groupId>
             <artifactId>aws-java-sdk-s3</artifactId>
+            <exclusions>
+            <exclusion>
+                <!-- This is not used by the connector and is removed to address CVE-2020-28491
+                    Once the jackson version gets upgraded consider lifting this exclusion -->
+                <groupId>com.fasterxml.jackson.dataformat</groupId>
+                <artifactId>jackson-dataformat-cbor</artifactId>
+            </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.amazonaws</groupId>
