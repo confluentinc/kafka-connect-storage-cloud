@@ -105,7 +105,6 @@
             <type>test-jar</type>
             <classifier>test</classifier>
             <scope>test</scope>
-
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
