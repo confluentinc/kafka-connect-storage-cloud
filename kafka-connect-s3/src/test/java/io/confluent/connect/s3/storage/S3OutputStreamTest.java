@@ -41,12 +41,12 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
     e.setErrorType(ErrorType.Service);
 
     when(s3Mock.initiateMultipartUpload(any())).thenThrow(e);
-    assertThrows("Multipart upload failed to complete.", ConnectException.class, () -> stream.commit());
+    assertThrows("Multipart upload failed to complete.", IOException.class, () -> stream.commit());
   }
 
   @Test
   public void testPropagateOtherRetriableS3Exceptions() {
     when(s3Mock.initiateMultipartUpload(any())).thenThrow(new AmazonClientException("this is an other s3 exception"));
-    assertThrows("Multipart upload failed to complete.", ConnectException.class, () -> stream.commit());
+    assertThrows("Multipart upload failed to complete.", IOException.class, () -> stream.commit());
   }
 }
