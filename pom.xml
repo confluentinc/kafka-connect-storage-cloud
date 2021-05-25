@@ -64,6 +64,7 @@
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <hadoop.version>2.7.7</hadoop.version>
         <maven.release.plugin.version>2.5.3</maven.release.plugin.version>
+        <metrics.core.version>4.2.0</metrics.core.version>
     </properties>
 
     <repositories>
@@ -224,7 +225,7 @@
         <dependency>
             <groupId>io.dropwizard.metrics</groupId>
             <artifactId>metrics-core</artifactId>
-            <version>4.2.0</version>
+            <version>${metrics.core.version}</version>
         </dependency>
 
     </dependencies>
