@@ -25,7 +25,7 @@ mkdir -p ${DESTDIR}${SYSCONFDIR}
 
 function copy_subpackage() {
     local SUBPACKAGE="$1"
-    pushd "${SUBPACKAGE}/target/${SUBPACKAGE}-${VERSION}-package"
+    pushd "${SUBPACKAGE}/target/${SUBPACKAGE}-${VERSION}${SECURITY_SUFFIX}-package"
 
     find bin/ -type f | grep -v README[.]rpm | xargs -I XXX ${INSTALL_X} -o root -g root XXX ${DESTDIR}${PREFIX}/XXX
     find share/ -type f | grep -v README[.]rpm | xargs -I XXX ${INSTALL} -o root -g root XXX ${DESTDIR}${PREFIX}/XXX
