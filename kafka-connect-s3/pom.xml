@@ -77,6 +77,13 @@
             </exclusion>
             </exclusions>
         </dependency>
+        <!-- Pinning the version of this dependency to address CVE in alignment with
+            https://github.com/confluentinc/common/pull/342
+            Once the jackson version gets upgraded consider lifting this explicit listing -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-cbor</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.amazonaws</groupId>
             <artifactId>aws-java-sdk-sts</artifactId>
