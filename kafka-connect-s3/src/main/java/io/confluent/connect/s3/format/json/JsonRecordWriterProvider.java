@@ -19,6 +19,7 @@ import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
@@ -76,6 +77,18 @@ public class JsonRecordWriterProvider extends RecordViewSetter
         public void write(SinkRecord record) {
           log.trace("Sink record with view {}: {}", recordView, record);
           try {
+            // headers need to be enveloped for json format
+            if (recordView instanceof HeaderRecordView) {
+              byte[] rawJson = converter.fromConnectData(
+                  record.topic(),
+                  recordView.getViewSchema(record, true),
+                  recordView.getView(record, true)
+              );
+              s3outWrapper.write(rawJson);
+              s3outWrapper.write(LINE_SEPARATOR_BYTES);
+              return;
+            }
+
             Object value = recordView.getView(record, false);
             if (value instanceof Struct) {
               byte[] rawJson = converter.fromConnectData(
