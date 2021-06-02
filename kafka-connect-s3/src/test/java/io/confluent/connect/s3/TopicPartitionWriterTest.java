@@ -1435,11 +1435,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   private List<String> getS3FileListHeaders(List<S3ObjectSummary> summaries) {
-    return getS3FileListFilter(summaries, ".headers");
+    return getS3FileListFilter(summaries, RecordElement.HEADERS.name().toLowerCase());
   }
 
   private List<String> getS3FileListKeys(List<S3ObjectSummary> summaries) {
-    return getS3FileListFilter(summaries, ".keys.avro");
+    return getS3FileListFilter(summaries, RecordElement.KEYS.name().toLowerCase());
   }
 
   // filter for keys or headers
