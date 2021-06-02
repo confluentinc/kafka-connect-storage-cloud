@@ -76,24 +76,14 @@ public class JsonRecordWriterProvider extends RecordViewSetter
         @Override
         public void write(SinkRecord record) {
           log.trace("Sink record with view {}: {}", recordView, record);
+          // headers need to be enveloped for json format
+          boolean envelop = recordView instanceof HeaderRecordView;
           try {
-            // headers need to be enveloped for json format
-            if (recordView instanceof HeaderRecordView) {
-              byte[] rawJson = converter.fromConnectData(
-                  record.topic(),
-                  recordView.getViewSchema(record, true),
-                  recordView.getView(record, true)
-              );
-              s3outWrapper.write(rawJson);
-              s3outWrapper.write(LINE_SEPARATOR_BYTES);
-              return;
-            }
-
-            Object value = recordView.getView(record, false);
+            Object value = recordView.getView(record, envelop);
             if (value instanceof Struct) {
               byte[] rawJson = converter.fromConnectData(
                   record.topic(),
-                  recordView.getViewSchema(record, false),
+                  recordView.getViewSchema(record, envelop),
                   value
               );
               s3outWrapper.write(rawJson);

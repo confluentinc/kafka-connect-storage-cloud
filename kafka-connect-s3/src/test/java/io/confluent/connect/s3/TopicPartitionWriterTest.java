@@ -29,6 +29,8 @@ import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.storage.errors.PartitionException;
 import io.confluent.kafka.serializers.NonRecordContainer;
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -97,6 +99,10 @@ import static org.mockito.Mockito.times;
 public class TopicPartitionWriterTest extends TestWithMockedS3 {
   // The default
   private static final String ZERO_PAD_FMT = "%010d";
+  private static final String HEADER_JSON = ".headers.json";
+  private static final String HEADER_AVRO = ".headers.avro";
+  private static final String KEYS_AVRO = ".keys.avro";
+
   private enum RecordElement {
     KEYS,
     HEADERS,
@@ -1368,17 +1374,17 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
         SinkRecord currentRecord = records.get(index++);
         Object expectedRecord;
-        if (fileKey.endsWith(".headers.avro")) {
+        if (fileKey.endsWith(HEADER_AVRO)) {
           Schema headerSchema = new HeaderRecordView().getViewSchema(currentRecord, false);
           Object value = new HeaderRecordView().getView(currentRecord, false);
           expectedRecord = ((NonRecordContainer) format.getAvroData().fromConnectData(headerSchema, value)).getValue();
-        } else if (fileKey.endsWith(".headers.json")) {
+        } else if (fileKey.endsWith(HEADER_JSON)) {
           Schema headerSchema = new HeaderRecordView().getViewSchema(currentRecord, true);
           Object value = new HeaderRecordView().getView(currentRecord, true);
           byte[] jsonBytes = configuredJsonConverter().fromConnectData(currentRecord.topic(), headerSchema, value);
           JsonParser reader = new ObjectMapper().getFactory().createParser(jsonBytes);
           expectedRecord = reader.readValueAs(Object.class);
-        } else if (fileKey.endsWith(".keys.avro")) {
+        } else if (fileKey.endsWith(KEYS_AVRO)) {
           expectedRecord = ((NonRecordContainer) format.getAvroData().fromConnectData(currentRecord.keySchema(), currentRecord.key())).getValue();
           expectedRecord = new Utf8((String) expectedRecord); // fix assert conflicts due to java string and avro utf8
         } else {
@@ -1402,7 +1408,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   // whether a filename contains any of the extensions
-  private boolean filenameContainsExtensions(String filename, List<String> extensions) {
+  private boolean filenameContainsExtensions(String filename, Set<String> extensions) {
     for (String extension : extensions){
       if (filename.contains(extension)) {
         return true;
@@ -1413,7 +1419,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   // filter for values only.
   private List<String> getS3FileListValues(List<S3ObjectSummary> summaries) {
-    List<String> excludeExtensions = Arrays.asList(".headers.avro", ".headers.json", ".keys.avro");
+    Set<String> excludeExtensions = new HashSet<>(Arrays.asList(HEADER_AVRO, HEADER_JSON, KEYS_AVRO));
     List<String> filteredFiles = new ArrayList<>();
     for (S3ObjectSummary summary : summaries) {
       String fileKey = summary.getKey();
