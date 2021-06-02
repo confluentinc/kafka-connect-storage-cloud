@@ -99,9 +99,9 @@ import static org.mockito.Mockito.times;
 public class TopicPartitionWriterTest extends TestWithMockedS3 {
   // The default
   private static final String ZERO_PAD_FMT = "%010d";
-  private static final String HEADER_JSON = ".headers.json";
-  private static final String HEADER_AVRO = ".headers.avro";
-  private static final String KEYS_AVRO = ".keys.avro";
+  private static final String HEADER_JSON_EXT = ".headers.json";
+  private static final String HEADER_AVRO_EXT = ".headers.avro";
+  private static final String KEYS_AVRO_EXT = ".keys.avro";
 
   private enum RecordElement {
     KEYS,
@@ -1121,9 +1121,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     verifyRecordElement(expectedValueFiles, 3, sinkRecords, RecordElement.VALUES);
 
     List<String> expectedHeaderFiles = new ArrayList<>();
-    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, ".headers.json", ZERO_PAD_FMT));
-    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, ".headers.json", ZERO_PAD_FMT));
-    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, ".headers.json", ZERO_PAD_FMT));
+    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0,
+        HEADER_JSON_EXT, ZERO_PAD_FMT));
+    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3,
+        HEADER_JSON_EXT, ZERO_PAD_FMT));
+    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6,
+        HEADER_JSON_EXT, ZERO_PAD_FMT));
     verifyRecordElement(expectedHeaderFiles, 3, sinkRecords, RecordElement.HEADERS);
   }
 
@@ -1374,17 +1377,17 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
         SinkRecord currentRecord = records.get(index++);
         Object expectedRecord;
-        if (fileKey.endsWith(HEADER_AVRO)) {
+        if (fileKey.endsWith(HEADER_AVRO_EXT)) {
           Schema headerSchema = new HeaderRecordView().getViewSchema(currentRecord, false);
           Object value = new HeaderRecordView().getView(currentRecord, false);
           expectedRecord = ((NonRecordContainer) format.getAvroData().fromConnectData(headerSchema, value)).getValue();
-        } else if (fileKey.endsWith(HEADER_JSON)) {
+        } else if (fileKey.endsWith(HEADER_JSON_EXT)) {
           Schema headerSchema = new HeaderRecordView().getViewSchema(currentRecord, true);
           Object value = new HeaderRecordView().getView(currentRecord, true);
           byte[] jsonBytes = configuredJsonConverter().fromConnectData(currentRecord.topic(), headerSchema, value);
           JsonParser reader = new ObjectMapper().getFactory().createParser(jsonBytes);
           expectedRecord = reader.readValueAs(Object.class);
-        } else if (fileKey.endsWith(KEYS_AVRO)) {
+        } else if (fileKey.endsWith(KEYS_AVRO_EXT)) {
           expectedRecord = ((NonRecordContainer) format.getAvroData().fromConnectData(currentRecord.keySchema(), currentRecord.key())).getValue();
           expectedRecord = new Utf8((String) expectedRecord); // fix assert conflicts due to java string and avro utf8
         } else {
@@ -1419,7 +1422,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   // filter for values only.
   private List<String> getS3FileListValues(List<S3ObjectSummary> summaries) {
-    Set<String> excludeExtensions = new HashSet<>(Arrays.asList(HEADER_AVRO, HEADER_JSON, KEYS_AVRO));
+    Set<String> excludeExtensions = new HashSet<>(Arrays.asList(HEADER_AVRO_EXT, HEADER_JSON_EXT,
+        KEYS_AVRO_EXT));
     List<String> filteredFiles = new ArrayList<>();
     for (S3ObjectSummary summary : summaries) {
       String fileKey = summary.getKey();
