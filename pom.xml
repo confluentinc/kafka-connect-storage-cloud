@@ -73,6 +73,11 @@
             <name>Confluent</name>
             <url>${confluent.maven.repo}</url>
         </repository>
+        <repository>
+            <id>mulesoft</id>
+            <name>mulesoft </name>
+            <url>https://repository.mulesoft.org/nexus/content/repositories/public/</url>
+        </repository>
     </repositories>
 
     <dependencies>
@@ -108,6 +113,11 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-format</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.rdblue</groupId>
+            <artifactId>brotli-codec</artifactId>
+            <version>0.1.1</version>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>

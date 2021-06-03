@@ -133,6 +133,12 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
   }
 
   @Test
+  public void testBrotliCompressionWriteRecords() throws Exception {
+    localProps.put(S3SinkConnectorConfig.PARQUET_CODEC_CONFIG, "brotli");
+    writeRecordsWithExtensionAndVerifyResult(CompressionCodecName.BROTLI.getExtension() + ".parquet");
+  }
+
+  @Test
   public void testRecoveryWithPartialFile() throws Exception {
     setUp();
 
