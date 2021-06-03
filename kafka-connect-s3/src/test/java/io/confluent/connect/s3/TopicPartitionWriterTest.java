@@ -18,13 +18,19 @@ package io.confluent.connect.s3;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.services.s3.model.Tag;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.common.utils.SystemTime;
 import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
 import io.confluent.connect.s3.format.RecordViewSetter;
 import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
+import io.confluent.connect.s3.format.json.JsonFormat;
+import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.storage.errors.PartitionException;
 import io.confluent.kafka.serializers.NonRecordContainer;
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -37,6 +43,7 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.errors.SchemaProjectorException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Header;
+import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -92,6 +99,10 @@ import static org.mockito.Mockito.times;
 public class TopicPartitionWriterTest extends TestWithMockedS3 {
   // The default
   private static final String ZERO_PAD_FMT = "%010d";
+  private static final String HEADER_JSON_EXT = ".headers.json";
+  private static final String HEADER_AVRO_EXT = ".headers.avro";
+  private static final String KEYS_AVRO_EXT = ".keys.avro";
+
   private enum RecordElement {
     KEYS,
     HEADERS,
@@ -1079,6 +1090,46 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     verifyRecordElement(expectedKeyFiles, 3, sinkRecords, RecordElement.KEYS);
   }
 
+  @Test
+  public void testRecordHeadersWrittenJson() throws Exception {
+    setUp();
+    // Define the partitioner
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, getKeyHeaderValueProviderJsonHeaders(), partitioner,  connectorConfig, context, null);
+
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 3);
+    List<SinkRecord> sinkRecords = createSinkRecordsWithHeaders(records, "key", schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
+
+    List<String> expectedValueFiles = new ArrayList<>();
+    expectedValueFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    expectedValueFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
+    expectedValueFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
+    verifyRecordElement(expectedValueFiles, 3, sinkRecords, RecordElement.VALUES);
+
+    List<String> expectedHeaderFiles = new ArrayList<>();
+    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0,
+        HEADER_JSON_EXT, ZERO_PAD_FMT));
+    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3,
+        HEADER_JSON_EXT, ZERO_PAD_FMT));
+    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6,
+        HEADER_JSON_EXT, ZERO_PAD_FMT));
+    verifyRecordElement(expectedHeaderFiles, 3, sinkRecords, RecordElement.HEADERS);
+  }
+
   // Test if a given exception type was reported to the DLQ
   private <T extends DataException> void testExceptionReportedToDLQ(
       SinkRecord faultyRecord,
@@ -1172,6 +1223,19 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     return new KeyValueHeaderRecordWriterProvider(
         new AvroFormat(storage).getRecordWriterProvider(),
         keyWriterProvider,
+        headerWriterProvider
+    );
+  }
+
+  private RecordWriterProvider<S3SinkConnectorConfig> getKeyHeaderValueProviderJsonHeaders() {
+    // setup header record provider for writing record header files.
+    RecordWriterProvider<S3SinkConnectorConfig> headerWriterProvider =
+        new JsonFormat(storage).getRecordWriterProvider();
+    ((RecordViewSetter) headerWriterProvider).setRecordView(new HeaderRecordView());
+    // initialize the KVHWriterProvider with header and key writers turned on.
+    return new KeyValueHeaderRecordWriterProvider(
+        new AvroFormat(storage).getRecordWriterProvider(),
+        null,
         headerWriterProvider
     );
   }
@@ -1302,17 +1366,28 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     int index = 0;
     for (String fileKey : actualFiles) {
-      Collection<Object> actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3);
+      Collection<Object> actualRecords;
+      if (fileKey.endsWith(".json")) {
+        actualRecords = readRecordsJson(S3_TEST_BUCKET_NAME, fileKey, s3, CompressionType.NONE);
+      } else {
+        actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3);
+      }
       assertEquals(expectedSize, actualRecords.size());
       for (Object avroRecord : actualRecords) {
 
         SinkRecord currentRecord = records.get(index++);
         Object expectedRecord;
-        if (fileKey.endsWith(".headers.avro")) {
+        if (fileKey.endsWith(HEADER_AVRO_EXT)) {
           Schema headerSchema = new HeaderRecordView().getViewSchema(currentRecord, false);
           Object value = new HeaderRecordView().getView(currentRecord, false);
           expectedRecord = ((NonRecordContainer) format.getAvroData().fromConnectData(headerSchema, value)).getValue();
-        } else if (fileKey.endsWith(".keys.avro")) {
+        } else if (fileKey.endsWith(HEADER_JSON_EXT)) {
+          Schema headerSchema = new HeaderRecordView().getViewSchema(currentRecord, true);
+          Object value = new HeaderRecordView().getView(currentRecord, true);
+          byte[] jsonBytes = configuredJsonConverter().fromConnectData(currentRecord.topic(), headerSchema, value);
+          JsonParser reader = new ObjectMapper().getFactory().createParser(jsonBytes);
+          expectedRecord = reader.readValueAs(Object.class);
+        } else if (fileKey.endsWith(KEYS_AVRO_EXT)) {
           expectedRecord = ((NonRecordContainer) format.getAvroData().fromConnectData(currentRecord.keySchema(), currentRecord.key())).getValue();
           expectedRecord = new Utf8((String) expectedRecord); // fix assert conflicts due to java string and avro utf8
         } else {
@@ -1323,8 +1398,20 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     }
   }
 
+  private JsonConverter configuredJsonConverter() {
+    JsonConverter jsonConverter = new JsonConverter();
+    Map<String, Object> converterConfig = new HashMap<>();
+    converterConfig.put("schemas.enable", "false");
+    converterConfig.put(
+        "schemas.cache.size",
+        String.valueOf(storage.conf().get(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG))
+    );
+    jsonConverter.configure(converterConfig, false);
+    return jsonConverter;
+  }
+
   // whether a filename contains any of the extensions
-  private boolean filenameContainsExtensions(String filename, List<String> extensions) {
+  private boolean filenameContainsExtensions(String filename, Set<String> extensions) {
     for (String extension : extensions){
       if (filename.contains(extension)) {
         return true;
@@ -1335,7 +1422,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   // filter for values only.
   private List<String> getS3FileListValues(List<S3ObjectSummary> summaries) {
-    List<String> excludeExtensions = Arrays.asList(".headers.avro", ".keys.avro");
+    Set<String> excludeExtensions = new HashSet<>(Arrays.asList(HEADER_AVRO_EXT, HEADER_JSON_EXT,
+        KEYS_AVRO_EXT));
     List<String> filteredFiles = new ArrayList<>();
     for (S3ObjectSummary summary : summaries) {
       String fileKey = summary.getKey();
@@ -1347,11 +1435,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   private List<String> getS3FileListHeaders(List<S3ObjectSummary> summaries) {
-    return getS3FileListFilter(summaries, ".headers.avro");
+    return getS3FileListFilter(summaries, RecordElement.HEADERS.name().toLowerCase());
   }
 
   private List<String> getS3FileListKeys(List<S3ObjectSummary> summaries) {
-    return getS3FileListFilter(summaries, ".keys.avro");
+    return getS3FileListFilter(summaries, RecordElement.KEYS.name().toLowerCase());
   }
 
   // filter for keys or headers
