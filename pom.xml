@@ -60,7 +60,6 @@
     <properties>
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
-        <hadoop.version>2.7.7</hadoop.version>
         <maven.release.plugin.version>2.5.3</maven.release.plugin.version>
         <!-- temporary fix by pinning the version until we upgrade to a version of common that contains this or newer version.
             See https://github.com/confluentinc/common/pull/332 for details -->
@@ -114,6 +113,11 @@
             <artifactId>kafka-connect-storage-partitioner</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-connect-storage-common-htrace-core4-shaded</artifactId>
+            <version>${kafka.connect.storage.common.version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>${jackson.databind.version}</version>
@@ -139,6 +143,10 @@
                 <exclusion>
                     <groupId>org.apache.htrace</groupId>
                     <artifactId>htrace-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.htrace</groupId>
+                    <artifactId>htrace-core4</artifactId>
                 </exclusion>
                 <exclusion>
                     <groupId>org.mortbay.jetty</groupId>
