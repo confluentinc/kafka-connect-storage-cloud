@@ -168,7 +168,7 @@ public class S3OutputStream extends PositionOutputStream {
       log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
     } catch (IOException e) {
       log.error("Multipart upload failed to complete for bucket '{}' key '{}'", bucket, key);
-      throw new ConnectException(
+      throw new IOException(
           String.format("Multipart upload failed to complete: %s", e.getMessage())
       );
     } finally {
