@@ -32,7 +32,7 @@ public class Utils {
   public static String getAdjustedFilename(RecordView recordView, String filename,
       String initialExtension) {
     if (filename.endsWith(initialExtension)) {
-      int index = filename.indexOf(initialExtension);
+      int index = filename.lastIndexOf(initialExtension);
       return filename.substring(0, index) + recordView.getExtension() + initialExtension;
     } else {
       // filename is already stripped
