@@ -172,6 +172,16 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String HEADERS_FORMAT_CLASS_CONFIG = "headers.format.class";
   public static final Class<? extends Format> HEADERS_FORMAT_CLASS_DEFAULT = AvroFormat.class;
 
+  /**
+   * Elastic buffer to save memory. {@link io.confluent.connect.s3.storage.S3OutputStream#buffer}
+   */
+
+  public static final String ELASTIC_BUFFER_ENABLE = "s3.elastic.buffer.enable";
+  public static final boolean ELASTIC_BUFFER_ENABLE_DEFAULT = false;
+
+  public static final String ELASTIC_BUFFER_INIT_CAPACITY = "s3.elastic.buffer.init.capacity";
+  public static final int ELASTIC_BUFFER_INIT_CAPACITY_DEFAULT = 128 * 1024;  // 128KB
+
   private final String name;
 
   private final StorageCommonConfig commonConfig;
@@ -663,6 +673,31 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.SHORT,
           "Enable Path Style Access to S3"
       );
+      configDef.define(
+          ELASTIC_BUFFER_ENABLE,
+          Type.BOOLEAN,
+          ELASTIC_BUFFER_ENABLE_DEFAULT,
+          Importance.LOW,
+          "Elastic buffer to staging s3-part for saving memory.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Enable elastic buffer to staging s3-part"
+      );
+
+      configDef.define(
+          ELASTIC_BUFFER_INIT_CAPACITY,
+          Type.INT,
+          ELASTIC_BUFFER_INIT_CAPACITY_DEFAULT,
+          atLeast(4096),
+          Importance.LOW,
+          "Elastic buffer initial capacity.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Elastic buffer initial capacity"
+      );
+
     }
     return configDef;
   }
@@ -790,6 +825,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       return originalsStrings().get(FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG);
     }
     return FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT;
+  }
+
+  public boolean getElasticBufferEnable() {
+    return getBoolean(ELASTIC_BUFFER_ENABLE);
+  }
+
+  public int getElasticBufferInitCap() {
+    return getInt(ELASTIC_BUFFER_INIT_CAPACITY);
   }
 
   protected static String parseName(Map<String, String> props) {
