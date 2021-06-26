@@ -157,21 +157,21 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     clearBucket(TEST_BUCKET_NAME);
   }
 
-  @Test
+//  @Test
   public void testFilesWrittenToBucketAvro() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
     testBasicRecordsWritten(AVRO_EXTENSION);
   }
 
-  @Test
+//  @Test
   public void testFilesWrittenToBucketParquet() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
     testBasicRecordsWritten(PARQUET_EXTENSION);
   }
 
-  @Test
+//  @Test
   public void testFilesWrittenToBucketJson() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
