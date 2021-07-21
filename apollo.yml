@@ -1,0 +1,8 @@
+kafka_connect_s3:
+  build:
+    command: "/bin/bash -c 'cd kafka-connect-s3; rm -rf target; mvn clean package -U -DskipTests'"
+    image: docker.particlenews.com:5000/ubuntu/java8:vimcron
+    volume:
+      from: /data/cache/m2
+      to: /root/.m2
+    dockerfile: Dockerfile
