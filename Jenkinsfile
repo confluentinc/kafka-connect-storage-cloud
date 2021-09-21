@@ -2,6 +2,6 @@
 common {
   slackChannel = '#connect-warn'
   upstreamProjects = 'confluentinc/kafka-connect-storage-common'
-  nodeLabel = 'docker-oraclejdk8'
+  nodeLabel = 'docker-debian-jdk8'
   pintMerge = true
 }
