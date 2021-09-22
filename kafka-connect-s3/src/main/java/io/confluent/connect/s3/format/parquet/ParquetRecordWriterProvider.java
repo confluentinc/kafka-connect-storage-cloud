@@ -82,7 +82,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
             throw new ConnectException(e);
           }
         }
-        log.trace("Sink record: {}", record.toString());
+        log.trace("Sink record: {}", record);
         Object value = avroData.fromConnectData(schema, record.value());
         try {
           writer.write((GenericRecord) value);
