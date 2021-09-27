@@ -15,6 +15,7 @@ public class UtilsTest {
 
   private static List<String> givenFilenames = new ArrayList<>(Arrays.asList(
       "x",
+      "avro",
       "x.avro",
       "asdf.avro",
       "keys.avro",
@@ -31,6 +32,7 @@ public class UtilsTest {
   public void getAdjustedFilenameForValues() {
     List<String> expectedFilenames = new ArrayList<>(Arrays.asList(
         "x.avro",
+        "avro.avro",
         "x.avro",
         "asdf.avro",
         "keys.avro",
@@ -53,6 +55,7 @@ public class UtilsTest {
   public void getAdjustedFilenameForKeys() {
     List<String> expectedFilenames = new ArrayList<>(Arrays.asList(
         "x.keys.avro",
+        "avro.keys.avro",
         "x.keys.avro",
         "asdf.keys.avro",
         "keys.keys.avro",
@@ -75,6 +78,7 @@ public class UtilsTest {
   public void getAdjustedFilenameForHeaders() {
     List<String> expectedFilenames = new ArrayList<>(Arrays.asList(
         "x.headers.avro",
+        "avro.headers.avro",
         "x.headers.avro",
         "asdf.headers.avro",
         "keys.headers.avro",
