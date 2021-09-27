@@ -14,8 +14,6 @@ import org.junit.Test;
 public class UtilsTest {
 
   private static List<String> givenFilenames = new ArrayList<>(Arrays.asList(
-      "x",
-      "avro",
       "x.avro",
       "asdf.avro",
       "keys.avro",
@@ -25,14 +23,16 @@ public class UtilsTest {
       "sample-filename.avro",
       "sample.filename.avro",
       "sample.file.name.avro",
-      "sample.file.avro.RawEvent.avro"
+      "sample.file.avro.RawEvent.avro",
+      "x",
+      "avro",
+      ".avro",
+      "fooavrobar.txt"
   ));
 
   @Test
   public void getAdjustedFilenameForValues() {
     List<String> expectedFilenames = new ArrayList<>(Arrays.asList(
-        "x.avro",
-        "avro.avro",
         "x.avro",
         "asdf.avro",
         "keys.avro",
@@ -42,7 +42,11 @@ public class UtilsTest {
         "sample-filename.avro",
         "sample.filename.avro",
         "sample.file.name.avro",
-        "sample.file.avro.RawEvent.avro"
+        "sample.file.avro.RawEvent.avro",
+        "x.avro",
+        "avro.avro",
+        ".avro",
+        "fooavrobar.txt.avro"
     ));
 
     for (int i = 0; i < expectedFilenames.size(); i++) {
@@ -55,8 +59,6 @@ public class UtilsTest {
   public void getAdjustedFilenameForKeys() {
     List<String> expectedFilenames = new ArrayList<>(Arrays.asList(
         "x.keys.avro",
-        "avro.keys.avro",
-        "x.keys.avro",
         "asdf.keys.avro",
         "keys.keys.avro",
         "key.keys.avro",
@@ -65,7 +67,11 @@ public class UtilsTest {
         "sample-filename.keys.avro",
         "sample.filename.keys.avro",
         "sample.file.name.keys.avro",
-        "sample.file.avro.RawEvent.keys.avro"
+        "sample.file.avro.RawEvent.keys.avro",
+        "x.keys.avro",
+        "avro.keys.avro",
+        ".keys.avro",
+        "fooavrobar.txt.keys.avro"
     ));
 
     for (int i = 0; i < expectedFilenames.size(); i++) {
@@ -78,8 +84,6 @@ public class UtilsTest {
   public void getAdjustedFilenameForHeaders() {
     List<String> expectedFilenames = new ArrayList<>(Arrays.asList(
         "x.headers.avro",
-        "avro.headers.avro",
-        "x.headers.avro",
         "asdf.headers.avro",
         "keys.headers.avro",
         "key.headers.avro",
@@ -88,7 +92,11 @@ public class UtilsTest {
         "sample-filename.headers.avro",
         "sample.filename.headers.avro",
         "sample.file.name.headers.avro",
-        "sample.file.avro.RawEvent.headers.avro"
+        "sample.file.avro.RawEvent.headers.avro",
+        "x.headers.avro",
+        "avro.headers.avro",
+        ".headers.avro",
+        "fooavrobar.txt.headers.avro"
     ));
 
     for (int i = 0; i < expectedFilenames.size(); i++) {
