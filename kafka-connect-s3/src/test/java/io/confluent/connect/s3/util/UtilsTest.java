@@ -22,7 +22,12 @@ public class UtilsTest {
       "header.avro",
       "sample-filename.avro",
       "sample.filename.avro",
-      "sample.file.name.avro"
+      "sample.file.name.avro",
+      "sample.file.avro.RawEvent.avro",
+      "x",
+      "avro",
+      ".avro",
+      "fooavrobar.txt"
   ));
 
   @Test
@@ -36,7 +41,12 @@ public class UtilsTest {
         "header.avro",
         "sample-filename.avro",
         "sample.filename.avro",
-        "sample.file.name.avro"
+        "sample.file.name.avro",
+        "sample.file.avro.RawEvent.avro",
+        "x.avro",
+        "avro.avro",
+        ".avro",
+        "fooavrobar.txt.avro"
     ));
 
     for (int i = 0; i < expectedFilenames.size(); i++) {
@@ -56,7 +66,12 @@ public class UtilsTest {
         "header.keys.avro",
         "sample-filename.keys.avro",
         "sample.filename.keys.avro",
-        "sample.file.name.keys.avro"
+        "sample.file.name.keys.avro",
+        "sample.file.avro.RawEvent.keys.avro",
+        "x.keys.avro",
+        "avro.keys.avro",
+        ".keys.avro",
+        "fooavrobar.txt.keys.avro"
     ));
 
     for (int i = 0; i < expectedFilenames.size(); i++) {
@@ -76,7 +91,12 @@ public class UtilsTest {
         "header.headers.avro",
         "sample-filename.headers.avro",
         "sample.filename.headers.avro",
-        "sample.file.name.headers.avro"
+        "sample.file.name.headers.avro",
+        "sample.file.avro.RawEvent.headers.avro",
+        "x.headers.avro",
+        "avro.headers.avro",
+        ".headers.avro",
+        "fooavrobar.txt.headers.avro"
     ));
 
     for (int i = 0; i < expectedFilenames.size(); i++) {
@@ -106,5 +126,4 @@ public class UtilsTest {
       assertEquals(expectedFilenames.get(i), adjustedFilename);
     }
   }
-
 }
