@@ -72,6 +72,7 @@ public class TopicPartitionWriter {
   private final int flushSize;
   private final long rotateIntervalMs;
   private final long rotateScheduleIntervalMs;
+  private final long rotateScheduleDayAdjustmentMs;
   private long nextScheduledRotation;
   private long currentOffset;
   private Long currentStartOffset;
@@ -145,6 +146,8 @@ public class TopicPartitionWriter {
     if (rotateScheduleIntervalMs > 0) {
       timeZone = DateTimeZone.forID(connectorConfig.getString(PartitionerConfig.TIMEZONE_CONFIG));
     }
+    rotateScheduleDayAdjustmentMs =
+        connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_SCHEDULE_DAY_ADJUSTMENT_MS_CONFIG);
     timeoutMs = connectorConfig.getLong(S3SinkConnectorConfig.RETRY_BACKOFF_CONFIG);
     compatibility = StorageSchemaCompatibility.getCompatibility(
         connectorConfig.getString(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG));
@@ -430,6 +433,7 @@ public class TopicPartitionWriter {
       nextScheduledRotation = DateTimeUtils.getNextTimeAdjustedByDay(
           now,
           rotateScheduleIntervalMs,
+          rotateScheduleDayAdjustmentMs,
           timeZone
       );
       if (log.isDebugEnabled()) {
