@@ -93,7 +93,7 @@ public class JsonRecordWriterProvider extends RecordViewSetter
               writer.writeRaw(LINE_SEPARATOR);
             }
           } catch (IOException e) {
-            throw new ConnectException(e);
+            throw new RetriableException(e);
           }
         }
 

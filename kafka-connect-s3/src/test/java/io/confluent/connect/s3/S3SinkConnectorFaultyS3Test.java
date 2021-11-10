@@ -2,6 +2,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
+import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.util.EmbeddedConnectUtils;
 import io.confluent.connect.s3.util.S3Utils;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
@@ -121,6 +122,12 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
                 {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_SMALL},
                 {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, PART_SIZE_SMALL},
                 {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_SMALL},
+                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_BIG},
+                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, PART_SIZE_BIG},
+                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_BIG},
+                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_SMALL},
+                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, PART_SIZE_SMALL},
+                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_SMALL},
         });
     }
 
