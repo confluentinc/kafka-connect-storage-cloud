@@ -1,6 +1,7 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
+import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.util.EmbeddedConnectUtils;
@@ -128,6 +129,12 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
                 {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_SMALL},
                 {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, PART_SIZE_SMALL},
                 {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_SMALL},
+                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_BIG},
+                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, PART_SIZE_BIG},
+                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_BIG},
+                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_SMALL},
+                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, PART_SIZE_SMALL},
+                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_SMALL},
         });
     }
 

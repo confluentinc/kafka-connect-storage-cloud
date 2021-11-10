@@ -76,7 +76,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
             writer.setCodec(CodecFactory.fromString(conf.getAvroCodec()));
             writer.create(avroSchema, s3out);
           } catch (IOException e) {
-            throw new ConnectException(e);
+            throw new RetriableException(e);
           }
         }
         log.trace("Sink record with view {}: {}", recordView, record);
@@ -89,7 +89,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
           }
           writer.append(value);
         } catch (IOException e) {
-          throw new ConnectException(e);
+          throw new RetriableException(e);
         }
       }
 
