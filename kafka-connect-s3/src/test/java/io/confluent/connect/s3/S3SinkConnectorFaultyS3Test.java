@@ -31,15 +31,15 @@ import static com.github.tomakehurst.wiremock.client.WireMock.put;
 @RunWith(Parameterized.class)
 public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     protected static final int MAX_TASKS = 1;
-    protected static final int FLUSH_SIZE = 70; // ~ 7 MB
+    protected static final int PART_SIZE = 5 * 1024 * 1024;
     protected static final int TOPIC_PARTITIONS = 2;
 
     protected static final String CONNECTOR_NAME = "s3-sink";
     protected static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
 
     protected static final String TEST_MESSAGE = generateLongString(100 * 1024); // 100 KB
-    protected static final int PART_SIZE_BIG = 10 * 1024 * 1024; // trigger single part upload
-    protected static final int PART_SIZE_SMALL = 5 * 1024 * 1024; // trigger two part uploads
+    protected static final int FLUSH_SIZE_SMALL = 30; // ~ 3 MB (less than PART_SIZE, trigger single part upload - during commit)
+    protected static final int FLUSH_SIZE_BIG = 70; // ~ 7 MB (more than PART_SIZE, trigger two part uploads - during write and commit)
 
     protected Map<String, String> localProps = new HashMap<>();
     protected EmbeddedConnectCluster connect;
@@ -47,20 +47,20 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
 
     // test parameters
     private final Failure failure;
-    private final int partSize;
     private final Class formatClass;
     private final Class converterClass;
+    private final int flushSize;
 
     public S3SinkConnectorFaultyS3Test(
             Class formatClass,
             Class converterClass,
             Failure failure,
-            int partSize
+            int flushSize
     ) {
         this.failure = failure;
-        this.partSize = partSize;
         this.formatClass = formatClass;
         this.converterClass = converterClass;
+        this.flushSize = flushSize;
     }
 
     @Override
@@ -69,7 +69,11 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
 
         props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, S3SinkConnector.class.getName());
         props.put(ConnectorConfig.TASKS_MAX_CONFIG, Integer.toString(MAX_TASKS));
-        props.put(StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG, Integer.toString(FLUSH_SIZE));
+
+        // If flushSize > PART_SIZE, then first uploadPart() is called from S3OutputStream::write() method.
+        // If flushSize < PART_SIZE, then uploadPart() is called only from S3OutputStream::commit() method.
+        props.put(S3SinkConnectorConfig.PART_SIZE_CONFIG, Integer.toString(PART_SIZE));
+        props.put(StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG, Integer.toString(flushSize));
 
         // since S3 is mocked, credentials don't matter
         props.put(S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG, "12345");
@@ -117,32 +121,29 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     @Parameterized.Parameters
     public static Collection<Object[]> tests() {
         return Arrays.asList(new Object[][]{
-                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_BIG},
-                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, PART_SIZE_BIG},
-                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_BIG},
-                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_SMALL},
-                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, PART_SIZE_SMALL},
-                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_SMALL},
-                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_BIG},
-                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, PART_SIZE_BIG},
-                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_BIG},
-                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_SMALL},
-                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, PART_SIZE_SMALL},
-                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_SMALL},
-                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_BIG},
-                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, PART_SIZE_BIG},
-                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_BIG},
-                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_SMALL},
-                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, PART_SIZE_SMALL},
-                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_SMALL},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_SMALL},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, FLUSH_SIZE_SMALL},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_SMALL},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_BIG},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, FLUSH_SIZE_BIG},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_BIG},
+                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_SMALL},
+                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, FLUSH_SIZE_SMALL},
+                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_SMALL},
+                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_BIG},
+                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, FLUSH_SIZE_BIG},
+                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_BIG},
+                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_SMALL},
+                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, FLUSH_SIZE_SMALL},
+                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_SMALL},
+                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_BIG},
+                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, FLUSH_SIZE_BIG},
+                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_BIG},
         });
     }
 
     @Test
     public void testErrorIsRetriedByConnectFramework() throws Exception {
-        // Setting s3.part.size low will trigger uploadPart() to be called from S3OutputStream::write() method
-        // instead of S3OutputStream::commit() method.
-        localProps.put(S3SinkConnectorConfig.PART_SIZE_CONFIG, Integer.toString(partSize));
 
         localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, formatClass.getName());
         localProps.put(SinkConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, converterClass.getName());
@@ -155,7 +156,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         failure.inject();
 
         // produce enough messages to generate file commit
-        for (int i = 0; i < FLUSH_SIZE; i++) {
+        for (int i = 0; i < flushSize; i++) {
             connect.kafka().produce(TOPIC, 0, null, TEST_MESSAGE);
         }
 
