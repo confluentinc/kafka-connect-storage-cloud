@@ -41,7 +41,7 @@ public class TestWithMockedFaultyS3 extends TestWithMockedS3 {
      * Inject the specified failure for two times.
      * Third and following requests will go to mocked S3 instance.
      */
-    protected void injectS3FailureFor(MappingBuilder mapping) {
+    protected static void injectS3FailureFor(MappingBuilder mapping) {
         stubFor(mapping
                 .atPriority(1)
                 .inScenario("TestWithMockedFaultyS3")

@@ -11,7 +11,11 @@ import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.junit.After;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -22,6 +26,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.matching;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.put;
 
+@RunWith(Parameterized.class)
 public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     protected static final int MAX_TASKS = 1;
     protected static final int FLUSH_SIZE = 70; // ~ 7 MB
@@ -31,10 +36,30 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     protected static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
 
     protected static final String TEST_MESSAGE = generateLongString(100 * 1024); // 100 KB
+    protected static final int PART_SIZE_BIG = 10 * 1024 * 1024; // trigger single part upload
+    protected static final int PART_SIZE_SMALL = 5 * 1024 * 1024; // trigger two part uploads
 
     protected Map<String, String> localProps = new HashMap<>();
     protected EmbeddedConnectCluster connect;
     protected AmazonS3 s3;
+
+    // test parameters
+    private final Failure failure;
+    private final int partSize;
+    private final Class formatClass;
+    private final Class converterClass;
+
+    public S3SinkConnectorFaultyS3Test(
+            Class formatClass,
+            Class converterClass,
+            Failure failure,
+            int partSize
+    ) {
+        this.failure = failure;
+        this.partSize = partSize;
+        this.formatClass = formatClass;
+        this.converterClass = converterClass;
+    }
 
     @Override
     protected Map<String, String> createProps() {
@@ -87,50 +112,33 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     // TODO: different error codes
     // TODO: different output formats
 
-    @Test
-    public void test429ErrorDuringCreateMultipartUploadIsRetriedByConnectFrameworkWhileCommit() throws Exception {
-        testErrorIsRetriedByConnectFramework(this::injectS3FailureForCreateMultipartUploadRequest, 10 * 1024 * 1024);
+    @Parameterized.Parameters
+    public static Collection<Object[]> tests() {
+        return Arrays.asList(new Object[][]{
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_BIG},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, PART_SIZE_BIG},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_BIG},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_SMALL},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, PART_SIZE_SMALL},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, PART_SIZE_SMALL},
+        });
     }
 
     @Test
-    public void test429ErrorDuringPartUploadIsRetriedByConnectFrameworkWhileCommit() throws Exception {
-        testErrorIsRetriedByConnectFramework(this::injectS3FailureForUploadPartRequest, 10 * 1024 * 1024);
-    }
-
-    @Test
-    public void test429ErrorDuringCompleteMultipartUploadIsRetriedByConnectFrameworkWhileCommit() throws Exception {
-        testErrorIsRetriedByConnectFramework(this::injectS3FailureForCompleteMultipartUploadRequest, 10 * 1024 * 1024);
-    }
-
-    @Test
-    public void test429ErrorDuringCreateMultipartUploadIsRetriedByConnectFrameworkWhileWrite() throws Exception {
-        testErrorIsRetriedByConnectFramework(this::injectS3FailureForCreateMultipartUploadRequest, 5 * 1024 * 1024);
-    }
-
-    @Test
-    public void test429ErrorDuringPartUploadIsRetriedByConnectFrameworkWhileWrite() throws Exception {
-        testErrorIsRetriedByConnectFramework(this::injectS3FailureForUploadPartRequest, 5 * 1024 * 1024);
-    }
-
-    @Test
-    public void test429ErrorDuringCompleteMultipartUploadIsRetriedByConnectFrameworkWhileWrite() throws Exception {
-        testErrorIsRetriedByConnectFramework(this::injectS3FailureForCompleteMultipartUploadRequest, 5 * 1024 * 1024);
-    }
-
-    public void testErrorIsRetriedByConnectFramework(Runnable failure, int partSize) throws Exception {
+    public void testErrorIsRetriedByConnectFramework() throws Exception {
         // Setting s3.part.size low will trigger uploadPart() to be called from S3OutputStream::write() method
         // instead of S3OutputStream::commit() method.
         localProps.put(S3SinkConnectorConfig.PART_SIZE_CONFIG, Integer.toString(partSize));
 
-        localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, ByteArrayFormat.class.getName());
-        localProps.put(SinkConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ByteArrayConverter.class.getName());
+        localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, formatClass.getName());
+        localProps.put(SinkConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, converterClass.getName());
 
         localProps.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "0"); // disable AWS SDK retries
-        localProps.put(StorageSinkConnectorConfig.RETRY_BACKOFF_CONFIG, "1000"); // lower Connect Framework retry backoff
+        localProps.put(StorageSinkConnectorConfig.RETRY_BACKOFF_CONFIG, "100"); // lower Connect Framework retry backoff
 
         setUp();
 
-        failure.run(); // inject failure
+        failure.inject();
 
         // produce enough messages to generate file commit
         for (int i = 0; i < FLUSH_SIZE; i++) {
@@ -140,32 +148,46 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         S3Utils.waitForFilesInBucket(s3, S3_TEST_BUCKET_NAME, 1, S3_TIMEOUT_MS);
     }
 
-    private void injectS3FailureForCreateMultipartUploadRequest() {
-        injectS3FailureFor(post(anyUrl())
-                .withQueryParam("uploads", matching("$^"))
-                .willReturn(
-                        aResponse().withStatus(429)  // "too many requests"
-                )
-        );
-    }
+    enum Failure {
 
-    private void injectS3FailureForUploadPartRequest() {
-        injectS3FailureFor(put(anyUrl())
-                .withQueryParam("partNumber", matching(".*"))
-                .withQueryParam("uploadId", matching(".*"))
-                .willReturn(
-                        aResponse().withStatus(429)  // "too many requests"
-                )
-        );
-    }
+        FAIL_CREATE_MULTIPART_UPLOAD_REQUEST {
+            @Override
+            public void inject() {
+                injectS3FailureFor(post(anyUrl())
+                        .withQueryParam("uploads", matching("$^"))
+                        .willReturn(
+                                aResponse().withStatus(429)  // "too many requests"
+                        )
+                );
+            }
+        },
 
-    private void injectS3FailureForCompleteMultipartUploadRequest() {
-        injectS3FailureFor(post(anyUrl())
-                .withQueryParam("uploadId", matching(".*"))
-                .willReturn(
-                        aResponse().withStatus(429)  // "too many requests"
-                )
-        );
+        FAIL_UPLOAD_PART_REQUEST {
+            @Override
+            public void inject() {
+                injectS3FailureFor(put(anyUrl())
+                        .withQueryParam("partNumber", matching(".*"))
+                        .withQueryParam("uploadId", matching(".*"))
+                        .willReturn(
+                                aResponse().withStatus(429)  // "too many requests"
+                        )
+                );
+            }
+        },
+
+        FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST {
+            @Override
+            public void inject() {
+                injectS3FailureFor(post(anyUrl())
+                        .withQueryParam("uploadId", matching(".*"))
+                        .willReturn(
+                                aResponse().withStatus(429)  // "too many requests"
+                        )
+                );
+            }
+        };
+
+        public abstract void inject();
     }
 
     private static String generateLongString(int sizeInCharacters) {
