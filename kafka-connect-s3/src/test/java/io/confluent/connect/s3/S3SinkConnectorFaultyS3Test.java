@@ -2,23 +2,18 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
+import io.confluent.connect.s3.util.EmbeddedConnectUtils;
 import io.confluent.connect.s3.util.S3Utils;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import org.apache.kafka.connect.converters.ByteArrayConverter;
-import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -27,14 +22,11 @@ import static com.github.tomakehurst.wiremock.client.WireMock.matching;
 import static com.github.tomakehurst.wiremock.client.WireMock.put;
 
 public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
-    private static final Logger LOGGER = LoggerFactory.getLogger(S3SinkConnectorFaultyS3Test.class);
-
     protected static final int MAX_TASKS = 1;
     protected static final int FLUSH_SIZE = 3;
     protected static final int TOPIC_PARTITIONS = 2;
 
     protected static final String CONNECTOR_NAME = "s3-sink";
-    protected static final long CONNECTOR_STARTUP_DURATION_MS = TimeUnit.MINUTES.toMillis(1);
     protected static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
 
     protected Map<String, String> localProps = new HashMap<>();
@@ -86,47 +78,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         connect.kafka().createTopic(TOPIC, TOPIC_PARTITIONS);
 
         connect.configureConnector(CONNECTOR_NAME, properties);
-        waitForConnectorToStart(CONNECTOR_NAME, Math.min(TOPIC_PARTITIONS, MAX_TASKS));
-    }
-
-    /**
-     * Wait up to {@link #CONNECTOR_STARTUP_DURATION_MS maximum time limit} for the connector with the
-     * given name to start the specified number of tasks.
-     *
-     * @param name     the name of the connector
-     * @param numTasks the minimum number of tasks that are expected
-     * @return the time this method discovered the connector has started, in milliseconds past epoch
-     * @throws InterruptedException if this was interrupted
-     */
-    protected long waitForConnectorToStart(String name, int numTasks) throws InterruptedException {
-        TestUtils.waitForCondition(
-                () -> assertConnectorAndTasksRunning(name, numTasks).orElse(false),
-                CONNECTOR_STARTUP_DURATION_MS,
-                "Connector tasks did not start in time."
-        );
-        return System.currentTimeMillis();
-    }
-
-    /**
-     * Confirm that a connector with an exact number of tasks is running.
-     *
-     * @param connectorName the connector
-     * @param numTasks      the minimum number of tasks
-     * @return true if the connector and tasks are in RUNNING state; false otherwise
-     */
-    protected Optional<Boolean> assertConnectorAndTasksRunning(String connectorName, int numTasks) {
-        try {
-            ConnectorStateInfo info = connect.connectorStatus(connectorName);
-            boolean result = info != null
-                    && info.tasks().size() >= numTasks
-                    && info.connector().state().equals(AbstractStatus.State.RUNNING.toString())
-                    && info.tasks().stream()
-                    .allMatch(s -> s.state().equals(AbstractStatus.State.RUNNING.toString()));
-            return Optional.of(result);
-        } catch (Exception e) {
-            LOGGER.warn("Could not check connector state info.");
-            return Optional.empty();
-        }
+        EmbeddedConnectUtils.waitForConnectorToStart(connect, CONNECTOR_NAME, Math.min(TOPIC_PARTITIONS, MAX_TASKS));
     }
 
     // TODO: add test for different S3 places: when initiating multipart upload, when uploading part and when completing the upload
