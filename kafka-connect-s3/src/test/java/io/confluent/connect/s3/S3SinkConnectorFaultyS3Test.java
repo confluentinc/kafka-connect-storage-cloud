@@ -1,13 +1,20 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
+import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.util.EmbeddedConnectUtils;
 import io.confluent.connect.s3.util.S3Utils;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.kafka.connect.converters.ByteArrayConverter;
+import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
@@ -35,11 +42,12 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     protected static final int TOPIC_PARTITIONS = 2;
 
     protected static final String CONNECTOR_NAME = "s3-sink";
-    protected static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
+    protected static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
 
-    protected static final String TEST_MESSAGE = generateLongString(100 * 1024); // 100 KB
+    protected static final String[] TEST_MESSAGES = generateTestMessages(70); // ~ 7 MB of data
     protected static final int FLUSH_SIZE_SMALL = 30; // ~ 3 MB (less than PART_SIZE, trigger single part upload - during commit)
     protected static final int FLUSH_SIZE_BIG = 70; // ~ 7 MB (more than PART_SIZE, trigger two part uploads - during write and commit)
+    protected static final int FLUSH_SIZE_HUGE = 1400; // ~ 140 MB (more than 128 MB (default block size for parquet), trigger two part uploads for parquet)
 
     protected Map<String, String> localProps = new HashMap<>();
     protected EmbeddedConnectCluster connect;
@@ -116,7 +124,6 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     }
 
     // TODO: different error codes
-    // TODO: different output formats
 
     @Parameterized.Parameters
     public static Collection<Object[]> tests() {
@@ -139,6 +146,12 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
                 {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_BIG},
                 {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, FLUSH_SIZE_BIG},
                 {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_BIG},
+                {ParquetFormat.class, JsonConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_SMALL},
+                {ParquetFormat.class, JsonConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, FLUSH_SIZE_SMALL},
+                {ParquetFormat.class, JsonConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_SMALL},
+                {ParquetFormat.class, JsonConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_HUGE},
+                {ParquetFormat.class, JsonConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, FLUSH_SIZE_HUGE},
+                {ParquetFormat.class, JsonConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_BIG},
         });
     }
 
@@ -157,7 +170,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
 
         // produce enough messages to generate file commit
         for (int i = 0; i < flushSize; i++) {
-            connect.kafka().produce(TOPIC, 0, null, TEST_MESSAGE);
+            connect.kafka().produce(TOPIC, 0, null, TEST_MESSAGES[i % TEST_MESSAGES.length]);
         }
 
         S3Utils.waitForFilesInBucket(s3, S3_TEST_BUCKET_NAME, 1, S3_TIMEOUT_MS);
@@ -205,12 +218,50 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         public abstract void inject();
     }
 
-    private static String generateLongString(int sizeInCharacters) {
-        String tenCharacters = "1234567890";
-        StringBuilder result = new StringBuilder();
-        for (int i = 0; i < sizeInCharacters / 10 + 1; i++) {
-            result.append(tenCharacters);
+    private static String[] generateTestMessages(int count) {
+        String[] messages = new String[count];
+        for (int i = 0; i < count; i++) {
+            messages[i] = generateTestMessage();
         }
-        return result.toString();
+        return messages;
+    }
+
+    private static String generateTestMessage() {
+        return envelopeStringToJsonWithSchema(generateLongString(100 * 1024)); // ~100 KB
+    }
+
+    private static String generateLongString(int sizeInCharacters) {
+        // random string is needed to trick ParquetFormat compressor,
+        // so that resulting file size is big enough to trigger part upload
+        return RandomStringUtils.random(sizeInCharacters);
+    }
+
+    private static String envelopeStringToJsonWithSchema(String string) {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ObjectNode fieldDescription = mapper.createObjectNode();
+        fieldDescription.put("type", "string");
+        fieldDescription.put("optional", false);
+        fieldDescription.put("field", "string");
+
+        ArrayNode fields = mapper.createArrayNode();
+        fields.add(fieldDescription);
+
+        ObjectNode schema = mapper.createObjectNode();
+        schema.put("type", "struct");
+        schema.set("fields", fields);
+
+        ObjectNode payload = mapper.createObjectNode();
+        payload.put("string", string);
+
+        ObjectNode root = mapper.createObjectNode();
+        root.set("payload", payload);
+        root.set("schema", schema);
+
+        try {
+            return mapper.writeValueAsString(root);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

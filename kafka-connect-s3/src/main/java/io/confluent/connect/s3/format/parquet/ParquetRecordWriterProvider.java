@@ -29,6 +29,7 @@ import io.confluent.connect.storage.format.RecordWriterProvider;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetFileWriter;
@@ -92,7 +93,7 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
         try {
           writer.write((GenericRecord) value);
         } catch (IOException e) {
-          throw new ConnectException(e);
+          throw new RetriableException(e);
         }
       }
 
@@ -115,7 +116,7 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
             writer.close();
           }
         } catch (IOException e) {
-          throw new ConnectException(e);
+          throw new RetriableException(e);
         }
       }
     };
