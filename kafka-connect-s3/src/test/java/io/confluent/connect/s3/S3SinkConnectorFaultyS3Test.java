@@ -21,13 +21,13 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -51,7 +51,6 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     protected static final int FLUSH_SIZE_BIG = 70; // ~ 7 MB (more than PART_SIZE, trigger two part uploads - during write and commit)
     protected static final int FLUSH_SIZE_HUGE = 1400; // ~ 140 MB (more than 128 MB (default block size for parquet), trigger two part uploads for parquet)
 
-    protected Map<String, String> localProps = new HashMap<>();
     protected EmbeddedConnectCluster connect;
     protected AmazonS3 s3;
 
@@ -80,6 +79,12 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, S3SinkConnector.class.getName());
         props.put(ConnectorConfig.TASKS_MAX_CONFIG, Integer.toString(MAX_TASKS));
 
+        props.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, formatClass.getName());
+        props.put(SinkConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, converterClass.getName());
+
+        props.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "0"); // disable AWS SDK retries
+        props.put(StorageSinkConnectorConfig.RETRY_BACKOFF_CONFIG, "100"); // lower Connect Framework retry backoff
+
         // If flushSize > PART_SIZE, then first uploadPart() is called from S3OutputStream::write() method.
         // If flushSize < PART_SIZE, then uploadPart() is called only from S3OutputStream::commit() method.
         props.put(S3SinkConnectorConfig.PART_SIZE_CONFIG, Integer.toString(PART_SIZE));
@@ -91,13 +96,10 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
 
         props.put(SinkConnectorConfig.TOPICS_CONFIG, TOPIC);
 
-        // add per-test overrides
-        props.putAll(localProps);
-
         return props;
     }
 
-    //@Before
+    @Before
     @Override
     public void setUp() throws Exception {
         super.setUp();
@@ -109,7 +111,6 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     @After
     public void tearDown() throws Exception {
         connect.stop();
-        localProps.clear();
         super.tearDown();
     }
 
@@ -231,15 +232,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
 
     @Test
     public void testErrorIsRetriedByConnectFramework() throws Exception {
-
-        localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, formatClass.getName());
-        localProps.put(SinkConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, converterClass.getName());
-
-        localProps.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "0"); // disable AWS SDK retries
-        localProps.put(StorageSinkConnectorConfig.RETRY_BACKOFF_CONFIG, "100"); // lower Connect Framework retry backoff
-
-        setUp();
-
+        // inject failure
         failure.inject();
 
         // produce enough messages to generate file commit
@@ -247,6 +240,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
             connect.kafka().produce(TOPIC, 0, null, TEST_MESSAGES[i % TEST_MESSAGES.length]);
         }
 
+        // check that the file is written to S3
         S3Utils.waitForFilesInBucket(s3, S3_TEST_BUCKET_NAME, 1, S3_TIMEOUT_MS);
     }
 
