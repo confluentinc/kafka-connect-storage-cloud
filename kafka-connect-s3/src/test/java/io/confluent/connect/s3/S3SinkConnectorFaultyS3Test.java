@@ -86,7 +86,21 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     // TODO: and also: depending on part.size, exceptions may be thrown from write() or from commit()
 
     @Test
-    public void test429ErrorDuringCreateMultipartUploadIsRetriedByConnectFramework() throws Exception {
+    public void test429ErrorDuringCreateMultipartUploadIsRetriedByConnectFrameworkWhileCommit() throws Exception {
+        testErrorIsRetriedByConnectFramework(this::injectS3FailureForCreateMultipartUploadRequest);
+    }
+
+    @Test
+    public void test429ErrorDuringPartUploadIsRetriedByConnectFrameworkWhileCommit() throws Exception {
+        testErrorIsRetriedByConnectFramework(this::injectS3FailureForUploadPartRequest);
+    }
+
+    @Test
+    public void test429ErrorDuringCompleteMultipartUploadIsRetriedByConnectFrameworkWhileCommit() throws Exception {
+        testErrorIsRetriedByConnectFramework(this::injectS3FailureForCompleteMultipartUploadRequest);
+    }
+
+    public void testErrorIsRetriedByConnectFramework(Runnable failure) throws Exception {
         localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, ByteArrayFormat.class.getName());
         localProps.put(SinkConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ByteArrayConverter.class.getName());
 
@@ -95,13 +109,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
 
         setUp();
 
-        // inject S3 failure for CreateMultipartUpload request
-        injectS3FailureFor(post(anyUrl())
-                .withQueryParam("uploads", matching("$^"))
-                .willReturn(
-                        aResponse().withStatus(429)  // "too many requests"
-                )
-        );
+        failure.run(); // inject failure
 
         connect.kafka().produce(TOPIC, 0, null, "Message1");
         connect.kafka().produce(TOPIC, 0, null, "Message2");
@@ -110,17 +118,16 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         S3Utils.waitForFilesInBucket(s3, S3_TEST_BUCKET_NAME, 1, S3_TIMEOUT_MS);
     }
 
-    @Test
-    public void test429ErrorDuringPartUploadIsRetriedByConnectFramework() throws Exception {
-        localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, ByteArrayFormat.class.getName());
-        localProps.put(SinkConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ByteArrayConverter.class.getName());
+    private void injectS3FailureForCreateMultipartUploadRequest() {
+        injectS3FailureFor(post(anyUrl())
+                .withQueryParam("uploads", matching("$^"))
+                .willReturn(
+                        aResponse().withStatus(429)  // "too many requests"
+                )
+        );
+    }
 
-        localProps.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "0"); // disable AWS SDK retries
-        localProps.put(StorageSinkConnectorConfig.RETRY_BACKOFF_CONFIG, "1000"); // lower Connect Framework retry backoff
-
-        setUp();
-
-        // inject S3 failure for UploadPart request
+    private void injectS3FailureForUploadPartRequest() {
         injectS3FailureFor(put(anyUrl())
                 .withQueryParam("partNumber", matching(".*"))
                 .withQueryParam("uploadId", matching(".*"))
@@ -128,36 +135,14 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
                         aResponse().withStatus(429)  // "too many requests"
                 )
         );
-
-        connect.kafka().produce(TOPIC, 0, null, "Message1");
-        connect.kafka().produce(TOPIC, 0, null, "Message2");
-        connect.kafka().produce(TOPIC, 0, null, "Message3");
-
-        S3Utils.waitForFilesInBucket(s3, S3_TEST_BUCKET_NAME, 1, S3_TIMEOUT_MS);
     }
 
-    @Test
-    public void test429ErrorDuringCompleteMultipartUploadIsRetriedByConnectFramework() throws Exception {
-        localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, ByteArrayFormat.class.getName());
-        localProps.put(SinkConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ByteArrayConverter.class.getName());
-
-        localProps.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "0"); // disable AWS SDK retries
-        localProps.put(StorageSinkConnectorConfig.RETRY_BACKOFF_CONFIG, "1000"); // lower Connect Framework retry backoff
-
-        setUp();
-
-        // inject S3 failure for CompleteMultipartUpload request
+    private void injectS3FailureForCompleteMultipartUploadRequest() {
         injectS3FailureFor(post(anyUrl())
                 .withQueryParam("uploadId", matching(".*"))
                 .willReturn(
                         aResponse().withStatus(429)  // "too many requests"
                 )
         );
-
-        connect.kafka().produce(TOPIC, 0, null, "Message1");
-        connect.kafka().produce(TOPIC, 0, null, "Message2");
-        connect.kafka().produce(TOPIC, 0, null, "Message3");
-
-        S3Utils.waitForFilesInBucket(s3, S3_TEST_BUCKET_NAME, 1, S3_TIMEOUT_MS);
     }
 }
