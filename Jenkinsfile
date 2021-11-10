@@ -5,4 +5,5 @@ common {
   nodeLabel = 'docker-debian-jdk8'
   pintMerge = true
   twistlockCveScan = true
+  disableConcurrentBuilds = true
 }
