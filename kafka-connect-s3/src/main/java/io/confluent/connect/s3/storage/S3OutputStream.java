@@ -238,14 +238,14 @@ public class S3OutputStream extends PositionOutputStream {
 
         // The only exception is "Too Many Requests" - these may succeed after some backoff
         if (e.getStatusCode() == 429) {
-          throw new IOException("Unable to initiate MultipartUpload.", e);
+          throw new IOException(e);
         }
 
-        throw new ConnectException("Unable to initiate MultipartUpload", e);
+        throw new ConnectException(e);
       }
-      throw new IOException("Unable to initiate MultipartUpload.", e);
+      throw new IOException(e);
     } catch (AmazonClientException e) {
-      throw new IOException("Unable to initiate MultipartUpload.", e);
+      throw new IOException(e);
     }
   }
 
