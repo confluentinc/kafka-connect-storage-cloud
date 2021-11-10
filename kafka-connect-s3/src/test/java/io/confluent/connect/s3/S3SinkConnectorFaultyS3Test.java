@@ -128,30 +128,71 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     @Parameterized.Parameters
     public static Collection<Object[]> tests() {
         return Arrays.asList(new Object[][]{
-                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_SMALL},
-                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, FLUSH_SIZE_SMALL},
-                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_SMALL},
-                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_BIG},
-                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, FLUSH_SIZE_BIG},
-                {ByteArrayFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_BIG},
-                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_SMALL},
-                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, FLUSH_SIZE_SMALL},
-                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_SMALL},
-                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_BIG},
-                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, FLUSH_SIZE_BIG},
-                {JsonFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_BIG},
-                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_SMALL},
-                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, FLUSH_SIZE_SMALL},
-                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_SMALL},
-                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_BIG},
-                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, FLUSH_SIZE_BIG},
-                {AvroFormat.class, ByteArrayConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_BIG},
-                {ParquetFormat.class, JsonConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_SMALL},
-                {ParquetFormat.class, JsonConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, FLUSH_SIZE_SMALL},
-                {ParquetFormat.class, JsonConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_SMALL},
-                {ParquetFormat.class, JsonConverter.class, Failure.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_HUGE},
-                {ParquetFormat.class, JsonConverter.class, Failure.FAIL_UPLOAD_PART_REQUEST, FLUSH_SIZE_HUGE},
-                {ParquetFormat.class, JsonConverter.class, Failure.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST, FLUSH_SIZE_BIG},
+                // tests for error 429 Too Many Requests
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failures.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429, FLUSH_SIZE_SMALL},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failures.FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_429, FLUSH_SIZE_SMALL},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failures.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429, FLUSH_SIZE_SMALL},
+
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failures.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429, FLUSH_SIZE_BIG},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failures.FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_429, FLUSH_SIZE_BIG},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failures.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429, FLUSH_SIZE_BIG},
+
+                {JsonFormat.class, ByteArrayConverter.class, Failures.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429, FLUSH_SIZE_SMALL},
+                {JsonFormat.class, ByteArrayConverter.class, Failures.FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_429, FLUSH_SIZE_SMALL},
+                {JsonFormat.class, ByteArrayConverter.class, Failures.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429, FLUSH_SIZE_SMALL},
+
+                {JsonFormat.class, ByteArrayConverter.class, Failures.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429, FLUSH_SIZE_BIG},
+                {JsonFormat.class, ByteArrayConverter.class, Failures.FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_429, FLUSH_SIZE_BIG},
+                {JsonFormat.class, ByteArrayConverter.class, Failures.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429, FLUSH_SIZE_BIG},
+
+                {AvroFormat.class, ByteArrayConverter.class, Failures.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429, FLUSH_SIZE_SMALL},
+                {AvroFormat.class, ByteArrayConverter.class, Failures.FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_429, FLUSH_SIZE_SMALL},
+                {AvroFormat.class, ByteArrayConverter.class, Failures.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429, FLUSH_SIZE_SMALL},
+
+                {AvroFormat.class, ByteArrayConverter.class, Failures.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429, FLUSH_SIZE_BIG},
+                {AvroFormat.class, ByteArrayConverter.class, Failures.FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_429, FLUSH_SIZE_BIG},
+                {AvroFormat.class, ByteArrayConverter.class, Failures.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429, FLUSH_SIZE_BIG},
+
+                {ParquetFormat.class, JsonConverter.class, Failures.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429, FLUSH_SIZE_SMALL},
+                {ParquetFormat.class, JsonConverter.class, Failures.FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_429, FLUSH_SIZE_SMALL},
+                {ParquetFormat.class, JsonConverter.class, Failures.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429, FLUSH_SIZE_SMALL},
+
+                {ParquetFormat.class, JsonConverter.class, Failures.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429, FLUSH_SIZE_HUGE},
+                {ParquetFormat.class, JsonConverter.class, Failures.FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_429, FLUSH_SIZE_HUGE},
+                {ParquetFormat.class, JsonConverter.class, Failures.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429, FLUSH_SIZE_BIG},
+
+                // tests for error 500 Server Error
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failures.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500, FLUSH_SIZE_SMALL},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failures.FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_500, FLUSH_SIZE_SMALL},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failures.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500, FLUSH_SIZE_SMALL},
+
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failures.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500, FLUSH_SIZE_BIG},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failures.FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_500, FLUSH_SIZE_BIG},
+                {ByteArrayFormat.class, ByteArrayConverter.class, Failures.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500, FLUSH_SIZE_BIG},
+
+                {JsonFormat.class, ByteArrayConverter.class, Failures.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500, FLUSH_SIZE_SMALL},
+                {JsonFormat.class, ByteArrayConverter.class, Failures.FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_500, FLUSH_SIZE_SMALL},
+                {JsonFormat.class, ByteArrayConverter.class, Failures.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500, FLUSH_SIZE_SMALL},
+
+                {JsonFormat.class, ByteArrayConverter.class, Failures.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500, FLUSH_SIZE_BIG},
+                {JsonFormat.class, ByteArrayConverter.class, Failures.FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_500, FLUSH_SIZE_BIG},
+                {JsonFormat.class, ByteArrayConverter.class, Failures.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500, FLUSH_SIZE_BIG},
+
+                {AvroFormat.class, ByteArrayConverter.class, Failures.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500, FLUSH_SIZE_SMALL},
+                {AvroFormat.class, ByteArrayConverter.class, Failures.FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_500, FLUSH_SIZE_SMALL},
+                {AvroFormat.class, ByteArrayConverter.class, Failures.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500, FLUSH_SIZE_SMALL},
+
+                {AvroFormat.class, ByteArrayConverter.class, Failures.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500, FLUSH_SIZE_BIG},
+                {AvroFormat.class, ByteArrayConverter.class, Failures.FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_500, FLUSH_SIZE_BIG},
+                {AvroFormat.class, ByteArrayConverter.class, Failures.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500, FLUSH_SIZE_BIG},
+
+                {ParquetFormat.class, JsonConverter.class, Failures.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500, FLUSH_SIZE_SMALL},
+                {ParquetFormat.class, JsonConverter.class, Failures.FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_500, FLUSH_SIZE_SMALL},
+                {ParquetFormat.class, JsonConverter.class, Failures.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500, FLUSH_SIZE_SMALL},
+
+                {ParquetFormat.class, JsonConverter.class, Failures.FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500, FLUSH_SIZE_HUGE},
+                {ParquetFormat.class, JsonConverter.class, Failures.FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_500, FLUSH_SIZE_HUGE},
+                {ParquetFormat.class, JsonConverter.class, Failures.FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500, FLUSH_SIZE_BIG},
         });
     }
 
@@ -176,46 +217,82 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         S3Utils.waitForFilesInBucket(s3, S3_TEST_BUCKET_NAME, 1, S3_TIMEOUT_MS);
     }
 
-    enum Failure {
+    interface Failure {
+        void inject();
+    }
 
-        FAIL_CREATE_MULTIPART_UPLOAD_REQUEST {
-            @Override
-            public void inject() {
-                injectS3FailureFor(post(anyUrl())
-                        .withQueryParam("uploads", matching("$^"))
-                        .willReturn(
-                                aResponse().withStatus(429)  // "too many requests"
-                        )
-                );
-            }
-        },
+    private static class CreateMultipartUploadRequestFailure implements Failure {
+        private final int statusCode;
 
-        FAIL_UPLOAD_PART_REQUEST {
-            @Override
-            public void inject() {
+        public CreateMultipartUploadRequestFailure(int statusCode) {
+            this.statusCode = statusCode;
+        }
+
+        @Override
+        public void inject() {
+            injectS3FailureFor(post(anyUrl())
+                    .withQueryParam("uploads", matching("$^"))
+                    .willReturn(
+                            aResponse().withStatus(statusCode)
+                    )
+            );
+        }
+    }
+
+    private static class PartUploadRequestFailure implements Failure {
+        private final int statusCode;
+
+        public PartUploadRequestFailure(int statusCode) {
+            this.statusCode = statusCode;
+        }
+
+        @Override
+        public void inject() {
                 injectS3FailureFor(put(anyUrl())
                         .withQueryParam("partNumber", matching(".*"))
                         .withQueryParam("uploadId", matching(".*"))
                         .willReturn(
-                                aResponse().withStatus(429)  // "too many requests"
+                                aResponse().withStatus(statusCode)
                         )
                 );
-            }
-        },
+        }
+    }
 
-        FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST {
-            @Override
-            public void inject() {
+    private static class CompleteMultipartUploadRequestFailure implements Failure {
+        private final int statusCode;
+
+        public CompleteMultipartUploadRequestFailure(int statusCode) {
+            this.statusCode = statusCode;
+        }
+
+        @Override
+        public void inject() {
                 injectS3FailureFor(post(anyUrl())
                         .withQueryParam("uploadId", matching(".*"))
                         .willReturn(
-                                aResponse().withStatus(429)  // "too many requests"
+                                aResponse().withStatus(statusCode)  // "too many requests"
                         )
                 );
-            }
-        };
+        }
+    }
 
-        public abstract void inject();
+    enum Failures implements Failure {
+        FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429(new CreateMultipartUploadRequestFailure(429)),
+        FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_429(new PartUploadRequestFailure(429)),
+        FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_429(new CompleteMultipartUploadRequestFailure(429)),
+
+        FAIL_CREATE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500(new CreateMultipartUploadRequestFailure(500)),
+        FAIL_UPLOAD_PART_REQUEST_WITH_ERROR_500(new PartUploadRequestFailure(500)),
+        FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_ERROR_500(new CompleteMultipartUploadRequestFailure(500));
+
+        private final Failure failure;
+        public void inject() {
+            failure.inject();
+        }
+
+        Failures(Failure failure) {
+            this.failure = failure;
+        }
     }
 
     private static String[] generateTestMessages(int count) {
