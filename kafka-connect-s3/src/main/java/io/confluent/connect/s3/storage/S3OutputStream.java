@@ -45,6 +45,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * Output stream enabling multi-part uploads of Kafka records.
@@ -220,14 +221,26 @@ public class S3OutputStream extends PositionOutputStream {
       initRequest.setSSECustomerKey(sseCustomerKey);
     }
 
+    return handleAmazonExceptions(
+      () -> new MultipartUpload(s3.initiateMultipartUpload(initRequest).getUploadId())
+    );
+  }
+
+  private <T> T handleAmazonExceptions(Supplier<T> supplier) throws IOException {
     try {
-      return new MultipartUpload(s3.initiateMultipartUpload(initRequest).getUploadId());
+      return supplier.get();
     } catch (AmazonServiceException e) {
       if (e.getErrorType() == ErrorType.Client) {
         // S3 documentation states that this error type means there is a problem with the request
         // and that retrying this request will not result in a successful response. This includes
         // errors such as incorrect access keys, invalid parameter values, missing parameters, etc.
         // Therefore, the connector should propagate this exception and fail.
+
+        // The only exception is "Too Many Requests" - these may succeed after some backoff
+        if (e.getStatusCode() == 429) {
+          throw new IOException("Unable to initiate MultipartUpload.", e);
+        }
+
         throw new ConnectException("Unable to initiate MultipartUpload", e);
       }
       throw new IOException("Unable to initiate MultipartUpload.", e);
@@ -266,11 +279,14 @@ public class S3OutputStream extends PositionOutputStream {
       partETags.add(s3.uploadPart(request).getPartETag());
     }
 
-    public void complete() {
+    public void complete() throws IOException {
       log.debug("Completing multi-part upload for key '{}', id '{}'", key, uploadId);
       CompleteMultipartUploadRequest completeRequest =
           new CompleteMultipartUploadRequest(bucket, key, uploadId, partETags);
-      s3.completeMultipartUpload(completeRequest);
+
+      handleAmazonExceptions(
+          () -> s3.completeMultipartUpload(completeRequest)
+      );
     }
 
     public void abort() {
