@@ -24,11 +24,13 @@ import static com.github.tomakehurst.wiremock.client.WireMock.put;
 
 public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     protected static final int MAX_TASKS = 1;
-    protected static final int FLUSH_SIZE = 3;
+    protected static final int FLUSH_SIZE = 70; // ~ 7 MB
     protected static final int TOPIC_PARTITIONS = 2;
 
     protected static final String CONNECTOR_NAME = "s3-sink";
-    protected static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
+    protected static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
+
+    protected static final String TEST_MESSAGE = generateLongString(100 * 1024); // 100 KB
 
     protected Map<String, String> localProps = new HashMap<>();
     protected EmbeddedConnectCluster connect;
@@ -82,25 +84,44 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         EmbeddedConnectUtils.waitForConnectorToStart(connect, CONNECTOR_NAME, Math.min(TOPIC_PARTITIONS, MAX_TASKS));
     }
 
-    // TODO: add test for different S3 places: when initiating multipart upload, when uploading part and when completing the upload
-    // TODO: and also: depending on part.size, exceptions may be thrown from write() or from commit()
+    // TODO: different error codes
+    // TODO: different output formats
 
     @Test
     public void test429ErrorDuringCreateMultipartUploadIsRetriedByConnectFrameworkWhileCommit() throws Exception {
-        testErrorIsRetriedByConnectFramework(this::injectS3FailureForCreateMultipartUploadRequest);
+        testErrorIsRetriedByConnectFramework(this::injectS3FailureForCreateMultipartUploadRequest, 10 * 1024 * 1024);
     }
 
     @Test
     public void test429ErrorDuringPartUploadIsRetriedByConnectFrameworkWhileCommit() throws Exception {
-        testErrorIsRetriedByConnectFramework(this::injectS3FailureForUploadPartRequest);
+        testErrorIsRetriedByConnectFramework(this::injectS3FailureForUploadPartRequest, 10 * 1024 * 1024);
     }
 
     @Test
     public void test429ErrorDuringCompleteMultipartUploadIsRetriedByConnectFrameworkWhileCommit() throws Exception {
-        testErrorIsRetriedByConnectFramework(this::injectS3FailureForCompleteMultipartUploadRequest);
+        testErrorIsRetriedByConnectFramework(this::injectS3FailureForCompleteMultipartUploadRequest, 10 * 1024 * 1024);
     }
 
-    public void testErrorIsRetriedByConnectFramework(Runnable failure) throws Exception {
+    @Test
+    public void test429ErrorDuringCreateMultipartUploadIsRetriedByConnectFrameworkWhileWrite() throws Exception {
+        testErrorIsRetriedByConnectFramework(this::injectS3FailureForCreateMultipartUploadRequest, 5 * 1024 * 1024);
+    }
+
+    @Test
+    public void test429ErrorDuringPartUploadIsRetriedByConnectFrameworkWhileWrite() throws Exception {
+        testErrorIsRetriedByConnectFramework(this::injectS3FailureForUploadPartRequest, 5 * 1024 * 1024);
+    }
+
+    @Test
+    public void test429ErrorDuringCompleteMultipartUploadIsRetriedByConnectFrameworkWhileWrite() throws Exception {
+        testErrorIsRetriedByConnectFramework(this::injectS3FailureForCompleteMultipartUploadRequest, 5 * 1024 * 1024);
+    }
+
+    public void testErrorIsRetriedByConnectFramework(Runnable failure, int partSize) throws Exception {
+        // Setting s3.part.size low will trigger uploadPart() to be called from S3OutputStream::write() method
+        // instead of S3OutputStream::commit() method.
+        localProps.put(S3SinkConnectorConfig.PART_SIZE_CONFIG, Integer.toString(partSize));
+
         localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, ByteArrayFormat.class.getName());
         localProps.put(SinkConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ByteArrayConverter.class.getName());
 
@@ -111,9 +132,10 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
 
         failure.run(); // inject failure
 
-        connect.kafka().produce(TOPIC, 0, null, "Message1");
-        connect.kafka().produce(TOPIC, 0, null, "Message2");
-        connect.kafka().produce(TOPIC, 0, null, "Message3");
+        // produce enough messages to generate file commit
+        for (int i = 0; i < FLUSH_SIZE; i++) {
+            connect.kafka().produce(TOPIC, 0, null, TEST_MESSAGE);
+        }
 
         S3Utils.waitForFilesInBucket(s3, S3_TEST_BUCKET_NAME, 1, S3_TIMEOUT_MS);
     }
@@ -144,5 +166,14 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
                         aResponse().withStatus(429)  // "too many requests"
                 )
         );
+    }
+
+    private static String generateLongString(int sizeInCharacters) {
+        String tenCharacters = "1234567890";
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < sizeInCharacters / 10 + 1; i++) {
+            result.append(tenCharacters);
+        }
+        return result.toString();
     }
 }
