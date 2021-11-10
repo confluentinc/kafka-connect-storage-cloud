@@ -15,20 +15,25 @@ import io.confluent.connect.s3.util.EmbeddedConnectUtils;
 import io.confluent.connect.s3.util.S3Utils;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.connect.converters.ByteArrayConverter;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -43,7 +48,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     protected static final int PART_SIZE = 5 * 1024 * 1024;
     protected static final int TOPIC_PARTITIONS = 2;
 
-    protected static final String CONNECTOR_NAME = "s3-sink";
+    protected static final String CONNECTOR_NAME = "s3-sink-";
     protected static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
 
     protected static final String[] TEST_MESSAGES = generateTestMessages(70); // ~ 7 MB of data
@@ -51,7 +56,10 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     protected static final int FLUSH_SIZE_BIG = 70; // ~ 7 MB (more than PART_SIZE, trigger two part uploads - during write and commit)
     protected static final int FLUSH_SIZE_HUGE = 1400; // ~ 140 MB (more than 128 MB (default block size for parquet), trigger two part uploads for parquet)
 
-    protected EmbeddedConnectCluster connect;
+    protected static EmbeddedConnectCluster connect;
+    protected static Admin kafkaAdmin;
+    protected String connectorName;
+    protected String topicName;
     protected AmazonS3 s3;
 
     // test parameters
@@ -95,7 +103,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         props.put(S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG, "12345");
         props.put(S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG, "12345");
 
-        props.put(SinkConnectorConfig.TOPICS_CONFIG, TOPIC);
+        props.put(SinkConnectorConfig.TOPICS_CONFIG, topicName);
 
         return props;
     }
@@ -103,28 +111,39 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     @Before
     @Override
     public void setUp() throws Exception {
+        topicName = TOPIC + "-" + UUID.randomUUID();
+        connect.kafka().createTopic(topicName, TOPIC_PARTITIONS);
+
         super.setUp();
+
         s3 = newS3Client(connectorConfig);
         s3.createBucket(S3_TEST_BUCKET_NAME);
-        startConnect();
+
+        connectorName = CONNECTOR_NAME + UUID.randomUUID();
+        connect.configureConnector(connectorName, properties);
+        EmbeddedConnectUtils.waitForConnectorToStart(connect, connectorName, Math.min(TOPIC_PARTITIONS, MAX_TASKS));
     }
 
     @After
     public void tearDown() throws Exception {
-        connect.stop();
+        connect.deleteConnector(connectorName);
+        kafkaAdmin.deleteTopics(Collections.singleton(topicName));
+
         super.tearDown();
     }
 
-    protected void startConnect() throws InterruptedException {
+    @BeforeClass
+    public static void startConnect() {
         connect = new EmbeddedConnectCluster.Builder()
                 .name("s3-connect-cluster")
                 .build();
         connect.start();
+        kafkaAdmin = connect.kafka().createAdminClient();
+    }
 
-        connect.kafka().createTopic(TOPIC, TOPIC_PARTITIONS);
-
-        connect.configureConnector(CONNECTOR_NAME, properties);
-        EmbeddedConnectUtils.waitForConnectorToStart(connect, CONNECTOR_NAME, Math.min(TOPIC_PARTITIONS, MAX_TASKS));
+    @AfterClass
+    public static void stopConnect() {
+        connect.stop();
     }
 
     @Parameterized.Parameters
@@ -238,7 +257,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
 
         // produce enough messages to generate file commit
         for (int i = 0; i < flushSize; i++) {
-            connect.kafka().produce(TOPIC, 0, null, TEST_MESSAGES[i % TEST_MESSAGES.length]);
+            connect.kafka().produce(topicName, 0, null, TEST_MESSAGES[i % TEST_MESSAGES.length]);
         }
 
         // check that the file is written to S3
