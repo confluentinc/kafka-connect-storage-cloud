@@ -20,10 +20,8 @@ import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.confluent.common.utils.IntegrationTest;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -214,6 +212,24 @@ public abstract class BaseConnectorIT {
   protected boolean fileNamesValid(String bucketName, List<String> expectedFiles) {
     List<String> actualFiles = getBucketFileNames(bucketName);
     return expectedFiles.equals(actualFiles);
+  }
+
+  /**
+   * Check if all of the expected namings are in the bucket and that the bucket has extactly
+   * the specified number of files.
+   *
+   * @param bucketName    the name of the bucket with the files
+   * @param filesToCheck the list of expected filenames for exact comparison
+   * @param expectedBucketFileCount the total number of keys (matching or unmatching) expected in the bucket
+   * @return whether all the expected values are in the bucket
+   */
+  protected boolean fileNamesBoundedSubset(
+          String bucketName,
+          Collection<String> filesToCheck,
+          int expectedBucketFileCount
+  ) {
+    Set<String> actualFiles = new HashSet<>(getBucketFileNames(bucketName));
+    return actualFiles.size() == expectedBucketFileCount && actualFiles.containsAll(filesToCheck);
   }
 
   /**

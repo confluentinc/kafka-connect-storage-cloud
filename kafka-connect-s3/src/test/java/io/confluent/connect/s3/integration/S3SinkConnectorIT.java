@@ -51,13 +51,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -115,7 +109,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final String TEST_DOWNLOAD_PATH = TEST_RESOURCES_PATH + "downloaded-files/";
   // connector and test configs
   private static final String CONNECTOR_NAME = "s3-sink";
-  private static final String TEST_TOPIC_NAME = "TestTopic";
+  private static final String DEFAULT_TEST_TOPIC_NAME = "TestTopic";
   private static final String STORAGE_CLASS_CONFIG = "storage.class";
   private static final String AVRO_EXTENSION = "avro";
   private static final String PARQUET_EXTENSION = "snappy.parquet";
@@ -124,7 +118,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final String DLQ_TOPIC_CONFIG = "errors.deadletterqueue.topic.name";
   private static final String DLQ_TOPIC_NAME = "DLQ-topic";
 
-  private static final List<String> KAFKA_TOPICS = Collections.singletonList(TEST_TOPIC_NAME);
+  private static final List<String> KAFKA_TOPICS = Collections.singletonList(DEFAULT_TEST_TOPIC_NAME);
   private static final long CONSUME_MAX_DURATION_MS = TimeUnit.SECONDS.toMillis(10);
   private static final int NUM_RECORDS_INSERT = 30;
   private static final int FLUSH_SIZE_STANDARD = 3;
@@ -202,7 +196,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   public void testFilesWrittenToBucketJson() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
-    testBasicRecordsWritten(JSON_EXTENSION);
+    testBasicRecordsWrittenWithExtInTopic(JSON_EXTENSION);
   }
 
   private void testBasicRecordsWritten(String expectedFileExtension) throws Throwable {
@@ -221,10 +215,58 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     int expectedFileCount = NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
     waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
 
-    List<String> expectedFilenames = getExpectedFilenames(TEST_TOPIC_NAME, TOPIC_PARTITION,
+    List<String> expectedFilenames = getExpectedFilenames(DEFAULT_TEST_TOPIC_NAME, TOPIC_PARTITION,
         FLUSH_SIZE_STANDARD, NUM_RECORDS_INSERT, expectedFileExtension);
     assertTrue(fileNamesValid(TEST_BUCKET_NAME, expectedFilenames));
     assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
+  }
+
+  /**
+   * Test that topics which have ".{expectedFileExtension}" in them are processed
+   * @param expectedFileExtension The file extension to test against
+   * @throws Throwable
+   */
+  private void testBasicRecordsWrittenWithExtInTopic(String expectedFileExtension) throws Throwable {
+    //final String topicNameWithExt = "my." + expectedFileExtension + ".topic." + expectedFileExtension;
+    final String topicNameWithExt = "OtherTopic";
+
+    // Add an extra topic with this extension inside of the name
+    // Use a TreeSet for test determinism
+    Set<String> topicNames = new TreeSet<>(KAFKA_TOPICS);
+    topicNames.add(topicNameWithExt);
+    connect.kafka().createTopic(topicNameWithExt, 1);
+    props.replace(
+        "topics",
+        props.get("topics") + "," + topicNameWithExt
+    );
+
+    // start sink connector
+    connect.configureConnector(CONNECTOR_NAME, props);
+    // wait for tasks to spin up
+    waitForConnectorToStart(CONNECTOR_NAME, Math.min(topicNames.size(), MAX_TASKS));
+
+    Schema recordValueSchema = getSampleStructSchema();
+    Struct recordValueStruct = getSampleStructVal(recordValueSchema);
+
+    for (String thisTopicName : topicNames) {
+      // Create and send records to Kafka using the topic name in the current 'thisTopicName'
+      SinkRecord sampleRecord = getSampleTopicRecord(thisTopicName, recordValueSchema, recordValueStruct);
+      produceRecordsNoHeaders(NUM_RECORDS_INSERT, sampleRecord);
+    }
+
+    log.info("Waiting for files in S3...");
+    int expectedTotalFileCount = NUM_RECORDS_INSERT * topicNames.size() / FLUSH_SIZE_STANDARD;
+    waitForFilesInBucket(TEST_BUCKET_NAME, expectedTotalFileCount);
+
+    for (String thisTopicName : topicNames) {
+      List<String> expectedTopicFilenames = getExpectedFilenames(thisTopicName, TOPIC_PARTITION,
+              FLUSH_SIZE_STANDARD, NUM_RECORDS_INSERT, expectedFileExtension);
+      // The total number of files allowed in the bucket is number of topics * # produced for each
+      // All topics should have produced the same number of files, so this check should hold
+      // for all iterations.
+      assertTrue(fileNamesBoundedSubset(TEST_BUCKET_NAME, expectedTopicFilenames, expectedTotalFileCount));
+      assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
+    }
   }
 
   @Test
@@ -248,7 +290,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     SinkRecord sampleRecord = getSampleRecord(recordValueSchema, recordValueStruct);
 
     // Send first batch of valid records to Kafka
-    produceRecordsWithHeaders(TEST_TOPIC_NAME, NUM_RECORDS_INSERT, sampleRecord);
+    produceRecordsWithHeaders(DEFAULT_TEST_TOPIC_NAME, NUM_RECORDS_INSERT, sampleRecord);
 
     // wait for values keys and headers from first batch
     int expectedFileCount = (NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD) * 3;
@@ -256,12 +298,12 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
     // send faulty records
     int numberOfFaultyRecords = 1;
-    produceRecordsWithHeadersNoKey(TEST_TOPIC_NAME, numberOfFaultyRecords, sampleRecord);
-    produceRecordsWithHeadersNoValue(TEST_TOPIC_NAME, numberOfFaultyRecords, sampleRecord);
+    produceRecordsWithHeadersNoKey(DEFAULT_TEST_TOPIC_NAME, numberOfFaultyRecords, sampleRecord);
+    produceRecordsWithHeadersNoValue(DEFAULT_TEST_TOPIC_NAME, numberOfFaultyRecords, sampleRecord);
     produceRecordsNoHeaders(numberOfFaultyRecords, sampleRecord);
 
     // Send second batch of valid records to Kafka
-    produceRecordsWithHeaders(TEST_TOPIC_NAME, NUM_RECORDS_INSERT, sampleRecord);
+    produceRecordsWithHeaders(DEFAULT_TEST_TOPIC_NAME, NUM_RECORDS_INSERT, sampleRecord);
 
     log.info("Waiting for files in S3...");
     expectedFileCount = expectedFileCount * 2;
@@ -353,16 +395,20 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     }
   }
 
-  private SinkRecord getSampleRecord(Schema recordValueSchema, Struct recordValueStruct ) {
+  private SinkRecord getSampleTopicRecord(String topicName, Schema recordValueSchema, Struct recordValueStruct ) {
     return new SinkRecord(
-        TEST_TOPIC_NAME,
-        TOPIC_PARTITION,
-        Schema.STRING_SCHEMA,
-        "key",
-        recordValueSchema,
-        recordValueStruct,
-        DEFAULT_OFFSET
+            topicName,
+            TOPIC_PARTITION,
+            Schema.STRING_SCHEMA,
+            "key",
+            recordValueSchema,
+            recordValueStruct,
+            DEFAULT_OFFSET
     );
+  }
+
+  private SinkRecord getSampleRecord(Schema recordValueSchema, Struct recordValueStruct ) {
+    return getSampleTopicRecord(DEFAULT_TEST_TOPIC_NAME, recordValueSchema, recordValueStruct);
   }
 
   private Iterable<Header> sampleHeaders() {
