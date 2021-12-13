@@ -227,8 +227,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * @throws Throwable
    */
   private void testBasicRecordsWrittenWithExtInTopic(String expectedFileExtension) throws Throwable {
-    //final String topicNameWithExt = "my." + expectedFileExtension + ".topic." + expectedFileExtension;
-    final String topicNameWithExt = "OtherTopic";
+    final String topicNameWithExt = "my." + expectedFileExtension + ".topic." + expectedFileExtension;
+    //final String topicNameWithExt = "OtherTopic";
 
     // Add an extra topic with this extension inside of the name
     // Use a TreeSet for test determinism
