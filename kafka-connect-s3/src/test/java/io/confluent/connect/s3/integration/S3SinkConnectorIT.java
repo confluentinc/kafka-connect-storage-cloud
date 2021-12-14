@@ -182,14 +182,14 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   public void testFilesWrittenToBucketAvro() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
-    testBasicRecordsWritten(AVRO_EXTENSION);
+    testBasicRecordsWrittenWithExtInTopic(AVRO_EXTENSION);
   }
 
   @Test
   public void testFilesWrittenToBucketParquet() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
-    testBasicRecordsWritten(PARQUET_EXTENSION);
+    testBasicRecordsWrittenWithExtInTopic(PARQUET_EXTENSION);
   }
 
   @Test
@@ -227,8 +227,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * @throws Throwable
    */
   private void testBasicRecordsWrittenWithExtInTopic(String expectedFileExtension) throws Throwable {
-    final String topicNameWithExt = "my." + expectedFileExtension + ".topic." + expectedFileExtension;
-    //final String topicNameWithExt = "OtherTopic";
+    final String topicNameWithExt = "other." + expectedFileExtension + ".topic." + expectedFileExtension;
 
     // Add an extra topic with this extension inside of the name
     // Use a TreeSet for test determinism
@@ -259,14 +258,25 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     waitForFilesInBucket(TEST_BUCKET_NAME, expectedTotalFileCount);
 
     for (String thisTopicName : topicNames) {
-      List<String> expectedTopicFilenames = getExpectedFilenames(thisTopicName, TOPIC_PARTITION,
-              FLUSH_SIZE_STANDARD, NUM_RECORDS_INSERT, expectedFileExtension);
+      List<String> expectedTopicFilenames = getExpectedFilenames(
+              thisTopicName,
+              TOPIC_PARTITION,
+              FLUSH_SIZE_STANDARD,
+              NUM_RECORDS_INSERT,
+              expectedFileExtension
+      );
       // The total number of files allowed in the bucket is number of topics * # produced for each
       // All topics should have produced the same number of files, so this check should hold
       // for all iterations.
-      assertTrue(fileNamesBoundedSubset(TEST_BUCKET_NAME, expectedTopicFilenames, expectedTotalFileCount));
-      assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
+      assertTrue(fileNamesBoundedSubset(
+              TEST_BUCKET_NAME,
+              expectedTopicFilenames,
+              expectedTotalFileCount
+      ));
     }
+    // Now check that all files created by the sink have the contents that were sent
+    // to the producer (they're all the same content)
+    assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
   }
 
   @Test
@@ -629,12 +639,24 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * @param S3FileKey the object file key
    * @return the extension, may be .avro, .json, or .snappy.parquet,
    */
-  private String getExtensionFromKey(String S3FileKey) {
-    String[] tokens = S3FileKey.split("\\.", 2);
-    if (tokens.length < 2) {
-      throw new RuntimeException("Could not parse extension from filename.");
+  private static String getExtensionFromKey(String S3FileKey) {
+    String[] pathTokens = S3FileKey.split("/");
+    // The last one is (presumably) the file name
+    String fileName = pathTokens[pathTokens.length - 1];
+    // The extension ".snappy.parquet" is a special case of a two-dot
+    // extension, so check for that so that we can generalize the rest
+    // of the checks in case there is a dot in the filename portion itself.
+    if (fileName.endsWith("." + PARQUET_EXTENSION)) {
+      return PARQUET_EXTENSION;
     }
-    return tokens[1];
+    // Now on to the more generalized version
+    int lastDot = fileName.lastIndexOf('.');
+    if (lastDot < 0) {
+      // no extension
+      throw new RuntimeException("Could not parse extension from filename: " + S3FileKey);
+    }
+
+    return fileName.substring(lastDot + 1);
   }
 
   private void initializeJsonConverter() {
