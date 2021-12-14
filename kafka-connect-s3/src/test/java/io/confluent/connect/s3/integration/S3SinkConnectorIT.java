@@ -652,11 +652,11 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * <p>
    * ex.: /topics/s3_topic/partition=97/s3_topic+97+0000000001.avro
    *
-   * @param S3FileKey the object file key
+   * @param s3FileKey the object file key
    * @return the extension, may be .avro, .json, or .snappy.parquet,
    */
-  private static String getExtensionFromKey(String S3FileKey) {
-    String[] pathTokens = S3FileKey.split("/");
+  private static String getExtensionFromKey(String s3FileKey) {
+    String[] pathTokens = s3FileKey.split("/");
     // The last one is (presumably) the file name
     String fileName = pathTokens[pathTokens.length - 1];
     // The extension ".snappy.parquet" is a special case of a two-dot
