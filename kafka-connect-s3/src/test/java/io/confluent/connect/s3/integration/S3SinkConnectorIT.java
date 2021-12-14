@@ -179,65 +179,71 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   @Test
-  public void testFilesWrittenToBucketAvro() throws Throwable {
+  public void testBasicRecordsWrittenAvro() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
-    testBasicRecordsWrittenWithExtInTopic(AVRO_EXTENSION);
+    testBasicRecordsWritten(AVRO_EXTENSION, /*addExtensionInTopic=*/false);
   }
 
   @Test
-  public void testFilesWrittenToBucketParquet() throws Throwable {
+  public void testBasicRecordsWrittenParquet() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
-    testBasicRecordsWrittenWithExtInTopic(PARQUET_EXTENSION);
+    testBasicRecordsWritten(PARQUET_EXTENSION, /*addExtensionInTopic=*/false);
   }
 
   @Test
-  public void testFilesWrittenToBucketJson() throws Throwable {
+  public void testBasicRecordsWrittenJson() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
-    testBasicRecordsWrittenWithExtInTopic(JSON_EXTENSION);
+    testBasicRecordsWritten(JSON_EXTENSION, /*addExtensionInTopic=*/false);
   }
 
-  private void testBasicRecordsWritten(String expectedFileExtension) throws Throwable {
-    // start sink connector
-    connect.configureConnector(CONNECTOR_NAME, props);
-    // wait for tasks to spin up
-    waitForConnectorToStart(CONNECTOR_NAME, Math.min(KAFKA_TOPICS.size(), MAX_TASKS));
+  @Test
+  public void testFilesWrittenToBucketAvroWithExtInTopic() throws Throwable {
+    //add test specific props
+    props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
+    testBasicRecordsWritten(AVRO_EXTENSION, /*addExtensionInTopic=*/true);
+  }
 
-    Schema recordValueSchema = getSampleStructSchema();
-    Struct recordValueStruct = getSampleStructVal(recordValueSchema);
-    SinkRecord sampleRecord = getSampleRecord(recordValueSchema, recordValueStruct);
-    // Send records to Kafka
-    produceRecordsNoHeaders(NUM_RECORDS_INSERT, sampleRecord);
+  @Test
+  public void testFilesWrittenToBucketParquetWithExtInTopic() throws Throwable {
+    //add test specific props
+    props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
+    testBasicRecordsWritten(PARQUET_EXTENSION, /*addExtensionInTopic=*/true);
+  }
 
-    log.info("Waiting for files in S3...");
-    int expectedFileCount = NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
-    waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
-
-    List<String> expectedFilenames = getExpectedFilenames(DEFAULT_TEST_TOPIC_NAME, TOPIC_PARTITION,
-        FLUSH_SIZE_STANDARD, NUM_RECORDS_INSERT, expectedFileExtension);
-    assertTrue(fileNamesValid(TEST_BUCKET_NAME, expectedFilenames));
-    assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
+  @Test
+  public void testFilesWrittenToBucketJsonWithExtInTopic() throws Throwable {
+    //add test specific props
+    props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+    testBasicRecordsWritten(JSON_EXTENSION, /*addExtensionInTopic=*/true);
   }
 
   /**
    * Test that topics which have ".{expectedFileExtension}" in them are processed
    * @param expectedFileExtension The file extension to test against
+   * @param addExtensionInTopic Add a topic to to the test which contains the extension
    * @throws Throwable
    */
-  private void testBasicRecordsWrittenWithExtInTopic(String expectedFileExtension) throws Throwable {
+  private void testBasicRecordsWritten(
+          String expectedFileExtension,
+          boolean addExtensionInTopic
+  ) throws Throwable {
     final String topicNameWithExt = "other." + expectedFileExtension + ".topic." + expectedFileExtension;
 
     // Add an extra topic with this extension inside of the name
     // Use a TreeSet for test determinism
     Set<String> topicNames = new TreeSet<>(KAFKA_TOPICS);
-    topicNames.add(topicNameWithExt);
-    connect.kafka().createTopic(topicNameWithExt, 1);
-    props.replace(
-        "topics",
-        props.get("topics") + "," + topicNameWithExt
-    );
+
+    if (addExtensionInTopic) {
+      topicNames.add(topicNameWithExt);
+      connect.kafka().createTopic(topicNameWithExt, 1);
+      props.replace(
+              "topics",
+              props.get("topics") + "," + topicNameWithExt
+      );
+    }
 
     // start sink connector
     connect.configureConnector(CONNECTOR_NAME, props);
