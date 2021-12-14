@@ -15,15 +15,11 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.s3.storage.S3OutputStream;
-import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
-import io.confluent.connect.storage.partitioner.DefaultPartitioner;
-import io.confluent.connect.storage.partitioner.Partitioner;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.converters.ByteArrayConverter;
@@ -36,7 +32,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,19 +40,47 @@ import java.util.zip.Deflater;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertTrue;
 
-public class DataWriterByteArrayTest extends TestWithMockedS3 {
+public class DataWriterByteArrayTest extends DataWriterTestBase<ByteArrayFormat> {
 
-  private static final String ZERO_PAD_FMT = "%010d";
+  private static final String DEFAULT_EXTENSION = ".bin";
+
   private ByteArrayConverter converter;
 
-  protected S3Storage storage;
-  protected AmazonS3 s3;
-  protected Partitioner<?> partitioner;
-  protected ByteArrayFormat format;
-  protected S3SinkTask task;
-  protected Map<String, String> localProps = new HashMap<>();
+  public DataWriterByteArrayTest() {
+    super(ByteArrayFormat.class);
+  }
+
+  //
+  // -DataWriterTestBase
+  //
+  @Override
+  protected String getFileExtension() {
+    return DEFAULT_EXTENSION;
+  }
+
+  @Override
+  protected List<SinkRecord> createGenericRecords(int count, long firstOffset) {
+    return createByteArrayRecordsWithoutSchema(
+        count * context.assignment().size(),
+        firstOffset,
+        context.assignment()
+    );
+  }
+
+  @Override
+  protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets) throws IOException {
+    verify(
+        sinkRecords,
+        validOffsets,
+        Collections.singleton(new TopicPartition(TOPIC, PARTITION)),
+        DEFAULT_EXTENSION
+    );
+  }
+  //
+  // DataWriterTestBase-
+  //
+
 
   @Override
   protected Map<String, String> createProps() {
@@ -70,15 +93,6 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
   public void setUp() throws Exception {
     super.setUp();
     converter = new ByteArrayConverter();
-
-    s3 = newS3Client(connectorConfig);
-    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
-
-    partitioner = new DefaultPartitioner<>();
-    partitioner.configure(parsedConfig);
-    format = new ByteArrayFormat(storage);
-    s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
   }
 
   @After
@@ -110,7 +124,7 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
     task.stop();
 
     long[] validOffsets = {0, 3, 6};
-    verify(sinkRecords, validOffsets, context.assignment(), ".bin");
+    verify(sinkRecords, validOffsets, context.assignment(), DEFAULT_EXTENSION);
   }
 
   @Test
@@ -127,7 +141,7 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
     task.stop();
 
     long[] validOffsets = {0, 3, 6};
-    verify(sinkRecords, validOffsets, context.assignment(), ".bin.gz");
+    verify(sinkRecords, validOffsets, context.assignment(), DEFAULT_EXTENSION + ".gz");
   }
 
   @Test
@@ -145,7 +159,7 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
     task.stop();
 
     long[] validOffsets = {0, 3, 6};
-    verify(sinkRecords, validOffsets, context.assignment(), ".bin.gz");
+    verify(sinkRecords, validOffsets, context.assignment(), DEFAULT_EXTENSION + ".gz");
   }
 
   @Test

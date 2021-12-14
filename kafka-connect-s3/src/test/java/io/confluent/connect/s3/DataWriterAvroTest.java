@@ -15,7 +15,6 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.internal.SkipMd5CheckStrategy;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import org.apache.avro.file.DataFileStream;
@@ -35,7 +34,6 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
-import org.powermock.api.mockito.PowerMockito;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -60,32 +58,25 @@ import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
-import io.confluent.connect.storage.partitioner.DefaultPartitioner;
-import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.kafka.serializers.NonRecordContainer;
 
 import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-public class DataWriterAvroTest extends TestWithMockedS3 {
+public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
 
-  private static final String ZERO_PAD_FMT = "%010d";
-
-  private final String extension = ".avro";
-  protected S3Storage storage;
-  protected AmazonS3 s3;
-  AvroFormat format;
-  Partitioner<?> partitioner;
-  S3SinkTask task;
-  Map<String, String> localProps = new HashMap<>();
+  protected static final String EXTENSION = ".avro";
   private String prevMd5Prop = null;
+
+  public DataWriterAvroTest() {
+    super(AvroFormat.class);
+  }
 
   @Override
   protected Map<String, String> createProps() {
@@ -97,18 +88,6 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   //@Before should be omitted in order to be able to add properties per test.
   public void setUp() throws Exception {
     super.setUp();
-
-    s3 = PowerMockito.spy(newS3Client(connectorConfig));
-
-    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
-
-    partitioner = new DefaultPartitioner<>();
-    partitioner.configure(parsedConfig);
-    format = new AvroFormat(storage);
-
-    s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
-
     // Workaround to avoid AWS S3 client failing due to apparently incorrect S3Mock digest
     prevMd5Prop = System.getProperty(
         SkipMd5CheckStrategy.DISABLE_GET_OBJECT_MD5_VALIDATION_PROPERTY
@@ -116,12 +95,29 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     System.setProperty(SkipMd5CheckStrategy.DISABLE_GET_OBJECT_MD5_VALIDATION_PROPERTY, "true");
   }
 
+  //
+  // -DataWriterTestBase
+  //
+  @Override
+  protected String getFileExtension() {
+    return EXTENSION;
+  }
+
+  @Override
+  protected List<SinkRecord> createGenericRecords(int count, long firstOffset) {
+    return createRecordsNoVersion(count, firstOffset);
+  }
+  //
+  // DataWriterTestBase-
+  //
+
+
   //@Before should be omitted in order to be able to add properties per test.
   public void setUpWithCommitException() throws Exception {
     super.setUp();
 
-    s3 = PowerMockito.spy(newS3Client(connectorConfig));
-
+    // We'll replace 'storage' and 'format' here that were created by
+    // the base class.
     storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3) {
       private final AtomicInteger retries = new AtomicInteger(0);
 
@@ -130,13 +126,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
         return new TopicPartitionWriterTest.S3OutputStreamFlaky(path, this.conf(), s3, retries);
       }
     };
-
-    partitioner = new DefaultPartitioner<>();
-    partitioner.configure(parsedConfig);
     format = new AvroFormat(storage);
-
-    s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
   }
 
   @After
@@ -241,7 +231,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     // Upload partial file.
     List<SinkRecord> sinkRecords = createRecords(2);
     byte[] partialData = AvroUtils.putRecords(sinkRecords, format.getAvroData());
-    String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT);
+    String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, EXTENSION, ZERO_PAD_FMT);
     s3.putObject(S3_TEST_BUCKET_NAME, fileKey, new ByteArrayInputStream(partialData), null);
 
     // Accumulate rest of the records.
@@ -703,8 +693,13 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
       task.close(context.assignment());
       task.stop();
       long[] validOffsets = {};
-      verify(Collections.<SinkRecord>emptyList(), validOffsets);
+      verify(Collections.emptyList(), validOffsets);
     }
+  }
+
+  @Test
+  public void testCorrectRecordWriter() throws Exception {
+    testCorrectRecordWriterHelper("this.is.json.dir");
   }
 
   /**
@@ -924,7 +919,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     for (int i = 1; i < validOffsets.length; ++i) {
       long startOffset = validOffsets[i - 1];
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset,
-                                                  extension, ZERO_PAD_FMT));
+                                                  EXTENSION, ZERO_PAD_FMT));
     }
     return expectedFiles;
   }
@@ -945,9 +940,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
       actualFiles.add(fileKey);
     }
 
-    Collections.sort(actualFiles);
-    Collections.sort(expectedFiles);
-    assertThat(actualFiles, is(expectedFiles));
+    assertThat(actualFiles).containsExactlyInAnyOrderElementsOf(expectedFiles);
   }
 
   protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records) {
@@ -1002,9 +995,9 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
         long startOffset = validOffsets[i - 1];
         long size = validOffsets[i] - startOffset;
 
-        FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset, extension, ZERO_PAD_FMT);
+        FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset, EXTENSION, ZERO_PAD_FMT);
         Collection<Object> records = readRecords(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset,
-                                                 extension, ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
+                                                 EXTENSION, ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
         assertEquals(size, records.size());
         verifyContents(sinkRecords, j, records);
         j += size;

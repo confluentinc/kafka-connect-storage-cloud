@@ -18,6 +18,7 @@ package io.confluent.connect.s3;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.connect.s3.format.avro.AvroFormat;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
@@ -49,18 +50,17 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-public class DataWriterJsonTest extends TestWithMockedS3 {
+public class DataWriterJsonTest extends DataWriterTestBase<JsonFormat> {
 
   private static final String ZERO_PAD_FMT = "%010d";
+  private static final String EXTENSION = ".json";
   private JsonConverter converter;
 
   protected final ObjectMapper mapper = new ObjectMapper();
-  protected S3Storage storage;
-  protected AmazonS3 s3;
-  protected Partitioner<?> partitioner;
-  protected JsonFormat format;
-  protected S3SinkTask task;
-  protected Map<String, String> localProps = new HashMap<>();
+
+  public DataWriterJsonTest() {
+    super(JsonFormat.class);
+  }
 
   @Override
   protected Map<String, String> createProps() {
@@ -69,20 +69,32 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
     return props;
   }
 
+  //
+  // -DataWriterTestBase
+  //
+  @Override
+  protected String getFileExtension() {
+    return EXTENSION;
+  }
+
+  @Override
+  protected List<SinkRecord> createGenericRecords(int count, long firstOffset) {
+    return createJsonRecordsWithoutSchema(count, firstOffset, context.assignment());
+  }
+
+  @Override
+  protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets) throws IOException {
+    verify(sinkRecords, validOffsets, context.assignment(), EXTENSION);
+  }
+  //
+  // DataWriterTestBase-
+  //
+
   //@Before should be omitted in order to be able to add properties per test.
   public void setUp() throws Exception {
     super.setUp();
     converter = new JsonConverter();
     converter.configure(Collections.singletonMap("schemas.enable", "false"), false);
-
-    s3 = newS3Client(connectorConfig);
-    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
-
-    partitioner = new DefaultPartitioner<>();
-    partitioner.configure(parsedConfig);
-    format = new JsonFormat(storage);
-    s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
   }
 
   @After
@@ -104,7 +116,7 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
     task.stop();
 
     long[] validOffsets = {0, 3, 6};
-    verify(sinkRecords, validOffsets, context.assignment(), ".json");
+    verify(sinkRecords, validOffsets, context.assignment(), EXTENSION);
   }
 
   @Test
@@ -119,7 +131,7 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
     task.stop();
 
     long[] validOffsets = {0, 3, 6};
-    verify(sinkRecords, validOffsets, context.assignment(), ".json");
+    verify(sinkRecords, validOffsets, context.assignment(), EXTENSION);
   }
 
   @Test
@@ -136,7 +148,7 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
     task.stop();
 
     long[] validOffsets = {0, 3, 6};
-    verify(sinkRecords, validOffsets, context.assignment(), ".json.gz");
+    verify(sinkRecords, validOffsets, context.assignment(), EXTENSION + ".gz");
   }
 
   @Test
@@ -153,7 +165,7 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
     task.stop();
 
     long[] validOffsets = {0, 3, 6};
-    verify(sinkRecords, validOffsets, context.assignment(), ".json.gz");
+    verify(sinkRecords, validOffsets, context.assignment(), EXTENSION + ".gz");
   }
 
   @Test
@@ -171,7 +183,7 @@ public class DataWriterJsonTest extends TestWithMockedS3 {
     task.stop();
 
     long[] validOffsets = {0, 3, 6};
-    verify(sinkRecords, validOffsets, context.assignment(), ".json.gz");
+    verify(sinkRecords, validOffsets, context.assignment(), EXTENSION + ".gz");
   }
 
   protected List<SinkRecord> createRecordsInterleaved(int size, long startOffset, Set<TopicPartition> partitions) {
