@@ -270,26 +270,27 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     }
 
     log.info("Waiting for files in S3...");
-    int expectedTotalFileCount = NUM_RECORDS_INSERT * topicNames.size() / FLUSH_SIZE_STANDARD;
+    int countPerTopic = NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
+    int expectedTotalFileCount = countPerTopic * topicNames.size();
     waitForFilesInBucket(TEST_BUCKET_NAME, expectedTotalFileCount);
 
+    Set<String> expectedTopicFilenames = new TreeSet<>();
     for (String thisTopicName : topicNames) {
-      List<String> expectedTopicFilenames = getExpectedFilenames(
-          thisTopicName,
-          TOPIC_PARTITION,
-          FLUSH_SIZE_STANDARD,
-          NUM_RECORDS_INSERT,
-          expectedFileExtension
+      List<String> theseFiles = getExpectedFilenames(
+              thisTopicName,
+              TOPIC_PARTITION,
+              FLUSH_SIZE_STANDARD,
+              NUM_RECORDS_INSERT,
+              expectedFileExtension
       );
-      // The total number of files allowed in the bucket is number of topics * # produced for each
-      // All topics should have produced the same number of files, so this check should hold
-      // for all iterations.
-      assertTrue(fileNamesBoundedSubset(
-          TEST_BUCKET_NAME,
-          expectedTopicFilenames,
-          expectedTotalFileCount
-      ));
+      assertEquals(theseFiles.size(), countPerTopic);
+      expectedTopicFilenames.addAll(theseFiles);
     }
+    // This check will catch any duplications
+    assertEquals(expectedTopicFilenames.size(), expectedTotalFileCount);
+    // The total number of files allowed in the bucket is number of topics * # produced for each
+    // All topics should have produced the same number of files, so this check should hold.
+    assertFileNamesValid(TEST_BUCKET_NAME, new ArrayList<>(expectedTopicFilenames));
     // Now check that all files created by the sink have the contents that were sent
     // to the producer (they're all the same content)
     assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));

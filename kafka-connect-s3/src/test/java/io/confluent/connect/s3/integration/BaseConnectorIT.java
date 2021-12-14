@@ -32,6 +32,7 @@ import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.TestUtils;
+import org.assertj.core.api.ListAssert;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.experimental.categories.Category;
@@ -214,27 +215,10 @@ public abstract class BaseConnectorIT {
    * @param expectedFiles the list of expected filenames for exact comparison
    * @return whether all the files in the bucket match the expected values
    */
-  protected boolean fileNamesValid(String bucketName, List<String> expectedFiles) {
+  protected void assertFileNamesValid(String bucketName, List<String> expectedFiles) {
     List<String> actualFiles = getBucketFileNames(bucketName);
-    return expectedFiles.equals(actualFiles);
-  }
-
-  /**
-   * Check if all of the expected namings are in the bucket and that the bucket has exactly
-   * the specified number of files.
-   *
-   * @param bucketName    the name of the bucket with the files
-   * @param filesToCheck the list of expected filenames for exact comparison
-   * @param expectedBucketFileCount the total number of keys (matching or unmatching) expected in the bucket
-   * @return whether all the expected values are in the bucket
-   */
-  protected boolean fileNamesBoundedSubset(
-          String bucketName,
-          Collection<String> filesToCheck,
-          int expectedBucketFileCount
-  ) {
-    Set<String> actualFiles = new HashSet<>(getBucketFileNames(bucketName));
-    return actualFiles.size() == expectedBucketFileCount && actualFiles.containsAll(filesToCheck);
+    ListAssert<String> listAssert = new ListAssert<>(actualFiles);
+    listAssert.containsExactlyInAnyOrderElementsOf(expectedFiles);
   }
 
   /**
