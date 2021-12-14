@@ -21,23 +21,21 @@ import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.confluent.common.utils.IntegrationTest;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.TestUtils;
-import org.assertj.core.api.ListAssert;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 @Category(IntegrationTest.class)
 public abstract class BaseConnectorIT {
@@ -217,8 +215,7 @@ public abstract class BaseConnectorIT {
    */
   protected void assertFileNamesValid(String bucketName, List<String> expectedFiles) {
     List<String> actualFiles = getBucketFileNames(bucketName);
-    ListAssert<String> listAssert = new ListAssert<>(actualFiles);
-    listAssert.containsExactlyInAnyOrderElementsOf(expectedFiles);
+    assertThat(actualFiles).containsExactlyInAnyOrderElementsOf(expectedFiles);
   }
 
   /**
