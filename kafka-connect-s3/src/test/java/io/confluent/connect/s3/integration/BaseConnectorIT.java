@@ -220,7 +220,7 @@ public abstract class BaseConnectorIT {
   }
 
   /**
-   * Check if all of the expected namings are in the bucket and that the bucket has extactly
+   * Check if all of the expected namings are in the bucket and that the bucket has exactly
    * the specified number of files.
    *
    * @param bucketName    the name of the bucket with the files

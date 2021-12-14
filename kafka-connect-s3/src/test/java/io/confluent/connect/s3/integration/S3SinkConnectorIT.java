@@ -229,7 +229,9 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   /**
-   * Test that topics which have ".{expectedFileExtension}" in them are processed
+   * Test that the expected records are written for a given file extension
+   * Optionally, test that topics which have "*.{expectedFileExtension}*" in them are processed
+   * and written.
    * @param expectedFileExtension The file extension to test against
    * @param addExtensionInTopic Add a topic to to the test which contains the extension
    * @throws Throwable
