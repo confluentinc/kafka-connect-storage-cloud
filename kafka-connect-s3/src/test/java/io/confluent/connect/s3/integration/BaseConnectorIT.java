@@ -20,7 +20,6 @@ import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.confluent.common.utils.IntegrationTest;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
