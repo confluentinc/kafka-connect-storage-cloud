@@ -190,42 +190,42 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   public void testBasicRecordsWrittenAvro() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
-    testBasicRecordsWritten(AVRO_EXTENSION, /*addExtensionInTopic=*/false);
+    testBasicRecordsWritten(AVRO_EXTENSION, false);
   }
 
   @Test
   public void testBasicRecordsWrittenParquet() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
-    testBasicRecordsWritten(PARQUET_EXTENSION, /*addExtensionInTopic=*/false);
+    testBasicRecordsWritten(PARQUET_EXTENSION, false);
   }
 
   @Test
   public void testBasicRecordsWrittenJson() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
-    testBasicRecordsWritten(JSON_EXTENSION, /*addExtensionInTopic=*/false);
+    testBasicRecordsWritten(JSON_EXTENSION, false);
   }
 
   @Test
   public void testFilesWrittenToBucketAvroWithExtInTopic() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
-    testBasicRecordsWritten(AVRO_EXTENSION, /*addExtensionInTopic=*/true);
+    testBasicRecordsWritten(AVRO_EXTENSION, true);
   }
 
   @Test
   public void testFilesWrittenToBucketParquetWithExtInTopic() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
-    testBasicRecordsWritten(PARQUET_EXTENSION, /*addExtensionInTopic=*/true);
+    testBasicRecordsWritten(PARQUET_EXTENSION, true);
   }
 
   @Test
   public void testFilesWrittenToBucketJsonWithExtInTopic() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
-    testBasicRecordsWritten(JSON_EXTENSION, /*addExtensionInTopic=*/true);
+    testBasicRecordsWritten(JSON_EXTENSION, true);
   }
 
   /**
