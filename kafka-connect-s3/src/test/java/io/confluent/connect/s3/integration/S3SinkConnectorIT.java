@@ -51,7 +51,15 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -265,19 +273,19 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
     for (String thisTopicName : topicNames) {
       List<String> expectedTopicFilenames = getExpectedFilenames(
-              thisTopicName,
-              TOPIC_PARTITION,
-              FLUSH_SIZE_STANDARD,
-              NUM_RECORDS_INSERT,
-              expectedFileExtension
+          thisTopicName,
+          TOPIC_PARTITION,
+          FLUSH_SIZE_STANDARD,
+          NUM_RECORDS_INSERT,
+          expectedFileExtension
       );
       // The total number of files allowed in the bucket is number of topics * # produced for each
       // All topics should have produced the same number of files, so this check should hold
       // for all iterations.
       assertTrue(fileNamesBoundedSubset(
-              TEST_BUCKET_NAME,
-              expectedTopicFilenames,
-              expectedTotalFileCount
+          TEST_BUCKET_NAME,
+          expectedTopicFilenames,
+          expectedTotalFileCount
       ));
     }
     // Now check that all files created by the sink have the contents that were sent
@@ -413,13 +421,13 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   private SinkRecord getSampleTopicRecord(String topicName, Schema recordValueSchema, Struct recordValueStruct ) {
     return new SinkRecord(
-            topicName,
-            TOPIC_PARTITION,
-            Schema.STRING_SCHEMA,
-            "key",
-            recordValueSchema,
-            recordValueStruct,
-            DEFAULT_OFFSET
+        topicName,
+        TOPIC_PARTITION,
+        Schema.STRING_SCHEMA,
+        "key",
+        recordValueSchema,
+        recordValueStruct,
+        DEFAULT_OFFSET
     );
   }
 
