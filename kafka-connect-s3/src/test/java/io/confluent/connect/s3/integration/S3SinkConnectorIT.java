@@ -669,7 +669,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     int lastDot = fileName.lastIndexOf('.');
     if (lastDot < 0) {
       // no extension
-      throw new RuntimeException("Could not parse extension from filename: " + S3FileKey);
+      throw new RuntimeException("Could not parse extension from filename: " + s3FileKey);
     }
 
     return fileName.substring(lastDot + 1);
