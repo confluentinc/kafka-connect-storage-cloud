@@ -45,7 +45,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -64,10 +63,8 @@ import io.confluent.kafka.serializers.NonRecordContainer;
 
 import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 
 public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
 
@@ -616,9 +613,9 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     long[] validOffsets3 = {6, 9, 12};
     verify(sinkRecords, validOffsets3, Collections.singleton(TOPIC_PARTITION3), true);
 
-    List<String> expectedFiles = getExpectedFiles(validOffsets1, TOPIC_PARTITION);
-    expectedFiles.addAll(getExpectedFiles(validOffsets2, TOPIC_PARTITION2));
-    expectedFiles.addAll(getExpectedFiles(validOffsets3, TOPIC_PARTITION3));
+    List<String> expectedFiles = getExpectedFiles(validOffsets1, TOPIC_PARTITION, EXTENSION);
+    expectedFiles.addAll(getExpectedFiles(validOffsets2, TOPIC_PARTITION2, EXTENSION));
+    expectedFiles.addAll(getExpectedFiles(validOffsets3, TOPIC_PARTITION3, EXTENSION));
     verifyFileListing(expectedFiles);
   }
 
@@ -698,8 +695,21 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
   }
 
   @Test
-  public void testCorrectRecordWriter() throws Exception {
+  public void testCorrectRecordWriterBasic() throws Exception {
+    // Test the base-case -- no known embedded extension
+    testCorrectRecordWriterHelper("this.is.dir");
+  }
+
+  @Test
+  public void testCorrectRecordWriterOther() throws Exception {
+    // Test with a different embedded extension
     testCorrectRecordWriterHelper("this.is.json.dir");
+  }
+
+  @Test
+  public void testCorrectRecordWriterThis() throws Exception {
+    // Test with our embedded extension
+    testCorrectRecordWriterHelper("this.is" + EXTENSION + ".dir");
   }
 
   /**
@@ -914,35 +924,6 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     return partitioner.generatePartitionedPath(topic, encodedPartition);
   }
 
-  protected List<String> getExpectedFiles(long[] validOffsets, TopicPartition tp) {
-    List<String> expectedFiles = new ArrayList<>();
-    for (int i = 1; i < validOffsets.length; ++i) {
-      long startOffset = validOffsets[i - 1];
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset,
-                                                  EXTENSION, ZERO_PAD_FMT));
-    }
-    return expectedFiles;
-  }
-
-  protected void verifyFileListing(long[] validOffsets, Set<TopicPartition> partitions) throws IOException {
-    List<String> expectedFiles = new ArrayList<>();
-    for (TopicPartition tp : partitions) {
-      expectedFiles.addAll(getExpectedFiles(validOffsets, tp));
-    }
-    verifyFileListing(expectedFiles);
-  }
-
-  protected void verifyFileListing(List<String> expectedFiles) {
-    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
-    List<String> actualFiles = new ArrayList<>();
-    for (S3ObjectSummary summary : summaries) {
-      String fileKey = summary.getKey();
-      actualFiles.add(fileKey);
-    }
-
-    assertThat(actualFiles).containsExactlyInAnyOrderElementsOf(expectedFiles);
-  }
-
   protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records) {
     Schema expectedSchema = null;
     for (Object avroRecord : records) {
@@ -987,7 +968,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
                         boolean skipFileListing)
       throws IOException {
     if (!skipFileListing) {
-      verifyFileListing(validOffsets, partitions);
+      verifyFileListing(validOffsets, partitions, EXTENSION);
     }
 
     for (TopicPartition tp : partitions) {
@@ -1015,7 +996,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
         expectedOffsets.put(tp, new OffsetAndMetadata(offset, ""));
       }
     }
-    assertTrue(Objects.equals(actualOffsets, expectedOffsets));
+    assertEquals(actualOffsets, expectedOffsets);
   }
 
   protected void verifyRawOffsets(
@@ -1031,7 +1012,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
         expectedOffsets.put(tp, offset);
       }
     }
-    assertTrue(Objects.equals(actualOffsets, expectedOffsets));
+    assertEquals(actualOffsets, expectedOffsets);
   }
 }
 

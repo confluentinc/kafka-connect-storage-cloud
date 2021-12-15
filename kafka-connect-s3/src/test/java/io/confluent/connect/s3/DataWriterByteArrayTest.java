@@ -37,8 +37,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.zip.Deflater;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 
 public class DataWriterByteArrayTest extends DataWriterTestBase<ByteArrayFormat> {
@@ -69,11 +67,15 @@ public class DataWriterByteArrayTest extends DataWriterTestBase<ByteArrayFormat>
   }
 
   @Override
-  protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets) throws IOException {
+  protected void verify(
+      List<SinkRecord> sinkRecords,
+      long[] validOffsets,
+      Set<TopicPartition> partitions
+  ) throws IOException {
     verify(
         sinkRecords,
         validOffsets,
-        Collections.singleton(new TopicPartition(TOPIC, PARTITION)),
+        partitions,
         DEFAULT_EXTENSION
     );
   }
@@ -180,6 +182,24 @@ public class DataWriterByteArrayTest extends DataWriterTestBase<ByteArrayFormat>
     verify(sinkRecords, validOffsets, context.assignment(), extension);
   }
 
+  @Test
+  public void testCorrectRecordWriterBasic() throws Exception {
+    // Test the base-case -- no known embedded extension
+    testCorrectRecordWriterHelper("this.is.dir");
+  }
+
+  @Test
+  public void testCorrectRecordWriterOther() throws Exception {
+    // Test with a different embedded extension
+    testCorrectRecordWriterHelper("this.is.json.dir");
+  }
+
+  @Test
+  public void testCorrectRecordWriterThis() throws Exception {
+    // Test with our embedded extension
+    testCorrectRecordWriterHelper("this.is" + DEFAULT_EXTENSION + ".dir");
+  }
+
   protected List<SinkRecord> createByteArrayRecordsWithoutSchema(int size, long startOffset, Set<TopicPartition> partitions) {
     String key = "key";
     int ibase = 12;
@@ -210,37 +230,6 @@ public class DataWriterByteArrayTest extends DataWriterTestBase<ByteArrayFormat>
   protected String getDirectory(String topic, int partition) {
     String encodedPartition = "partition=" + partition;
     return partitioner.generatePartitionedPath(topic, encodedPartition);
-  }
-
-  protected List<String> getExpectedFiles(long[] validOffsets, TopicPartition tp, String extension) {
-    List<String> expectedFiles = new ArrayList<>();
-    for (int i = 1; i < validOffsets.length; ++i) {
-      long startOffset = validOffsets[i - 1];
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset,
-                                                  extension, ZERO_PAD_FMT));
-    }
-    return expectedFiles;
-  }
-
-  protected void verifyFileListing(long[] validOffsets, Set<TopicPartition> partitions, String extension) {
-    List<String> expectedFiles = new ArrayList<>();
-    for (TopicPartition tp : partitions) {
-      expectedFiles.addAll(getExpectedFiles(validOffsets, tp, extension));
-    }
-    verifyFileListing(expectedFiles);
-  }
-
-  protected void verifyFileListing(List<String> expectedFiles) {
-    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
-    List<String> actualFiles = new ArrayList<>();
-    for (S3ObjectSummary summary : summaries) {
-      String fileKey = summary.getKey();
-      actualFiles.add(fileKey);
-    }
-
-    Collections.sort(actualFiles);
-    Collections.sort(expectedFiles);
-    assertThat(actualFiles, is(expectedFiles));
   }
 
   protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records) {

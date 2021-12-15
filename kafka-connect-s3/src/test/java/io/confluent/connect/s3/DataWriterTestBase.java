@@ -17,6 +17,7 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
@@ -31,9 +32,13 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.powermock.api.mockito.PowerMockito;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -73,7 +78,11 @@ public abstract class DataWriterTestBase<
    *
    * @throws IOException Thrown upon an IO exception,m such as S3 unreachable
    */
-  protected abstract void verify(List<SinkRecord> sinkRecords, long[] validOffsets) throws IOException;
+  protected abstract void verify(
+      List<SinkRecord> sinkRecords,
+      long[] validOffsets,
+      Set<TopicPartition> partitions
+  ) throws IOException;
 
   /**
    * Create a generic list of records, usually for purposes other than validating the
@@ -113,6 +122,8 @@ public abstract class DataWriterTestBase<
 
   //@Before should be omitted in order to be able to add properties per test.
   public void setUp() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, clazz.getName());
+
     super.setUp();
 
     s3 = PowerMockito.spy(newS3Client(connectorConfig));
@@ -128,10 +139,59 @@ public abstract class DataWriterTestBase<
     assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
   }
 
+  protected List<String> getExpectedFiles(long[] validOffsets, TopicPartition tp, String extension) {
+    List<String> expectedFiles = new ArrayList<>();
+    for (int i = 1; i < validOffsets.length; ++i) {
+      long startOffset = validOffsets[i - 1];
+      expectedFiles.add(FileUtils.fileKeyToCommit(
+          topicsDir,
+          getDirectory(tp.topic(), tp.partition()),
+          tp,
+          startOffset,
+          extension, ZERO_PAD_FMT));
+    }
+    return expectedFiles;
+  }
+
+  protected List<String> getExpectedFiles(long[] validOffsets, Collection<TopicPartition> partitions,
+                                          String extension) {
+    List<String> expectedFiles = new ArrayList<>();
+    for (TopicPartition tp : partitions) {
+      expectedFiles.addAll(getExpectedFiles(validOffsets, tp, extension));
+    }
+    return expectedFiles;
+  }
+
+//  protected List<String> getExpectedFiles(long[] validOffsets, Collection<TopicPartition> partitions) {
+//    List<String> expectedFiles = new ArrayList<>();
+//    for (TopicPartition tp : partitions) {
+//      expectedFiles.addAll(getExpectedFiles(validOffsets, tp, getFileExtension()));
+//    }
+//    return expectedFiles;
+//  }
+
+  protected void verifyFileListing(List<String> expectedFiles) throws IOException {
+    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<String> actualFiles = new ArrayList<>();
+    for (S3ObjectSummary summary : summaries) {
+      String fileKey = summary.getKey();
+      actualFiles.add(fileKey);
+    }
+
+    assertThat(actualFiles).containsExactlyInAnyOrderElementsOf(expectedFiles);
+  }
+
+  protected void verifyFileListing(long[] validOffsets, Set<TopicPartition> partitions,
+                                   String extension) throws IOException {
+    List<String> expectedFiles = getExpectedFiles(validOffsets, partitions, extension);
+    verifyFileListing(expectedFiles);
+  }
+
   /**
-   *
-   * @param topicDir
-   * @throws Exception
+   * Test that what ends up on S3 have the correct files names, given the topic
+   * dir which may have anything in it, such as the file extension itself, etc.
+   * @param topicDir The directory to save the records
+   * @throws Exception On test failure
    */
   protected void testCorrectRecordWriterHelper(
       final String topicDir
@@ -148,18 +208,27 @@ public abstract class DataWriterTestBase<
     KeyValueHeaderRecordWriterProvider kvProvider =
         (KeyValueHeaderRecordWriterProvider)keyValueRecordWriterProvider;
 
-    List<SinkRecord> records = createGenericRecords(6, 1);
-    int offset = 0;
+    final int offsetCount = 1;
+    //final int offsetCount = 6;
+
+    Set<TopicPartition> partitions = new HashSet<>();
+    List<SinkRecord> records = createGenericRecords(offsetCount, 1);
+    List<String> expectedFiles = new ArrayList<>();
+    Map<Integer, Long> offsetMap = new HashMap<>();
     for (SinkRecord record : records) {
       TopicPartition tp = new TopicPartition(record.topic(), record.kafkaPartition());
+      partitions.add(tp);
+      Long offset = offsetMap.getOrDefault(tp.partition(), 0L);
+      offsetMap.put(tp.partition(), offset + 1);
       String fileKey = FileUtils.fileKeyToCommit(
           topicsDir,
           getDirectory(tp.topic(), tp.partition()),
           tp,
-          offset++,
+          offset,
           getFileExtension(),
           ZERO_PAD_FMT
       );
+      expectedFiles.add(fileKey);
       RecordWriter actualRecordWriterProvider =
           kvProvider.getRecordWriter(connectorConfig, fileKey);
       actualRecordWriterProvider.write(record);
@@ -167,8 +236,21 @@ public abstract class DataWriterTestBase<
       actualRecordWriterProvider.close();
     }
 
-    long[] validOffsets = {0, 1, 2, 3, 4, 5, 6};
-    verify(records, validOffsets);
+    // Where is std::iota() in java?
+    long[] validOffsets = new long[offsetCount + 1];
+    for (int i = 0; i <= offsetCount; ++i) {
+      validOffsets[i] = i;
+    }
+
+    // Sanity check to make sure we generated the correct names along the way against
+    // what it is going to check for later (not checking against what's actually going to
+    // be on S3, which is another check altogether).
+    assertThat(expectedFiles).containsExactlyInAnyOrderElementsOf(
+        getExpectedFiles(validOffsets, partitions, getFileExtension())
+    );
+
+    // Now check what actually made it to S3
+    verify(records, validOffsets, partitions);
   }
 
 }

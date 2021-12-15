@@ -16,7 +16,6 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.services.s3.model.S3ObjectSummary;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -54,11 +53,9 @@ import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.kafka.serializers.NonRecordContainer;
 
 import static org.apache.kafka.common.utils.Time.SYSTEM;
-import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
 
 public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
 
@@ -82,13 +79,16 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
   }
 
   @Override
-  protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets) throws IOException {
-    verify(sinkRecords, validOffsets, Collections.singleton(new TopicPartition(TOPIC, PARTITION)), false);
+  protected void verify(
+      List<SinkRecord> sinkRecords,
+      long[] validOffsets,
+      Set<TopicPartition> partitions
+  ) throws IOException {
+    verify(sinkRecords, validOffsets, partitions, false);
   }
   //
   // DataWriterTestBase-
   //
-
 
   @Override
   protected Map<String, String> createProps() {
@@ -422,9 +422,9 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     long[] validOffsets3 = {6, 9, 12};
     verify(sinkRecords, validOffsets3, Collections.singleton(TOPIC_PARTITION3), true);
 
-    List<String> expectedFiles = getExpectedFiles(validOffsets1, TOPIC_PARTITION);
-    expectedFiles.addAll(getExpectedFiles(validOffsets2, TOPIC_PARTITION2));
-    expectedFiles.addAll(getExpectedFiles(validOffsets3, TOPIC_PARTITION3));
+    List<String> expectedFiles = getExpectedFiles(validOffsets1, TOPIC_PARTITION, EXTENSION);
+    expectedFiles.addAll(getExpectedFiles(validOffsets2, TOPIC_PARTITION2, EXTENSION));
+    expectedFiles.addAll(getExpectedFiles(validOffsets3, TOPIC_PARTITION3, EXTENSION));
     verifyFileListing(expectedFiles);
   }
 
@@ -503,6 +503,35 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     }
   }
 
+  @Test
+  public void testCorrectRecordWriterBasic() throws Exception {
+    // Test the base-case -- no known embedded extension
+    testCorrectRecordWriterHelper("this.is.dir");
+  }
+
+  @Test
+  public void testCorrectRecordWriterOther() throws Exception {
+    // Test with a different embedded extension
+    testCorrectRecordWriterHelper("this.is.json.dir");
+  }
+
+  @Test
+  public void testCorrectRecordWriterThis() throws Exception {
+    // Test with our embedded extension
+    testCorrectRecordWriterHelper("this.is" + EXTENSION + ".dir");
+  }
+
+  @Test
+  public void testCorrectRecordWriterPartialThisA() throws Exception {
+    // Test with our embedded extension
+    testCorrectRecordWriterHelper("this.is.snappy.dir");
+  }
+
+  @Test
+  public void testCorrectRecordWriterPartialThisB() throws Exception {
+    // Test with our embedded extension
+    testCorrectRecordWriterHelper("this.is.parquet.dir");
+  }
 
   /**
    * Return a list of new records starting at zero offset.
@@ -611,10 +640,14 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     verify(sinkRecords, validOffsets, Collections.singleton(new TopicPartition(TOPIC, PARTITION)), false, extension);
   }
 
-  protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, Set<TopicPartition> partitions)
-          throws IOException {
-    verify(sinkRecords, validOffsets, partitions, false);
+  protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets) throws IOException {
+    verify(sinkRecords, validOffsets, Collections.singleton(new TopicPartition(TOPIC, PARTITION)), false);
   }
+
+//  protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, Set<TopicPartition> partitions)
+//          throws IOException {
+//    verify(sinkRecords, validOffsets, partitions, false);
+//  }
 
   protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, Set<TopicPartition> partitions,
                         boolean skipFileListing)
@@ -652,27 +685,6 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     }
   }
 
-  protected void verifyFileListing(long[] validOffsets, Set<TopicPartition> partitions, String extension) {
-    List<String> expectedFiles = new ArrayList<>();
-    for (TopicPartition tp : partitions) {
-      expectedFiles.addAll(getExpectedFiles(validOffsets, tp, extension));
-    }
-    verifyFileListing(expectedFiles);
-  }
-
-  protected void verifyFileListing(List<String> expectedFiles) {
-    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
-    List<String> actualFiles = new ArrayList<>();
-    for (S3ObjectSummary summary : summaries) {
-      String fileKey = summary.getKey();
-      actualFiles.add(fileKey);
-    }
-
-    Collections.sort(actualFiles);
-    Collections.sort(expectedFiles);
-    assertThat(actualFiles, is(expectedFiles));
-  }
-
   protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records) {
     Schema expectedSchema = null;
     for (Object avroRecord : records) {
@@ -703,20 +715,6 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
   protected String getDirectory(String topic, int partition) {
     String encodedPartition = "partition=" + partition;
     return partitioner.generatePartitionedPath(topic, encodedPartition);
-  }
-
-  protected List<String> getExpectedFiles(long[] validOffsets, TopicPartition tp) {
-    return getExpectedFiles(validOffsets, tp, EXTENSION);
-  }
-
-  protected List<String> getExpectedFiles(long[] validOffsets, TopicPartition tp, String extension) {
-    List<String> expectedFiles = new ArrayList<>();
-    for (int i = 1; i < validOffsets.length; ++i) {
-      long startOffset = validOffsets[i - 1];
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset,
-              extension, ZERO_PAD_FMT));
-    }
-    return expectedFiles;
   }
 
   protected void verifyOffsets(Map<TopicPartition, OffsetAndMetadata> actualOffsets, Long[] validOffsets,
