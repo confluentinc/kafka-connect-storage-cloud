@@ -644,11 +644,6 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     verify(sinkRecords, validOffsets, Collections.singleton(new TopicPartition(TOPIC, PARTITION)), false);
   }
 
-//  protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, Set<TopicPartition> partitions)
-//          throws IOException {
-//    verify(sinkRecords, validOffsets, partitions, false);
-//  }
-
   protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, Set<TopicPartition> partitions,
                         boolean skipFileListing)
           throws IOException {
