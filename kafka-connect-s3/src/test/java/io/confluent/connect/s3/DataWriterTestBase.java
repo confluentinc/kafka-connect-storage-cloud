@@ -60,9 +60,6 @@ public abstract class DataWriterTestBase<
   protected FORMAT format;
   private final Class<FORMAT> clazz;
 
-  //
-  // -DataWriterTestBase
-  //
   /**
    * Return the default file extension
    *
@@ -116,9 +113,6 @@ public abstract class DataWriterTestBase<
   protected DataWriterTestBase(final Class<FORMAT> clazz) {
     this.clazz = clazz;
   }
-  //
-  // DataWriterTestBase-
-  //
 
   //@Before should be omitted in order to be able to add properties per test.
   public void setUp() throws Exception {
@@ -161,14 +155,6 @@ public abstract class DataWriterTestBase<
     }
     return expectedFiles;
   }
-
-//  protected List<String> getExpectedFiles(long[] validOffsets, Collection<TopicPartition> partitions) {
-//    List<String> expectedFiles = new ArrayList<>();
-//    for (TopicPartition tp : partitions) {
-//      expectedFiles.addAll(getExpectedFiles(validOffsets, tp, getFileExtension()));
-//    }
-//    return expectedFiles;
-//  }
 
   protected void verifyFileListing(List<String> expectedFiles) throws IOException {
     List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);

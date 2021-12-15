@@ -58,34 +58,10 @@ public class DataWriterJsonTest extends DataWriterTestBase<JsonFormat> {
     return props;
   }
 
-  //
-  // -DataWriterTestBase
-  //
   @Override
   protected String getFileExtension() {
     return EXTENSION;
   }
-
-  @Override
-  protected List<SinkRecord> createGenericRecords(int count, long firstOffset) {
-    return createJsonRecordsWithoutSchema(
-        count * context.assignment().size(),
-        firstOffset,
-        context.assignment()
-    );
-  }
-
-  @Override
-  protected void verify(
-      List<SinkRecord> sinkRecords,
-      long[] validOffsets,
-      Set<TopicPartition> partitions
-  ) throws IOException {
-    verify(sinkRecords, validOffsets, partitions, EXTENSION);
-  }
-  //
-  // DataWriterTestBase-
-  //
 
   //@Before should be omitted in order to be able to add properties per test.
   public void setUp() throws Exception {
@@ -261,6 +237,24 @@ public class DataWriterJsonTest extends DataWriterTestBase<JsonFormat> {
       }
       assertEquals(expectedValue, jsonRecord);
     }
+  }
+
+  @Override
+  protected List<SinkRecord> createGenericRecords(int count, long firstOffset) {
+    return createJsonRecordsWithoutSchema(
+        count * context.assignment().size(),
+        firstOffset,
+        context.assignment()
+    );
+  }
+
+  @Override
+  protected void verify(
+      List<SinkRecord> sinkRecords,
+      long[] validOffsets,
+      Set<TopicPartition> partitions
+  ) throws IOException {
+    verify(sinkRecords, validOffsets, partitions, EXTENSION);
   }
 
   protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, Set<TopicPartition> partitions,

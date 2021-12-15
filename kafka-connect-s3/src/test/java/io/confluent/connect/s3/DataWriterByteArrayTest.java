@@ -49,40 +49,10 @@ public class DataWriterByteArrayTest extends DataWriterTestBase<ByteArrayFormat>
     super(ByteArrayFormat.class);
   }
 
-  //
-  // -DataWriterTestBase
-  //
   @Override
   protected String getFileExtension() {
     return DEFAULT_EXTENSION;
   }
-
-  @Override
-  protected List<SinkRecord> createGenericRecords(int count, long firstOffset) {
-    return createByteArrayRecordsWithoutSchema(
-        count * context.assignment().size(),
-        firstOffset,
-        context.assignment()
-    );
-  }
-
-  @Override
-  protected void verify(
-      List<SinkRecord> sinkRecords,
-      long[] validOffsets,
-      Set<TopicPartition> partitions
-  ) throws IOException {
-    verify(
-        sinkRecords,
-        validOffsets,
-        partitions,
-        DEFAULT_EXTENSION
-    );
-  }
-  //
-  // DataWriterTestBase-
-  //
-
 
   @Override
   protected Map<String, String> createProps() {
@@ -239,6 +209,29 @@ public class DataWriterByteArrayTest extends DataWriterTestBase<ByteArrayFormat>
       byte[] expectedBytes = (byte[]) expectedRecord.value();
       assertArrayEquals(expectedBytes, bytes);
     }
+  }
+
+  @Override
+  protected List<SinkRecord> createGenericRecords(int count, long firstOffset) {
+    return createByteArrayRecordsWithoutSchema(
+        count * context.assignment().size(),
+        firstOffset,
+        context.assignment()
+    );
+  }
+
+  @Override
+  protected void verify(
+      List<SinkRecord> sinkRecords,
+      long[] validOffsets,
+      Set<TopicPartition> partitions
+  ) throws IOException {
+    verify(
+        sinkRecords,
+        validOffsets,
+        partitions,
+        DEFAULT_EXTENSION
+    );
   }
 
   protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, Set<TopicPartition> partitions,

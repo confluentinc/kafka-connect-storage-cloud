@@ -65,37 +65,17 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     super(ParquetFormat.class);
   }
 
-  //
-  // -DataWriterTestBase
-  //
-  @Override
-  protected String getFileExtension() {
-    return EXTENSION;
-  }
-
-  @Override
-  protected List<SinkRecord> createGenericRecords(int count, long firstOffset) {
-    return createRecords(count, firstOffset);
-  }
-
-  @Override
-  protected void verify(
-      List<SinkRecord> sinkRecords,
-      long[] validOffsets,
-      Set<TopicPartition> partitions
-  ) throws IOException {
-    verify(sinkRecords, validOffsets, partitions, false);
-  }
-  //
-  // DataWriterTestBase-
-  //
-
   @Override
   protected Map<String, String> createProps() {
     Map<String, String> props = super.createProps();
     props.putAll(localProps);
     props.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
     return props;
+  }
+
+  @Override
+  protected String getFileExtension() {
+    return EXTENSION;
   }
 
   @After
@@ -634,6 +614,20 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
               recordNoVersion, offset));
     }
     return sinkRecords;
+  }
+
+  @Override
+  protected List<SinkRecord> createGenericRecords(int count, long firstOffset) {
+    return createRecords(count, firstOffset);
+  }
+
+  @Override
+  protected void verify(
+      List<SinkRecord> sinkRecords,
+      long[] validOffsets,
+      Set<TopicPartition> partitions
+  ) throws IOException {
+    verify(sinkRecords, validOffsets, partitions, false);
   }
 
   protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, String extension) throws IOException {

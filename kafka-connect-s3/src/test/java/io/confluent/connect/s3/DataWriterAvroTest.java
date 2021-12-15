@@ -92,22 +92,10 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     System.setProperty(SkipMd5CheckStrategy.DISABLE_GET_OBJECT_MD5_VALIDATION_PROPERTY, "true");
   }
 
-  //
-  // -DataWriterTestBase
-  //
   @Override
   protected String getFileExtension() {
     return EXTENSION;
   }
-
-  @Override
-  protected List<SinkRecord> createGenericRecords(int count, long firstOffset) {
-    return createRecordsNoVersion(count, firstOffset);
-  }
-  //
-  // DataWriterTestBase-
-  //
-
 
   //@Before should be omitted in order to be able to add properties per test.
   public void setUpWithCommitException() throws Exception {
@@ -850,6 +838,11 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
       }
     }
     return sinkRecords;
+  }
+
+  @Override
+  protected List<SinkRecord> createGenericRecords(int count, long firstOffset) {
+    return createRecordsNoVersion(count, firstOffset);
   }
 
   protected List<SinkRecord> createRecordsNoVersion(int size, long startOffset) {
