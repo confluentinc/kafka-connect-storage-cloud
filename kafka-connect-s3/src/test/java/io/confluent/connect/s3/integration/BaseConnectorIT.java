@@ -35,6 +35,8 @@ import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 @Category(IntegrationTest.class)
 public abstract class BaseConnectorIT {
 
@@ -211,9 +213,9 @@ public abstract class BaseConnectorIT {
    * @param expectedFiles the list of expected filenames for exact comparison
    * @return whether all the files in the bucket match the expected values
    */
-  protected boolean fileNamesValid(String bucketName, List<String> expectedFiles) {
+  protected void assertFileNamesValid(String bucketName, List<String> expectedFiles) {
     List<String> actualFiles = getBucketFileNames(bucketName);
-    return expectedFiles.equals(actualFiles);
+    assertThat(actualFiles).containsExactlyInAnyOrderElementsOf(expectedFiles);
   }
 
   /**

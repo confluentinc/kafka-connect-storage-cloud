@@ -60,9 +60,6 @@ import static org.powermock.api.easymock.PowerMock.verifyAll;
 @PowerMockIgnore({"io.findify.s3mock.*", "akka.*", "javax.*", "org.xml.*", "com.sun.org.apache.xerces.*"})
 public class S3SinkTaskTest extends DataWriterAvroTest {
 
-  private static final String ZERO_PAD_FMT = "%010d";
-  private final String extension = ".avro";
-
   //@Before should be omitted in order to be able to add properties per test.
   public void setUp() throws Exception {
     super.setUp();
@@ -174,7 +171,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     // Upload partial file.
     List<SinkRecord> sinkRecords = createRecords(2);
     byte[] partialData = AvroUtils.putRecords(sinkRecords, format.getAvroData());
-    String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT);
+    String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, EXTENSION, ZERO_PAD_FMT);
     s3.putObject(S3_TEST_BUCKET_NAME, fileKey, new ByteArrayInputStream(partialData), null);
 
     // Accumulate rest of the records.

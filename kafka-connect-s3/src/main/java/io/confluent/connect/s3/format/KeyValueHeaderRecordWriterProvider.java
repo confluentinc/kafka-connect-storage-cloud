@@ -70,9 +70,8 @@ public class KeyValueHeaderRecordWriterProvider
     // Each provider will add its own extension. The filename comes in with the value file format,
     // e.g. filename.avro, but when the format class is different for the key or the headers the
     // extension needs to be removed.
-    int extensionIndex = filename.indexOf(valueProvider.getExtension());
-    String strippedFilename = extensionIndex > -1
-        ? filename.substring(0, extensionIndex)
+    String strippedFilename = filename.endsWith(valueProvider.getExtension())
+        ? filename.substring(0, filename.length() - valueProvider.getExtension().length())
         : filename;
 
     RecordWriter valueWriter = valueProvider.getRecordWriter(conf, strippedFilename);
