@@ -58,6 +58,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -117,7 +119,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final String TEST_DOWNLOAD_PATH = TEST_RESOURCES_PATH + "downloaded-files/";
   // connector and test configs
   private static final String CONNECTOR_NAME = "s3-sink";
-  private static final String TEST_TOPIC_NAME = "TestTopic";
+  private static final String DEFAULT_TEST_TOPIC_NAME = "TestTopic";
   private static final String STORAGE_CLASS_CONFIG = "storage.class";
   private static final String AVRO_EXTENSION = "avro";
   private static final String PARQUET_EXTENSION = "snappy.parquet";
@@ -126,7 +128,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private static final String DLQ_TOPIC_CONFIG = "errors.deadletterqueue.topic.name";
   private static final String DLQ_TOPIC_NAME = "DLQ-topic";
 
-  private static final List<String> KAFKA_TOPICS = Collections.singletonList(TEST_TOPIC_NAME);
+  private static final List<String> KAFKA_TOPICS = Collections.singletonList(DEFAULT_TEST_TOPIC_NAME);
   private static final long CONSUME_MAX_DURATION_MS = TimeUnit.SECONDS.toMillis(10);
   private static final int NUM_RECORDS_INSERT = 30;
   private static final int FLUSH_SIZE_STANDARD = 3;
@@ -187,45 +189,112 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   @Test
-  public void testFilesWrittenToBucketAvro() throws Throwable {
+  public void testBasicRecordsWrittenAvro() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
-    testBasicRecordsWritten(AVRO_EXTENSION);
+    testBasicRecordsWritten(AVRO_EXTENSION, false);
   }
 
   @Test
-  public void testFilesWrittenToBucketParquet() throws Throwable {
+  public void testBasicRecordsWrittenParquet() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
-    testBasicRecordsWritten(PARQUET_EXTENSION);
+    testBasicRecordsWritten(PARQUET_EXTENSION, false);
   }
 
   @Test
-  public void testFilesWrittenToBucketJson() throws Throwable {
+  public void testBasicRecordsWrittenJson() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
-    testBasicRecordsWritten(JSON_EXTENSION);
+    testBasicRecordsWritten(JSON_EXTENSION, false);
   }
 
-  private void testBasicRecordsWritten(String expectedFileExtension) throws Throwable {
+  @Test
+  public void testFilesWrittenToBucketAvroWithExtInTopic() throws Throwable {
+    //add test specific props
+    props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
+    testBasicRecordsWritten(AVRO_EXTENSION, true);
+  }
+
+  @Test
+  public void testFilesWrittenToBucketParquetWithExtInTopic() throws Throwable {
+    //add test specific props
+    props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
+    testBasicRecordsWritten(PARQUET_EXTENSION, true);
+  }
+
+  @Test
+  public void testFilesWrittenToBucketJsonWithExtInTopic() throws Throwable {
+    //add test specific props
+    props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+    testBasicRecordsWritten(JSON_EXTENSION, true);
+  }
+
+  /**
+   * Test that the expected records are written for a given file extension
+   * Optionally, test that topics which have "*.{expectedFileExtension}*" in them are processed
+   * and written.
+   * @param expectedFileExtension The file extension to test against
+   * @param addExtensionInTopic Add a topic to to the test which contains the extension
+   * @throws Throwable
+   */
+  private void testBasicRecordsWritten(
+          String expectedFileExtension,
+          boolean addExtensionInTopic
+  ) throws Throwable {
+    final String topicNameWithExt = "other." + expectedFileExtension + ".topic." + expectedFileExtension;
+
+    // Add an extra topic with this extension inside of the name
+    // Use a TreeSet for test determinism
+    Set<String> topicNames = new TreeSet<>(KAFKA_TOPICS);
+
+    if (addExtensionInTopic) {
+      topicNames.add(topicNameWithExt);
+      connect.kafka().createTopic(topicNameWithExt, 1);
+      props.replace(
+              "topics",
+              props.get("topics") + "," + topicNameWithExt
+      );
+    }
+
     // start sink connector
     connect.configureConnector(CONNECTOR_NAME, props);
     // wait for tasks to spin up
-    EmbeddedConnectUtils.waitForConnectorToStart(connect, CONNECTOR_NAME, Math.min(KAFKA_TOPICS.size(), MAX_TASKS));
+    EmbeddedConnectUtils.waitForConnectorToStart(connect, CONNECTOR_NAME, Math.min(topicNames.size(), MAX_TASKS));
 
     Schema recordValueSchema = getSampleStructSchema();
     Struct recordValueStruct = getSampleStructVal(recordValueSchema);
-    SinkRecord sampleRecord = getSampleRecord(recordValueSchema, recordValueStruct);
-    // Send records to Kafka
-    produceRecordsNoHeaders(NUM_RECORDS_INSERT, sampleRecord);
+
+    for (String thisTopicName : topicNames) {
+      // Create and send records to Kafka using the topic name in the current 'thisTopicName'
+      SinkRecord sampleRecord = getSampleTopicRecord(thisTopicName, recordValueSchema, recordValueStruct);
+      produceRecordsNoHeaders(NUM_RECORDS_INSERT, sampleRecord);
+    }
 
     log.info("Waiting for files in S3...");
-    int expectedFileCount = NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
-    waitForFilesInBucket(TEST_BUCKET_NAME, expectedFileCount);
+    int countPerTopic = NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
+    int expectedTotalFileCount = countPerTopic * topicNames.size();
+    waitForFilesInBucket(TEST_BUCKET_NAME, expectedTotalFileCount);
 
-    List<String> expectedFilenames = getExpectedFilenames(TEST_TOPIC_NAME, TOPIC_PARTITION,
-        FLUSH_SIZE_STANDARD, NUM_RECORDS_INSERT, expectedFileExtension);
-    assertTrue(fileNamesValid(TEST_BUCKET_NAME, expectedFilenames));
+    Set<String> expectedTopicFilenames = new TreeSet<>();
+    for (String thisTopicName : topicNames) {
+      List<String> theseFiles = getExpectedFilenames(
+              thisTopicName,
+              TOPIC_PARTITION,
+              FLUSH_SIZE_STANDARD,
+              NUM_RECORDS_INSERT,
+              expectedFileExtension
+      );
+      assertEquals(theseFiles.size(), countPerTopic);
+      expectedTopicFilenames.addAll(theseFiles);
+    }
+    // This check will catch any duplications
+    assertEquals(expectedTopicFilenames.size(), expectedTotalFileCount);
+    // The total number of files allowed in the bucket is number of topics * # produced for each
+    // All topics should have produced the same number of files, so this check should hold.
+    assertFileNamesValid(TEST_BUCKET_NAME, new ArrayList<>(expectedTopicFilenames));
+    // Now check that all files created by the sink have the contents that were sent
+    // to the producer (they're all the same content)
     assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
   }
 
@@ -250,7 +319,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     SinkRecord sampleRecord = getSampleRecord(recordValueSchema, recordValueStruct);
 
     // Send first batch of valid records to Kafka
-    produceRecordsWithHeaders(TEST_TOPIC_NAME, NUM_RECORDS_INSERT, sampleRecord);
+    produceRecordsWithHeaders(DEFAULT_TEST_TOPIC_NAME, NUM_RECORDS_INSERT, sampleRecord);
 
     // wait for values keys and headers from first batch
     int expectedFileCount = (NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD) * 3;
@@ -258,12 +327,12 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
     // send faulty records
     int numberOfFaultyRecords = 1;
-    produceRecordsWithHeadersNoKey(TEST_TOPIC_NAME, numberOfFaultyRecords, sampleRecord);
-    produceRecordsWithHeadersNoValue(TEST_TOPIC_NAME, numberOfFaultyRecords, sampleRecord);
+    produceRecordsWithHeadersNoKey(DEFAULT_TEST_TOPIC_NAME, numberOfFaultyRecords, sampleRecord);
+    produceRecordsWithHeadersNoValue(DEFAULT_TEST_TOPIC_NAME, numberOfFaultyRecords, sampleRecord);
     produceRecordsNoHeaders(numberOfFaultyRecords, sampleRecord);
 
     // Send second batch of valid records to Kafka
-    produceRecordsWithHeaders(TEST_TOPIC_NAME, NUM_RECORDS_INSERT, sampleRecord);
+    produceRecordsWithHeaders(DEFAULT_TEST_TOPIC_NAME, NUM_RECORDS_INSERT, sampleRecord);
 
     log.info("Waiting for files in S3...");
     expectedFileCount = expectedFileCount * 2;
@@ -355,9 +424,9 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     }
   }
 
-  private SinkRecord getSampleRecord(Schema recordValueSchema, Struct recordValueStruct ) {
+  private SinkRecord getSampleTopicRecord(String topicName, Schema recordValueSchema, Struct recordValueStruct ) {
     return new SinkRecord(
-        TEST_TOPIC_NAME,
+        topicName,
         TOPIC_PARTITION,
         Schema.STRING_SCHEMA,
         "key",
@@ -365,6 +434,10 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
         recordValueStruct,
         DEFAULT_OFFSET
     );
+  }
+
+  private SinkRecord getSampleRecord(Schema recordValueSchema, Struct recordValueStruct ) {
+    return getSampleTopicRecord(DEFAULT_TEST_TOPIC_NAME, recordValueSchema, recordValueStruct);
   }
 
   private Iterable<Header> sampleHeaders() {
@@ -582,15 +655,27 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * <p>
    * ex.: /topics/s3_topic/partition=97/s3_topic+97+0000000001.avro
    *
-   * @param S3FileKey the object file key
+   * @param s3FileKey the object file key
    * @return the extension, may be .avro, .json, or .snappy.parquet,
    */
-  private String getExtensionFromKey(String S3FileKey) {
-    String[] tokens = S3FileKey.split("\\.", 2);
-    if (tokens.length < 2) {
-      throw new RuntimeException("Could not parse extension from filename.");
+  private static String getExtensionFromKey(String s3FileKey) {
+    String[] pathTokens = s3FileKey.split("/");
+    // The last one is (presumably) the file name
+    String fileName = pathTokens[pathTokens.length - 1];
+    // The extension ".snappy.parquet" is a special case of a two-dot
+    // extension, so check for that so that we can generalize the rest
+    // of the checks in case there is a dot in the filename portion itself.
+    if (fileName.endsWith("." + PARQUET_EXTENSION)) {
+      return PARQUET_EXTENSION;
     }
-    return tokens[1];
+    // Now on to the more generalized version
+    int lastDot = fileName.lastIndexOf('.');
+    if (lastDot < 0) {
+      // no extension
+      throw new RuntimeException("Could not parse extension from filename: " + s3FileKey);
+    }
+
+    return fileName.substring(lastDot + 1);
   }
 
   private void initializeJsonConverter() {
