@@ -44,7 +44,7 @@ public class S3ErrorUtils {
       }
       // IOException, in many places, is passed the AWS exception
       // when it is thrown.  We recurse here to check that exception
-      // for ther IOException case.  Otherwise, the IOException
+      // for the IOException case.  Otherwise, the IOException
       // is considered not retryable.
       // Exception: An IOException embedded within an `AmazonClientException`
       // should be passed via the `AmazonClientException` object

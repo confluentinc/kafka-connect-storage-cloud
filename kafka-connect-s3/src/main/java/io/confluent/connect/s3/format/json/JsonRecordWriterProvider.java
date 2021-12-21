@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import io.confluent.connect.s3.util.S3ErrorUtils;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
@@ -114,7 +115,7 @@ public class JsonRecordWriterProvider extends RecordViewSetter
           try {
             writer.close();
           } catch (IOException e) {
-            throw S3ErrorUtils.maybeRetriableConnectException(e);
+            throw new ConnectException(e);
           }
         }
       };
