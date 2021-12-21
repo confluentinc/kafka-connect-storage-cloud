@@ -31,7 +31,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -230,7 +232,14 @@ public class S3SinkTask extends SinkTask {
       log.debug("Read {} records from Kafka", records.size());
     }
 
-    for (TopicPartition tp : topicPartitionWriters.keySet()) {
+    ArrayList<TopicPartition> keys = new ArrayList<>(topicPartitionWriters.keySet());
+    // Random shuffle the partition writer order so that a particular
+    // PartitionWriter which is currently error-prone does not block all
+    // other topics/partitions from being processed indefinitely
+    // (in the case of an un-retriable exception)
+    Collections.shuffle(keys);
+
+    for (TopicPartition tp : keys) {
       TopicPartitionWriter writer = topicPartitionWriters.get(tp);
       try {
         writer.write();

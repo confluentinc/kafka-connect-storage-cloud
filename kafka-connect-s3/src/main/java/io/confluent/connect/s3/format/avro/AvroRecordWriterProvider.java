@@ -17,12 +17,11 @@ package io.confluent.connect.s3.format.avro;
 
 import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
 
+import io.confluent.connect.s3.util.S3ErrorUtils;
 import org.apache.avro.file.CodecFactory;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,7 +75,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
             writer.setCodec(CodecFactory.fromString(conf.getAvroCodec()));
             writer.create(avroSchema, s3out);
           } catch (IOException e) {
-            throw new RetriableException(e);
+            throw S3ErrorUtils.maybeRetriableConnectException(e);
           }
         }
         log.trace("Sink record with view {}: {}", recordView, record);
@@ -89,7 +88,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
           }
           writer.append(value);
         } catch (IOException e) {
-          throw new RetriableException(e);
+          throw S3ErrorUtils.maybeRetriableConnectException(e);
         }
       }
 
@@ -102,7 +101,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
           s3out.commit();
           writer.close();
         } catch (IOException e) {
-          throw new RetriableException(e);
+          throw S3ErrorUtils.maybeRetriableConnectException(e);
         }
       }
 
@@ -111,7 +110,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
         try {
           writer.close();
         } catch (IOException e) {
-          throw new ConnectException(e);
+          throw S3ErrorUtils.maybeRetriableConnectException(e);
         }
       }
     };

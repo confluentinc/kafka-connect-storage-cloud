@@ -16,8 +16,6 @@
 package io.confluent.connect.s3.storage;
 
 import com.amazonaws.AmazonClientException;
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.AmazonServiceException.ErrorType;
 import com.amazonaws.event.ProgressEvent;
 import com.amazonaws.event.ProgressListener;
 import com.amazonaws.services.s3.AmazonS3;
@@ -32,9 +30,8 @@ import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import com.amazonaws.services.s3.model.SSECustomerKey;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.util.S3ErrorUtils;
 import io.confluent.connect.storage.common.util.StringUtils;
-import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.parquet.io.PositionOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -170,8 +167,9 @@ public class S3OutputStream extends PositionOutputStream {
       log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
     } catch (IOException e) {
       log.error("Multipart upload failed to complete for bucket '{}' key '{}'", bucket, key);
-      throw new RetriableException(
-          String.format("Multipart upload failed to complete: %s", e.getMessage()), e
+      throw S3ErrorUtils.maybeRetriableConnectException(
+          String.format("Multipart upload failed to complete: %s", e.getMessage()),
+          e
       );
     } finally {
       buffer.clear();
@@ -226,24 +224,19 @@ public class S3OutputStream extends PositionOutputStream {
     );
   }
 
-  private <T> T handleAmazonExceptions(Supplier<T> supplier) throws IOException {
+  /**
+   * Return the given Supplier value, converting any thrown AmazonClientException object
+   * to an IOException object (containing the AmazonClientException object) and
+   * throw that instead.
+   * @param supplier The supplier to evaluate
+   * @param <T> The object type returned by the Supplier
+   * @return The value returned by the Supplier
+   * @throws IOException Any IOException or AmazonClientException thrown while
+   *                     retreiving the Supplier's value
+   */
+  private static <T> T handleAmazonExceptions(Supplier<T> supplier) throws IOException {
     try {
       return supplier.get();
-    } catch (AmazonServiceException e) {
-      if (e.getErrorType() == ErrorType.Client) {
-        // S3 documentation states that this error type means there is a problem with the request
-        // and that retrying this request will not result in a successful response. This includes
-        // errors such as incorrect access keys, invalid parameter values, missing parameters, etc.
-        // Therefore, the connector should propagate this exception and fail.
-
-        // The only exception is "Too Many Requests" - these may succeed after some backoff
-        if (e.getStatusCode() == 429) {
-          throw new IOException(e);
-        }
-
-        throw new ConnectException(e);
-      }
-      throw new IOException(e);
     } catch (AmazonClientException e) {
       throw new IOException(e);
     }
