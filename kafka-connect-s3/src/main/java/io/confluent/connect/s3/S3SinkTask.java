@@ -232,14 +232,7 @@ public class S3SinkTask extends SinkTask {
       log.debug("Read {} records from Kafka", records.size());
     }
 
-    ArrayList<TopicPartition> keys = new ArrayList<>(topicPartitionWriters.keySet());
-    // Random shuffle the partition writer order so that a particular
-    // PartitionWriter which is currently error-prone does not block all
-    // other topics/partitions from being processed indefinitely
-    // (in the case of an un-retriable exception)
-    Collections.shuffle(keys);
-
-    for (TopicPartition tp : keys) {
+    for (TopicPartition tp : topicPartitionWriters.keySet()) {
       TopicPartitionWriter writer = topicPartitionWriters.get(tp);
       try {
         writer.write();
