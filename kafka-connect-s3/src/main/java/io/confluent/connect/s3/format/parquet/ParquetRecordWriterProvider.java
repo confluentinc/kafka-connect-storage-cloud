@@ -24,12 +24,12 @@ import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.format.RecordViewSetter;
 import io.confluent.connect.s3.storage.S3ParquetOutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.s3.util.S3ErrorUtils;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetFileWriter;
@@ -85,7 +85,7 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
                     .withPageSize(PAGE_SIZE)
                     .build();
           } catch (IOException e) {
-            throw new ConnectException(e);
+            throw S3ErrorUtils.maybeRetriableConnectException(e);
           }
         }
         log.trace("Sink record with view {}: {}", recordView, record);
@@ -93,7 +93,7 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
         try {
           writer.write((GenericRecord) value);
         } catch (IOException e) {
-          throw new RetriableException(e);
+          throw S3ErrorUtils.maybeRetriableConnectException(e);
         }
       }
 
@@ -116,7 +116,7 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
             writer.close();
           }
         } catch (IOException e) {
-          throw new RetriableException(e);
+          throw S3ErrorUtils.maybeRetriableConnectException(e);
         }
       }
     };
