@@ -30,7 +30,6 @@ import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import com.amazonaws.services.s3.model.SSECustomerKey;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
-import io.confluent.connect.s3.util.S3ErrorUtils;
 import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.parquet.io.PositionOutputStream;
 import org.slf4j.Logger;
@@ -52,7 +51,6 @@ import java.util.function.Supplier;
 public class S3OutputStream extends PositionOutputStream {
   private static final Logger log = LoggerFactory.getLogger(S3OutputStream.class);
   private final AmazonS3 s3;
-  private final S3SinkConnectorConfig connectorConfig;
   private final String bucket;
   private final String key;
   private final String ssea;
@@ -62,7 +60,7 @@ public class S3OutputStream extends PositionOutputStream {
   private final int partSize;
   private final CannedAccessControlList cannedAcl;
   private boolean closed;
-  private ByteBuffer buffer;
+  private final ByteBuffer buffer;
   private MultipartUpload multiPartUpload;
   private final CompressionType compressionType;
   private final int compressionLevel;
@@ -71,7 +69,6 @@ public class S3OutputStream extends PositionOutputStream {
 
   public S3OutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
     this.s3 = s3;
-    this.connectorConfig = conf;
     this.bucket = conf.getBucketName();
     this.key = key;
     this.ssea = conf.getSsea();
@@ -166,11 +163,9 @@ public class S3OutputStream extends PositionOutputStream {
       multiPartUpload.complete();
       log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
     } catch (IOException e) {
+      // Catch here in order to log this specific error and then rethrow.
       log.error("Multipart upload failed to complete for bucket '{}' key '{}'", bucket, key);
-      throw S3ErrorUtils.maybeRetriableConnectException(
-          String.format("Multipart upload failed to complete: %s", e.getMessage()),
-          e
-      );
+      throw e;
     } finally {
       buffer.clear();
       multiPartUpload = null;
@@ -238,7 +233,7 @@ public class S3OutputStream extends PositionOutputStream {
     try {
       return supplier.get();
     } catch (AmazonClientException e) {
-      throw new IOException(e);
+      throw new IOException(e.getMessage(), e);
     }
   }
 
