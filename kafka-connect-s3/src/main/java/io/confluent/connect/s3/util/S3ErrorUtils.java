@@ -19,6 +19,7 @@ import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.retry.PredefinedRetryPolicies;
 import io.confluent.connect.storage.common.util.StringUtils;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 
@@ -38,29 +39,31 @@ public class S3ErrorUtils {
     if (exception == null) {
       return false;
     }
-    if (exception instanceof IOException) {
-      if (exception.equals(exception.getCause())) {
+
+    // IOException, in many places, is passed the AWS exception
+    // when it is thrown. We search here to check that exception
+    // for the IOException case.  Otherwise, the IOException
+    // is considered not retriable.
+    // Exception: An IOException embedded within an `AmazonClientException`
+    // should be passed via the `AmazonClientException` object
+    // as its parent (as the SDK does), in which case, shouldRetry()
+    // will often find it retriable.
+    for (Throwable cause : ExceptionUtils.getThrowableList(exception)) {
+      if (cause instanceof AmazonClientException) {
+        // The AWS SDK maintains a check for what it considers to be
+        // retriable exceptions.
+        return PredefinedRetryPolicies.DEFAULT_RETRY_CONDITION.shouldRetry(
+                AmazonWebServiceRequest.NOOP,
+                (AmazonClientException) cause,
+                Integer.MAX_VALUE
+        );
+      }
+
+      if (!(cause instanceof IOException)) {
         return false;
       }
-      // IOException, in many places, is passed the AWS exception
-      // when it is thrown.  We recurse here to check that exception
-      // for the IOException case.  Otherwise, the IOException
-      // is considered not retryable.
-      // Exception: An IOException embedded within an `AmazonClientException`
-      // should be passed via the `AmazonClientException` object
-      // as its parent (as the SDK does), in which case, shouldRetry()
-      // will often find it retryable.
-      return isRetriableException(exception.getCause());
     }
-    if (exception instanceof AmazonClientException) {
-      // The AWS SDK maintains a check for what it considers to be
-      // retryable exceptions.
-      return PredefinedRetryPolicies.DEFAULT_RETRY_CONDITION.shouldRetry(
-          AmazonWebServiceRequest.NOOP,
-          (AmazonClientException) exception,
-          Integer.MAX_VALUE
-      );
-    }
+
     return false;
   }
 
