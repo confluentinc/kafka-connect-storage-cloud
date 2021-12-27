@@ -166,7 +166,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String S3_FILENAME_PATTERN_DEFAULT = "";
 
   public static final String S3_FILENAME_DATE_FORMAT_CONFIG = "s3.path.filename.date.format";
-  public static final String S3_FILENAME_DATE_FORMAT_DEFAULT = "YYYYMMDD_HHmmSS";
+  public static final String S3_FILENAME_DATE_FORMAT_DEFAULT = "yyyyMMDD_HHmmSS";
 
 
   public static final String SCHEMA_MAPPING_CONFIG = "s3.schema.name.mapping";

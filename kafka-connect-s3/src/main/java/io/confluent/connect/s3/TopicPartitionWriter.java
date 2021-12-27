@@ -203,7 +203,7 @@ public class TopicPartitionWriter {
     if (StringUtils.isNotBlank(connectorConfig.getString(
             S3SinkConnectorConfig.S3_FILENAME_DATE_FORMAT_CONFIG))) {
       filenameDateTimeFormatter = DateTimeFormatter.ofPattern(
-              connectorConfig.getString(S3SinkConnectorConfig.S3_FILENAME_DATE_FORMAT_CONFIG));
+              connectorConfig.getString(S3SinkConnectorConfig.S3_FILENAME_DATE_FORMAT_CONFIG).replace("YYYY", "yyyy"));
     } else {
       filenameDateTimeFormatter = DateTimeFormatter.ISO_INSTANT;
     }
