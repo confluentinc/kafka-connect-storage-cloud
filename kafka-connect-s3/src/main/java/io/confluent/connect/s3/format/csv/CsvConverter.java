@@ -43,7 +43,7 @@ public class CsvConverter implements Converter, HeaderConverter {
   private static final ConfigDef CONFIG_DEF = CsvConverterConfig.configDef();
   private static final Pattern CASE_CHANGE_PATTERN = Pattern.compile("([a-z])([A-Z])");
   public static final DateTimeFormatter COMPAT_FORMAT =
-          DateTimeFormatter.ofPattern("YYYY-MM-dd HH:mm:ss");
+          DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
   private CsvConverterConfig config;
   private String fieldSeparator = ",";
   private List<String> fieldsList = null;
