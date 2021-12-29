@@ -16,7 +16,6 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
-import com.google.common.annotations.VisibleForTesting;
 import io.confluent.connect.s3.S3SinkConnectorConfig.BehaviorOnNullValues;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -76,7 +75,7 @@ public class S3SinkTask extends SinkTask {
   // visible for testing.
   S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage,
              Partitioner<?> partitioner, Format<S3SinkConnectorConfig, String> format,
-             Time time) throws Exception {
+             Time time) {
     this.topicPartitionWriters = new HashMap<>();
     this.connectorConfig = connectorConfig;
     this.context = context;
@@ -161,8 +160,7 @@ public class S3SinkTask extends SinkTask {
     return formatClass.getConstructor(S3Storage.class).newInstance(storage);
   }
 
-  @VisibleForTesting
-  public RecordWriterProvider<S3SinkConnectorConfig> newRecordWriterProvider(
+  RecordWriterProvider<S3SinkConnectorConfig> newRecordWriterProvider(
       S3SinkConnectorConfig config)
       throws ClassNotFoundException, InvocationTargetException, InstantiationException,
       NoSuchMethodException, IllegalAccessException {
@@ -326,10 +324,5 @@ public class S3SinkTask extends SinkTask {
         time,
         reporter
     );
-  }
-
-  // Visible for testing
-  Format<S3SinkConnectorConfig, String> getFormat() {
-    return format;
   }
 }
