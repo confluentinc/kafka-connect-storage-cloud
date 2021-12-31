@@ -163,9 +163,21 @@ public class S3OutputStream extends PositionOutputStream {
       multiPartUpload.complete();
       log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
     } catch (IOException e) {
-      // Catch here in order to log this specific error and then rethrow.
-      log.error("Multipart upload failed to complete for bucket '{}' key '{}'", bucket, key);
-      throw e;
+      // Catch here in order to log this specific error and then rethrow
+      // with a more specific message (message may be used for error mapping).
+      String msg = String.format(
+          "Multipart upload failed to complete for bucket '%s' key '%s'. Reason: %s",
+          bucket,
+          key,
+          e.getMessage()
+      );
+      log.error("{}", msg);
+      IOException newIoException = new IOException(msg, e.getCause()) ;
+      // Set original exception's stack trace
+      newIoException.setStackTrace(e.getStackTrace());
+      // Throw the new IOException with updated message and the original cause
+      // (cause is most likely an AmazonClientException)
+      throw newIoException;
     } finally {
       buffer.clear();
       multiPartUpload = null;
