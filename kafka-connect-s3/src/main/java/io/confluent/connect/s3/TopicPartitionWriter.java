@@ -60,6 +60,8 @@ public class TopicPartitionWriter {
   private final Map<String, RecordWriter> writers;
   private final Map<String, Schema> currentSchemas;
   private final TopicPartition tp;
+  private TopicPartition sourceTp = null;
+  private boolean isTransformedPartition = false;
   private final S3Storage storage;
   private final Partitioner<?> partitioner;
   private final TimestampExtractor timestampExtractor;
@@ -168,6 +170,11 @@ public class TopicPartitionWriter {
 
     // Initialize scheduled rotation timer if applicable
     setNextScheduledRotation();
+  }
+
+  public void setSourceTopicPartition(TopicPartition tp) {
+    this.sourceTp = tp;
+    this.isTransformedPartition = true;
   }
 
   private enum State {
@@ -478,12 +485,20 @@ public class TopicPartitionWriter {
 
   private void pause() {
     log.trace("Pausing writer for topic-partition '{}'", tp);
-    context.pause(tp);
+    if (isTransformedPartition) {
+      context.pause(sourceTp);
+    } else {
+      context.pause(tp);
+    }
   }
 
   private void resume() {
     log.trace("Resuming writer for topic-partition '{}'", tp);
-    context.resume(tp);
+    if (isTransformedPartition) {
+      context.resume(sourceTp);
+    } else {
+      context.resume(tp);
+    }
   }
 
   private RecordWriter newWriter(SinkRecord record, String encodedPartition)

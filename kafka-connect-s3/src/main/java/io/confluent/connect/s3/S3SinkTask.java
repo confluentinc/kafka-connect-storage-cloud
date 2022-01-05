@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
+import org.apache.kafka.connect.runtime.InternalSinkRecord;
 import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -222,6 +223,11 @@ public class S3SinkTask extends SinkTask {
         }
         continue;
       }
+      if (topicPartitionWriters.get(tp) == null) {
+        // We'll attempt to register extract and store the source partition and partition
+        // in case a transformer props was declared
+        maybeRegisterSourceTopicPartition(record, tp);
+      }
       topicPartitionWriters.get(tp).buffer(record);
     }
     if (log.isDebugEnabled()) {
@@ -244,6 +250,17 @@ public class S3SinkTask extends SinkTask {
         topicPartitionWriters.put(tp, writer);
       }
     }
+  }
+
+  private void maybeRegisterSourceTopicPartition(SinkRecord record, TopicPartition tp) {
+    String originalTopic = ((InternalSinkRecord) record).originalRecord().topic();
+    Integer originalPartition = ((InternalSinkRecord) record).originalRecord().partition();
+
+    TopicPartition originalTp = new TopicPartition(originalTopic, originalPartition);
+
+    TopicPartitionWriter topicPartitionWriter = newTopicPartitionWriter(tp);
+    topicPartitionWriter.setSourceTopicPartition(originalTp);
+    topicPartitionWriters.put(tp, topicPartitionWriter);
   }
 
   private boolean maybeSkipOnNullValue(SinkRecord record) {
@@ -287,14 +304,18 @@ public class S3SinkTask extends SinkTask {
 
   @Override
   public void close(Collection<TopicPartition> partitions) {
-    for (TopicPartition tp : topicPartitionWriters.keySet()) {
+    for (TopicPartition tp : partitions) {
       try {
-        topicPartitionWriters.get(tp).close();
+        // If not already closed
+        if (topicPartitionWriters.get(tp) != null) {
+          topicPartitionWriters.get(tp).close();
+          topicPartitionWriters.remove(tp);
+        }
+
       } catch (ConnectException e) {
         log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
       }
     }
-    topicPartitionWriters.clear();
   }
 
   @Override
@@ -315,14 +336,14 @@ public class S3SinkTask extends SinkTask {
 
   private TopicPartitionWriter newTopicPartitionWriter(TopicPartition tp) {
     return new TopicPartitionWriter(
-        tp,
-        storage,
-        writerProvider,
-        partitioner,
-        connectorConfig,
-        context,
-        time,
-        reporter
+            tp,
+            storage,
+            writerProvider,
+            partitioner,
+            connectorConfig,
+            context,
+            time,
+            reporter
     );
   }
 }
