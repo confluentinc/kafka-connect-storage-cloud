@@ -147,6 +147,47 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
   }
 
   @Test
+  public void testWriteNullRecordsWithKeepConfig() throws Exception {
+    setUp();
+    replayAll();
+    task = new S3SinkTask();
+    SinkTaskContext mockContext = mock(SinkTaskContext.class);
+    ErrantRecordReporter reporter = mock(ErrantRecordReporter.class);
+    when(mockContext.errantRecordReporter()).thenReturn(reporter);
+    when(mockContext.assignment()).thenReturn(Collections.singleton(TOPIC_PARTITION));
+    task.initialize(mockContext);
+
+    properties.put(S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG,
+        S3SinkConnectorConfig.BehaviorOnNullValues.KEEP.toString());
+    task.start(properties);
+    verifyAll();
+
+    List<SinkRecord> sinkRecords = createRecordsWithPrimitive(3, 0,
+        Collections.singleton(new TopicPartition(TOPIC, PARTITION)));
+    sinkRecords.add(
+        new SinkRecord(TOPIC, PARTITION, null, null, Schema.OPTIONAL_INT32_SCHEMA, null, 3));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, null, null, Schema.OPTIONAL_INT32_SCHEMA, null, 4));
+    sinkRecords.addAll(createRecordsWithPrimitive(4, 5,
+        Collections.singleton(new TopicPartition(TOPIC, PARTITION))));
+    task.put(sinkRecords);
+    task.close(mockContext.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 3, 5, 8};
+
+    // expect sink records like the ones we put including the null records
+    List<SinkRecord> expectedSinkRecords = createRecordsWithPrimitive(3, 0,
+        Collections.singleton(new TopicPartition(TOPIC, PARTITION)));
+    expectedSinkRecords.add(
+        new SinkRecord(TOPIC, PARTITION, null, null, Schema.OPTIONAL_INT32_SCHEMA, null, 3));
+    expectedSinkRecords.add(new SinkRecord(TOPIC, PARTITION, null, null, Schema.OPTIONAL_INT32_SCHEMA, null, 4));
+    expectedSinkRecords.addAll(createRecordsWithPrimitive(4, 5,
+        Collections.singleton(new TopicPartition(TOPIC, PARTITION))));
+    verify(expectedSinkRecords, validOffsets, Collections.singleton(new TopicPartition(TOPIC, PARTITION)), true);
+    Mockito.verify(reporter, times(0)).report(any(), any(DataException.class));
+  }
+
+  @Test
   public void testWriteRecordWithPrimitives() throws Exception {
     setUp();
     replayAll();

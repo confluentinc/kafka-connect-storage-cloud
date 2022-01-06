@@ -587,7 +587,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           BehaviorOnNullValues.VALIDATOR,
           Importance.LOW,
           "How to handle records with a null value (i.e. Kafka tombstone records)."
-              + " Valid options are 'ignore' and 'fail'.",
+              + " Valid options are 'ignore', 'fail', and 'keep'",
           group,
           ++orderInGroup,
           Width.SHORT,
@@ -1079,7 +1079,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public enum BehaviorOnNullValues {
     IGNORE,
-    FAIL;
+    FAIL,
+    KEEP;
 
     public static final ConfigDef.Validator VALIDATOR = new ConfigDef.Validator() {
       private final ConfigDef.ValidString validator = ConfigDef.ValidString.in(names());

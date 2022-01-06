@@ -257,7 +257,8 @@ public class S3SinkTask extends SinkTask {
             record.kafkaOffset()
         );
         return true;
-      } else {
+      } else if (connectorConfig.nullValueBehavior()
+          .equalsIgnoreCase(BehaviorOnNullValues.FAIL.toString())) {
         throw new ConnectException("Null valued records are not writeable with current "
             + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " 'settings.");
       }
