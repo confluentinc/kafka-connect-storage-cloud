@@ -600,6 +600,165 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
+  public void testWriteRecordsAfterScheduleRotationExpiryButNoResetShouldGoToSameFile()
+      throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.HOURS.toMillis(1))
+    );
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.MINUTES.toMillis(10))
+    );
+    setUp();
+
+    // Define the partitioner
+    TimeBasedPartitioner<?> partitioner = new TimeBasedPartitioner<>();
+    parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
+    parsedConfig.put(
+        PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+        MockedWallclockTimestampExtractor.class.getName());
+    partitioner.configure(parsedConfig);
+
+    MockTime time = ((MockedWallclockTimestampExtractor) partitioner.getTimestampExtractor()).time;
+
+    // Bring the clock to present.
+    time.sleep(SYSTEM.milliseconds());
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, writerProvider, partitioner, connectorConfig, context, time);
+
+    // sleep for 11 minutes after startup
+    time.sleep(TimeUnit.MINUTES.toMillis(11));
+
+    //send new records after ScheduleRotation is expired but not reset
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 6);
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records.subList(0, 3), key, schema);
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // No records written to S3
+    topicPartitionWriter.write();
+    // 11 minutes
+    time.sleep(TimeUnit.MINUTES.toMillis(11));
+    // Records are written due to scheduled rotation
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+    long timestampFirst = time.milliseconds();
+
+    String encodedPartitionFirst = getTimebasedEncodedPartition(timestampFirst);
+
+    String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC, encodedPartitionFirst);
+    List<String> expectedFiles = new ArrayList<>();
+    for (int i : new int[]{0}) {
+      expectedFiles
+          .add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
+              ZERO_PAD_FMT));
+    }
+    verify(expectedFiles, 3, schema, records);
+  }
+
+  @Test
+  public void testWriteRecordsAfterCurrentScheduleRotationExpiryShouldGoToSameFile()
+      throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.HOURS.toMillis(1))
+    );
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.MINUTES.toMillis(10))
+    );
+    setUp();
+
+    // Define the partitioner
+    TimeBasedPartitioner<?> partitioner = new TimeBasedPartitioner<>();
+    parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
+    parsedConfig.put(
+        PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+        MockedWallclockTimestampExtractor.class.getName());
+    partitioner.configure(parsedConfig);
+
+    MockTime time = ((MockedWallclockTimestampExtractor) partitioner.getTimestampExtractor()).time;
+
+    // Bring the clock to present.
+    time.sleep(SYSTEM.milliseconds());
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, writerProvider, partitioner, connectorConfig, context, time);
+
+    // sleep for 11 minutes after startup
+    time.sleep(TimeUnit.MINUTES.toMillis(11));
+
+    topicPartitionWriter.write();
+    //send records after nextScheduledRotation is reset by topicPartitionWriter.write()
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 6);
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records.subList(0, 3), key, schema);
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // No records written to S3
+    topicPartitionWriter.write();
+    long timestampFirst = time.milliseconds();
+
+    // 11 minutes
+    time.sleep(TimeUnit.MINUTES.toMillis(11));
+    // Records are written due to scheduled rotation
+    topicPartitionWriter.write();
+
+    //simulate idle loop and kafka calling put with no records
+    for (int i = 0; i < 5; i++) {
+      // sleep for 11 minutes after startup
+      time.sleep(TimeUnit.MINUTES.toMillis(11));
+      //nextScheduledRotation should be reset
+      topicPartitionWriter.write();
+    }
+
+    sinkRecords = createSinkRecords(records.subList(3, 6), key, schema, 3);
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // More records later
+    topicPartitionWriter.write();
+    long timestampLater = time.milliseconds();
+
+    // 11 minutes later, another scheduled rotation
+    time.sleep(TimeUnit.MINUTES.toMillis(11));
+
+    // Again the records are written due to scheduled rotation
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String encodedPartitionFirst = getTimebasedEncodedPartition(timestampFirst);
+    String encodedPartitionLater = getTimebasedEncodedPartition(timestampLater);
+
+    String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC, encodedPartitionFirst);
+    List<String> expectedFiles = new ArrayList<>();
+    for (int i : new int[]{0}) {
+      expectedFiles
+          .add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
+              ZERO_PAD_FMT));
+    }
+
+    String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
+    for (int i : new int[]{3}) {
+      expectedFiles
+          .add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
+              ZERO_PAD_FMT));
+    }
+    verify(expectedFiles, 3, schema, records);
+  }
+
+  @Test
   public void testWriteRecordTimeBasedPartitionWallclockMockedWithScheduleRotation()
       throws Exception {
     localProps.put(FLUSH_SIZE_CONFIG, "1000");

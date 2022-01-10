@@ -191,6 +191,8 @@ public class TopicPartitionWriter {
       failureTime = -1;
     }
 
+    resetExpiredScheduledRotationIfNoPendingRecords(now);
+
     while (!buffer.isEmpty()) {
       try {
         executeState(now);
@@ -338,6 +340,12 @@ public class TopicPartitionWriter {
     }
   }
 
+  private void resetExpiredScheduledRotationIfNoPendingRecords(long now) {
+    if (recordCount == 0 && shouldApplyScheduledRotation(now)) {
+      setNextScheduledRotation();
+    }
+  }
+
   public void close() throws ConnectException {
     log.debug("Closing TopicPartitionWriter {}", tp);
     for (RecordWriter writer : writers.values()) {
@@ -396,14 +404,18 @@ public class TopicPartitionWriter {
     );
 
     log.trace(
-        "Checking rotation on time with recordCount '{}' and encodedPartition '{}'",
+        "Checking rotation on time for topic-partition '{}' "
+            + "with recordCount '{}' and encodedPartition '{}'",
+        tp,
         recordCount,
         encodedPartition
     );
 
     log.trace(
-        "Should apply periodic time-based rotation (rotateIntervalMs: '{}', baseRecordTimestamp: "
+        "Should apply periodic time-based rotation for topic-partition '{}':"
+            + " (rotateIntervalMs: '{}', baseRecordTimestamp: "
             + "'{}', timestamp: '{}', encodedPartition: '{}', currentEncodedPartition: '{}')? {}",
+        tp,
         rotateIntervalMs,
         baseRecordTimestamp,
         recordTimestamp,
@@ -411,17 +423,22 @@ public class TopicPartitionWriter {
         currentEncodedPartition,
         periodicRotation
     );
+    return periodicRotation || shouldApplyScheduledRotation(now);
+  }
 
+  private boolean shouldApplyScheduledRotation(long now) {
     boolean scheduledRotation = rotateScheduleIntervalMs > 0 && now >= nextScheduledRotation;
     log.trace(
-        "Should apply scheduled rotation: (rotateScheduleIntervalMs: '{}', nextScheduledRotation:"
+        "Should apply scheduled rotation for topic-partition '{}':"
+            + " (rotateScheduleIntervalMs: '{}', nextScheduledRotation:"
             + " '{}', now: '{}')? {}",
+        tp,
         rotateScheduleIntervalMs,
         nextScheduledRotation,
         now,
         scheduledRotation
     );
-    return periodicRotation || scheduledRotation;
+    return scheduledRotation;
   }
 
   private void setNextScheduledRotation() {
@@ -434,8 +451,13 @@ public class TopicPartitionWriter {
       );
       if (log.isDebugEnabled()) {
         log.debug(
-            "Update scheduled rotation timer. Next rotation for {} will be at {}",
+            "Update scheduled rotation timer for topic-partition '{}': "
+                + "(rotateScheduleIntervalMs: '{}', nextScheduledRotation: '{}', now: '{}'). "
+                + "Next rotation will be at {}",
             tp,
+            rotateScheduleIntervalMs,
+            nextScheduledRotation,
+            now,
             new DateTime(nextScheduledRotation).withZone(timeZone).toString()
         );
       }
@@ -444,8 +466,9 @@ public class TopicPartitionWriter {
 
   private boolean rotateOnSize() {
     boolean messageSizeRotation = recordCount >= flushSize;
-    log.trace(
-        "Should apply size-based rotation (count {} >= flush size {})? {}",
+    log.trace("Should apply size-based rotation for topic-partition '{}':"
+            + " (count {} >= flush size {})? {}",
+        tp,
         recordCount,
         flushSize,
         messageSizeRotation
