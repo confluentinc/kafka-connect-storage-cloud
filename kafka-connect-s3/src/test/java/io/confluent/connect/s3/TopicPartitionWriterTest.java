@@ -563,7 +563,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @Test
   public void testWriteRecordsAfterScheduleRotationExpiryButNoResetShouldGoToSameFile()
       throws Exception {
-    localProps.put(FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
     localProps.put(
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
         String.valueOf(TimeUnit.HOURS.toMillis(1))
@@ -588,8 +588,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     time.sleep(SYSTEM.milliseconds());
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time,
-        null);
+        TOPIC_PARTITION, writerProvider, partitioner, connectorConfig, context, time);
 
     // sleep for 11 minutes after startup
     time.sleep(TimeUnit.MINUTES.toMillis(11));
@@ -627,7 +626,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @Test
   public void testWriteRecordsAfterCurrentScheduleRotationExpiryShouldGoToSameFile()
       throws Exception {
-    localProps.put(FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
     localProps.put(
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
         String.valueOf(TimeUnit.HOURS.toMillis(1))
@@ -652,8 +651,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     time.sleep(SYSTEM.milliseconds());
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time,
-        null);
+        TOPIC_PARTITION, writerProvider, partitioner, connectorConfig, context, time);
 
     // sleep for 11 minutes after startup
     time.sleep(TimeUnit.MINUTES.toMillis(11));
