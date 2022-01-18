@@ -76,7 +76,7 @@ are tested.
 ### Backporting Commits
 If your code changes are essentially bug fixes that make sense to backport to existing releases make sure to target the earliest release branch (e.g. 2.0.x) that should contain your changes. When selecting the release branch you should also consider how easy it will be to resolve any conflicts in newer release branches, including the `master` branch.
 
-## Github Workflow:
+## Github Workflow
 
 1. Fork the connector repository into your GitHub account: https://github.com/confluentinc/kafka-connect-storage-cloud/fork
 
@@ -178,7 +178,7 @@ If your code changes are essentially bug fixes that make sense to backport to ex
     git push origin --force feature-xyz
     ```
 
-## Useful Resources for Developers:
+## Useful Resources for Developers
 
 1. Connector Developer Guide: https://docs.confluent.io/platform/current/connect/devguide.html
 2. A Guide to the Confluent Verified Integrations Program: https://www.confluent.io/blog/guide-to-confluent-verified-integrations-program/
