@@ -156,7 +156,7 @@ If your code changes are essentially bug fixes that make sense to backport to ex
     button for any branches you recently pushed to. If you click that button it will automatically
     offer you to submit your pull-request to the `confluentinc` connector repository.
 
-    - Give your pull-request a meaningful title as described [above](#Titles and changelogs).
+    - Give your pull-request a meaningful title as described [above](#titles-and-changelogs).
     - In the description, explain your changes and the problem they are solving.
 
 9. Addressing code review comments
