@@ -20,7 +20,7 @@ Code changes are submitted via a pull request (PR). When submitting a PR use the
 guidelines:
 
 * Follow the style guide below
-* Add/update documentation appropriately for the change you are making. For more information, see the docs readme.
+* Add/update documentation appropriately for the change you are making.
 * Non-trivial changes should include unit tests covering the new functionality and potentially integration tests.
 * Bug fixes should include unit tests and/or integration tests proving the issue is fixed.
 * Try to keep pull requests short and submit separate ones for unrelated features.
@@ -31,7 +31,7 @@ This connector is using a coding style that generally follows the [Google Java c
 
 Some conventions worth mentioning are:
 
-* Indentation is 2 spaces.
+* Indentation (single tab) is 2 spaces.
 * All import statements are listed explicitly. The wildcard (*) is not used in imports.
 * Imports are groups as follows:
 ```
