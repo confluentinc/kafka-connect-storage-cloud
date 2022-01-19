@@ -25,6 +25,7 @@ You can build *kafka-connect-storage-cloud* with Maven using the standard lifecy
 
 - Source Code: https://github.com/confluentinc/kafka-connect-storage-cloud
 - Issue Tracker: https://github.com/confluentinc/kafka-connect-storage-cloud/issues
+- Learn how to work with the connector's source code by reading our [Development and Contribution guidelines](CONTRIBUTING.md).
 
 
 # License
