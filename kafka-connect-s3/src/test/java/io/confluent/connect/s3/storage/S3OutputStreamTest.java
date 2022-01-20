@@ -21,12 +21,6 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
   private S3OutputStream stream;
   final static String S3_TEST_KEY_NAME = "key";
   final static String S3_EXCEPTION_MESSAGE = "this is an s3 exception";
-  final String EXPECTED_EXCEPTION_MESSAGE = String.format(
-      "Multipart upload failed to complete for bucket '%s' key '%s'. Reason: %s",
-      S3_TEST_BUCKET_NAME,
-      S3_TEST_KEY_NAME,
-      S3_EXCEPTION_MESSAGE
-  );
 
 
   @Before
@@ -42,7 +36,7 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
     e.setErrorType(ErrorType.Client);
 
     when(s3Mock.initiateMultipartUpload(any())).thenThrow(e);
-    assertThrows(EXPECTED_EXCEPTION_MESSAGE, IOException.class, () -> stream.commit());
+    assertThrows(IOException.class, () -> stream.commit());
   }
 
   @Test
@@ -51,12 +45,12 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
     e.setErrorType(ErrorType.Service);
 
     when(s3Mock.initiateMultipartUpload(any())).thenThrow(e);
-    assertThrows(EXPECTED_EXCEPTION_MESSAGE, IOException.class, () -> stream.commit());
+    assertThrows(IOException.class, () -> stream.commit());
   }
 
   @Test
   public void testPropagateOtherRetriableS3Exceptions() {
     when(s3Mock.initiateMultipartUpload(any())).thenThrow(new AmazonClientException(S3_EXCEPTION_MESSAGE));
-    assertThrows(EXPECTED_EXCEPTION_MESSAGE, IOException.class, () -> stream.commit());
+    assertThrows(IOException.class, () -> stream.commit());
   }
 }

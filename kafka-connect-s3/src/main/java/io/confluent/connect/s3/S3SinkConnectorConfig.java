@@ -671,9 +671,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   protected S3SinkConnectorConfig(ConfigDef configDef, Map<String, String> props) {
     super(configDef, props);
     ConfigDef storageCommonConfigDef = StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER);
-    StorageCommonConfig commonConfig = new StorageCommonConfig(storageCommonConfigDef, originalsStrings());
+    StorageCommonConfig commonConfig = new StorageCommonConfig(storageCommonConfigDef,
+        originalsStrings());
     ConfigDef partitionerConfigDef = PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER);
-    PartitionerConfig partitionerConfig = new PartitionerConfig(partitionerConfigDef, originalsStrings());
+    PartitionerConfig partitionerConfig = new PartitionerConfig(partitionerConfigDef,
+        originalsStrings());
 
     this.name = parseName(originalsStrings());
     addToGlobal(partitionerConfig);
