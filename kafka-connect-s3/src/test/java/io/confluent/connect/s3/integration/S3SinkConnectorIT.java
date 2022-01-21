@@ -727,7 +727,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   private static Map<String, String> getAWSCredentialFromPath() {
-    Map<String, String> map = new HashMap<String, String>();
+    Map<String, String> map = new HashMap<>();
     if  (!System.getenv().containsKey(AWS_CREDENTIALS_PATH)) {
         return map;
     }
