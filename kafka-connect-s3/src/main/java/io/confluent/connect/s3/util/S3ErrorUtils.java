@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Confluent Inc.
+ * Copyright 2022 Confluent Inc.
  *
  * Licensed under the Confluent Community License (the "License"); you may not use
  * this file except in compliance with the License.  You may obtain a copy of the
@@ -18,7 +18,6 @@ package io.confluent.connect.s3.util;
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.retry.PredefinedRetryPolicies;
-import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
@@ -70,13 +69,11 @@ public class S3ErrorUtils {
   /**
    * Return a `ConnectException` exception which may or may not
    * be of (or derived from) type `RetriableException`.
-   * @param message Optional message (can be null)
    * @param t The exception to analyze
    * @return an exception of (or derived from) `ConnectException` which
    *         may also be of type `RetriableException`.
    */
   public static ConnectException maybeRetriableConnectException(
-      String message,
       Throwable t
   ) {
     // If this is already a ConnectException of some sort, just rethrow it
@@ -84,24 +81,8 @@ public class S3ErrorUtils {
       return (ConnectException) t;
     }
     if (isRetriableException(t)) {
-      return StringUtils.isNotBlank(message)
-          ? new RetriableException(message, t) : new RetriableException(t);
+      return new RetriableException(t.getMessage(), t);
     }
-    return StringUtils.isNotBlank(message)
-        ? new ConnectException(message, t) : new ConnectException(t);
+    return new ConnectException(t.getMessage(), t);
   }
-
-  /**
-   * Return a `ConnectException` exception which may or may not
-   * be of (or derived from) type `RetriableException`.
-   * @param t The exception to analyze
-   * @return an exception of (or derived from) `ConnectException` which
-   *         may also be of type `RetriableException`.
-   */
-  public static ConnectException maybeRetriableConnectException(
-      Throwable t
-  ) {
-    return maybeRetriableConnectException(null, t);
-  }
-
 }
