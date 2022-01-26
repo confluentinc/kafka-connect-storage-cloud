@@ -24,10 +24,12 @@ import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.parquet.avro.AvroParquetWriter;
+import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.io.OutputFile;
@@ -36,6 +38,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 
 public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
   private static final Logger log = LoggerFactory.getLogger(ParquetRecordWriterProvider.class);
@@ -68,16 +72,27 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
           try {
             log.info("Opening record writer for: {}", filename);
             org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
-
             s3ParquetOutputFile = new S3ParquetOutputFile(storage, filename);
-            writer = AvroParquetWriter
-                    .<GenericRecord>builder(s3ParquetOutputFile)
+            AvroParquetWriter.Builder<GenericRecord> builder =
+                AvroParquetWriter.<GenericRecord>builder(s3ParquetOutputFile)
                     .withSchema(avroSchema)
                     .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
                     .withDictionaryEncoding(true)
                     .withCompressionCodec(storage.conf().parquetCompressionCodecName())
-                    .withPageSize(PAGE_SIZE)
-                    .build();
+                    .withPageSize(PAGE_SIZE);
+            if (schemaHasArrayOfOptionalItems(schema, /*seenSchemas=*/null)) {
+              // If the schema contains an array of optional items, then
+              // it is possible that the array may have null items during the
+              // writing process.  In this case, we set a flag so as not to
+              // incur a NullPointerException
+              log.debug(
+                  "Setting \"" + AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE
+                      + "\" to false because the schema contains an array "
+                      + "with optional items"
+              );
+              builder.config(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false");
+            }
+            writer = builder.build();
           } catch (IOException e) {
             throw new ConnectException(e);
           }
@@ -112,6 +127,38 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
         }
       }
     };
+  }
+
+  /**
+   * Check if any schema (or nested schema) is an array of optional items
+   * @param schema The shema to check
+   * @return 'true' if the schema contains an array with optional items.
+   */
+  /* VisibleForTesting */
+  public static boolean schemaHasArrayOfOptionalItems(Schema schema, Set<Schema> seenSchemas) {
+    // First, check for infinitely recursing schemas
+    if (seenSchemas == null) {
+      seenSchemas = new HashSet<>();
+    } else if (seenSchemas.contains(schema)) {
+      return false;
+    }
+    seenSchemas.add(schema);
+    switch (schema.type()) {
+      case STRUCT:
+        for (Field field : schema.fields()) {
+          if (schemaHasArrayOfOptionalItems(field.schema(), seenSchemas)) {
+            return true;
+          }
+        }
+        return false;
+      case MAP:
+        return schemaHasArrayOfOptionalItems(schema.valueSchema(), seenSchemas);
+      case ARRAY:
+        return schema.valueSchema().isOptional()
+            || schemaHasArrayOfOptionalItems(schema.valueSchema(), seenSchemas);
+      default:
+        return false;
+    }
   }
 
   private static class S3ParquetOutputFile implements OutputFile {

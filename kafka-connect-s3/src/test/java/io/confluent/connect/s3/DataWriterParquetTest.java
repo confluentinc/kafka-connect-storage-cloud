@@ -18,6 +18,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import io.confluent.connect.s3.format.parquet.ParquetRecordWriterProvider;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -29,6 +30,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.codehaus.plexus.util.StringUtils;
 import org.junit.After;
 import org.junit.Test;
 import org.powermock.api.mockito.PowerMockito;
@@ -40,6 +42,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -57,13 +60,12 @@ import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.kafka.serializers.NonRecordContainer;
+import org.testcontainers.shaded.com.google.common.collect.ImmutableList;
 
 import static org.apache.kafka.common.utils.Time.SYSTEM;
-import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 public class DataWriterParquetTest extends TestWithMockedS3 {
@@ -98,7 +100,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     format = new ParquetFormat(storage);
 
     s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
+    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
   }
 
   @After
@@ -200,6 +202,38 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     task.close(context.assignment());
     task.stop();
 
+    long[] validOffsets = {0, 3, 6};
+    verify(sinkRecords, validOffsets, context.assignment());
+  }
+
+  /**
+   * Tests ParquetRecordWriterProvider::schemaHasArrayOfOptionalItems
+   */
+  @Test
+  public void testOptionalArrayItemCheck() {
+
+  }
+
+  /**
+   * Test for parquet writer with null array item(s) arrays
+   * @link https://github.com/confluentinc/kafka-connect-storage-cloud/issues/339
+   * @throws Exception
+   */
+  @Test
+  public void testWriteRecordsInMultiplePartitionsWithArrayOfOptionalString() throws Exception {
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+
+    List<SinkRecord> sinkRecords = createRecordsWithArrayOfOptionalString(
+        7,
+        context.assignment()
+    );
+    // Perform write
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    // Offsets where each file should start (embedded in the file name)
     long[] validOffsets = {0, 3, 6};
     verify(sinkRecords, validOffsets, context.assignment());
   }
@@ -506,6 +540,199 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     }
   }
 
+  class SchemaConfig {
+    public String name;
+    public boolean optional_items = false;
+    public boolean regular_items = false;
+    public boolean map_regular = false;
+    public boolean map_optional = false;
+    public SchemaConfig nested = null;
+    public SchemaConfig nested_array = null;
+
+    public SchemaConfig() {}
+
+    public SchemaConfig(
+        String name,
+        boolean regular_items,
+        boolean optional_items,
+        boolean map_regular,
+        boolean map_optional,
+        SchemaConfig nested,
+        SchemaConfig nested_array
+    ) {
+      this.name = name;
+      this.optional_items = optional_items;
+      this.regular_items = regular_items;
+      this.map_regular = map_regular;
+      this.map_optional = map_optional;
+      this.nested = nested;
+      this.nested_array = nested_array;
+    }
+
+    public boolean hasOptionalItems() {
+      if (optional_items || map_optional) {
+        return true;
+      }
+      if (nested != null && nested.hasOptionalItems()) {
+        return true;
+      }
+      return nested_array != null && nested_array.hasOptionalItems();
+    }
+
+    private Schema create() {
+      SchemaBuilder builder = SchemaBuilder.struct();
+      if (StringUtils.isNotBlank(name)) {
+        builder.name(name);
+      }
+      if (regular_items) {
+        builder.field("regular_items", SchemaBuilder.array(Schema.STRING_SCHEMA).build());
+      }
+      if (optional_items) {
+        builder.field("optional_items", SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).build());
+      }
+      if (map_regular) {
+        builder.field("regular_map", SchemaBuilder.map(
+            Schema.STRING_SCHEMA,
+            SchemaBuilder.array(Schema.STRING_SCHEMA).build()
+        ).build());
+      }
+      if (map_optional) {
+        builder.field("optional_map", SchemaBuilder.map(
+            Schema.STRING_SCHEMA,
+            SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).build()
+        ).build());
+      }
+      if (this.nested != null) {
+        builder.field("nested", nested.create());
+      }
+      if (this.nested_array != null) {
+        builder.field("nested_array", SchemaBuilder.array(nested_array.create()));
+      }
+      return builder.build();
+    }
+
+  }
+
+  /**
+   * Test permutations of schemas and schema nesting with and without optional array items
+   * somewhere within the schema.
+   */
+  @Test
+  public void testSchemaHasArrayOfOptionalItems() {
+    for (int regular_items = 0; regular_items < 2; ++regular_items) {
+      for (int optional_items = 0; optional_items < 2; ++optional_items) {
+        for (int map_regular = 0; map_regular < 2; ++map_regular) {
+          for (int map_optional = 0; map_optional < 2; ++map_optional) {
+            for (int has_nested = 0; has_nested < 2; ++has_nested) {
+              for (int has_nested_array = 0; has_nested_array < 2; ++has_nested_array) {
+                SchemaConfig conf = new SchemaConfig();
+                SchemaConfig nested = null, nested_array = null;
+                if (has_nested != 0) {
+                    // Invert tests so as to hit in isolation
+                    nested = new SchemaConfig(
+                        "nested_schema",
+                        regular_items == 0,
+                        optional_items == 0,
+                        map_regular == 0,
+                        map_optional == 0,
+                        /*nested=*/ null,
+                        /*nested_array=*/null
+                    );
+                }
+                if (has_nested_array != 0) {
+                  // Invert tests so as to hit in isolation
+                  nested_array = new SchemaConfig(
+                      "array_of_schema",
+                      regular_items == 0,
+                      optional_items == 0,
+                      map_regular == 0,
+                      map_optional == 0,
+                      /*nested=*/ null,
+                      /*nested_array=*/null
+                  );
+                }
+                conf.nested = new SchemaConfig(
+                    "nested_schema",
+                    regular_items != 0,
+                    optional_items != 0,
+                    map_regular != 0,
+                    map_optional != 0,
+                    nested,
+                    nested_array
+                );
+                Schema schema = conf.create();
+                if (schema.fields().size() == 0) {
+                  // Base case of everything is false
+                  continue;
+                }
+                boolean has_array_optional = ParquetRecordWriterProvider.schemaHasArrayOfOptionalItems(schema, null);
+                boolean should_have_array_optional = conf.hasOptionalItems();
+                assertEquals(has_array_optional, should_have_array_optional);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private List<SinkRecord> createRecordsWithArrayOfOptionalString(
+      int size,
+      Set<TopicPartition> partitions
+  ) {
+    SchemaConfig conf = new SchemaConfig();
+    conf.regular_items = true;
+    conf.optional_items = true;
+    conf.nested = new SchemaConfig(
+        "nested_schema",
+        /*regular_items=*/true,
+        /*optional_items=*/true,
+        /*map_regular=*/false,
+        /*map_optional=*/false,
+        /*nested=*/null,
+        /*nested_array=*/null
+    );
+
+    Schema schema = conf.create();
+
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    for (TopicPartition tp : partitions) {
+      // We're going to alternate internal and external array elements as null
+      boolean hasString = true;
+      for (long offset = 0; offset < size; ++offset) {
+        LinkedList<String> optional_list = new LinkedList<>();
+        // Alternate edge and internal as null items
+        optional_list.add(hasString ? "item-1" : null);
+        optional_list.add(hasString ? null : "item-2");
+        optional_list.add(hasString ? "item-3" : null);
+        Struct struct = new Struct(schema)
+            .put("optional_items", optional_list)
+            .put("regular_items", ImmutableList.of("reg-1", "reg-2"))
+            .put(
+                // Nested struct
+                "nested",
+                new Struct(schema.field("nested").schema())
+                    // Nested option string array
+                    .put("optional_items", optional_list.clone())
+                    // Nested regular string array
+                    .put("regular_items", ImmutableList.of("reg-1", "reg-2"))
+            );
+        sinkRecords.add(
+            new SinkRecord(
+                TOPIC,
+                tp.partition(),
+                Schema.STRING_SCHEMA,
+                "key",
+                schema,
+                struct,
+                offset
+            )
+        );
+        hasString = !hasString;
+      }
+    }
+    return sinkRecords;
+  }
 
   /**
    * Return a list of new records starting at zero offset.
@@ -677,7 +904,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
 
     Collections.sort(actualFiles);
     Collections.sort(expectedFiles);
-    assertThat(actualFiles, is(expectedFiles));
+    assertEquals(actualFiles, expectedFiles);
   }
 
   protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records) {
