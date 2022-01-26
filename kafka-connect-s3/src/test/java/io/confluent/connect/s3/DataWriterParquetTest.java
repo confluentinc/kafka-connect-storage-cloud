@@ -207,14 +207,6 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
   }
 
   /**
-   * Tests ParquetRecordWriterProvider::schemaHasArrayOfOptionalItems
-   */
-  @Test
-  public void testOptionalArrayItemCheck() {
-
-  }
-
-  /**
    * Test for parquet writer with null array item(s) arrays
    * @link https://github.com/confluentinc/kafka-connect-storage-cloud/issues/339
    * @throws Exception
@@ -614,6 +606,8 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
   }
 
   /**
+   * Tests ParquetRecordWriterProvider::schemaHasArrayOfOptionalItems()
+   *
    * Test permutations of schemas and schema nesting with and without optional array items
    * somewhere within the schema.
    */
