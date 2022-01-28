@@ -534,41 +534,41 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
 
   class SchemaConfig {
     public String name;
-    public boolean optional_items = false;
-    public boolean regular_items = false;
-    public boolean map_regular = false;
-    public boolean map_optional = false;
+    public boolean optionalItems = false;
+    public boolean regularItems = false;
+    public boolean mapRegular = false;
+    public boolean mapOptional = false;
     public SchemaConfig nested = null;
-    public SchemaConfig nested_array = null;
+    public SchemaConfig nestedArray = null;
 
     public SchemaConfig() {}
 
     public SchemaConfig(
         String name,
-        boolean regular_items,
-        boolean optional_items,
-        boolean map_regular,
-        boolean map_optional,
+        boolean regularItems,
+        boolean optionalItems,
+        boolean mapRegular,
+        boolean mapOptional,
         SchemaConfig nested,
-        SchemaConfig nested_array
+        SchemaConfig nestedArray
     ) {
       this.name = name;
-      this.optional_items = optional_items;
-      this.regular_items = regular_items;
-      this.map_regular = map_regular;
-      this.map_optional = map_optional;
+      this.optionalItems = optionalItems;
+      this.regularItems = regularItems;
+      this.mapRegular = mapRegular;
+      this.mapOptional = mapOptional;
       this.nested = nested;
-      this.nested_array = nested_array;
+      this.nestedArray = nestedArray;
     }
 
     public boolean hasOptionalItems() {
-      if (optional_items || map_optional) {
+      if (optionalItems || mapOptional) {
         return true;
       }
       if (nested != null && nested.hasOptionalItems()) {
         return true;
       }
-      return nested_array != null && nested_array.hasOptionalItems();
+      return nestedArray != null && nestedArray.hasOptionalItems();
     }
 
     private Schema create() {
@@ -576,19 +576,19 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
       if (StringUtils.isNotBlank(name)) {
         builder.name(name);
       }
-      if (regular_items) {
+      if (regularItems) {
         builder.field("regular_items", SchemaBuilder.array(Schema.STRING_SCHEMA).build());
       }
-      if (optional_items) {
+      if (optionalItems) {
         builder.field("optional_items", SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).build());
       }
-      if (map_regular) {
+      if (mapRegular) {
         builder.field("regular_map", SchemaBuilder.map(
             Schema.STRING_SCHEMA,
             SchemaBuilder.array(Schema.STRING_SCHEMA).build()
         ).build());
       }
-      if (map_optional) {
+      if (mapOptional) {
         builder.field("optional_map", SchemaBuilder.map(
             Schema.STRING_SCHEMA,
             SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).build()
@@ -597,8 +597,8 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
       if (this.nested != null) {
         builder.field("nested", nested.create());
       }
-      if (this.nested_array != null) {
-        builder.field("nested_array", SchemaBuilder.array(nested_array.create()));
+      if (this.nestedArray != null) {
+        builder.field("nested_array", SchemaBuilder.array(nestedArray.create()));
       }
       return builder.build();
     }
@@ -613,55 +613,59 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
    */
   @Test
   public void testSchemaHasArrayOfOptionalItems() {
-    for (int regular_items = 0; regular_items < 2; ++regular_items) {
-      for (int optional_items = 0; optional_items < 2; ++optional_items) {
-        for (int map_regular = 0; map_regular < 2; ++map_regular) {
-          for (int map_optional = 0; map_optional < 2; ++map_optional) {
+    for (int regularItems = 0; regularItems < 2; ++regularItems) {
+      for (int optionalItems = 0; optionalItems < 2; ++optionalItems) {
+        for (int mapRegular = 0; mapRegular < 2; ++mapRegular) {
+          for (int mapOptional = 0; mapOptional < 2; ++mapOptional) {
             for (int has_nested = 0; has_nested < 2; ++has_nested) {
               for (int has_nested_array = 0; has_nested_array < 2; ++has_nested_array) {
                 SchemaConfig conf = new SchemaConfig();
-                SchemaConfig nested = null, nested_array = null;
+                SchemaConfig nested = null, nestedArray = null;
                 if (has_nested != 0) {
                     // Invert tests so as to hit in isolation
                     nested = new SchemaConfig(
                         "nested_schema",
-                        regular_items == 0,
-                        optional_items == 0,
-                        map_regular == 0,
-                        map_optional == 0,
+                        regularItems == 0,
+                        optionalItems == 0,
+                        mapRegular == 0,
+                        mapOptional == 0,
                         /*nested=*/ null,
-                        /*nested_array=*/null
+                        /*nestedArray=*/null
                     );
                 }
                 if (has_nested_array != 0) {
                   // Invert tests so as to hit in isolation
-                  nested_array = new SchemaConfig(
+                  nestedArray = new SchemaConfig(
                       "array_of_schema",
-                      regular_items == 0,
-                      optional_items == 0,
-                      map_regular == 0,
-                      map_optional == 0,
+                      regularItems == 0,
+                      optionalItems == 0,
+                      mapRegular == 0,
+                      mapOptional == 0,
                       /*nested=*/ null,
-                      /*nested_array=*/null
+                      /*nestedArray=*/null
                   );
                 }
                 conf.nested = new SchemaConfig(
                     "nested_schema",
-                    regular_items != 0,
-                    optional_items != 0,
-                    map_regular != 0,
-                    map_optional != 0,
+                    regularItems != 0,
+                    optionalItems != 0,
+                    mapRegular != 0,
+                    mapOptional != 0,
                     nested,
-                    nested_array
+                    nestedArray
                 );
                 Schema schema = conf.create();
                 if (schema.fields().size() == 0) {
                   // Base case of everything is false
                   continue;
                 }
-                boolean has_array_optional = ParquetRecordWriterProvider.schemaHasArrayOfOptionalItems(schema, null);
-                boolean should_have_array_optional = conf.hasOptionalItems();
-                assertEquals(has_array_optional, should_have_array_optional);
+                final boolean hasArrayOptional =
+                    ParquetRecordWriterProvider.schemaHasArrayOfOptionalItems(
+                      schema,
+                      /*seenSchemas=*/null
+                  );
+                final boolean shouldHaveArrayOptional = conf.hasOptionalItems();
+                assertEquals(hasArrayOptional, shouldHaveArrayOptional);
               }
             }
           }
@@ -675,16 +679,16 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
       Set<TopicPartition> partitions
   ) {
     SchemaConfig conf = new SchemaConfig();
-    conf.regular_items = true;
-    conf.optional_items = true;
+    conf.regularItems = true;
+    conf.optionalItems = true;
     conf.nested = new SchemaConfig(
         "nested_schema",
-        /*regular_items=*/true,
-        /*optional_items=*/true,
-        /*map_regular=*/false,
-        /*map_optional=*/false,
+        /*regularItems=*/true,
+        /*optionalItems=*/true,
+        /*mapRegular=*/false,
+        /*mapOptional=*/false,
         /*nested=*/null,
-        /*nested_array=*/null
+        /*nestedArray=*/null
     );
 
     Schema schema = conf.create();
