@@ -617,11 +617,11 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
       for (int optionalItems = 0; optionalItems < 2; ++optionalItems) {
         for (int mapRegular = 0; mapRegular < 2; ++mapRegular) {
           for (int mapOptional = 0; mapOptional < 2; ++mapOptional) {
-            for (int has_nested = 0; has_nested < 2; ++has_nested) {
-              for (int has_nested_array = 0; has_nested_array < 2; ++has_nested_array) {
+            for (int hasNested = 0; hasNested < 2; ++hasNested) {
+              for (int hasNestedArray = 0; hasNestedArray < 2; ++hasNestedArray) {
                 SchemaConfig conf = new SchemaConfig();
                 SchemaConfig nested = null, nestedArray = null;
-                if (has_nested != 0) {
+                if (hasNested != 0) {
                     // Invert tests so as to hit in isolation
                     nested = new SchemaConfig(
                         "nested_schema",
@@ -633,7 +633,7 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
                         /*nestedArray=*/null
                     );
                 }
-                if (has_nested_array != 0) {
+                if (hasNestedArray != 0) {
                   // Invert tests so as to hit in isolation
                   nestedArray = new SchemaConfig(
                       "array_of_schema",
@@ -698,20 +698,20 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
       // We're going to alternate internal and external array elements as null
       boolean hasString = true;
       for (long offset = 0; offset < size; ++offset) {
-        LinkedList<String> optional_list = new LinkedList<>();
+        LinkedList<String> optionalList = new LinkedList<>();
         // Alternate edge and internal as null items
-        optional_list.add(hasString ? "item-1" : null);
-        optional_list.add(hasString ? null : "item-2");
-        optional_list.add(hasString ? "item-3" : null);
+        optionalList.add(hasString ? "item-1" : null);
+        optionalList.add(hasString ? null : "item-2");
+        optionalList.add(hasString ? "item-3" : null);
         Struct struct = new Struct(schema)
-            .put("optional_items", optional_list)
+            .put("optional_items", optionalList)
             .put("regular_items", ImmutableList.of("reg-1", "reg-2"))
             .put(
                 // Nested struct
                 "nested",
                 new Struct(schema.field("nested").schema())
                     // Nested option string array
-                    .put("optional_items", optional_list.clone())
+                    .put("optional_items", optionalList.clone())
                     // Nested regular string array
                     .put("regular_items", ImmutableList.of("reg-1", "reg-2"))
             );
