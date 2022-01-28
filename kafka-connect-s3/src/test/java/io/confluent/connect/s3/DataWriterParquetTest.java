@@ -683,12 +683,12 @@ public class DataWriterParquetTest extends TestWithMockedS3 {
     conf.optionalItems = true;
     conf.nested = new SchemaConfig(
         "nested_schema",
-        /*regularItems=*/true,
-        /*optionalItems=*/true,
-        /*mapRegular=*/false,
-        /*mapOptional=*/false,
-        /*nested=*/null,
-        /*nestedArray=*/null
+        true,
+        true,
+        false,
+        false,
+        null,
+        null
     );
 
     Schema schema = conf.create();
