@@ -39,6 +39,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -147,7 +148,8 @@ public abstract class DataWriterTestBase<
     return expectedFiles;
   }
 
-  protected List<String> getExpectedFiles(long[] validOffsets, Collection<TopicPartition> partitions,
+  protected List<String> getExpectedFiles(long[] validOffsets,
+                                          Collection<TopicPartition> partitions,
                                           String extension) {
     List<String> expectedFiles = new ArrayList<>();
     for (TopicPartition tp : partitions) {
@@ -167,7 +169,7 @@ public abstract class DataWriterTestBase<
     assertThat(actualFiles).containsExactlyInAnyOrderElementsOf(expectedFiles);
   }
 
-  protected void verifyFileListing(long[] validOffsets, Set<TopicPartition> partitions,
+  protected void verifyFileListing(long[] validOffsets, Collection<TopicPartition> partitions,
                                    String extension) throws IOException {
     List<String> expectedFiles = getExpectedFiles(validOffsets, partitions, extension);
     verifyFileListing(expectedFiles);
@@ -237,6 +239,27 @@ public abstract class DataWriterTestBase<
 
     // Now check what actually made it to S3
     verify(records, validOffsets, partitions);
+  }
+
+  /**
+   * Sort a collection of TopicPartition objects by the partition number.
+   * Expectation is that there are not duplicate partition numbers in the set
+   * (i.e. only one topic).
+   * @param partitions Collection of TopicPartition objects
+   * @return Coll3ection of TopicPartition sorted by TopicPartition::partition()
+   */
+  protected static Collection<TopicPartition> sortedPartitions(
+      Collection<TopicPartition> partitions
+  ) {
+    // Sort by partition #
+    TreeMap<Integer, TopicPartition> map = new TreeMap<>();
+    for (TopicPartition partition : partitions) {
+      if (map.containsKey(partition.partition())) {
+        throw new RuntimeException("A duplicate partition number not expected.");
+      }
+      map.put(partition.partition(), partition);
+    }
+    return  map.values();
   }
 
 }

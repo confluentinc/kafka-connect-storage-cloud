@@ -777,10 +777,16 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     return sinkRecords;
   }
 
-  protected List<SinkRecord> createRecordsInterleaved(int size, long startOffset, Set<TopicPartition> partitions) {
+  protected List<SinkRecord> createRecordsInterleaved(
+      int size,
+      long startOffset,
+      Set<TopicPartition> partitionSet
+  ) {
     String key = "key";
     Schema schema = createSchema();
     Struct record = createRecord(schema);
+
+    Collection<TopicPartition> partitions = sortedPartitions(partitionSet);
 
     List<SinkRecord> sinkRecords = new ArrayList<>();
     for (long offset = startOffset; offset < startOffset + size; ++offset) {
@@ -936,7 +942,8 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
   }
 
   protected void verifyOffsets(Map<TopicPartition, OffsetAndMetadata> actualOffsets, Long[] validOffsets,
-                               Set<TopicPartition> partitions) {
+                               Set<TopicPartition> partitionSet) {
+    Collection<TopicPartition> partitions = sortedPartitions(partitionSet);
     int i = 0;
     Map<TopicPartition, OffsetAndMetadata> expectedOffsets = new HashMap<>();
     for (TopicPartition tp : partitions) {
