@@ -15,9 +15,9 @@
 
 package io.confluent.connect.s3.format.avro;
 
+import static io.confluent.connect.s3.util.S3ErrorUtils.throwConnectException;
 import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
 
-import io.confluent.connect.s3.util.S3ErrorUtils;
 import org.apache.avro.file.CodecFactory;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -76,7 +76,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
             writer.setCodec(CodecFactory.fromString(conf.getAvroCodec()));
             writer.create(avroSchema, s3out);
           } catch (IOException e) {
-            throw S3ErrorUtils.maybeRetriableConnectException(e);
+            throwConnectException(e);
           }
         }
         log.trace("Sink record with view {}: {}", recordView, record);
@@ -89,7 +89,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
           }
           writer.append(value);
         } catch (IOException e) {
-          throw S3ErrorUtils.maybeRetriableConnectException(e);
+          throwConnectException(e);
         }
       }
 
@@ -102,7 +102,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
           s3out.commit();
           writer.close();
         } catch (IOException e) {
-          throw S3ErrorUtils.maybeRetriableConnectException(e);
+          throwConnectException(e);
         }
       }
 

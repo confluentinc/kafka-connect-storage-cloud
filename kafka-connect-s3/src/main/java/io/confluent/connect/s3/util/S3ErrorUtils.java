@@ -67,22 +67,20 @@ public class S3ErrorUtils {
   }
 
   /**
-   * Return a `ConnectException` exception which may or may not
+   * Throw a `ConnectException` exception which may or may not
    * be of (or derived from) type `RetriableException`.
    * @param t The exception to analyze
-   * @return an exception of (or derived from) `ConnectException` which
+   * @throws ConnectException exception of (or derived from) `ConnectException` which
    *         may also be of type `RetriableException`.
    */
-  public static ConnectException maybeRetriableConnectException(
-      Throwable t
-  ) {
+  public static void throwConnectException(Throwable t) throws ConnectException {
     // If this is already a ConnectException of some sort, just rethrow it
     if (t instanceof ConnectException) {
-      return (ConnectException) t;
+      throw (ConnectException) t;
     }
     if (isRetriableException(t)) {
-      return new RetriableException(t.getMessage(), t);
+      throw new RetriableException(t.getMessage(), t);
     }
-    return new ConnectException(t.getMessage(), t);
+    throw new ConnectException(t.getMessage(), t);
   }
 }

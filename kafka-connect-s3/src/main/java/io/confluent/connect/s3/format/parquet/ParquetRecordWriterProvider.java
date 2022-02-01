@@ -17,6 +17,7 @@
 
 package io.confluent.connect.s3.format.parquet;
 
+import static io.confluent.connect.s3.util.S3ErrorUtils.throwConnectException;
 import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
 
 import io.confluent.connect.avro.AvroData;
@@ -24,7 +25,6 @@ import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.format.RecordViewSetter;
 import io.confluent.connect.s3.storage.S3ParquetOutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.s3.util.S3ErrorUtils;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import org.apache.avro.generic.GenericRecord;
@@ -85,7 +85,7 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
                     .withPageSize(PAGE_SIZE)
                     .build();
           } catch (IOException e) {
-            throw S3ErrorUtils.maybeRetriableConnectException(e);
+            throwConnectException(e);
           }
         }
         log.trace("Sink record with view {}: {}", recordView, record);
@@ -93,7 +93,7 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
         try {
           writer.write((GenericRecord) value);
         } catch (IOException e) {
-          throw S3ErrorUtils.maybeRetriableConnectException(e);
+          throwConnectException(e);
         }
       }
 
@@ -116,7 +116,7 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
             writer.close();
           }
         } catch (IOException e) {
-          throw S3ErrorUtils.maybeRetriableConnectException(e);
+          throwConnectException(e);
         }
       }
     };
