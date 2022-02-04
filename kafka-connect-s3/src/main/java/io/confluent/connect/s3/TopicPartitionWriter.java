@@ -172,6 +172,14 @@ public class TopicPartitionWriter {
     setNextScheduledRotation();
   }
 
+  public boolean isTransformedPartition() {
+    return this.isTransformedPartition;
+  }
+
+  public TopicPartition getSourceTopicPartition() {
+    return this.sourceTp;
+  }
+
   public void setSourceTopicPartition(TopicPartition tp) {
     this.sourceTp = tp;
     this.isTransformedPartition = true;
