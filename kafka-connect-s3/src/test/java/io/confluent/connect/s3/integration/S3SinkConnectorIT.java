@@ -104,6 +104,7 @@ import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings({"unchecked", "deprecation"})
 @Category(IntegrationTest.class)
 public class S3SinkConnectorIT extends BaseConnectorIT {
 
