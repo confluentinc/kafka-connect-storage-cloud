@@ -15,6 +15,7 @@
 
 package io.confluent.connect.s3.format.bytearray;
 
+import static io.confluent.connect.s3.util.S3ErrorUtils.throwConnectException;
 import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
@@ -24,8 +25,6 @@ import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import org.apache.kafka.connect.converters.ByteArrayConverter;
-import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,7 +72,7 @@ public class ByteArrayRecordWriterProvider extends RecordViewSetter
           s3outWrapper.write(bytes);
           s3outWrapper.write(lineSeparatorBytes);
         } catch (IOException e) {
-          throw new ConnectException(e);
+          throwConnectException(e);
         }
       }
 
@@ -83,7 +82,7 @@ public class ByteArrayRecordWriterProvider extends RecordViewSetter
           s3out.commit();
           s3outWrapper.close();
         } catch (IOException e) {
-          throw new RetriableException(e);
+          throwConnectException(e);
         }
       }
 

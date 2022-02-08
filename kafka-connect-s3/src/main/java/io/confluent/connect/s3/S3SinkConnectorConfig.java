@@ -174,9 +174,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   private final String name;
 
-  private final StorageCommonConfig commonConfig;
-  private final PartitionerConfig partitionerConfig;
-
   private final Map<String, ComposableConfig> propertyToConfig = new HashMap<>();
   private final Set<AbstractConfig> allConfigs = new HashSet<>();
 
@@ -212,13 +209,13 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   static {
     STORAGE_CLASS_RECOMMENDER.addValidValues(
-        Arrays.<Object>asList(S3Storage.class)
+        Collections.singletonList(S3Storage.class)
     );
 
     FORMAT_CLASS_RECOMMENDER.addValidValues(FORMAT_CLASS_VALID_VALUES);
 
     PARTITIONER_CLASS_RECOMMENDER.addValidValues(
-        Arrays.<Object>asList(
+        Arrays.asList(
             DefaultPartitioner.class,
             HourlyPartitioner.class,
             DailyPartitioner.class,
@@ -674,9 +671,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   protected S3SinkConnectorConfig(ConfigDef configDef, Map<String, String> props) {
     super(configDef, props);
     ConfigDef storageCommonConfigDef = StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER);
-    commonConfig = new StorageCommonConfig(storageCommonConfigDef, originalsStrings());
+    StorageCommonConfig commonConfig = new StorageCommonConfig(storageCommonConfigDef,
+        originalsStrings());
     ConfigDef partitionerConfigDef = PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER);
-    partitionerConfig = new PartitionerConfig(partitionerConfigDef, originalsStrings());
+    PartitionerConfig partitionerConfig = new PartitionerConfig(partitionerConfigDef,
+        originalsStrings());
 
     this.name = parseName(originalsStrings());
     addToGlobal(partitionerConfig);
@@ -854,7 +853,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private static class RegionRecommender implements ConfigDef.Recommender {
     @Override
     public List<Object> validValues(String name, Map<String, Object> connectorConfigs) {
-      return Arrays.<Object>asList(RegionUtils.getRegions());
+      return Collections.singletonList(RegionUtils.getRegions());
     }
 
     @Override

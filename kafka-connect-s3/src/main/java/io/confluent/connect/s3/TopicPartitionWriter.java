@@ -74,7 +74,6 @@ public class TopicPartitionWriter {
   private final long rotateScheduleIntervalMs;
   private long nextScheduledRotation;
   private long currentOffset;
-  private Long currentStartOffset;
   private Long currentTimestamp;
   private String currentEncodedPartition;
   private Long baseRecordTimestamp;
@@ -366,7 +365,7 @@ public class TopicPartitionWriter {
   }
 
   public Long currentStartOffset() {
-    return currentStartOffset;
+    return minStartOffset();
   }
 
   public void failureTime(long when) {
@@ -596,7 +595,6 @@ public class TopicPartitionWriter {
   }
 
   private void commitFiles() {
-    currentStartOffset = minStartOffset();
     for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
       String encodedPartition = entry.getKey();
       commitFile(encodedPartition);

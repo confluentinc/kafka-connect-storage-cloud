@@ -15,6 +15,7 @@
 
 package io.confluent.connect.s3.format.avro;
 
+import static io.confluent.connect.s3.util.S3ErrorUtils.throwConnectException;
 import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
 
 import org.apache.avro.file.CodecFactory;
@@ -22,7 +23,6 @@ import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,7 +76,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
             writer.setCodec(CodecFactory.fromString(conf.getAvroCodec()));
             writer.create(avroSchema, s3out);
           } catch (IOException e) {
-            throw new ConnectException(e);
+            throwConnectException(e);
           }
         }
         log.trace("Sink record with view {}: {}", recordView, record);
@@ -89,7 +89,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
           }
           writer.append(value);
         } catch (IOException e) {
-          throw new ConnectException(e);
+          throwConnectException(e);
         }
       }
 
@@ -102,7 +102,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
           s3out.commit();
           writer.close();
         } catch (IOException e) {
-          throw new RetriableException(e);
+          throwConnectException(e);
         }
       }
 
