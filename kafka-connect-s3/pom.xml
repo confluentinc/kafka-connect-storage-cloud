@@ -44,6 +44,7 @@
         <skipIntegrationTests>false</skipIntegrationTests>
         <surefire-junit47.version>2.22.1</surefire-junit47.version>
         <guava.version>30.1.1-jre</guava.version>
+        <wiremock.version>2.31.0</wiremock.version>
     </properties>
 
     <dependencyManagement>
@@ -156,6 +157,12 @@
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
             <version>${guava.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.tomakehurst</groupId>
+            <artifactId>wiremock-jre8-standalone</artifactId>
+            <version>${wiremock.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.assertj</groupId>

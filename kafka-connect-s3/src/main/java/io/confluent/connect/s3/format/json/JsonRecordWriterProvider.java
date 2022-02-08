@@ -15,6 +15,7 @@
 
 package io.confluent.connect.s3.format.json;
 
+import static io.confluent.connect.s3.util.S3ErrorUtils.throwConnectException;
 import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
 
 import com.fasterxml.jackson.core.JsonGenerator;
@@ -22,7 +23,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
@@ -93,7 +93,7 @@ public class JsonRecordWriterProvider extends RecordViewSetter
               writer.writeRaw(LINE_SEPARATOR);
             }
           } catch (IOException e) {
-            throw new ConnectException(e);
+            throwConnectException(e);
           }
         }
 
@@ -106,7 +106,7 @@ public class JsonRecordWriterProvider extends RecordViewSetter
             s3out.commit();
             s3outWrapper.close();
           } catch (IOException e) {
-            throw new RetriableException(e);
+            throwConnectException(e);
           }
         }
 
@@ -120,7 +120,10 @@ public class JsonRecordWriterProvider extends RecordViewSetter
         }
       };
     } catch (IOException e) {
-      throw new ConnectException(e);
+      throwConnectException(e);
+      // compiler can't see that the above method is always throwing an exception,
+      // so had to add this useless return statement
+      return null;
     }
   }
 }
