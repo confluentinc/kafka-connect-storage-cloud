@@ -104,7 +104,7 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
             writer.close();
           }
         } catch (IOException e) {
-          throw new ConnectException(e);
+          throwConnectException(e);
         }
       }
 

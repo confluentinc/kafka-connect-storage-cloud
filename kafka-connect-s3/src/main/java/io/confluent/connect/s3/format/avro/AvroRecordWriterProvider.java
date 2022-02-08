@@ -111,7 +111,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
         try {
           writer.close();
         } catch (IOException e) {
-          throw new ConnectException(e);
+          throwConnectException(e);
         }
       }
     };
