@@ -22,7 +22,6 @@ import org.apache.avro.file.CodecFactory;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,7 +110,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
         try {
           writer.close();
         } catch (IOException e) {
-          throw new ConnectException(e);
+          throwConnectException(e);
         }
       }
     };
