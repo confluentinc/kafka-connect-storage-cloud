@@ -72,8 +72,8 @@ public class JsonRecordWriterProvider extends RecordViewSetter
           final S3OutputStream s3out = storage.create(adjustedFilename, true, JsonFormat.class);
           final OutputStream s3outWrapper = s3out.wrapForCompression();
           final JsonGenerator writer = mapper.getFactory()
-            .createGenerator(s3outWrapper)
-            .setRootValueSeparator(null);
+              .createGenerator(s3outWrapper)
+              .setRootValueSeparator(null);
 
           @Override
           public void write(SinkRecord record) throws IOException {
