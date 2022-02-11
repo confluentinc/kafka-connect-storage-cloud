@@ -9,12 +9,12 @@ import java.io.IOException;
 import static io.confluent.connect.s3.util.S3ErrorUtils.throwConnectException;
 
 /**
- * Wrapper class which may convert an IOException ito either a ConnectException
+ * Wrapper class which may convert an IOException to either a ConnectException
  * or a RetriableException depending upon whether the exception is "retriable"
  * as determined within `throwConnectException()`.
  */
 public class S3RetriableRecordWriter implements RecordWriter {
-  private IORecordWriter writer;
+  private final IORecordWriter writer;
 
   public S3RetriableRecordWriter(IORecordWriter writer) {
     this.writer = writer;

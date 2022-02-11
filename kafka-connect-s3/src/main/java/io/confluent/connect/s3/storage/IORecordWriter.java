@@ -9,7 +9,7 @@ import java.io.IOException;
  * IOException throwing signatures.
  */
 public interface IORecordWriter {
-  void write(SinkRecord var1) throws IOException;
+  void write(SinkRecord sinkRecord) throws IOException;
 
   void close() throws IOException;
 
