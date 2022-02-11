@@ -20,7 +20,9 @@ import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.connect.s3.storage.IORecordWriter;
 import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
+import io.confluent.connect.s3.format.S3RetriableRecordWriter;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -64,26 +66,26 @@ public class JsonRecordWriterProvider extends RecordViewSetter
   @Override
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     try {
-      return new RecordWriter() {
-        final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
-        final S3OutputStream s3out = storage.create(adjustedFilename, true, JsonFormat.class);
-        final OutputStream s3outWrapper = s3out.wrapForCompression();
-        final JsonGenerator writer = mapper.getFactory()
-                                         .createGenerator(s3outWrapper)
-                                         .setRootValueSeparator(null);
+      return new S3RetriableRecordWriter(
+        new IORecordWriter() {
+          final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
+          final S3OutputStream s3out = storage.create(adjustedFilename, true, JsonFormat.class);
+          final OutputStream s3outWrapper = s3out.wrapForCompression();
+          final JsonGenerator writer = mapper.getFactory()
+            .createGenerator(s3outWrapper)
+            .setRootValueSeparator(null);
 
-        @Override
-        public void write(SinkRecord record) {
-          log.trace("Sink record with view {}: {}", recordView, record);
-          // headers need to be enveloped for json format
-          boolean envelop = recordView instanceof HeaderRecordView;
-          try {
+          @Override
+          public void write(SinkRecord record) throws IOException {
+            log.trace("Sink record with view {}: {}", recordView, record);
+            // headers need to be enveloped for json format
+            boolean envelop = recordView instanceof HeaderRecordView;
             Object value = recordView.getView(record, envelop);
             if (value instanceof Struct) {
               byte[] rawJson = converter.fromConnectData(
-                  record.topic(),
-                  recordView.getViewSchema(record, envelop),
-                  value
+                record.topic(),
+                recordView.getViewSchema(record, envelop),
+                value
               );
               s3outWrapper.write(rawJson);
               s3outWrapper.write(LINE_SEPARATOR_BYTES);
@@ -91,33 +93,23 @@ public class JsonRecordWriterProvider extends RecordViewSetter
               writer.writeObject(value);
               writer.writeRaw(LINE_SEPARATOR);
             }
-          } catch (IOException e) {
-            throwConnectException(e);
           }
-        }
 
-        @Override
-        public void commit() {
-          try {
+          @Override
+          public void commit() throws IOException {
             // Flush is required here, because closing the writer will close the underlying S3
             // output stream before committing any data to S3.
             writer.flush();
             s3out.commit();
             s3outWrapper.close();
-          } catch (IOException e) {
-            throwConnectException(e);
           }
-        }
 
-        @Override
-        public void close() {
-          try {
+          @Override
+          public void close() throws IOException {
             writer.close();
-          } catch (IOException e) {
-            throwConnectException(e);
           }
         }
-      };
+      );
     } catch (IOException e) {
       throwConnectException(e);
       // compiler can't see that the above method is always throwing an exception,
