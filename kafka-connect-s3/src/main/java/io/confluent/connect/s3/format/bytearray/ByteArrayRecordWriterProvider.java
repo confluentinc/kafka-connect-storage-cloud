@@ -15,11 +15,12 @@
 
 package io.confluent.connect.s3.format.bytearray;
 
-import static io.confluent.connect.s3.util.S3ErrorUtils.throwConnectException;
 import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.storage.IORecordWriter;
 import io.confluent.connect.s3.format.RecordViewSetter;
+import io.confluent.connect.s3.format.S3RetriableRecordWriter;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
@@ -58,36 +59,30 @@ public class ByteArrayRecordWriterProvider extends RecordViewSetter
 
   @Override
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
-    return new RecordWriter() {
-      final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
-      final S3OutputStream s3out = storage.create(adjustedFilename, true, ByteArrayFormat.class);
-      final OutputStream s3outWrapper = s3out.wrapForCompression();
+    return new S3RetriableRecordWriter(
+      new IORecordWriter() {
+        final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
+        final S3OutputStream s3out = storage.create(adjustedFilename, true, ByteArrayFormat.class);
+        final OutputStream s3outWrapper = s3out.wrapForCompression();
 
-      @Override
-      public void write(SinkRecord record) {
-        log.trace("Sink record with view {}: {}", recordView, record);
-        try {
+        @Override
+        public void write(SinkRecord record) throws IOException {
+          log.trace("Sink record with view {}: {}", recordView, record);
           byte[] bytes = converter.fromConnectData(record.topic(),
               recordView.getViewSchema(record, false), recordView.getView(record, false));
           s3outWrapper.write(bytes);
           s3outWrapper.write(lineSeparatorBytes);
-        } catch (IOException e) {
-          throwConnectException(e);
         }
-      }
 
-      @Override
-      public void commit() {
-        try {
+        @Override
+        public void commit() throws IOException {
           s3out.commit();
           s3outWrapper.close();
-        } catch (IOException e) {
-          throwConnectException(e);
         }
-      }
 
-      @Override
-      public void close() {}
-    };
+        @Override
+        public void close() throws IOException {}
+      }
+    );
   }
 }
