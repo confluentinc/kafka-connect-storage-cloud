@@ -610,8 +610,9 @@ public class TopicPartitionWriter {
     for (String commitFileName : commitFilesName) {
       log.info("commitFileName {} nowPrefix {}", commitFileName, nowPrefix);
       if (!commitFileName.equals(nowPrefix)) {
-        log.info("commitFileName equals nowPrefix!");
+        log.info("commitFileName {} not equals nowPrefix {}!", commitFileName, nowPrefix);
         String tagFile = topicsDir + dirDelim + commitFileName + "_SUCCESS";
+        log.info("Put file {} to S3", tagFile);
         S3OutputStream s3out = storage.create(tagFile, true, String.class);
         OutputStream s3outWrapper = s3out.wrapForCompression();
         byte[] bytes = new byte[0];
