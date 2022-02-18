@@ -612,7 +612,7 @@ public class TopicPartitionWriter {
       if (!commitFileName.equals(nowPrefix)) {
         String tagFile;
         log.info("commitFileName {} not equals nowPrefix {}!", commitFileName, nowPrefix);
-        if (topicsDir.startsWith("/")){
+        if (topicsDir.startsWith("/")) {
           tagFile =topicsDir.substring(1);
         } else {
           tagFile = topicsDir + dirDelim + commitFileName + "_SUCCESS";
