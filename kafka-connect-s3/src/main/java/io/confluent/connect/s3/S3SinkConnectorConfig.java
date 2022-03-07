@@ -853,7 +853,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private static class RegionRecommender implements ConfigDef.Recommender {
     @Override
     public List<Object> validValues(String name, Map<String, Object> connectorConfigs) {
-      return Collections.singletonList(RegionUtils.getRegions());
+      return new ArrayList<>(RegionUtils.getRegions());
     }
 
     @Override
