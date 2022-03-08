@@ -78,7 +78,7 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
             schema = recordView.getViewSchema(record, true);
             log.info("Opening record writer for: {}", adjustedFilename);
             org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
-            s3ParquetOutputFile = new S3ParquetOutputFile(storage, filename);
+            s3ParquetOutputFile = new S3ParquetOutputFile(storage, adjustedFilename);
             AvroParquetWriter.Builder<GenericRecord> builder =
                 AvroParquetWriter.<GenericRecord>builder(s3ParquetOutputFile)
                 .withSchema(avroSchema)

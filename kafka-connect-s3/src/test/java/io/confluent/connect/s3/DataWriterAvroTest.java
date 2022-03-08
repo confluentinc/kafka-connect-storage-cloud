@@ -891,10 +891,16 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     return sinkRecords;
   }
 
-  protected List<SinkRecord> createRecordsInterleaved(int size, long startOffset, Set<TopicPartition> partitions) {
+  protected List<SinkRecord> createRecordsInterleaved(
+      int size,
+      long startOffset,
+      Set<TopicPartition> partitionSet
+  ) {
     String key = "key";
     Schema schema = createSchema();
     Struct record = createRecord(schema);
+
+    Collection<TopicPartition> partitions = sortedPartitions(partitionSet);
 
     List<SinkRecord> sinkRecords = new ArrayList<>();
     for (long offset = startOffset, total = 0; total < size; ++offset) {
@@ -957,7 +963,8 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
    *                     equals the expected size of the file, and last offset in exclusive.
    * @throws IOException
    */
-  protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, Set<TopicPartition> partitions,
+  protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets,
+                        Set<TopicPartition> partitions,
                         boolean skipFileListing)
       throws IOException {
     if (!skipFileListing) {
@@ -979,8 +986,12 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     }
   }
 
-  protected void verifyOffsets(Map<TopicPartition, OffsetAndMetadata> actualOffsets, long[] validOffsets,
-                              Set<TopicPartition> partitions) {
+  protected void verifyOffsets(
+      Map<TopicPartition, OffsetAndMetadata> actualOffsets,
+      long[] validOffsets,
+      Set<TopicPartition> partitionSet
+  ) {
+    Collection<TopicPartition> partitions = sortedPartitions(partitionSet);
     int i = 0;
     Map<TopicPartition, OffsetAndMetadata> expectedOffsets = new HashMap<>();
     for (TopicPartition tp : partitions) {
@@ -995,8 +1006,9 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
   protected void verifyRawOffsets(
       Map<TopicPartition, Long> actualOffsets,
       long[] validOffsets,
-      Set<TopicPartition> partitions
+      Set<TopicPartition> partitionSet
   ) {
+    Collection<TopicPartition> partitions = sortedPartitions(partitionSet);
     int i = 0;
     Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
     for (TopicPartition tp : partitions) {

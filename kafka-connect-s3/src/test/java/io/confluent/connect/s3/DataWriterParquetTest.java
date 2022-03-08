@@ -16,8 +16,6 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.confluent.connect.s3.format.parquet.ParquetRecordWriterProvider;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -513,6 +511,36 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     }
   }
 
+  @Test
+  public void testCorrectRecordWriterBasic() throws Exception {
+    // Test the base-case -- no known embedded extension
+    testCorrectRecordWriterHelper("this.is.dir");
+  }
+
+  @Test
+  public void testCorrectRecordWriterOther() throws Exception {
+    // Test with a different embedded extension
+    testCorrectRecordWriterHelper("this.is.json.dir");
+  }
+
+  @Test
+  public void testCorrectRecordWriterThis() throws Exception {
+    // Test with our embedded extension
+    testCorrectRecordWriterHelper("this.is" + EXTENSION + ".dir");
+  }
+
+  @Test
+  public void testCorrectRecordWriterPartialThisA() throws Exception {
+    // Test with our embedded extension
+    testCorrectRecordWriterHelper("this.is.snappy.dir");
+  }
+
+  @Test
+  public void testCorrectRecordWriterPartialThisB() throws Exception {
+    // Test with our embedded extension
+    testCorrectRecordWriterHelper("this.is.parquet.dir");
+  }
+
   class SchemaConfig {
     public String name;
     public boolean optionalItems = false;
@@ -748,10 +776,16 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     return sinkRecords;
   }
 
-  protected List<SinkRecord> createRecordsInterleaved(int size, long startOffset, Set<TopicPartition> partitions) {
+  protected List<SinkRecord> createRecordsInterleaved(
+      int size,
+      long startOffset,
+      Set<TopicPartition> partitionSet
+  ) {
     String key = "key";
     Schema schema = createSchema();
     Struct record = createRecord(schema);
+
+    Collection<TopicPartition> partitions = sortedPartitions(partitionSet);
 
     List<SinkRecord> sinkRecords = new ArrayList<>();
     for (long offset = startOffset; offset < startOffset + size; ++offset) {
@@ -874,27 +908,6 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     }
   }
 
-  protected void verifyFileListing(long[] validOffsets, Set<TopicPartition> partitions, String extension) {
-    List<String> expectedFiles = new ArrayList<>();
-    for (TopicPartition tp : partitions) {
-      expectedFiles.addAll(getExpectedFiles(validOffsets, tp, extension));
-    }
-    verifyFileListing(expectedFiles);
-  }
-
-  protected void verifyFileListing(List<String> expectedFiles) {
-    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
-    List<String> actualFiles = new ArrayList<>();
-    for (S3ObjectSummary summary : summaries) {
-      String fileKey = summary.getKey();
-      actualFiles.add(fileKey);
-    }
-
-    Collections.sort(actualFiles);
-    Collections.sort(expectedFiles);
-    assertEquals(actualFiles, expectedFiles);
-  }
-
   protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records) {
     Schema expectedSchema = null;
     for (Object avroRecord : records) {
@@ -928,7 +941,8 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
   }
 
   protected void verifyOffsets(Map<TopicPartition, OffsetAndMetadata> actualOffsets, Long[] validOffsets,
-                               Set<TopicPartition> partitions) {
+                               Set<TopicPartition> partitionSet) {
+    Collection<TopicPartition> partitions = sortedPartitions(partitionSet);
     int i = 0;
     Map<TopicPartition, OffsetAndMetadata> expectedOffsets = new HashMap<>();
     for (TopicPartition tp : partitions) {
