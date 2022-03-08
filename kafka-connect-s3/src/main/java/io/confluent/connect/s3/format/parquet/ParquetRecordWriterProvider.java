@@ -17,12 +17,13 @@
 
 package io.confluent.connect.s3.format.parquet;
 
-import static io.confluent.connect.s3.util.S3ErrorUtils.throwConnectException;
 import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
 
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.storage.IORecordWriter;
 import io.confluent.connect.s3.format.RecordViewSetter;
+import io.confluent.connect.s3.format.S3RetriableRecordWriter;
 import io.confluent.connect.s3.storage.S3ParquetOutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
@@ -64,28 +65,27 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
 
   @Override
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
-    return new RecordWriter() {
-      final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
-      Schema schema = null;
-      ParquetWriter<GenericRecord> writer;
-      S3ParquetOutputFile s3ParquetOutputFile;
+    return new S3RetriableRecordWriter(
+      new IORecordWriter() {
+        final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
+        Schema schema = null;
+        ParquetWriter<GenericRecord> writer;
+        S3ParquetOutputFile s3ParquetOutputFile;
 
-      @Override
-      public void write(SinkRecord record) {
-        if (schema == null) {
-          schema = recordView.getViewSchema(record, true);
-          try {
+        @Override
+        public void write(SinkRecord record) throws IOException {
+          if (schema == null || writer == null) {
+            schema = recordView.getViewSchema(record, true);
             log.info("Opening record writer for: {}", adjustedFilename);
             org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
-
             s3ParquetOutputFile = new S3ParquetOutputFile(storage, adjustedFilename);
             AvroParquetWriter.Builder<GenericRecord> builder =
                 AvroParquetWriter.<GenericRecord>builder(s3ParquetOutputFile)
-                    .withSchema(avroSchema)
-                    .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
-                    .withDictionaryEncoding(true)
-                    .withCompressionCodec(storage.conf().parquetCompressionCodecName())
-                    .withPageSize(PAGE_SIZE);
+                .withSchema(avroSchema)
+                .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
+                .withDictionaryEncoding(true)
+                .withCompressionCodec(storage.conf().parquetCompressionCodecName())
+                .withPageSize(PAGE_SIZE);
             if (schemaHasArrayOfOptionalItems(schema, /*seenSchemas=*/null)) {
               // If the schema contains an array of optional items, then
               // it is possible that the array may have null items during the
@@ -93,48 +93,34 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
               // incur a NullPointerException
               log.debug(
                   "Setting \"" + AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE
-                      + "\" to false because the schema contains an array "
-                      + "with optional items"
+                  + "\" to false because the schema contains an array "
+                  + "with optional items"
               );
               builder.config(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false");
             }
             writer = builder.build();
-          } catch (IOException e) {
-            throwConnectException(e);
           }
-        }
-        log.trace("Sink record with view {}: {}", recordView, record);
-        Object value = avroData.fromConnectData(schema, recordView.getView(record, true));
-        try {
+          log.trace("Sink record with view {}: {}", recordView, record);
+          Object value = avroData.fromConnectData(schema, recordView.getView(record, true));
           writer.write((GenericRecord) value);
-        } catch (IOException e) {
-          throwConnectException(e);
         }
-      }
 
-      @Override
-      public void close() {
-        try {
+        @Override
+        public void close() throws IOException {
           if (writer != null) {
             writer.close();
           }
-        } catch (IOException e) {
-          throwConnectException(e);
         }
-      }
 
-      @Override
-      public void commit() {
-        try {
+        @Override
+        public void commit() throws IOException {
           s3ParquetOutputFile.s3out.setCommit();
           if (writer != null) {
             writer.close();
           }
-        } catch (IOException e) {
-          throwConnectException(e);
         }
       }
-    };
+    );
   }
 
   /**

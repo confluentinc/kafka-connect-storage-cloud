@@ -16,7 +16,6 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.confluent.connect.s3.format.parquet.ParquetRecordWriterProvider;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
