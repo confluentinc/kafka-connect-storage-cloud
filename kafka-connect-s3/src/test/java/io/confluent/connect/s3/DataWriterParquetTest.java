@@ -16,6 +16,9 @@
 
 package io.confluent.connect.s3;
 
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
+import io.confluent.connect.s3.format.parquet.ParquetRecordWriterProvider;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -27,6 +30,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.codehaus.plexus.util.StringUtils;
 import org.junit.After;
 import org.junit.Test;
 
@@ -37,6 +41,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,6 +56,7 @@ import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.kafka.serializers.NonRecordContainer;
+import org.testcontainers.shaded.com.google.common.collect.ImmutableList;
 
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.junit.Assert.assertEquals;
@@ -177,6 +183,30 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     task.close(context.assignment());
     task.stop();
 
+    long[] validOffsets = {0, 3, 6};
+    verify(sinkRecords, validOffsets, context.assignment());
+  }
+
+  /**
+   * Test for parquet writer with null array item(s) arrays
+   * @link https://github.com/confluentinc/kafka-connect-storage-cloud/issues/339
+   * @throws Exception
+   */
+  @Test
+  public void testWriteRecordsInMultiplePartitionsWithArrayOfOptionalString() throws Exception {
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+
+    List<SinkRecord> sinkRecords = createRecordsWithArrayOfOptionalString(
+        7,
+        context.assignment()
+    );
+    // Perform write
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    // Offsets where each file should start (embedded in the file name)
     long[] validOffsets = {0, 3, 6};
     verify(sinkRecords, validOffsets, context.assignment());
   }
@@ -483,34 +513,204 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     }
   }
 
-  @Test
-  public void testCorrectRecordWriterBasic() throws Exception {
-    // Test the base-case -- no known embedded extension
-    testCorrectRecordWriterHelper("this.is.dir");
+  class SchemaConfig {
+    public String name;
+    public boolean optionalItems = false;
+    public boolean regularItems = false;
+    public boolean mapRegular = false;
+    public boolean mapOptional = false;
+    public SchemaConfig nested = null;
+    public SchemaConfig nestedArray = null;
+
+    public SchemaConfig() {}
+
+    public SchemaConfig(
+        String name,
+        boolean regularItems,
+        boolean optionalItems,
+        boolean mapRegular,
+        boolean mapOptional,
+        SchemaConfig nested,
+        SchemaConfig nestedArray
+    ) {
+      this.name = name;
+      this.optionalItems = optionalItems;
+      this.regularItems = regularItems;
+      this.mapRegular = mapRegular;
+      this.mapOptional = mapOptional;
+      this.nested = nested;
+      this.nestedArray = nestedArray;
+    }
+
+    public boolean hasOptionalItems() {
+      if (optionalItems || mapOptional) {
+        return true;
+      }
+      if (nested != null && nested.hasOptionalItems()) {
+        return true;
+      }
+      return nestedArray != null && nestedArray.hasOptionalItems();
+    }
+
+    private Schema create() {
+      SchemaBuilder builder = SchemaBuilder.struct();
+      if (StringUtils.isNotBlank(name)) {
+        builder.name(name);
+      }
+      if (regularItems) {
+        builder.field("regular_items", SchemaBuilder.array(Schema.STRING_SCHEMA).build());
+      }
+      if (optionalItems) {
+        builder.field("optional_items", SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).build());
+      }
+      if (mapRegular) {
+        builder.field("regular_map", SchemaBuilder.map(
+            Schema.STRING_SCHEMA,
+            SchemaBuilder.array(Schema.STRING_SCHEMA).build()
+        ).build());
+      }
+      if (mapOptional) {
+        builder.field("optional_map", SchemaBuilder.map(
+            Schema.STRING_SCHEMA,
+            SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).build()
+        ).build());
+      }
+      if (this.nested != null) {
+        builder.field("nested", nested.create());
+      }
+      if (this.nestedArray != null) {
+        builder.field("nested_array", SchemaBuilder.array(nestedArray.create()));
+      }
+      return builder.build();
+    }
+
   }
 
+  /**
+   * Tests ParquetRecordWriterProvider::schemaHasArrayOfOptionalItems()
+   *
+   * Test permutations of schemas and schema nesting with and without optional array items
+   * somewhere within the schema.
+   */
   @Test
-  public void testCorrectRecordWriterOther() throws Exception {
-    // Test with a different embedded extension
-    testCorrectRecordWriterHelper("this.is.json.dir");
+  public void testSchemaHasArrayOfOptionalItems() {
+    for (int regularItems = 0; regularItems < 2; ++regularItems) {
+      for (int optionalItems = 0; optionalItems < 2; ++optionalItems) {
+        for (int mapRegular = 0; mapRegular < 2; ++mapRegular) {
+          for (int mapOptional = 0; mapOptional < 2; ++mapOptional) {
+            for (int hasNested = 0; hasNested < 2; ++hasNested) {
+              for (int hasNestedArray = 0; hasNestedArray < 2; ++hasNestedArray) {
+                SchemaConfig conf = new SchemaConfig();
+                SchemaConfig nested = null, nestedArray = null;
+                if (hasNested != 0) {
+                    // Invert tests so as to hit in isolation
+                    nested = new SchemaConfig(
+                        "nested_schema",
+                        regularItems == 0,
+                        optionalItems == 0,
+                        mapRegular == 0,
+                        mapOptional == 0,
+                        /*nested=*/ null,
+                        /*nestedArray=*/null
+                    );
+                }
+                if (hasNestedArray != 0) {
+                  // Invert tests so as to hit in isolation
+                  nestedArray = new SchemaConfig(
+                      "array_of_schema",
+                      regularItems == 0,
+                      optionalItems == 0,
+                      mapRegular == 0,
+                      mapOptional == 0,
+                      /*nested=*/ null,
+                      /*nestedArray=*/null
+                  );
+                }
+                conf.nested = new SchemaConfig(
+                    "nested_schema",
+                    regularItems != 0,
+                    optionalItems != 0,
+                    mapRegular != 0,
+                    mapOptional != 0,
+                    nested,
+                    nestedArray
+                );
+                Schema schema = conf.create();
+                if (schema.fields().size() == 0) {
+                  // Base case of everything is false
+                  continue;
+                }
+                final boolean hasArrayOptional =
+                    ParquetRecordWriterProvider.schemaHasArrayOfOptionalItems(
+                      schema,
+                      /*seenSchemas=*/null
+                  );
+                final boolean shouldHaveArrayOptional = conf.hasOptionalItems();
+                assertEquals(hasArrayOptional, shouldHaveArrayOptional);
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
-  @Test
-  public void testCorrectRecordWriterThis() throws Exception {
-    // Test with our embedded extension
-    testCorrectRecordWriterHelper("this.is" + EXTENSION + ".dir");
-  }
+  private List<SinkRecord> createRecordsWithArrayOfOptionalString(
+      int size,
+      Set<TopicPartition> partitions
+  ) {
+    SchemaConfig conf = new SchemaConfig();
+    conf.regularItems = true;
+    conf.optionalItems = true;
+    conf.nested = new SchemaConfig(
+        "nested_schema",
+        true,
+        true,
+        false,
+        false,
+        null,
+        null
+    );
 
-  @Test
-  public void testCorrectRecordWriterPartialThisA() throws Exception {
-    // Test with our embedded extension
-    testCorrectRecordWriterHelper("this.is.snappy.dir");
-  }
+    Schema schema = conf.create();
 
-  @Test
-  public void testCorrectRecordWriterPartialThisB() throws Exception {
-    // Test with our embedded extension
-    testCorrectRecordWriterHelper("this.is.parquet.dir");
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    for (TopicPartition tp : partitions) {
+      // We're going to alternate internal and external array elements as null
+      boolean hasString = true;
+      for (long offset = 0; offset < size; ++offset) {
+        LinkedList<String> optionalList = new LinkedList<>();
+        // Alternate edge and internal as null items
+        optionalList.add(hasString ? "item-1" : null);
+        optionalList.add(hasString ? null : "item-2");
+        optionalList.add(hasString ? "item-3" : null);
+        Struct struct = new Struct(schema)
+            .put("optional_items", optionalList)
+            .put("regular_items", ImmutableList.of("reg-1", "reg-2"))
+            .put(
+                // Nested struct
+                "nested",
+                new Struct(schema.field("nested").schema())
+                    // Nested option string array
+                    .put("optional_items", optionalList.clone())
+                    // Nested regular string array
+                    .put("regular_items", ImmutableList.of("reg-1", "reg-2"))
+            );
+        sinkRecords.add(
+            new SinkRecord(
+                TOPIC,
+                tp.partition(),
+                Schema.STRING_SCHEMA,
+                "key",
+                schema,
+                struct,
+                offset
+            )
+        );
+        hasString = !hasString;
+      }
+    }
+    return sinkRecords;
   }
 
   /**
@@ -672,6 +872,27 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
         j += size;
       }
     }
+  }
+
+  protected void verifyFileListing(long[] validOffsets, Set<TopicPartition> partitions, String extension) {
+    List<String> expectedFiles = new ArrayList<>();
+    for (TopicPartition tp : partitions) {
+      expectedFiles.addAll(getExpectedFiles(validOffsets, tp, extension));
+    }
+    verifyFileListing(expectedFiles);
+  }
+
+  protected void verifyFileListing(List<String> expectedFiles) {
+    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<String> actualFiles = new ArrayList<>();
+    for (S3ObjectSummary summary : summaries) {
+      String fileKey = summary.getKey();
+      actualFiles.add(fileKey);
+    }
+
+    Collections.sort(actualFiles);
+    Collections.sort(expectedFiles);
+    assertEquals(actualFiles, expectedFiles);
   }
 
   protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records) {
