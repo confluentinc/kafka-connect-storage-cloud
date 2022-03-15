@@ -18,11 +18,16 @@ package io.confluent.connect.s3.util;
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.retry.PredefinedRetryPolicies;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
+import java.util.concurrent.Callable;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Utilities related to basic S3 error/exception analysis.
@@ -82,5 +87,62 @@ public class S3ErrorUtils {
       throw new RetriableException(t.getMessage(), t);
     }
     throw new ConnectException(t.getMessage(), t);
+  }
+
+  /**
+   * Return the given Supplier value, converting any thrown AmazonClientException object
+   * to an IOException object (containing the AmazonClientException object) and
+   * throw that instead.
+   * @param label Optional label string to be prepended to any exception message
+   * @param supplier The supplier to evaluate
+   * @param <T> The object type returned by the Supplier
+   * @return The value returned by the Supplier
+   * @throws IOException Any IOException or AmazonClientException thrown while
+   *                     retrieving the Supplier's value
+   */
+  public static <T> T handleAmazonExceptions(String label, Supplier<T> supplier) throws IOException {
+    try {
+      return supplier.get();
+    } catch (AmazonClientException e) {
+      if (!StringUtils.isBlank(label)) {
+        throw new IOException(label + ": " + e.getMessage(), e);
+      } else {
+        throw new IOException(e.getMessage(), e);
+      }
+    }
+  }
+
+  /**
+   * Return the given Supplier value, converting any thrown AmazonClientException object
+   * to an IOException object (containing the AmazonClientException object) and
+   * throw that instead.
+   * @param supplier The supplier to evaluate
+   * @param <T> The object type returned by the Supplier
+   * @return The value returned by the Supplier
+   * @throws IOException Any IOException or AmazonClientException thrown while
+   *                     retrieving the Supplier's value
+   */
+  public static <T> T handleAmazonExceptions(Supplier<T> supplier) throws IOException {
+    return handleAmazonExceptions(null, supplier);
+  }
+
+  /**
+   * Return the given Supplier value, converting any thrown AmazonClientException object
+   * to an IOException object (containing the AmazonClientException object) and
+   * throw that instead.
+   * @param supplier The supplier to evaluate
+   * @param <T> The object type returned by the Supplier
+   * @return The value returned by the Supplier
+   * @throws ConnectException ConnectException wrapping of any IOException or
+   *                          AmazonClientException thrown while retrieving the Supplier's value
+   */
+  public static <T> T convertAmazonToConnectExceptions(Supplier<T> supplier) throws ConnectException {
+    try {
+      return handleAmazonExceptions(null, supplier);
+    } catch (IOException e) {
+      throwConnectException(e);
+      /* Compiler doesn't know that this can't return */
+      return null;
+    }
   }
 }

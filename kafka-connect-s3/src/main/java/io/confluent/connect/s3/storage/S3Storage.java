@@ -55,6 +55,7 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_MAX_BACKOFF_TIME_MS;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
+import static io.confluent.connect.s3.util.S3ErrorUtils.convertAmazonToConnectExceptions;
 
 /**
  * S3 implementation of the storage interface for Connect sinks.
@@ -190,11 +191,17 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
   @Override
   public boolean exists(String name) {
-    return StringUtils.isNotBlank(name) && s3.doesObjectExist(bucketName, name);
+    return StringUtils.isNotBlank(name) &&
+      Boolean.TRUE.equals(convertAmazonToConnectExceptions(
+        () -> s3.doesObjectExist(bucketName, name)
+      ));
   }
 
   public boolean bucketExists() {
-    return StringUtils.isNotBlank(bucketName) && s3.doesBucketExistV2(bucketName);
+    return StringUtils.isNotBlank(bucketName) &&
+      Boolean.TRUE.equals(convertAmazonToConnectExceptions(
+        () -> s3.doesBucketExistV2(bucketName)
+      ));
   }
 
   @Override
@@ -236,9 +243,11 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     if (bucketName.equals(name)) {
       // TODO: decide whether to support delete for the top-level bucket.
       // s3.deleteBucket(name);
-      return;
     } else {
-      s3.deleteObject(bucketName, name);
+      convertAmazonToConnectExceptions(() -> {
+        s3.deleteObject(bucketName, name);
+        return true;
+      });
     }
   }
 
@@ -249,12 +258,14 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     ObjectTagging objectTagging = new ObjectTagging(tags.entrySet().stream()
         .map(e -> new Tag(e.getKey(), e.getValue()))
         .collect(Collectors.toList()));
-    s3.setObjectTagging(new SetObjectTaggingRequest(this.bucketName, fileName, objectTagging));
+    convertAmazonToConnectExceptions(
+      () -> s3.setObjectTagging(new SetObjectTaggingRequest(this.bucketName, fileName, objectTagging))
+    );
   }
 
   @Override
   public ObjectListing list(String path) {
-    return s3.listObjects(bucketName, path);
+    return convertAmazonToConnectExceptions(() -> s3.listObjects(bucketName, path));
   }
 
   @Override

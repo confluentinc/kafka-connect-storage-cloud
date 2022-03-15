@@ -20,6 +20,7 @@ import com.amazonaws.event.ProgressEvent;
 import com.amazonaws.event.ProgressListener;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
+import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
@@ -38,10 +39,12 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Supplier;
+
+import static io.confluent.connect.s3.util.S3ErrorUtils.handleAmazonExceptions;
 
 /**
  * Output stream enabling multi-part uploads of Kafka records.
@@ -223,24 +226,6 @@ public class S3OutputStream extends PositionOutputStream {
     );
   }
 
-  /**
-   * Return the given Supplier value, converting any thrown AmazonClientException object
-   * to an IOException object (containing the AmazonClientException object) and
-   * throw that instead.
-   * @param supplier The supplier to evaluate
-   * @param <T> The object type returned by the Supplier
-   * @return The value returned by the Supplier
-   * @throws IOException Any IOException or AmazonClientException thrown while
-   *                     retreiving the Supplier's value
-   */
-  private static <T> T handleAmazonExceptions(Supplier<T> supplier) throws IOException {
-    try {
-      return supplier.get();
-    } catch (AmazonClientException e) {
-      throw new IOException(e.getMessage(), e);
-    }
-  }
-
   private class MultipartUpload {
     private final String uploadId;
     private final List<PartETag> partETags;
@@ -286,8 +271,14 @@ public class S3OutputStream extends PositionOutputStream {
       try {
         s3.abortMultipartUpload(new AbortMultipartUploadRequest(bucket, key, uploadId));
       } catch (Exception e) {
-        // ignoring failure on abort.
-        log.warn("Unable to abort multipart upload, you may need to purge uploaded parts: ", e);
+        // An AWS exception of HTTP_NOT_FOUND (404) means nothing was uploaded yet.
+        if (
+          !(e instanceof AmazonS3Exception) ||
+          ((AmazonS3Exception)e).getStatusCode() != HttpURLConnection.HTTP_NOT_FOUND
+        ) {
+          // ignoring failure on abort.
+          log.warn("Unable to abort multipart upload, you may need to purge uploaded parts: ", e);
+        }
       }
     }
   }
