@@ -15,7 +15,6 @@
 
 package io.confluent.connect.s3.storage;
 
-import com.amazonaws.AmazonClientException;
 import com.amazonaws.event.ProgressEvent;
 import com.amazonaws.event.ProgressListener;
 import com.amazonaws.services.s3.AmazonS3;
@@ -241,7 +240,7 @@ public class S3OutputStream extends PositionOutputStream {
       );
     }
 
-    public void uploadPart(ByteArrayInputStream inputStream, int partSize) {
+    public void uploadPart(ByteArrayInputStream inputStream, int partSize) throws IOException {
       int currentPartNumber = partETags.size() + 1;
       UploadPartRequest request = new UploadPartRequest()
                                             .withBucketName(bucket)
@@ -253,7 +252,11 @@ public class S3OutputStream extends PositionOutputStream {
                                             .withPartSize(partSize)
                                             .withGeneralProgressListener(progressListener);
       log.debug("Uploading part {} for id '{}'", currentPartNumber, uploadId);
-      partETags.add(s3.uploadPart(request).getPartETag());
+      partETags.add(
+        handleAmazonExceptions(
+          () -> s3.uploadPart(request).getPartETag()
+        )
+      );
     }
 
     public void complete() throws IOException {
