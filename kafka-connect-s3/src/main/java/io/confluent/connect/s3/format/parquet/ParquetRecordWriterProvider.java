@@ -28,6 +28,7 @@ import io.confluent.connect.s3.storage.S3ParquetOutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
+
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -47,6 +48,7 @@ import java.util.Set;
 
 public class ParquetRecordWriterProvider extends RecordViewSetter
     implements RecordWriterProvider<S3SinkConnectorConfig> {
+
   private static final Logger log = LoggerFactory.getLogger(ParquetRecordWriterProvider.class);
   private static final String EXTENSION = ".parquet";
   private static final int PAGE_SIZE = 64 * 1024;
@@ -66,65 +68,66 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
   @Override
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     return new S3RetriableRecordWriter(
-      new IORecordWriter() {
-        final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
-        Schema schema = null;
-        ParquetWriter<GenericRecord> writer;
-        S3ParquetOutputFile s3ParquetOutputFile;
+        new IORecordWriter() {
+          final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
+          Schema schema = null;
+          ParquetWriter<GenericRecord> writer;
+          S3ParquetOutputFile s3ParquetOutputFile;
 
-        @Override
-        public void write(SinkRecord record) throws IOException {
-          if (schema == null || writer == null) {
-            schema = recordView.getViewSchema(record, true);
-            log.info("Opening record writer for: {}", adjustedFilename);
-            org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
-            s3ParquetOutputFile = new S3ParquetOutputFile(storage, adjustedFilename);
-            AvroParquetWriter.Builder<GenericRecord> builder =
-                AvroParquetWriter.<GenericRecord>builder(s3ParquetOutputFile)
-                .withSchema(avroSchema)
-                .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
-                .withDictionaryEncoding(true)
-                .withCompressionCodec(storage.conf().parquetCompressionCodecName())
-                .withPageSize(PAGE_SIZE);
-            if (schemaHasArrayOfOptionalItems(schema, /*seenSchemas=*/null)) {
-              // If the schema contains an array of optional items, then
-              // it is possible that the array may have null items during the
-              // writing process.  In this case, we set a flag so as not to
-              // incur a NullPointerException
-              log.debug(
-                  "Setting \"" + AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE
-                  + "\" to false because the schema contains an array "
-                  + "with optional items"
-              );
-              builder.config(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false");
+          @Override
+          public void write(SinkRecord record) throws IOException {
+            if (schema == null || writer == null) {
+              schema = recordView.getViewSchema(record, true);
+              log.info("Opening record writer for: {}", adjustedFilename);
+              org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
+              s3ParquetOutputFile = new S3ParquetOutputFile(storage, adjustedFilename);
+              AvroParquetWriter.Builder<GenericRecord> builder =
+                  AvroParquetWriter.<GenericRecord>builder(s3ParquetOutputFile)
+                      .withSchema(avroSchema)
+                      .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
+                      .withDictionaryEncoding(true)
+                      .withCompressionCodec(storage.conf().parquetCompressionCodecName())
+                      .withPageSize(PAGE_SIZE);
+              if (schemaHasArrayOfOptionalItems(schema, /*seenSchemas=*/null)) {
+                // If the schema contains an array of optional items, then
+                // it is possible that the array may have null items during the
+                // writing process.  In this case, we set a flag so as not to
+                // incur a NullPointerException
+                log.debug(
+                    "Setting \"" + AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE
+                        + "\" to false because the schema contains an array "
+                        + "with optional items"
+                );
+                builder.config(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false");
+              }
+              writer = builder.build();
             }
-            writer = builder.build();
+            log.trace("Sink record with view {}: {}", recordView, record);
+            Object value = avroData.fromConnectData(schema, recordView.getView(record, true));
+            writer.write((GenericRecord) value);
           }
-          log.trace("Sink record with view {}: {}", recordView, record);
-          Object value = avroData.fromConnectData(schema, recordView.getView(record, true));
-          writer.write((GenericRecord) value);
-        }
 
-        @Override
-        public void close() throws IOException {
-          if (writer != null) {
-            writer.close();
+          @Override
+          public void close() throws IOException {
+            if (writer != null) {
+              writer.close();
+            }
           }
-        }
 
-        @Override
-        public void commit() throws IOException {
-          s3ParquetOutputFile.s3out.setCommit();
-          if (writer != null) {
-            writer.close();
+          @Override
+          public void commit() throws IOException {
+            s3ParquetOutputFile.s3out.setCommit();
+            if (writer != null) {
+              writer.close();
+            }
           }
         }
-      }
     );
   }
 
   /**
    * Check if any schema (or nested schema) is an array of optional items
+   *
    * @param schema The shema to check
    * @return 'true' if the schema contains an array with optional items.
    */
@@ -156,6 +159,7 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
   }
 
   private static class S3ParquetOutputFile implements OutputFile {
+
     private static final int DEFAULT_BLOCK_SIZE = 0;
     private S3Storage storage;
     private String filename;
