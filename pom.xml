@@ -21,7 +21,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>10.2.2</version>
+        <version>11.0.2</version>
     </parent>
 
     <groupId>io.confluent</groupId>
@@ -212,6 +212,12 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <!--<version>5.3.2</version>-->
             <scope>test</scope>
         </dependency>
         <dependency>
