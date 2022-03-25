@@ -61,10 +61,9 @@ import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.connect.storage.partitioner.TimestampExtractor;
 
 import static org.apache.kafka.common.utils.Time.SYSTEM;
-import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNotEquals;
 
 public class TopicPartitionWriterTest extends TestWithMockedS3 {
   // The default
@@ -93,7 +92,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     format = new AvroFormat(storage);
 
     s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
+    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
 
     Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
     writerProvider = format.getRecordWriterProvider();
@@ -859,6 +858,41 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     verify(expectedFiles, 3, schema, records);
   }
 
+  @Test
+  public void testPathLowercaseForcePath() throws Exception {
+    localProps.put(S3SinkConnectorConfig.S3_PATH_FORCE_LOWERCASE_CONFIG, "true");
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new FieldPartitioner<>();
+    parsedConfig.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG, Collections.singletonList("string"));
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, writerProvider, partitioner, connectorConfig, context);
+
+    String key = "Key";
+    Schema schema = createNewSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 3);
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
+    for (SinkRecord record : sinkRecords) {
+      ((Struct) record.value()).put("string", "ABC");   // convert to uppercase.
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "string=ABC");
+    String uppercaseContainedFile = FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT);
+
+    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    for (S3ObjectSummary summary : summaries) {
+      assertNotEquals(uppercaseContainedFile, summary.getKey());    // uppercase value is not found
+    }
+  }
+
   private Struct createRecord(Schema schema, int ibase, float fbase) {
     return new Struct(schema)
                .put("boolean", true)
@@ -926,7 +960,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     Collections.sort(actualFiles);
     Collections.sort(expectedFileKeys);
-    assertThat(actualFiles, is(expectedFileKeys));
+    assertEquals(actualFiles, expectedFileKeys);
 
     int index = 0;
     for (String fileKey : actualFiles) {

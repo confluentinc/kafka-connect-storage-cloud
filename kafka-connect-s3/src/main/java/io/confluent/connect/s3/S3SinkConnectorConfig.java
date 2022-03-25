@@ -154,6 +154,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String S3_PATH_STYLE_ACCESS_ENABLED_CONFIG = "s3.path.style.access.enabled";
   public static final boolean S3_PATH_STYLE_ACCESS_ENABLED_DEFAULT = true;
 
+  public static final String S3_PATH_FORCE_LOWERCASE_CONFIG = "s3.path.force.lowercase";
+  public static final boolean S3_PATH_FORCE_LOWERCASE_DEFAULT = false;
+
   private final String name;
 
   private final StorageCommonConfig commonConfig;
@@ -525,6 +528,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.SHORT,
           "Enable Path Style Access to S3"
+      );
+
+      configDef.define(
+          S3_PATH_FORCE_LOWERCASE_CONFIG,
+          Type.BOOLEAN,
+          S3_PATH_FORCE_LOWERCASE_DEFAULT,
+          Importance.LOW,
+          "Force s3 path string to be lower cases.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Path's Letter Case"
       );
     }
     return configDef;
