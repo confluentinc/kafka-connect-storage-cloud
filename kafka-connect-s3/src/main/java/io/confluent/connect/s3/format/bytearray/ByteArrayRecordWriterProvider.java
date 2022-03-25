@@ -60,29 +60,31 @@ public class ByteArrayRecordWriterProvider extends RecordViewSetter
   @Override
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     return new S3RetriableRecordWriter(
-      new IORecordWriter() {
-        final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
-        final S3OutputStream s3out = storage.create(adjustedFilename, true, ByteArrayFormat.class);
-        final OutputStream s3outWrapper = s3out.wrapForCompression();
+        new IORecordWriter() {
+          final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
+          final S3OutputStream s3out = storage
+              .create(adjustedFilename, true, ByteArrayFormat.class);
+          final OutputStream s3outWrapper = s3out.wrapForCompression();
 
-        @Override
-        public void write(SinkRecord record) throws IOException {
-          log.trace("Sink record with view {}: {}", recordView, record);
-          byte[] bytes = converter.fromConnectData(record.topic(),
-              recordView.getViewSchema(record, false), recordView.getView(record, false));
-          s3outWrapper.write(bytes);
-          s3outWrapper.write(lineSeparatorBytes);
+          @Override
+          public void write(SinkRecord record) throws IOException {
+            log.trace("Sink record with view {}: {}", recordView, record);
+            byte[] bytes = converter.fromConnectData(record.topic(),
+                recordView.getViewSchema(record, false), recordView.getView(record, false));
+            s3outWrapper.write(bytes);
+            s3outWrapper.write(lineSeparatorBytes);
+          }
+
+          @Override
+          public void commit() throws IOException {
+            s3out.commit();
+            s3outWrapper.close();
+          }
+
+          @Override
+          public void close() throws IOException {
+          }
         }
-
-        @Override
-        public void commit() throws IOException {
-          s3out.commit();
-          s3outWrapper.close();
-        }
-
-        @Override
-        public void close() throws IOException {}
-      }
     );
   }
 }
