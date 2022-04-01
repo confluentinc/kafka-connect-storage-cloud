@@ -89,7 +89,7 @@ public class KeyValueHeaderRecordWriterProvider
         // keyWriter != null means writing keys is turned on
         if (keyWriter != null && sinkRecord.key() == null) {
           throw new DataException(
-              String.format("Key cannot be null for SinkRecord: %s", sinkRecord)
+              String.format("Key cannot be null for SinkRecord. Topic: %s", sinkRecord.topic())
           );
         }
 
@@ -97,7 +97,7 @@ public class KeyValueHeaderRecordWriterProvider
         if (headerWriter != null
             && (sinkRecord.headers() == null || sinkRecord.headers().isEmpty())) {
           throw new DataException(
-              String.format("Headers cannot be null for SinkRecord: %s", sinkRecord)
+              String.format("Headers cannot be null for SinkRecord. Topic: %s", sinkRecord.topic())
           );
         }
 
