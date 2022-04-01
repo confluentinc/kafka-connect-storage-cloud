@@ -1104,7 +1104,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, null,
         Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
 
-    String exceptionMessage = String.format("Key cannot be null for SinkRecord: %s", faultyRecord.toString());
+    String exceptionMessage = String.format("Key cannot be null for SinkRecord. Topic: %s", faultyRecord.topic());
     testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, false, false);
     tearDown(); // clear mock S3 port for follow up test
     // test with faulty being first in batch
@@ -1118,7 +1118,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
         Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, Collections.emptyList());
 
-    String exceptionMessage = String.format("Headers cannot be null for SinkRecord: %s", faultyRecord.toString());
+    String exceptionMessage = String.format("Headers cannot be null for SinkRecord. Topic: %s", faultyRecord.topic());
     testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, false, false);
     tearDown(); // clear mock S3 port for follow up test
     // test with faulty being first in batch
@@ -1132,7 +1132,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
         Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, null);
 
-    String exceptionMessage = String.format("Headers cannot be null for SinkRecord: %s", faultyRecord.toString());
+    String exceptionMessage = String.format("Headers cannot be null for SinkRecord. Topic: %s", faultyRecord.topic());
     testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, false, false);
     tearDown(); // clear mock S3 port for follow up test
     // test with faulty being first in batch
