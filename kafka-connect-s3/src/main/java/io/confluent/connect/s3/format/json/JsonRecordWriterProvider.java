@@ -17,6 +17,7 @@ package io.confluent.connect.s3.format.json;
 
 import static io.confluent.connect.s3.util.S3ErrorUtils.throwConnectException;
 import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
+import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -78,7 +79,8 @@ public class JsonRecordWriterProvider extends RecordViewSetter
 
             @Override
             public void write(SinkRecord record) throws IOException {
-              log.trace("Sink record with view {}: {}", recordView, record);
+              log.trace("Sink record with view {}: {}", recordView,
+                  sinkRecordToLoggableString(record));
               // headers need to be enveloped for json format
               boolean envelop = recordView instanceof HeaderRecordView;
               Object value = recordView.getView(record, envelop);

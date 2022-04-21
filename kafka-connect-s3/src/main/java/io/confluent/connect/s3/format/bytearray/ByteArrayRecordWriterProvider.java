@@ -16,6 +16,7 @@
 package io.confluent.connect.s3.format.bytearray;
 
 import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
+import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.storage.IORecordWriter;
@@ -68,7 +69,8 @@ public class ByteArrayRecordWriterProvider extends RecordViewSetter
 
           @Override
           public void write(SinkRecord record) throws IOException {
-            log.trace("Sink record with view {}: {}", recordView, record);
+            log.trace("Sink record with view {}: {}", recordView,
+                sinkRecordToLoggableString(record));
             byte[] bytes = converter.fromConnectData(record.topic(),
                 recordView.getViewSchema(record, false), recordView.getView(record, false));
             s3outWrapper.write(bytes);

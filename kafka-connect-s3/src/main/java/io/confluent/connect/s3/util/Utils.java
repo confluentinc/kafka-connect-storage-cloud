@@ -17,6 +17,7 @@
 package io.confluent.connect.s3.util;
 
 import io.confluent.connect.s3.format.RecordView;
+import org.apache.kafka.connect.sink.SinkRecord;
 
 public class Utils {
 
@@ -40,4 +41,8 @@ public class Utils {
     }
   }
 
+  public static String sinkRecordToLoggableString(SinkRecord sinkRecord) {
+    return "SinkRecord{kafkaOffset=" + sinkRecord.kafkaOffset() + ", topic='" + sinkRecord.topic()
+        + "', kafkaPartition=" + sinkRecord.kafkaPartition() + "} ";
+  }
 }
