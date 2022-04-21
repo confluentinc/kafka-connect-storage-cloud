@@ -18,6 +18,7 @@
 package io.confluent.connect.s3.format.parquet;
 
 import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
+import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
@@ -100,7 +101,8 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
               }
               writer = builder.build();
             }
-            log.trace("Sink record with view {}: {}", recordView, record);
+            log.trace("Sink record with view {}: {}", recordView,
+                sinkRecordToLoggableString(record));
             Object value = avroData.fromConnectData(schema, recordView.getView(record, true));
             writer.write((GenericRecord) value);
           }

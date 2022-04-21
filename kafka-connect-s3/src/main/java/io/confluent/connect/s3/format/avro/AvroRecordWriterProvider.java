@@ -16,6 +16,7 @@
 package io.confluent.connect.s3.format.avro;
 
 import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
+import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 
 import io.confluent.connect.s3.storage.IORecordWriter;
 import io.confluent.connect.s3.format.S3RetriableRecordWriter;
@@ -76,7 +77,8 @@ public class AvroRecordWriterProvider extends RecordViewSetter
               writer.setCodec(CodecFactory.fromString(conf.getAvroCodec()));
               writer.create(avroSchema, s3out);
             }
-            log.trace("Sink record with view {}: {}", recordView, record);
+            log.trace("Sink record with view {}: {}", recordView,
+                sinkRecordToLoggableString(record));
             Object value = avroData.fromConnectData(schema, recordView.getView(record, false));
             // AvroData wraps primitive types so their schema can be included. We need to unwrap
             // NonRecordContainers to just their value to properly handle these types

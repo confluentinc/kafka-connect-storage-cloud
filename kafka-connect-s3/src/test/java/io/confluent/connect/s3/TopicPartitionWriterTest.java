@@ -85,6 +85,7 @@ import io.confluent.connect.storage.partitioner.TimestampExtractor;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
+import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.partitioner.PartitionerConfig.PARTITION_FIELD_NAME_CONFIG;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
@@ -1104,7 +1105,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, null,
         Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
 
-    String exceptionMessage = String.format("Key cannot be null for SinkRecord. Topic: %s", faultyRecord.topic());
+    String exceptionMessage = String.format("Key cannot be null for SinkRecord: %s", sinkRecordToLoggableString(faultyRecord));
     testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, false, false);
     tearDown(); // clear mock S3 port for follow up test
     // test with faulty being first in batch
@@ -1118,7 +1119,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
         Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, Collections.emptyList());
 
-    String exceptionMessage = String.format("Headers cannot be null for SinkRecord. Topic: %s", faultyRecord.topic());
+    String exceptionMessage = String.format("Headers cannot be null for SinkRecord: %s", sinkRecordToLoggableString(faultyRecord));
     testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, false, false);
     tearDown(); // clear mock S3 port for follow up test
     // test with faulty being first in batch
@@ -1132,7 +1133,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
         Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, null);
 
-    String exceptionMessage = String.format("Headers cannot be null for SinkRecord. Topic: %s", faultyRecord.topic());
+    String exceptionMessage = String.format("Headers cannot be null for SinkRecord: %s", sinkRecordToLoggableString(faultyRecord));
     testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, false, false);
     tearDown(); // clear mock S3 port for follow up test
     // test with faulty being first in batch
