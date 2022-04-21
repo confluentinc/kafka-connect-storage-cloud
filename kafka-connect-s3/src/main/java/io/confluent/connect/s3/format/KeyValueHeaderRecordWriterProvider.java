@@ -28,6 +28,7 @@ import io.confluent.connect.storage.format.RecordWriterProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 import static java.util.Objects.requireNonNull;
 
 /**
@@ -89,7 +90,8 @@ public class KeyValueHeaderRecordWriterProvider
         // keyWriter != null means writing keys is turned on
         if (keyWriter != null && sinkRecord.key() == null) {
           throw new DataException(
-              String.format("Key cannot be null for SinkRecord. Topic: %s", sinkRecord.topic())
+              String.format("Key cannot be null for SinkRecord: %s",
+                  sinkRecordToLoggableString(sinkRecord))
           );
         }
 
@@ -97,7 +99,8 @@ public class KeyValueHeaderRecordWriterProvider
         if (headerWriter != null
             && (sinkRecord.headers() == null || sinkRecord.headers().isEmpty())) {
           throw new DataException(
-              String.format("Headers cannot be null for SinkRecord. Topic: %s", sinkRecord.topic())
+              String.format("Headers cannot be null for SinkRecord: %s",
+                  sinkRecordToLoggableString(sinkRecord))
           );
         }
 
