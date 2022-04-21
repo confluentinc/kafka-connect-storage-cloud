@@ -41,6 +41,12 @@ public class Utils {
     }
   }
 
+  /**
+   * Returns a safe string representation of the sink record that can be logged in the logs.
+   *
+   * @param sinkRecord the record
+   * @return the safe string representation that can be logged
+   */
   public static String sinkRecordToLoggableString(SinkRecord sinkRecord) {
     return "SinkRecord{kafkaOffset=" + sinkRecord.kafkaOffset() + ", topic='" + sinkRecord.topic()
         + "', kafkaPartition=" + sinkRecord.kafkaPartition() + "} ";
