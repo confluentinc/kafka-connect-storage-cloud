@@ -183,12 +183,6 @@
             <artifactId>json-smart</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>confluent-log4j</artifactId>
-            <version>${confluent-log4j.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>commons-beanutils</groupId>
             <artifactId>commons-beanutils</artifactId>
             <version>1.9.4</version>
