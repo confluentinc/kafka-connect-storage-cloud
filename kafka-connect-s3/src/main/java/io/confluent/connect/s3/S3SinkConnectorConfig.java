@@ -445,7 +445,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           group,
           ++orderInGroup,
           Width.LONG,
-          "Compression type",
+          "Compression Level",
           COMPRESSION_LEVEL_VALIDATOR
       );
 
