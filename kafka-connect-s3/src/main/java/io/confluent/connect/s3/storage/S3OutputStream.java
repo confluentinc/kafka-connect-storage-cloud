@@ -59,7 +59,7 @@ public class S3OutputStream extends PositionOutputStream {
   private final int partSize;
   private final CannedAccessControlList cannedAcl;
   private boolean closed;
-  private final ByteBuffer buffer;
+  private final ByteBuf buffer;
   private MultipartUpload multiPartUpload;
   private final CompressionType compressionType;
   private final int compressionLevel;
