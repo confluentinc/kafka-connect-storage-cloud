@@ -17,6 +17,7 @@
 package io.confluent.connect.s3.util;
 
 import io.confluent.connect.s3.format.RecordView;
+import org.apache.kafka.connect.sink.SinkRecord;
 
 public class Utils {
 
@@ -32,7 +33,7 @@ public class Utils {
   public static String getAdjustedFilename(RecordView recordView, String filename,
       String initialExtension) {
     if (filename.endsWith(initialExtension)) {
-      int index = filename.indexOf(initialExtension);
+      int index = filename.lastIndexOf(initialExtension);
       return filename.substring(0, index) + recordView.getExtension() + initialExtension;
     } else {
       // filename is already stripped
@@ -40,4 +41,14 @@ public class Utils {
     }
   }
 
+  /**
+   * Returns a safe string representation of the sink record that can be logged in the logs.
+   *
+   * @param sinkRecord the record
+   * @return the safe string representation that can be logged
+   */
+  public static String sinkRecordToLoggableString(SinkRecord sinkRecord) {
+    return "SinkRecord{kafkaOffset=" + sinkRecord.kafkaOffset() + ", topic='" + sinkRecord.topic()
+        + "', kafkaPartition=" + sinkRecord.kafkaPartition() + "} ";
+  }
 }

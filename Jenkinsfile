@@ -7,9 +7,10 @@ def getVaultSecretsList() {
 common {
   slackChannel = '#connect-warn'
   upstreamProjects = 'confluentinc/kafka-connect-storage-common'
-  nodeLabel = 'docker-oraclejdk8'
+  nodeLabel = 'docker-debian-jdk8'
   pintMerge = true
   twistlockCveScan = true
   secret_file_list = getVaultSecretsList()
   downStreamValidate = false
+  disableConcurrentBuilds = true
 }

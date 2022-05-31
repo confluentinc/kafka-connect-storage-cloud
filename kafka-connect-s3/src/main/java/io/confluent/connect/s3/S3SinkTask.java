@@ -160,7 +160,7 @@ public class S3SinkTask extends SinkTask {
     return formatClass.getConstructor(S3Storage.class).newInstance(storage);
   }
 
-  private RecordWriterProvider<S3SinkConnectorConfig> newRecordWriterProvider(
+  RecordWriterProvider<S3SinkConnectorConfig> newRecordWriterProvider(
       S3SinkConnectorConfig config)
       throws ClassNotFoundException, InvocationTargetException, InstantiationException,
       NoSuchMethodException, IllegalAccessException {
@@ -324,10 +324,5 @@ public class S3SinkTask extends SinkTask {
         time,
         reporter
     );
-  }
-
-  // Visible for testing
-  Format<S3SinkConnectorConfig, String> getFormat() {
-    return format;
   }
 }

@@ -16,13 +16,14 @@
 package io.confluent.connect.s3.format.avro;
 
 import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
+import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 
+import io.confluent.connect.s3.storage.IORecordWriter;
+import io.confluent.connect.s3.format.S3RetriableRecordWriter;
 import org.apache.avro.file.CodecFactory;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,61 +60,48 @@ public class AvroRecordWriterProvider extends RecordViewSetter
   @Override
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     // This is not meant to be a thread-safe writer!
-    return new RecordWriter() {
-      final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
-      final DataFileWriter<Object> writer = new DataFileWriter<>(new GenericDatumWriter<>());
-      Schema schema = null;
-      S3OutputStream s3out;
+    return new S3RetriableRecordWriter(
+        new IORecordWriter() {
+          final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
+          final DataFileWriter<Object> writer = new DataFileWriter<>(new GenericDatumWriter<>());
+          Schema schema = null;
+          S3OutputStream s3out;
 
-      @Override
-      public void write(SinkRecord record) {
-        if (schema == null) {
-          schema = recordView.getViewSchema(record, false);
-          try {
-            log.info("Opening record writer for: {}", adjustedFilename);
-            s3out = storage.create(adjustedFilename, true, AvroFormat.class);
-            org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
-            writer.setCodec(CodecFactory.fromString(conf.getAvroCodec()));
-            writer.create(avroSchema, s3out);
-          } catch (IOException e) {
-            throw new ConnectException(e);
+          @Override
+          public void write(SinkRecord record) throws IOException {
+            if (schema == null) {
+              schema = recordView.getViewSchema(record, false);
+              log.info("Opening record writer for: {}", adjustedFilename);
+              s3out = storage.create(adjustedFilename, true, AvroFormat.class);
+              org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
+              writer.setCodec(CodecFactory.fromString(conf.getAvroCodec()));
+              writer.create(avroSchema, s3out);
+            }
+            log.trace("Sink record with view {}: {}", recordView,
+                sinkRecordToLoggableString(record));
+            Object value = avroData.fromConnectData(schema, recordView.getView(record, false));
+            // AvroData wraps primitive types so their schema can be included. We need to unwrap
+            // NonRecordContainers to just their value to properly handle these types
+            if (value instanceof NonRecordContainer) {
+              value = ((NonRecordContainer) value).getValue();
+            }
+            writer.append(value);
+          }
+
+          @Override
+          public void commit() throws IOException {
+            // Flush is required here, because closing the writer will close the underlying S3
+            // output stream before committing any data to S3.
+            writer.flush();
+            s3out.commit();
+            writer.close();
+          }
+
+          @Override
+          public void close() throws IOException {
+            writer.close();
           }
         }
-        log.trace("Sink record with view {}: {}", recordView, record);
-        Object value = avroData.fromConnectData(schema, recordView.getView(record, false));
-        try {
-          // AvroData wraps primitive types so their schema can be included. We need to unwrap
-          // NonRecordContainers to just their value to properly handle these types
-          if (value instanceof NonRecordContainer) {
-            value = ((NonRecordContainer) value).getValue();
-          }
-          writer.append(value);
-        } catch (IOException e) {
-          throw new ConnectException(e);
-        }
-      }
-
-      @Override
-      public void commit() {
-        try {
-          // Flush is required here, because closing the writer will close the underlying S3
-          // output stream before committing any data to S3.
-          writer.flush();
-          s3out.commit();
-          writer.close();
-        } catch (IOException e) {
-          throw new RetriableException(e);
-        }
-      }
-
-      @Override
-      public void close() {
-        try {
-          writer.close();
-        } catch (IOException e) {
-          throw new ConnectException(e);
-        }
-      }
-    };
+    );
   }
 }

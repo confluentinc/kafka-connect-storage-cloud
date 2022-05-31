@@ -28,6 +28,7 @@ import io.confluent.connect.storage.format.RecordWriterProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 import static java.util.Objects.requireNonNull;
 
 /**
@@ -70,9 +71,8 @@ public class KeyValueHeaderRecordWriterProvider
     // Each provider will add its own extension. The filename comes in with the value file format,
     // e.g. filename.avro, but when the format class is different for the key or the headers the
     // extension needs to be removed.
-    int extensionIndex = filename.indexOf(valueProvider.getExtension());
-    String strippedFilename = extensionIndex > -1
-        ? filename.substring(0, extensionIndex)
+    String strippedFilename = filename.endsWith(valueProvider.getExtension())
+        ? filename.substring(0, filename.length() - valueProvider.getExtension().length())
         : filename;
 
     RecordWriter valueWriter = valueProvider.getRecordWriter(conf, strippedFilename);
@@ -90,7 +90,8 @@ public class KeyValueHeaderRecordWriterProvider
         // keyWriter != null means writing keys is turned on
         if (keyWriter != null && sinkRecord.key() == null) {
           throw new DataException(
-              String.format("Key cannot be null for SinkRecord: %s", sinkRecord)
+              String.format("Key cannot be null for SinkRecord: %s",
+                  sinkRecordToLoggableString(sinkRecord))
           );
         }
 
@@ -98,7 +99,8 @@ public class KeyValueHeaderRecordWriterProvider
         if (headerWriter != null
             && (sinkRecord.headers() == null || sinkRecord.headers().isEmpty())) {
           throw new DataException(
-              String.format("Headers cannot be null for SinkRecord: %s", sinkRecord)
+              String.format("Headers cannot be null for SinkRecord: %s",
+                  sinkRecordToLoggableString(sinkRecord))
           );
         }
 

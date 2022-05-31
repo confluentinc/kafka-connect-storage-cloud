@@ -9,7 +9,7 @@ import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 
 import io.confluent.common.utils.IntegrationTest;
-import org.apache.kafka.test.TestUtils;
+import io.confluent.connect.s3.util.S3Utils;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,12 +50,7 @@ public abstract class BaseConnectorNetworkIT extends BaseConnectorIT {
       String bucketName,
       int numFiles)
       throws InterruptedException {
-    TestUtils.waitForCondition(
-        () -> assertFileCountInBucket(bucketName, numFiles).orElse(false),
-        CONSUME_MAX_DURATION_MS,
-        "Files not written to S3 bucket in time."
-    );
-    return System.currentTimeMillis();
+    return S3Utils.waitForFilesInBucket(S3Client, bucketName, numFiles, CONSUME_MAX_DURATION_MS);
   }
 
   protected void startPumbaPauseContainer() {

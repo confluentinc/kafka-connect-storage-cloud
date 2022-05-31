@@ -21,7 +21,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-cloud</artifactId>
-        <version>10.0.1-SNAPSHOT</version>
+        <version>10.0.8-SNAPSHOT</version>
     </parent>
 
     <artifactId>kafka-connect-s3</artifactId>
@@ -43,6 +43,8 @@
         <maven.failsafe.plugin.version>2.22.1</maven.failsafe.plugin.version>
         <skipIntegrationTests>false</skipIntegrationTests>
         <surefire-junit47.version>2.22.1</surefire-junit47.version>
+        <guava.version>30.1.1-jre</guava.version>
+        <wiremock.version>2.31.0</wiremock.version>
     </properties>
 
     <dependencyManagement>
@@ -74,6 +76,13 @@
                 <artifactId>jackson-dataformat-cbor</artifactId>
             </exclusion>
             </exclusions>
+        </dependency>
+        <!-- Pinning the version of this dependency to address CVE in alignment with
+            https://github.com/confluentinc/common/pull/342
+            Once the jackson version gets upgraded consider lifting this explicit listing -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-cbor</artifactId>
         </dependency>
         <dependency>
             <groupId>com.amazonaws</groupId>
@@ -142,6 +151,23 @@
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers</artifactId>
             <version>${org.testcontainer.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>${guava.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.tomakehurst</groupId>
+            <artifactId>wiremock-jre8-standalone</artifactId>
+            <version>${wiremock.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.20.2</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
