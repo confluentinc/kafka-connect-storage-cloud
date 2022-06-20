@@ -93,7 +93,7 @@ public class ElasticByteBuffer implements ByteBuf {
 
     checkBounds(offset, length, src.length);
 
-    if (!hasRemaining()) {
+    if (remaining() < length) {
       throw new BufferOverflowException();
     }
 
