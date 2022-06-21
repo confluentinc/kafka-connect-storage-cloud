@@ -1,3 +1,0 @@
-hostPort: localhost:3231
-rules:
-- pattern: ".*"
