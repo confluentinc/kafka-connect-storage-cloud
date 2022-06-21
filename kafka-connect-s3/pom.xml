@@ -45,6 +45,8 @@
         <surefire-junit47.version>2.22.1</surefire-junit47.version>
         <guava.version>30.1.1-jre</guava.version>
         <wiremock.version>2.31.0</wiremock.version>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
     </properties>
 
     <dependencyManagement>

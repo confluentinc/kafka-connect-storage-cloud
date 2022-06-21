@@ -63,12 +63,14 @@ import io.confluent.connect.storage.common.GenericRecommender;
 import io.confluent.connect.storage.common.ParentValueRecommender;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.Format;
+// UDX-1216, add EVOcpiPartitioner here!
 import io.confluent.connect.storage.partitioner.DailyPartitioner;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.FieldPartitioner;
 import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
+import io.confluent.connect.s3.extensions.EVAnalyticsOcpiPartitioner;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
@@ -220,7 +222,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
             HourlyPartitioner.class,
             DailyPartitioner.class,
             TimeBasedPartitioner.class,
-            FieldPartitioner.class
+            FieldPartitioner.class,
+                EVAnalyticsOcpiPartitioner.class
         )
     );
   }
