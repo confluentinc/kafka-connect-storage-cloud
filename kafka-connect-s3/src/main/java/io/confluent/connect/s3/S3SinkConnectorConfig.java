@@ -675,7 +675,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Type.BOOLEAN,
           ELASTIC_BUFFER_ENABLE_DEFAULT,
           Importance.LOW,
-          "Elastic buffer to staging s3-part for saving memory.",
+          "Specifies whether or not to allocate Elastic buffer for staging s3-part to save memory.",
           group,
           ++orderInGroup,
           Width.LONG,
