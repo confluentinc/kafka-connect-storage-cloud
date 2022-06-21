@@ -1,4 +1,4 @@
-FROM confluentinc/cp-kafka-connect-base:6.0.7 as base
+FROM confluentinc/cp-kafka-connect-base:7.1.1 as base
 RUN confluent-hub install --no-prompt confluentinc/kafka-connect-s3:10.0.0
 COPY kafka-connect-s3/target/kafka-connect-s3-10.1.0-SNAPSHOT-development/share/java/kafka-connect-s3/kafka-connect-s3-10.1.0-SNAPSHOT.jar /usr/share/confluent-hub-components/confluentinc-kafka-connect-s3/lib/kafka-connect-s3-10.0.0.jar
 COPY connect-avro-distributed.properties /etc/schema-registry/
