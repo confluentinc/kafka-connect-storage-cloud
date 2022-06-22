@@ -146,7 +146,7 @@ public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
         EVAnalyticsOcpiPartitioner<String> partitioner = new EVAnalyticsOcpiPartitioner<>();
         partitioner.configure(config);
 
-        String streamUuidNotAUuid = "la-la-la-la-la";
+        String streamUuidNotAUuid = "not-a-uuid-la-la-la";
 
         String timeZoneString = (String) config.get(PartitionerConfig.TIMEZONE_CONFIG);
         int YYYY = 2022;

@@ -22,6 +22,8 @@ NOTE: this is an exact fork of v10.0.8:
 TODO: env: IntelliJ Community edition (I'm sure VSCode would work fine too, but I couldn't bear dealing with random Java extensions)
 NBNBNB: if using IntelliJ in combination with sdkman, remember to set the IntelliJ Maven path to the sdkman maven path!
 Otherwise the various `mvn installs`s on the dependent packages won't be linked properly and there will be PAIN
+Other bits: Make sure the indent level in IntelliJ is set to 2 spaces. Checkstyle (which seems to be a linter) will
+complain otherwise
 
 ## Installing Java 11 and maven with sdkman
 
@@ -70,6 +72,8 @@ mvn install:install-file \
 3. Run the tests, just to make sure the connector code executes: `cd kafka-connect-s3 && mvn test`
    1. Or without the 'checkstyle' / linting step `mvn test -Dcheckstyle.skip`
 4. TODO: use maven to build (mvn compile?), then compress with ... (a tool that produces zip archives)
+   1. `mvn clean install -DskipTests`
+   2. ZIP will appear in `kafka-connect-s3/target/components/packages/[a-z]*.zip`
 
 ## Updating the connector ZIP in S3
 
