@@ -1,26 +1,13 @@
 package io.confluent.connect.s3.extensions;
 
-public class OcpiPayload {
-    private String timestamp;
-    private String id;
+public interface OcpiPayload {
+    String getTimestamp();
 
-    public String getTimestamp() {
-        return timestamp;
-    }
+    void setTimestamp(String timestamp);
 
-    public void setTimestamp(String timestamp) {
-        this.timestamp = timestamp;
-    }
+    String getId();
 
-    public String getId() {
-        return id;
-    }
+    void setId(String id);
 
-    public void setId(String id) {
-        this.id = id;
-    }
-
-    public String toString(){
-        return "OcpiPayload [ entityId: "+ getId() +", Zulu timestamp: "+ getTimestamp() + " ]";
-    }
+    String toString();
 }
