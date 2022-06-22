@@ -9,3 +9,6 @@ COPY pub_i18n.properties /etc/schema-registry/
 COPY pub_euro_i18n.properties /etc/schema-registry/
 COPY pub_asia_i18n.properties /etc/schema-registry/
 COPY push2.properties /etc/schema-registry/
+COPY jmx/jmx_prometheus_httpserver-0.17.0.jar /
+COPY jmx/config.yaml /
+RUN export KAFKA_JMX_OPTS="-javaagent:/jmx_prometheus_httpserver-0.17.0.jar=127.0.0.1:10902:/config.yaml"
