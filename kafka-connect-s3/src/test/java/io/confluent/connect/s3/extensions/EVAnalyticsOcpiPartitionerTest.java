@@ -25,31 +25,6 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 
-class OcpiJsonPayload {
-    private String timestamp;
-    private String entityId;
-
-    public String getTimestamp() {
-        return timestamp;
-    }
-
-    public void setTimestamp(String timestamp) {
-        this.timestamp = timestamp;
-    }
-
-    public String getEntityId() {
-        return entityId;
-    }
-
-    public void setEntityId(String entityId) {
-        this.entityId = entityId;
-    }
-
-    public String toString(){
-        return "OcpiJsonPayload [ entityId: "+ getEntityId() +", Zulu timestamp: "+ getTimestamp() + " ]";
-    }
-}
-
 public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
     // Try to TDD it!
     // Partitioner should:
@@ -82,9 +57,10 @@ public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
         int DD = 1;
         int HH = 1;
         long timestamp = new DateTime(YYYY, MM, DD, HH, 0, 0, 0, DateTimeZone.forID(timeZoneString)).getMillis();
-        String streamUuid = "uuid-1234";
+        String streamUuid = "streamid-1234";
         String entityId = "entity-1234";
-        String payloadTimestamp = "2021-08-31T17:24:13Z";
+        // timestamp format: "2021-08-31T17:24:13Z";
+        String payloadTimestamp = String.format("%d-%02d-%02dT%02d:24:13Z", YYYY, MM, DD, HH);
         String ocpiSessionPayload = String.format(
                 "{\"id\":\"%s\",\"countryCode\":\"GB\",\"partyId\":\"CKL\",\"type\":\"EVChargingSession\",\"evseId\":\"GB*CKL*7*1\",\"address\":{\"postalCode\":\"CV1 3AQ\",\"streetAddress\":\"Northumberland Road\",\"addressCountry\":\"GB\",\"addressLocality\":\"Coventry\"},\"totalKW\":1.019,\"location\":{\"type\":\"Point\",\"coordinates\":[-1.524266,52.411123]},\"provider\":\"CKL\",\"sessionId\":59,\"timestamp\":\"%s\",\"connectorId\":7,\"sessionDurationMins\":0.3,\"chargingDurationMins\":0.3,\"sessionStartTime\":\"2020-04-28T11:54:54Z\",\"sessionEndTime\":\"2020-04-28T11:55:09Z\",\"totalCost\":{\"exclVat\":1,\"inclVat\":1.2}}",
                 entityId,
@@ -97,7 +73,7 @@ public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
 
         // Assert that the filepath is correct
 
-        assertThat(encodedPartition, is(String.format("%s/%s-%s/%s/%s", streamUuid, YYYY, MM, DD, HH)));
+        assertThat(encodedPartition, is(String.format("%s/%s/%d-%02d/%02d/%02d", streamUuid, entityId, YYYY, MM, DD, HH)));
 
     }
 

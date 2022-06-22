@@ -63,7 +63,7 @@ import io.confluent.connect.storage.common.GenericRecommender;
 import io.confluent.connect.storage.common.ParentValueRecommender;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.Format;
-// UDX-1216, add EVOcpiPartitioner here!
+// TODO: UDX-1216, add EVOcpiPartitioner here!
 import io.confluent.connect.storage.partitioner.DailyPartitioner;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.FieldPartitioner;
@@ -216,6 +216,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
     FORMAT_CLASS_RECOMMENDER.addValidValues(FORMAT_CLASS_VALID_VALUES);
 
+    // TODO: check that adding the EVAnalyticsOcpiPartitioner here _actually works_
     PARTITIONER_CLASS_RECOMMENDER.addValidValues(
         Arrays.asList(
             DefaultPartitioner.class,
