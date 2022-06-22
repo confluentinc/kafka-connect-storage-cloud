@@ -2,6 +2,7 @@ package io.confluent.connect.s3.extensions;
 
 import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import io.confluent.connect.storage.errors.PartitionException;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import org.apache.kafka.connect.sink.SinkRecord;
 
@@ -12,20 +13,9 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
-// Takes inspiration from
-// https://stackoverflow.com/questions/57499274/implementing-a-kafka-connect-custom-partitioner
-
-// Original DefaultPartitioner code
-// https://github.com/confluentinc/kafka-connect-storage-common/blob/master/partitioner/src/main/java/io/confluent/connect/storage/partitioner/DefaultPartitioner.java
-// Partitioner interface
-// https://github.com/confluentinc/kafka-connect-storage-common/blob/master/partitioner/src/main/java/io/confluent/connect/storage/partitioner/Partitioner.java
-
-// Original TimeBasedPartitioner code
-// https://github.com/confluentinc/kafka-connect-storage-common/blob/master/partitioner/src/main/java/io/confluent/connect/storage/partitioner/TimeBasedPartitioner.java
-// Maybe it's best to extend DefaultPartitioner<T> as above
-
 public class EVAnalyticsOcpiPartitioner<T> extends DefaultPartitioner<T> {
     private static final Logger log = LoggerFactory.getLogger(EVAnalyticsOcpiPartitioner.class);
+    private static final String PARTITION_FORMAT = "%s/%s/%s-%s/%s/%s";
 
     @Override
     public void configure(Map<String, Object> config) {
@@ -55,6 +45,14 @@ public class EVAnalyticsOcpiPartitioner<T> extends DefaultPartitioner<T> {
         String value = sinkRecord.value().toString();
         String streamUuid = sinkRecord.key().toString();
 
+        try{
+            UUID uuid = UUID.fromString(streamUuid);
+        } catch (IllegalArgumentException exception){
+            String msg = "Key is not a valid uuid, it therefore probably not a stream id";
+            log.error(msg);
+            throw new PartitionException(msg);
+        }
+
         ObjectMapper mapper = new ObjectMapper();
 
         // We don't want to have to extend our POJO with every single
@@ -71,6 +69,8 @@ public class EVAnalyticsOcpiPartitioner<T> extends DefaultPartitioner<T> {
 
         OcpiPayload ocpiPayload = null;
 
+        // An alternative approach to this could be to use a custom JsonDeserializer:
+        // https://www.baeldung.com/jackson-nested-values#mapping-with-custom-jsondeserializer
         try {
             // try to parse into sessions
             ocpiPayload = mapper.readValue(value, OcpiSessionsPayload.class);
@@ -83,29 +83,34 @@ public class EVAnalyticsOcpiPartitioner<T> extends DefaultPartitioner<T> {
             log.info("Mapped to OcpiLocationsPayload");
         } catch (JacksonException e) { log.warn("Could not parse payload into location POJO"); }
 
-        if (ocpiPayload == null) {
+        if (ocpiPayload.getId() == null || ocpiPayload.getTimestamp() == null) {
             log.error("No ocpi mapping found, try again...");
-            // TODO: exit gracefully here
+            String msg = "Could not map this payload to a known OCPI class";
+            throw new PartitionException(msg);
         }
 
         log.info("Mapping record value into object...");
         log.info(ocpiPayload.toString());
         String entityId = ocpiPayload.getId();
         String timestamp = ocpiPayload.getTimestamp();
-        // TODO: needs to ensure that id and timestamp are in the right format!
-        // timestamp format is e.g. "2021-08-31T17:24:13Z"
-        // There's definitely a better way to work with timestamps in Java
-        String [] splitTimestamp = timestamp.split("-");
-        String YYYY = splitTimestamp[0];
-        String MM = splitTimestamp[1];
-        String [] dayTime = splitTimestamp[2].split("T");
-        String DD = dayTime[0];
-        String HH = dayTime[1].substring(0, 2);
 
-        return String.format("%s/%s/%s-%s/%s/%s", streamUuid, entityId, YYYY, MM, DD, HH);
-
-        // How do we handle errors?
-        // return "TODO/what/to/do/when/it/errors";
+        try {
+            // timestamp format is e.g. "2021-08-31T17:24:13Z"
+            // There's definitely a better way to work with timestamps in Java
+            String [] splitTimestamp = timestamp.split("-");
+            String YYYY = splitTimestamp[0];
+            String MM = splitTimestamp[1];
+            String [] dayTime = splitTimestamp[2].split("T");
+            String DD = dayTime[0];
+            String HH = dayTime[1].substring(0, 2);
+            return String.format(PARTITION_FORMAT, streamUuid, entityId, YYYY, MM, DD, HH);
+        } catch (Exception e) {
+            String msg = "Could not parse YYYY-MM/DD/HH values from timestamp: " +
+                    timestamp +
+                    " => Cannot build partition";
+            log.error(msg);
+            throw new PartitionException(msg);
+        }
     }
 
     @Override
