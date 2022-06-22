@@ -128,12 +128,13 @@ public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
         String ocpiLocationPayload = "{\"not\":\"validAtAll\"}";
         Schema schema = this.createSchemaWithTimestampField();
         SinkRecord ocpiSessionRecord = new SinkRecord("test-ocpi-session-topic", 13, Schema.STRING_SCHEMA, streamUuid, schema, ocpiLocationPayload, 0L, timestamp, TimestampType.CREATE_TIME);
-
-        Exception e = assertThrows(PartitionException.class, () -> {
-            partitioner.encodePartition(ocpiSessionRecord);
-        });
-
-        assertEquals("Could not map this payload to a known OCPI class", e.getMessage());
+        String encodedPartition = partitioner.encodePartition(ocpiSessionRecord);
+//        Exception e = assertThrows(PartitionException.class, () -> {
+//            partitioner.encodePartition(ocpiSessionRecord);
+//        });
+//
+//        assertEquals("Could not map this payload to a known OCPI class", e.getMessage());
+        assertThat(encodedPartition, is(String.format("not-ocpi/%s", streamUuid)));
     }
 
     @Test
@@ -201,4 +202,34 @@ public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
 
         assertTrue(e.getMessage().contains("Could not parse YYYY-MM/DD/HH values from timestamp"));
     }
+
+//    @Test
+//    public void testRecordHasNoKey() {
+//        // Top level config
+//        Map<String, Object> config = new HashMap<>();
+//        config.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, StorageCommonConfig.DIRECTORY_DELIM_DEFAULT);
+//
+//        // Configure the partitioner
+//        EVAnalyticsOcpiPartitioner<String> partitioner = new EVAnalyticsOcpiPartitioner<>();
+//        partitioner.configure(config);
+//
+//        String streamUuidNotAUuid = null;
+//
+//        String timeZoneString = (String) config.get(PartitionerConfig.TIMEZONE_CONFIG);
+//        int YYYY = 2022;
+//        int MM = 6;
+//        int DD = 9;
+//        int HH = 7;
+//        long timestamp = new DateTime(YYYY, MM, DD, HH, 0, 0, 0, DateTimeZone.forID(timeZoneString)).getMillis();
+//        String payloadTimestamp = String.format("%d-%02d-%02dT%02d:12:34Z", YYYY, MM, DD, HH);
+//        String ocpiLocationPayload = "{\"not\":\"validEvenIfTheStreamUuidWasValid\"}";
+//        Schema schema = this.createSchemaWithTimestampField();
+//        SinkRecord ocpiSessionRecord = new SinkRecord("test-ocpi-session-topic", 13, Schema.STRING_SCHEMA, streamUuidNotAUuid, schema, ocpiLocationPayload, 0L, timestamp, TimestampType.CREATE_TIME);
+//
+//        Exception e = assertThrows(PartitionException.class, () -> {
+//            partitioner.encodePartition(ocpiSessionRecord);
+//        });
+//
+//        assertEquals("Record does not have a key", e.getMessage());
+//    }
 }

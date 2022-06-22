@@ -21,4 +21,10 @@
       files="(TopicPartitionWriter).java"
     />
 
+<!--    TODO: remove this and simplify the code, dammit-->
+    <suppress
+            checks="NPathComplexity"
+            files="(EVAnalyticsOcpiPartitioner).java"
+    />
+
 </suppressions>

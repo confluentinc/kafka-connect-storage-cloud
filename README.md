@@ -72,8 +72,15 @@ mvn install:install-file \
 3. Run the tests, just to make sure the connector code executes: `cd kafka-connect-s3 && mvn test`
    1. Or without the 'checkstyle' / linting step `mvn test -Dcheckstyle.skip`
 4. TODO: use maven to build (mvn compile?), then compress with ... (a tool that produces zip archives)
-   1. `mvn clean install -DskipTests`
-   2. ZIP will appear in `kafka-connect-s3/target/components/packages/[a-z]*.zip`
+   1. `mvn clean install -DskipTests` (skips the integration tests, these take a while)
+   2. The `.zip` bundle will appear in `kafka-connect-s3/target/components/packages/confluentinc-kafka-connect-s3-10.0.8.zip`
+   3. `ls -l kafka-connect-s3/target/components/packages/confluentinc-kafka-connect-s3-10.0.8.zip`, make sure the last updated time makes sense
+   4. copy that zip file to the udx-infra repo: `cp kafka-connect-s3/target/components/packages/confluentinc-kafka-connect-s3-10.0.8.zip ~/workshop/udx-infra/terraform/modules/data-lake/confluentinc-kafka-connect-s3-udc-edit-10.0.8.zip` 
+   5. Then nagivate to `~/workshop/udx-infra/terraform/modules/data-lake/`
+   6. (maybe) delete the file in s3
+   7. (maybe) delete the existing connector - the connector might cache the zip once created forever...
+      1. Or, just `terragrunt destroy` before an `apply` that requires a connector code update
+   8. Then run `terragrunt apply`. This will delete the old connector and create a new one with the updates from this repo
 
 ## Updating the connector ZIP in S3
 

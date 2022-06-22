@@ -20,6 +20,7 @@ import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import io.confluent.connect.storage.errors.PartitionException;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
+import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,6 +37,8 @@ public class EVAnalyticsOcpiPartitioner<T> extends DefaultPartitioner<T> {
   private static final Logger log = LoggerFactory.getLogger(EVAnalyticsOcpiPartitioner.class);
   // streamUuid/entityId/YYYY-MM/DD/HH
   private static final String PARTITION_FORMAT = "%s/%s/%s-%s/%s/%s";
+  // Thought, we could also have:
+//  private static final String PARTITION_FORMAT = "streamUuid=%s/entityId=%s/%s-%s/%s/%s";
 
   @Override
   public void configure(Map<String, Object> config) {
@@ -43,9 +46,26 @@ public class EVAnalyticsOcpiPartitioner<T> extends DefaultPartitioner<T> {
     super.configure(config);
   }
 
+  private String getStreamUuidFromHeaders(SinkRecord sinkRecord) {
+    log.warn("Trying to find the offering_uuid in the headers instead...");
+    String streamUuid = null;
+    // This is a job for a filtering lambda
+    for (Header header : sinkRecord.headers()) {
+      System.out.println("header key => "
+              + header.key()
+              + "header value => "
+              + header.value().toString());
+      if (header.key().equals("offering_uuid")) {
+        log.info("setting streamUuid to: " + header.value().toString());
+        streamUuid = header.value().toString();
+      }
+    }
+    return streamUuid == null ? "noStreamIdFound" : streamUuid;
+  }
+
   @Override
   public String encodePartition(SinkRecord sinkRecord) {
-    // Gets streamUuid from the key of the message
+    // Gets streamUuid from the key (or, indeed, the header) of the message
     // Decode value of sinkRecord as JSON using jackson
     // If it's not JSON, throw an exception?
     //    somehow exit gracefully
@@ -55,21 +75,37 @@ public class EVAnalyticsOcpiPartitioner<T> extends DefaultPartitioner<T> {
     //      get DD, create partition
     //        get HH, create partition
 
+    // NOTE that any Exceptions thrown from this class
+    // will helpfully crash the entire connector. This means it will not
+    // start up correctly. This means there is no data lake
+
     // for inspiration, see:
     // https://stackoverflow.com/questions/57499274/implementing-a-kafka-connect-custom-partitioner
     // for jackson, see:
     // https://www.tutorialspoint.com/jackson/jackson_quick_guide.htm
     log.info("encoding partition with EVAnalyticsOcpiPartitioner...");
 
+    log.info("Parsing value...");
+
     String value = sinkRecord.value().toString();
-    String streamUuid = sinkRecord.key().toString();
+    log.info("Value: " + value);
+    String streamUuid = "";
 
     try {
+      log.info("Assuming streamUuid is in the key...");
+      streamUuid = sinkRecord.key().toString();
       UUID.fromString(streamUuid);
     } catch (IllegalArgumentException exception) {
       String msg = "Key is not a valid uuid, it therefore probably not a stream id";
       log.error(msg);
       throw new PartitionException(msg);
+    } catch (NullPointerException exception) {
+      // on the aws.db.data-streams.records.0 topic the offering_uuid is in the headers...
+      String msg = "Record does not have a key";
+      log.warn(msg);
+      // This seems to work, hooray
+      // TODO: add unit tests for streamUuid in header
+      streamUuid = getStreamUuidFromHeaders(sinkRecord);
     }
 
     ObjectMapper mapper = new ObjectMapper();
@@ -106,10 +142,16 @@ public class EVAnalyticsOcpiPartitioner<T> extends DefaultPartitioner<T> {
       log.warn("Could not parse payload into location POJO");
     }
 
+    // Note that relying on id and timestamp will not be enough to guarantee the
+    // payload is an OCPI format if other payloads come in that are NOT OCPI on the same
+    // topic. This is a naive approach!
     if (ocpiPayload.getId() == null || ocpiPayload.getTimestamp() == null) {
-      log.error("No ocpi mapping found, try again...");
+      log.warn("No ocpi mapping found, sending payload to non stream uuid partition...");
       String msg = "Could not map this payload to a known OCPI class";
-      throw new PartitionException(msg);
+      // Should probably map to a different partition e.g. not-ocpi
+      // It's probably a good idea to see if we can still parse the timestamp, though
+      // If not that, just use the timestamp of the message supplied by kakfa?
+      return String.format("not-ocpi/%s", streamUuid);
     }
 
     log.info("Mapping record value into object...");
@@ -120,6 +162,13 @@ public class EVAnalyticsOcpiPartitioner<T> extends DefaultPartitioner<T> {
     try {
       // timestamp format is e.g. "2021-08-31T17:24:13Z"
       // There's definitely a better way to work with timestamps in Java
+      // TODO: for non ocpi payloads that are still mapped, format may NOT be Zulu!
+      // TODO: add unit tests for timestamp processing
+      // Error: Could not parse YYYY-MM/DD/HH values from timestamp: 1655925271224
+      // => Cannot build partition (org.apache.kafka.connect.runtime.WorkerSinkTask:612)
+      // it might be as well to parse _anything_ in a timestamp field into
+      // a Java Datetime in the UTC timezone and get the YYYY-MM/DD/HH that way
+      // TODO: do we even need an HH partition? Would it make glue crawling more difficult?
       String[] splitTimestamp = timestamp.split("-");
       String year = splitTimestamp[0];
       String month = splitTimestamp[1];
