@@ -30,6 +30,8 @@ public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
     // - Check that it has timestamp in the payload in the right format to be parsed (zulu time)
     // - Produce the correct path from the 'String encodePartition(SinkRecord sinkRecord)' function
 
+    private static final String UDX_PARTITION_FORMAT_FOR_INTS = "streamUuid=%s/entityId=%s/%d-%02d/day=%02d/hour=%02d";
+
     @Test
     public void testProducesPathFromValidOcpiSessionsPayload() throws Exception {
         // Top level config
@@ -66,7 +68,7 @@ public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
         String encodedPartition = partitioner.encodePartition(ocpiSessionRecord);
 
         // Assert that the filepath is correct
-        String expectedPath = String.format("%s/%s/%d-%02d/%02d/%02d", streamUuid, entityId, YYYY, MM, DD, HH);
+        String expectedPath = String.format(UDX_PARTITION_FORMAT_FOR_INTS, streamUuid, entityId, YYYY, MM, DD, HH);
         assertThat(encodedPartition, is(expectedPath));
     }
 
@@ -103,7 +105,7 @@ public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
         String encodedPartition = partitioner.encodePartition(ocpiSessionRecord);
 
         // Assert that the filepath is correct
-        String expectedPath = String.format("%s/%s/%d-%02d/%02d/%02d", streamUuid, entityId, YYYY, MM, DD, HH);
+        String expectedPath = String.format(UDX_PARTITION_FORMAT_FOR_INTS, streamUuid, entityId, YYYY, MM, DD, HH);
         assertThat(encodedPartition, is(expectedPath));
     }
 
@@ -167,6 +169,9 @@ public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
         assertEquals("Key is not a valid uuid, it therefore probably not a stream id", e.getMessage());
     }
 
+    // TODO: test noValidUUid in headers
+    // maybe just print a warning here and add it to another partition, /*/invalidStreamUUid/id/YYYY...
+
     @Test
     public void testIncorrectTimestampFormat() throws Exception {
         // Top level config
@@ -202,34 +207,4 @@ public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
 
         assertTrue(e.getMessage().contains("Could not parse YYYY-MM/DD/HH values from timestamp"));
     }
-
-//    @Test
-//    public void testRecordHasNoKey() {
-//        // Top level config
-//        Map<String, Object> config = new HashMap<>();
-//        config.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, StorageCommonConfig.DIRECTORY_DELIM_DEFAULT);
-//
-//        // Configure the partitioner
-//        EVAnalyticsOcpiPartitioner<String> partitioner = new EVAnalyticsOcpiPartitioner<>();
-//        partitioner.configure(config);
-//
-//        String streamUuidNotAUuid = null;
-//
-//        String timeZoneString = (String) config.get(PartitionerConfig.TIMEZONE_CONFIG);
-//        int YYYY = 2022;
-//        int MM = 6;
-//        int DD = 9;
-//        int HH = 7;
-//        long timestamp = new DateTime(YYYY, MM, DD, HH, 0, 0, 0, DateTimeZone.forID(timeZoneString)).getMillis();
-//        String payloadTimestamp = String.format("%d-%02d-%02dT%02d:12:34Z", YYYY, MM, DD, HH);
-//        String ocpiLocationPayload = "{\"not\":\"validEvenIfTheStreamUuidWasValid\"}";
-//        Schema schema = this.createSchemaWithTimestampField();
-//        SinkRecord ocpiSessionRecord = new SinkRecord("test-ocpi-session-topic", 13, Schema.STRING_SCHEMA, streamUuidNotAUuid, schema, ocpiLocationPayload, 0L, timestamp, TimestampType.CREATE_TIME);
-//
-//        Exception e = assertThrows(PartitionException.class, () -> {
-//            partitioner.encodePartition(ocpiSessionRecord);
-//        });
-//
-//        assertEquals("Record does not have a key", e.getMessage());
-//    }
 }

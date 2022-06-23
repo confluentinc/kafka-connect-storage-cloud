@@ -35,10 +35,7 @@ import java.util.UUID;
 
 public class EVAnalyticsOcpiPartitioner<T> extends DefaultPartitioner<T> {
   private static final Logger log = LoggerFactory.getLogger(EVAnalyticsOcpiPartitioner.class);
-  // streamUuid/entityId/YYYY-MM/DD/HH
-  private static final String PARTITION_FORMAT = "%s/%s/%s-%s/%s/%s";
-  // Thought, we could also have:
-//  private static final String PARTITION_FORMAT = "streamUuid=%s/entityId=%s/%s-%s/%s/%s";
+  private static final String UDX_PARTITION_FORMAT = "streamUuid=%s/entityId=%s/%s-%s/day=%s/hour=%s";
 
   @Override
   public void configure(Map<String, Object> config) {
@@ -151,6 +148,7 @@ public class EVAnalyticsOcpiPartitioner<T> extends DefaultPartitioner<T> {
       // Should probably map to a different partition e.g. not-ocpi
       // It's probably a good idea to see if we can still parse the timestamp, though
       // If not that, just use the timestamp of the message supplied by kakfa?
+      // TODO: this isn't 'not ocpi' its 'invalid id and timestamp'
       return String.format("not-ocpi/%s", streamUuid);
     }
 
@@ -175,7 +173,7 @@ public class EVAnalyticsOcpiPartitioner<T> extends DefaultPartitioner<T> {
       String[] dayTime = splitTimestamp[2].split("T");
       String day = dayTime[0];
       String hour = dayTime[1].substring(0, 2);
-      return String.format(PARTITION_FORMAT, streamUuid, entityId, year, month, day, hour);
+      return String.format(UDX_PARTITION_FORMAT, streamUuid, entityId, year, month, day, hour);
     } catch (Exception e) {
       String msg = "Could not parse YYYY-MM/DD/HH values from timestamp: "
               + timestamp
