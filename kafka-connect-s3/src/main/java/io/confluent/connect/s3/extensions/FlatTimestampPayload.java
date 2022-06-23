@@ -16,14 +16,27 @@
 
 package io.confluent.connect.s3.extensions;
 
-public interface OcpiPayload {
-  String getTimestamp();
+public class FlatTimestampPayload implements UdxPayload {
+  private String timestamp;
+  private String id;
 
-  void setTimestamp(String timestamp);
+  public String getTimestamp() {
+    return timestamp;
+  }
 
-  String getId();
+  public void setTimestamp(String timestamp) {
+    this.timestamp = timestamp;
+  }
 
-  void setId(String id);
+  public String getId() {
+    return id;
+  }
 
-  String toString();
+  public void setId(String id) {
+    this.id = id;
+  }
+
+  public String toString() {
+    return "OcpiPayload [ entityId: " + getId() + ", timestamp: " + getTimestamp() + " ]";
+  }
 }

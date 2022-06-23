@@ -25,21 +25,24 @@ import org.apache.kafka.connect.sink.SinkRecord;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static java.lang.Integer.parseInt;
 
-public class EVAnalyticsOcpiPartitioner<T> extends DefaultPartitioner<T> {
-  private static final Logger log = LoggerFactory.getLogger(EVAnalyticsOcpiPartitioner.class);
-  private static final String UDX_PARTITION_FORMAT = "streamUuid=%s/entityId=%s/%s-%s/day=%s/hour=%s";
+
+public class UdxStreamPartitioner<T> extends DefaultPartitioner<T> {
+  private static final Logger log = LoggerFactory.getLogger(UdxStreamPartitioner.class);
+  private static final String UDX_PARTITION_FORMAT = "streamUuid=%s/entityId=%s/%d-%02d/day=%02d/hour=%02d";
 
   @Override
   public void configure(Map<String, Object> config) {
-    log.info("Configuring EVAnalyticsOcpiPartitioner...");
+    log.info("Configuring UdxStreamPartitioner...");
     super.configure(config);
   }
 
@@ -58,6 +61,46 @@ public class EVAnalyticsOcpiPartitioner<T> extends DefaultPartitioner<T> {
       }
     }
     return streamUuid == null ? "noStreamIdFound" : streamUuid;
+  }
+
+  private boolean timestampCanParseToLong(String timestamp) {
+    try {
+      Long.parseLong(timestamp);
+      return true;
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  private DateTime parseTimestampFromPayload(String timestamp) {
+    log.info("parsing timestamp : " + timestamp);
+    // Here the timestamp could be a long as a string or an ISO timestamp
+    // We must therefore see if a long can be parsed from the string...
+    if (timestampCanParseToLong(timestamp)) {
+      long timestampAsLong = Long.parseLong(timestamp);
+      log.info("Parsed timestamp as : " + timestampAsLong);
+      return new DateTime(timestampAsLong).withZone(DateTimeZone.UTC);
+    }
+
+    try {
+      return new DateTime(timestamp).withZone(DateTimeZone.UTC);
+    } catch (Exception e) {
+      log.error(e.getMessage());
+      throw new PartitionException("Could not parse timestamp from payload");
+    }
+
+  }
+
+  private String generateCompletePartition(String streamUuid, String entityId, DateTime timestamp) {
+    int year = timestamp.getYear();
+    int month = timestamp.getMonthOfYear();
+    int day = timestamp.getDayOfMonth();
+    int hour = timestamp.getHourOfDay();
+    return String.format(UDX_PARTITION_FORMAT, streamUuid, entityId, year, month, day, hour);
+  }
+
+  private String generateInvalidPayloadPartition(String streamUuid) {
+    return String.format("invalidIdOrTimestamp/%s", streamUuid);
   }
 
   @Override
@@ -80,7 +123,7 @@ public class EVAnalyticsOcpiPartitioner<T> extends DefaultPartitioner<T> {
     // https://stackoverflow.com/questions/57499274/implementing-a-kafka-connect-custom-partitioner
     // for jackson, see:
     // https://www.tutorialspoint.com/jackson/jackson_quick_guide.htm
-    log.info("encoding partition with EVAnalyticsOcpiPartitioner...");
+    log.info("encoding partition with UdxStreamPartitioner...");
 
     log.info("Parsing value...");
 
@@ -119,22 +162,23 @@ public class EVAnalyticsOcpiPartitioner<T> extends DefaultPartitioner<T> {
     // { timestamp: { type: 'Property', value: string } } (in an OCPI location payload)
     // We account for both with some sort of generic function...
 
-    OcpiPayload ocpiPayload = null;
+    UdxPayload udxPayload = null;
 
     // An alternative approach to this could be to use a custom JsonDeserializer:
     // https://www.baeldung.com/jackson-nested-values#mapping-with-custom-jsondeserializer
+    // The use of concrete *Payload classes does make things very explicit, though
     try {
       // try to parse into sessions
-      ocpiPayload = mapper.readValue(value, OcpiSessionsPayload.class);
-      log.info("Mapped to OcpiSessionsPayload");
+      udxPayload = mapper.readValue(value, FlatTimestampPayload.class);
+      log.info("Mapped to FlatTimestampPayload");
     } catch (JacksonException e) {
       log.warn("Could not parse payload into sessions POJO");
     }
 
     try {
       // try to parse into location
-      ocpiPayload = mapper.readValue(value, OcpiLocationsPayload.class);
-      log.info("Mapped to OcpiLocationsPayload");
+      udxPayload = mapper.readValue(value, NestedTimestampPayload.class);
+      log.info("Mapped to NestedTimestampPayload");
     } catch (JacksonException e) {
       log.warn("Could not parse payload into location POJO");
     }
@@ -142,51 +186,30 @@ public class EVAnalyticsOcpiPartitioner<T> extends DefaultPartitioner<T> {
     // Note that relying on id and timestamp will not be enough to guarantee the
     // payload is an OCPI format if other payloads come in that are NOT OCPI on the same
     // topic. This is a naive approach!
-    if (ocpiPayload.getId() == null || ocpiPayload.getTimestamp() == null) {
-      log.warn("No ocpi mapping found, sending payload to non stream uuid partition...");
-      String msg = "Could not map this payload to a known OCPI class";
-      // Should probably map to a different partition e.g. not-ocpi
+    if (udxPayload.getId() == null || udxPayload.getTimestamp() == null) {
+      log.warn("No UdxPayload mapping found, sending payload to non stream uuid partition...");
+      String msg = "Could not map this payload to a defined UdxPayload class";
       // It's probably a good idea to see if we can still parse the timestamp, though
       // If not that, just use the timestamp of the message supplied by kakfa?
-      // TODO: this isn't 'not ocpi' its 'invalid id and timestamp'
-      return String.format("not-ocpi/%s", streamUuid);
+      return generateInvalidPayloadPartition(streamUuid);
     }
 
     log.info("Mapping record value into object...");
-    log.info(ocpiPayload.toString());
-    String entityId = ocpiPayload.getId();
-    String timestamp = ocpiPayload.getTimestamp();
+    log.info(udxPayload.toString());
+    String entityId = udxPayload.getId();
+    String timestamp = udxPayload.getTimestamp();
 
     try {
-      // timestamp format is e.g. "2021-08-31T17:24:13Z"
-      // There's definitely a better way to work with timestamps in Java
-      // TODO: for non ocpi payloads that are still mapped, format may NOT be Zulu!
-      // TODO: add unit tests for timestamp processing
-      // Error: Could not parse YYYY-MM/DD/HH values from timestamp: 1655925271224
-      // => Cannot build partition (org.apache.kafka.connect.runtime.WorkerSinkTask:612)
-      // it might be as well to parse _anything_ in a timestamp field into
-      // a Java Datetime in the UTC timezone and get the YYYY-MM/DD/HH that way
-      // TODO: do we even need an HH partition? Would it make glue crawling more difficult?
-      String[] splitTimestamp = timestamp.split("-");
-      String year = splitTimestamp[0];
-      String month = splitTimestamp[1];
-      String[] dayTime = splitTimestamp[2].split("T");
-      String day = dayTime[0];
-      String hour = dayTime[1].substring(0, 2);
-      return String.format(UDX_PARTITION_FORMAT, streamUuid, entityId, year, month, day, hour);
+      DateTime parsedTimestamp = parseTimestampFromPayload(timestamp);
+      return generateCompletePartition(streamUuid, entityId, parsedTimestamp);
     } catch (Exception e) {
+      // If we can't parse the timestamp, should we
+      log.error(e.getMessage());
       String msg = "Could not parse YYYY-MM/DD/HH values from timestamp: "
               + timestamp
               + " => Cannot build partition";
       log.error(msg);
       throw new PartitionException(msg);
     }
-  }
-
-  @Override
-  public List<T> partitionFields() {
-    // TODO: what are partition fields?
-    log.info("Returning partition fields from EVAnalyticsOcpiPartitioner...");
-    return super.partitionFields();
   }
 }

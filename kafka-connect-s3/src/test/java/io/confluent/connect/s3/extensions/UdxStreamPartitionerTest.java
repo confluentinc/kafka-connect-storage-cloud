@@ -9,20 +9,18 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
-import org.joda.time.format.DateTimeFormatterBuilder;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.*;
 
-import org.joda.time.ReadableInstant;
 import org.junit.Test;
 
+import java.util.Date;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 
-public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
+public class UdxStreamPartitionerTest extends StorageSinkTestBase {
     // Partitioner should:
     // - Take in a valid sessions / location payload
     // - Check that it has the offering_uuid somewhere (ideally in the key of the message)
@@ -33,7 +31,7 @@ public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
     private static final String UDX_PARTITION_FORMAT_FOR_INTS = "streamUuid=%s/entityId=%s/%d-%02d/day=%02d/hour=%02d";
 
     @Test
-    public void testProducesPathFromValidOcpiSessionsPayload() throws Exception {
+    public void testProducesPathFromValidFlatTimestampPayload() {
         // Top level config
         Map<String, Object> config = new HashMap<>();
         config.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, StorageCommonConfig.DIRECTORY_DELIM_DEFAULT);
@@ -41,7 +39,7 @@ public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
 
 
         // Configure the partitioner
-        EVAnalyticsOcpiPartitioner<String> partitioner = new EVAnalyticsOcpiPartitioner<>();
+        UdxStreamPartitioner<String> partitioner = new UdxStreamPartitioner<>();
         partitioner.configure(config);
 
         String timeZoneString = (String) config.get(PartitionerConfig.TIMEZONE_CONFIG);
@@ -73,13 +71,13 @@ public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
     }
 
     @Test
-    public void testProducesPathFromValidOcpiLocationsPayload() throws Exception {
+    public void testProducesPathFromValidNestedTimestampPayload() {
         // Top level config
         Map<String, Object> config = new HashMap<>();
         config.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, StorageCommonConfig.DIRECTORY_DELIM_DEFAULT);
 
         // Configure the partitioner
-        EVAnalyticsOcpiPartitioner<String> partitioner = new EVAnalyticsOcpiPartitioner<>();
+        UdxStreamPartitioner<String> partitioner = new UdxStreamPartitioner<>();
         partitioner.configure(config);
 
         String streamUuid = "1e962902-65ae-4346-bb8d-d2206d6dc852";
@@ -110,13 +108,53 @@ public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
     }
 
     @Test
-    public void testCannotParseJsonPayload() throws Exception {
+    public void testProducesPathFromValidNestedTimestampIntPayload() {
         // Top level config
         Map<String, Object> config = new HashMap<>();
         config.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, StorageCommonConfig.DIRECTORY_DELIM_DEFAULT);
 
         // Configure the partitioner
-        EVAnalyticsOcpiPartitioner<String> partitioner = new EVAnalyticsOcpiPartitioner<>();
+        UdxStreamPartitioner<String> partitioner = new UdxStreamPartitioner<>();
+        partitioner.configure(config);
+
+        String streamUuid = "1e962902-65ae-4346-bb8d-d2206d6dc852";
+        String entityId = "entity-1234";
+
+        String timeZoneString = (String) config.get(PartitionerConfig.TIMEZONE_CONFIG);
+        int YYYY = 2022;
+        int MM = 6;
+        int DD = 9;
+        int HH = 7;
+        long timestamp = new DateTime(YYYY, MM, DD, HH, 0, 0, 0, DateTimeZone.forID(timeZoneString)).getMillis();
+        String stringTimestampISO8601 = String.format("%d-%02d-%02dT%02d:12:34Z", YYYY, MM, DD, HH);
+        // TODO: how can we know if timestamps in arbitrary payloads are in millis or s?
+        long payloadTimestampAsUnix = new DateTime(stringTimestampISO8601).getMillis();
+        DateTime test = new DateTime(payloadTimestampAsUnix);
+        String ocpiLocationPayload = String.format(
+                "{\"id\":\"%s\",\"type\":\"EVChargingStation\",\"status\":{\"type\":\"Property\",\"value\":\"AVAILABLE\"},\"address\":{\"type\":\"Property\",\"value\":{\"type\":\"PostalAddress\",\"postalCode\":\"N15 6BT\",\"streetAddress\":\"Grovelands Road\",\"addressCountry\":\"GBR\",\"addressLocality\":\"Haringey\"}},\"voltage\":{\"type\":\"Property\",\"value\":230},\"amperage\":{\"type\":\"Property\",\"value\":23},\"location\":{\"type\":\"GeoProperty\",\"value\":{\"type\":\"Point\",\"coordinates\":[-0.06414,51.578497]}},\"operator\":{\"type\":\"Property\",\"value\":\"char.gy\"},\"timestamp\":{\"type\":\"Property\",\"value\":\"%d\"},\"powerOutput\":{\"type\":\"Property\",\"value\":52.9},\"chargingType\":{\"type\":\"Property\",\"value\":\"rapid\"},\"dateModified\":{\"type\":\"Property\",\"value\":\"2021-05-07T06:06:30Z\"},\"socketNumber\":{\"type\":\"Property\",\"value\":1},\"commissionDate\":{\"type\":\"Property\",\"value\":\"\"},\"decommissionDate\":{\"type\":\"Property\",\"value\":\"\"},\"@context\":[\"https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld\",\"https://raw.githubusercontent.com/smart-data-models/dataModel.Transportation/master/context.jsonld\"]}",
+                entityId,
+                payloadTimestampAsUnix
+        );
+
+        Schema schema = this.createSchemaWithTimestampField();
+        SinkRecord ocpiSessionRecord = new SinkRecord("test-ocpi-session-topic", 13, Schema.STRING_SCHEMA, streamUuid, schema, ocpiLocationPayload, 0L, timestamp, TimestampType.CREATE_TIME);
+
+        // Run the partitioner
+        String encodedPartition = partitioner.encodePartition(ocpiSessionRecord);
+
+        // Assert that the filepath is correct
+        String expectedPath = String.format(UDX_PARTITION_FORMAT_FOR_INTS, streamUuid, entityId, YYYY, MM, DD, HH);
+        assertThat(encodedPartition, is(expectedPath));
+    }
+
+    @Test
+    public void testCannotParseJsonPayload() {
+        // Top level config
+        Map<String, Object> config = new HashMap<>();
+        config.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, StorageCommonConfig.DIRECTORY_DELIM_DEFAULT);
+
+        // Configure the partitioner
+        UdxStreamPartitioner<String> partitioner = new UdxStreamPartitioner<>();
         partitioner.configure(config);
 
         String streamUuid = "1e962902-65ae-4346-bb8d-d2206d6dc852";
@@ -131,22 +169,22 @@ public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
         Schema schema = this.createSchemaWithTimestampField();
         SinkRecord ocpiSessionRecord = new SinkRecord("test-ocpi-session-topic", 13, Schema.STRING_SCHEMA, streamUuid, schema, ocpiLocationPayload, 0L, timestamp, TimestampType.CREATE_TIME);
         String encodedPartition = partitioner.encodePartition(ocpiSessionRecord);
-//        Exception e = assertThrows(PartitionException.class, () -> {
-//            partitioner.encodePartition(ocpiSessionRecord);
-//        });
-//
-//        assertEquals("Could not map this payload to a known OCPI class", e.getMessage());
-        assertThat(encodedPartition, is(String.format("not-ocpi/%s", streamUuid)));
+        assertThat(encodedPartition, is(String.format("invalidIdOrTimestamp/%s", streamUuid)));
     }
 
     @Test
-    public void testNoValidUuidInKey() throws Exception {
+    public void testCannotParseTimestamp() {
+
+    }
+
+    @Test
+    public void testNoValidUuidInKey() {
         // Top level config
         Map<String, Object> config = new HashMap<>();
         config.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, StorageCommonConfig.DIRECTORY_DELIM_DEFAULT);
 
         // Configure the partitioner
-        EVAnalyticsOcpiPartitioner<String> partitioner = new EVAnalyticsOcpiPartitioner<>();
+        UdxStreamPartitioner<String> partitioner = new UdxStreamPartitioner<>();
         partitioner.configure(config);
 
         String streamUuidNotAUuid = "not-a-uuid-la-la-la";
@@ -173,13 +211,13 @@ public class EVAnalyticsOcpiPartitionerTest extends StorageSinkTestBase {
     // maybe just print a warning here and add it to another partition, /*/invalidStreamUUid/id/YYYY...
 
     @Test
-    public void testIncorrectTimestampFormat() throws Exception {
+    public void testIncorrectTimestampFormat() {
         // Top level config
         Map<String, Object> config = new HashMap<>();
         config.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, StorageCommonConfig.DIRECTORY_DELIM_DEFAULT);
 
         // Configure the partitioner
-        EVAnalyticsOcpiPartitioner<String> partitioner = new EVAnalyticsOcpiPartitioner<>();
+        UdxStreamPartitioner<String> partitioner = new UdxStreamPartitioner<>();
         partitioner.configure(config);
 
         String streamUuid = "1e962902-65ae-4346-bb8d-d2206d6dc852";

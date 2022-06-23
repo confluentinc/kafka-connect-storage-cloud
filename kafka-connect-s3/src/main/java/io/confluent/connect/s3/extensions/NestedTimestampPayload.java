@@ -20,7 +20,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Map;
 
-public class OcpiLocationsPayload implements OcpiPayload {
+public class NestedTimestampPayload implements UdxPayload {
   private String timestamp;
   private String id;
 
@@ -48,6 +48,6 @@ public class OcpiLocationsPayload implements OcpiPayload {
   }
 
   public String toString() {
-    return "OcpiPayload [ entityId: " + getId() + ", Zulu timestamp: " + getTimestamp() + " ]";
+    return "OcpiPayload [ entityId: " + getId() + ", timestamp: " + getTimestamp() + " ]";
   }
 }
