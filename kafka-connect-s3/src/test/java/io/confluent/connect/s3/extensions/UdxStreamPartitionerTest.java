@@ -215,7 +215,7 @@ public class UdxStreamPartitionerTest extends StorageSinkTestBase {
                 timestamp
         );
         String encodedPartition = partitioner.encodePartition(ocpiSessionRecord);
-        assertThat(encodedPartition, is(String.format("invalidIdOrTimestamp/%s", streamUuid)));
+        assertThat(encodedPartition, is(String.format("invalidIdOrTimestamp/streamUuid=%s", streamUuid)));
     }
 
     @Test
@@ -244,7 +244,7 @@ public class UdxStreamPartitionerTest extends StorageSinkTestBase {
         );
 
         String encodedPartition = partitioner.encodePartition(ocpiSessionRecord);
-        assertThat(encodedPartition, is(String.format("invalidIdOrTimestamp/%s", streamUuidNotAUuid)));
+        assertThat(encodedPartition, is(String.format("invalidIdOrTimestamp/streamUuid=%s", streamUuidNotAUuid)));
     }
 
     // TODO: test noValidUUid in headers
@@ -272,7 +272,7 @@ public class UdxStreamPartitionerTest extends StorageSinkTestBase {
         );
 
         String encodedPartition = partitioner.encodePartition(ocpiSessionRecord);
-        assertThat(encodedPartition, is(String.format("invalidIdOrTimestamp/noStreamIdFound")));
+        assertThat(encodedPartition, is(String.format("invalidIdOrTimestamp/streamUuid=noStreamIdFound")));
     }
 
     @Test

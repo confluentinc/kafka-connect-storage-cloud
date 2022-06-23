@@ -38,7 +38,7 @@ public class UdxStreamPartitioner<T> extends DefaultPartitioner<T> {
   private static final String PARTITION_FORMAT =
           "streamUuid=%s/entityId=%s/%d-%02d/day=%02d/hour=%02d";
   private static final String INVALID_PAYLOAD_PARTITION_FORMAT =
-          "invalidIdOrTimestamp/%s";
+          "invalidIdOrTimestamp/streamUuid=%s";
   private static final String INVALID_TIMESTAMP_PARTITION_FORMAT =
           "invalidIdOrTimestamp/streamUuid=%s/entityId=%s/%s";
 
@@ -49,7 +49,7 @@ public class UdxStreamPartitioner<T> extends DefaultPartitioner<T> {
   }
 
   private String getStreamUuidFromHeaders(SinkRecord sinkRecord) {
-    log.warn("Trying to find the offering_uuid in the headers instead...");
+    log.info("Getting offering_uuid value from headers...");
     String streamUuid = null;
     // This is a job for a filtering lambda
     for (Header header : sinkRecord.headers()) {
