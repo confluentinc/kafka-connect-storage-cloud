@@ -6,17 +6,19 @@ import io.confluent.connect.storage.errors.PartitionException;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 
+import static org.apache.kafka.connect.data.Schema.STRING_SCHEMA;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.*;
 
 import org.junit.Test;
 
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -29,6 +31,39 @@ public class UdxStreamPartitionerTest extends StorageSinkTestBase {
     // - Produce the correct path from the 'String encodePartition(SinkRecord sinkRecord)' function
 
     private static final String UDX_PARTITION_FORMAT_FOR_INTS = "streamUuid=%s/entityId=%s/%d-%02d/day=%02d/hour=%02d";
+
+    private SinkRecord generateUdxPayloadRecordNullKey(String streamUuid, String payload, Long timestamp) {
+        Headers headers = new ConnectHeaders();
+        headers.add("offering_uuid", streamUuid, STRING_SCHEMA);
+        Schema schema = this.createSchemaWithTimestampField();
+        return new SinkRecord(
+                "test-ocpi-session-topic",
+                13,
+                STRING_SCHEMA,
+                null,
+                schema,
+                payload,
+                0L,
+                timestamp,
+                TimestampType.CREATE_TIME,
+                headers
+        );
+    }
+
+    private SinkRecord generateUdxPayloadRecordNoHeader(String payload, Long timestamp) {
+        Schema schema = this.createSchemaWithTimestampField();
+        return new SinkRecord(
+                "test-ocpi-session-topic",
+                13,
+                STRING_SCHEMA,
+                null,
+                schema,
+                payload,
+                0L,
+                timestamp,
+                TimestampType.CREATE_TIME
+        );
+    }
 
     @Test
     public void testProducesPathFromValidFlatTimestampPayload() {
@@ -58,9 +93,11 @@ public class UdxStreamPartitionerTest extends StorageSinkTestBase {
                 entityId,
                 payloadTimestamp
                 );
-        // Need a 'create OCPI sink record type function, I think'
-        Schema schema = this.createSchemaWithTimestampField();
-        SinkRecord ocpiSessionRecord = new SinkRecord("test-ocpi-session-topic", 12, Schema.STRING_SCHEMA, streamUuid, schema, ocpiSessionPayload, 0L, timestamp, TimestampType.CREATE_TIME);
+        SinkRecord ocpiSessionRecord = generateUdxPayloadRecordNullKey(
+                streamUuid,
+                ocpiSessionPayload,
+                timestamp
+        );
 
         // Run the partitioner
         String encodedPartition = partitioner.encodePartition(ocpiSessionRecord);
@@ -96,8 +133,11 @@ public class UdxStreamPartitionerTest extends StorageSinkTestBase {
                 payloadTimestamp
         );
 
-        Schema schema = this.createSchemaWithTimestampField();
-        SinkRecord ocpiSessionRecord = new SinkRecord("test-ocpi-session-topic", 13, Schema.STRING_SCHEMA, streamUuid, schema, ocpiLocationPayload, 0L, timestamp, TimestampType.CREATE_TIME);
+        SinkRecord ocpiSessionRecord = generateUdxPayloadRecordNullKey(
+                streamUuid,
+                ocpiLocationPayload,
+                timestamp
+        );
 
         // Run the partitioner
         String encodedPartition = partitioner.encodePartition(ocpiSessionRecord);
@@ -136,8 +176,11 @@ public class UdxStreamPartitionerTest extends StorageSinkTestBase {
                 payloadTimestampAsUnix
         );
 
-        Schema schema = this.createSchemaWithTimestampField();
-        SinkRecord ocpiSessionRecord = new SinkRecord("test-ocpi-session-topic", 13, Schema.STRING_SCHEMA, streamUuid, schema, ocpiLocationPayload, 0L, timestamp, TimestampType.CREATE_TIME);
+        SinkRecord ocpiSessionRecord = generateUdxPayloadRecordNullKey(
+                streamUuid,
+                ocpiLocationPayload,
+                timestamp
+        );
 
         // Run the partitioner
         String encodedPartition = partitioner.encodePartition(ocpiSessionRecord);
@@ -166,19 +209,17 @@ public class UdxStreamPartitionerTest extends StorageSinkTestBase {
         int HH = 7;
         long timestamp = new DateTime(YYYY, MM, DD, HH, 0, 0, 0, DateTimeZone.forID(timeZoneString)).getMillis();
         String ocpiLocationPayload = "{\"not\":\"validAtAll\"}";
-        Schema schema = this.createSchemaWithTimestampField();
-        SinkRecord ocpiSessionRecord = new SinkRecord("test-ocpi-session-topic", 13, Schema.STRING_SCHEMA, streamUuid, schema, ocpiLocationPayload, 0L, timestamp, TimestampType.CREATE_TIME);
+        SinkRecord ocpiSessionRecord = generateUdxPayloadRecordNullKey(
+                streamUuid,
+                ocpiLocationPayload,
+                timestamp
+        );
         String encodedPartition = partitioner.encodePartition(ocpiSessionRecord);
         assertThat(encodedPartition, is(String.format("invalidIdOrTimestamp/%s", streamUuid)));
     }
 
     @Test
-    public void testCannotParseTimestamp() {
-
-    }
-
-    @Test
-    public void testNoValidUuidInKey() {
+    public void testNoValidUuidInHeaders() {
         // Top level config
         Map<String, Object> config = new HashMap<>();
         config.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, StorageCommonConfig.DIRECTORY_DELIM_DEFAULT);
@@ -195,20 +236,44 @@ public class UdxStreamPartitionerTest extends StorageSinkTestBase {
         int DD = 9;
         int HH = 7;
         long timestamp = new DateTime(YYYY, MM, DD, HH, 0, 0, 0, DateTimeZone.forID(timeZoneString)).getMillis();
-        String payloadTimestamp = String.format("%d-%02d-%02dT%02d:12:34Z", YYYY, MM, DD, HH);
         String ocpiLocationPayload = "{\"not\":\"validEvenIfTheStreamUuidWasValid\"}";
-        Schema schema = this.createSchemaWithTimestampField();
-        SinkRecord ocpiSessionRecord = new SinkRecord("test-ocpi-session-topic", 13, Schema.STRING_SCHEMA, streamUuidNotAUuid, schema, ocpiLocationPayload, 0L, timestamp, TimestampType.CREATE_TIME);
+        SinkRecord ocpiSessionRecord = generateUdxPayloadRecordNullKey(
+                streamUuidNotAUuid,
+                ocpiLocationPayload,
+                timestamp
+        );
 
-        Exception e = assertThrows(PartitionException.class, () -> {
-            partitioner.encodePartition(ocpiSessionRecord);
-        });
-
-        assertEquals("Key is not a valid uuid, it therefore probably not a stream id", e.getMessage());
+        String encodedPartition = partitioner.encodePartition(ocpiSessionRecord);
+        assertThat(encodedPartition, is(String.format("invalidIdOrTimestamp/%s", streamUuidNotAUuid)));
     }
 
     // TODO: test noValidUUid in headers
     // maybe just print a warning here and add it to another partition, /*/invalidStreamUUid/id/YYYY...
+    @Test
+    public void testNoUuidInHeadersCorruptedPayload() {
+        // Top level config
+        Map<String, Object> config = new HashMap<>();
+        config.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, StorageCommonConfig.DIRECTORY_DELIM_DEFAULT);
+
+        // Configure the partitioner
+        UdxStreamPartitioner<String> partitioner = new UdxStreamPartitioner<>();
+        partitioner.configure(config);
+
+        String timeZoneString = (String) config.get(PartitionerConfig.TIMEZONE_CONFIG);
+        int YYYY = 2022;
+        int MM = 6;
+        int DD = 9;
+        int HH = 7;
+        long timestamp = new DateTime(YYYY, MM, DD, HH, 0, 0, 0, DateTimeZone.forID(timeZoneString)).getMillis();
+        String ocpiLocationPayload = "{\"not\":\"validEvenIfTheStreamUuidWasValid\"}";
+        SinkRecord ocpiSessionRecord = generateUdxPayloadRecordNoHeader(
+                ocpiLocationPayload,
+                timestamp
+        );
+
+        String encodedPartition = partitioner.encodePartition(ocpiSessionRecord);
+        assertThat(encodedPartition, is(String.format("invalidIdOrTimestamp/noStreamIdFound")));
+    }
 
     @Test
     public void testIncorrectTimestampFormat() {
@@ -236,13 +301,13 @@ public class UdxStreamPartitionerTest extends StorageSinkTestBase {
                 payloadTimestamp
         );
 
-        Schema schema = this.createSchemaWithTimestampField();
-        SinkRecord ocpiSessionRecord = new SinkRecord("test-ocpi-session-topic", 13, Schema.STRING_SCHEMA, streamUuid, schema, ocpiLocationPayload, 0L, timestamp, TimestampType.CREATE_TIME);
+        SinkRecord ocpiSessionRecord = generateUdxPayloadRecordNullKey(
+                streamUuid,
+                ocpiLocationPayload,
+                timestamp
+        );
 
-        Exception e = assertThrows(PartitionException.class, () -> {
-            partitioner.encodePartition(ocpiSessionRecord);
-        });
-
-        assertTrue(e.getMessage().contains("Could not parse YYYY-MM/DD/HH values from timestamp"));
+        String encodedPartition = partitioner.encodePartition(ocpiSessionRecord);
+        assertThat(encodedPartition, is(String.format("invalidIdOrTimestamp/streamUuid=%s/entityId=%s/%s", streamUuid, entityId, payloadTimestamp)));
     }
 }

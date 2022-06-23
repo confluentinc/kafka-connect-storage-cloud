@@ -39,6 +39,8 @@ import static java.lang.Integer.parseInt;
 public class UdxStreamPartitioner<T> extends DefaultPartitioner<T> {
   private static final Logger log = LoggerFactory.getLogger(UdxStreamPartitioner.class);
   private static final String UDX_PARTITION_FORMAT = "streamUuid=%s/entityId=%s/%d-%02d/day=%02d/hour=%02d";
+  private static final String UDX_INVALID_PAYLOAD_PARTITION_FORMAT = "invalidIdOrTimestamp/%s";
+  private static final String UDX_INVALID_TIMESTAMP_PARTITION_FORMAT = "invalidIdOrTimestamp/streamUuid=%s/entityId=%s/%s";
 
   @Override
   public void configure(Map<String, Object> config) {
@@ -100,7 +102,11 @@ public class UdxStreamPartitioner<T> extends DefaultPartitioner<T> {
   }
 
   private String generateInvalidPayloadPartition(String streamUuid) {
-    return String.format("invalidIdOrTimestamp/%s", streamUuid);
+    return String.format(UDX_INVALID_PAYLOAD_PARTITION_FORMAT, streamUuid);
+  }
+
+  private String generateInvalidTimestampPartition(String streamUuid, String entityUuid, String timestamp) {
+    return String.format(UDX_INVALID_TIMESTAMP_PARTITION_FORMAT, streamUuid, entityUuid, timestamp);
   }
 
   @Override
@@ -124,28 +130,19 @@ public class UdxStreamPartitioner<T> extends DefaultPartitioner<T> {
     // for jackson, see:
     // https://www.tutorialspoint.com/jackson/jackson_quick_guide.htm
     log.info("encoding partition with UdxStreamPartitioner...");
-
     log.info("Parsing value...");
 
     String value = sinkRecord.value().toString();
     log.info("Value: " + value);
-    String streamUuid = "";
+    String streamUuid = null;
 
     try {
-      log.info("Assuming streamUuid is in the key...");
-      streamUuid = sinkRecord.key().toString();
+      log.info("Assuming streamUuid is in the headers...");
+      streamUuid = getStreamUuidFromHeaders(sinkRecord);
       UUID.fromString(streamUuid);
     } catch (IllegalArgumentException exception) {
-      String msg = "Key is not a valid uuid, it therefore probably not a stream id";
-      log.error(msg);
-      throw new PartitionException(msg);
-    } catch (NullPointerException exception) {
-      // on the aws.db.data-streams.records.0 topic the offering_uuid is in the headers...
-      String msg = "Record does not have a key";
+      String msg = "stream uuid in header is not a valid uuid, it therefore probably not a valid stream id";
       log.warn(msg);
-      // This seems to work, hooray
-      // TODO: add unit tests for streamUuid in header
-      streamUuid = getStreamUuidFromHeaders(sinkRecord);
     }
 
     ObjectMapper mapper = new ObjectMapper();
@@ -170,7 +167,6 @@ public class UdxStreamPartitioner<T> extends DefaultPartitioner<T> {
     try {
       // try to parse into sessions
       udxPayload = mapper.readValue(value, FlatTimestampPayload.class);
-      log.info("Mapped to FlatTimestampPayload");
     } catch (JacksonException e) {
       log.warn("Could not parse payload into sessions POJO");
     }
@@ -178,10 +174,11 @@ public class UdxStreamPartitioner<T> extends DefaultPartitioner<T> {
     try {
       // try to parse into location
       udxPayload = mapper.readValue(value, NestedTimestampPayload.class);
-      log.info("Mapped to NestedTimestampPayload");
     } catch (JacksonException e) {
       log.warn("Could not parse payload into location POJO");
     }
+
+    log.info("Mapped to: " + udxPayload.getClass().toString());
 
     // Note that relying on id and timestamp will not be enough to guarantee the
     // payload is an OCPI format if other payloads come in that are NOT OCPI on the same
@@ -208,8 +205,8 @@ public class UdxStreamPartitioner<T> extends DefaultPartitioner<T> {
       String msg = "Could not parse YYYY-MM/DD/HH values from timestamp: "
               + timestamp
               + " => Cannot build partition";
-      log.error(msg);
-      throw new PartitionException(msg);
+      log.warn(msg);
+      return generateInvalidTimestampPartition(streamUuid, entityId, timestamp);
     }
   }
 }
