@@ -33,14 +33,14 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.UUID;
 
-import static java.lang.Integer.parseInt;
-
-
 public class UdxStreamPartitioner<T> extends DefaultPartitioner<T> {
   private static final Logger log = LoggerFactory.getLogger(UdxStreamPartitioner.class);
-  private static final String UDX_PARTITION_FORMAT = "streamUuid=%s/entityId=%s/%d-%02d/day=%02d/hour=%02d";
-  private static final String UDX_INVALID_PAYLOAD_PARTITION_FORMAT = "invalidIdOrTimestamp/%s";
-  private static final String UDX_INVALID_TIMESTAMP_PARTITION_FORMAT = "invalidIdOrTimestamp/streamUuid=%s/entityId=%s/%s";
+  private static final String PARTITION_FORMAT =
+          "streamUuid=%s/entityId=%s/%d-%02d/day=%02d/hour=%02d";
+  private static final String INVALID_PAYLOAD_PARTITION_FORMAT =
+          "invalidIdOrTimestamp/%s";
+  private static final String INVALID_TIMESTAMP_PARTITION_FORMAT =
+          "invalidIdOrTimestamp/streamUuid=%s/entityId=%s/%s";
 
   @Override
   public void configure(Map<String, Object> config) {
@@ -98,15 +98,19 @@ public class UdxStreamPartitioner<T> extends DefaultPartitioner<T> {
     int month = timestamp.getMonthOfYear();
     int day = timestamp.getDayOfMonth();
     int hour = timestamp.getHourOfDay();
-    return String.format(UDX_PARTITION_FORMAT, streamUuid, entityId, year, month, day, hour);
+    return String.format(PARTITION_FORMAT, streamUuid, entityId, year, month, day, hour);
   }
 
   private String generateInvalidPayloadPartition(String streamUuid) {
-    return String.format(UDX_INVALID_PAYLOAD_PARTITION_FORMAT, streamUuid);
+    return String.format(INVALID_PAYLOAD_PARTITION_FORMAT, streamUuid);
   }
 
-  private String generateInvalidTimestampPartition(String streamUuid, String entityUuid, String timestamp) {
-    return String.format(UDX_INVALID_TIMESTAMP_PARTITION_FORMAT, streamUuid, entityUuid, timestamp);
+  private String generateInvalidTimestampPartition(
+          String streamUuid,
+          String entityUuid,
+          String timestamp
+  ) {
+    return String.format(INVALID_TIMESTAMP_PARTITION_FORMAT, streamUuid, entityUuid, timestamp);
   }
 
   @Override
@@ -141,7 +145,9 @@ public class UdxStreamPartitioner<T> extends DefaultPartitioner<T> {
       streamUuid = getStreamUuidFromHeaders(sinkRecord);
       UUID.fromString(streamUuid);
     } catch (IllegalArgumentException exception) {
-      String msg = "stream uuid in header is not a valid uuid, it therefore probably not a valid stream id";
+      String msg =
+              "stream uuid in header is not a valid uuid "
+              + "it therefore probably not a valid stream id";
       log.warn(msg);
     }
 
