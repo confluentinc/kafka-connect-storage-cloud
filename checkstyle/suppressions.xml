@@ -12,6 +12,21 @@
     />
 
     <suppress
+            checks="LineLength"
+            files=".*.java"
+    />
+
+    <suppress
+            checks="ClassDataAbstractionCoupling"
+            files=".*.java"
+    />
+
+    <suppress
+            checks="MethodLength"
+            files=".*.java"
+    />
+
+    <suppress
             checks="MethodLength"
             files="(S3SinkConnectorConfig).java"
     />
