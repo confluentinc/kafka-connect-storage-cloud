@@ -32,10 +32,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
+import java.util.Set;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.COMPRESSION_TYPE_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.HEADERS_FORMAT_CLASS_CONFIG;
@@ -48,14 +49,14 @@ public class S3SinkConnectorValidator {
 
   private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorValidator.class);
 
-  public static final Map<CompressionType, List<Class<? extends Format>>>
+  public static final Map<CompressionType, Set<Class<? extends Format>>>
       COMPRESSION_SUPPORTED_FORMATS = Collections.unmodifiableMap(
-      new HashMap<CompressionType, List<Class<? extends Format>>>() {
+      new HashMap<CompressionType, Set<Class<? extends Format>>>() {
           {
-            put(CompressionType.GZIP, new ArrayList<>(Arrays.asList(
+            put(CompressionType.GZIP, new HashSet<>(Arrays.asList(
                     JsonFormat.class,
                     ByteArrayFormat.class)));
-            put(CompressionType.NONE, new ArrayList<>(Arrays.asList(
+            put(CompressionType.NONE, new HashSet<>(Arrays.asList(
                     AvroFormat.class,
                     ParquetFormat.class,
                     JsonFormat.class,
@@ -104,11 +105,8 @@ public class S3SinkConnectorValidator {
   public void validateCompression(CompressionType compressionType, Class formatClass,
         boolean storeKafkaKeys, Class keysFormatClass,
         boolean storeKafkaHeaders, Class headersFormatClass) {
-    List<Class<? extends Format>> validFormats = COMPRESSION_SUPPORTED_FORMATS.get(compressionType);
-    Optional<Class<? extends Format>> formatClassFound = validFormats.stream().filter(
-        format -> format.getName().equals(formatClass.getName()))
-        .findAny();
-    if (!formatClassFound.isPresent()) {
+    Set<Class<? extends Format>> validFormats = COMPRESSION_SUPPORTED_FORMATS.get(compressionType);
+    if (!validFormats.contains(formatClass)) {
       recordErrors(
           String.format(FORMAT_CONFIG_ERROR_MESSAGE,
               compressionType.name, "data", formatClass.getName()),
@@ -116,10 +114,7 @@ public class S3SinkConnectorValidator {
     }
 
     if (storeKafkaKeys) {
-      Optional<Class<? extends Format>> keysFormatClassFound = validFormats.stream().filter(
-          format -> format.getName().equals(keysFormatClass.getName()))
-          .findAny();
-      if (!keysFormatClassFound.isPresent()) {
+      if (!validFormats.contains(keysFormatClass)) {
         recordErrors(
             String.format(FORMAT_CONFIG_ERROR_MESSAGE,
                 compressionType.name, "keys", keysFormatClass.getName()),
@@ -128,10 +123,7 @@ public class S3SinkConnectorValidator {
     }
 
     if (storeKafkaHeaders) {
-      Optional<Class<? extends Format>> headersFormatClassFound = validFormats.stream().filter(
-          format -> format.getName().equals(headersFormatClass.getName()))
-          .findAny();
-      if (!headersFormatClassFound.isPresent()) {
+      if (!validFormats.contains(headersFormatClass)) {
         recordErrors(
             String.format(FORMAT_CONFIG_ERROR_MESSAGE,
                 compressionType.name, "headers", headersFormatClass.getName()),
