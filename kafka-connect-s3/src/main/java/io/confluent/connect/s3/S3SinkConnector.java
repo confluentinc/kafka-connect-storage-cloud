@@ -15,6 +15,7 @@
 
 package io.confluent.connect.s3;
 
+import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -85,4 +86,10 @@ public class S3SinkConnector extends SinkConnector {
     return S3SinkConnectorConfig.getConfig();
   }
 
+  @Override
+  public Config validate(Map<String, String> connectorConfigs) {
+    Config configs = super.validate(connectorConfigs);
+    return new S3SinkConnectorValidator(
+        config(), connectorConfigs, configs.configValues()).validate();
+  }
 }
