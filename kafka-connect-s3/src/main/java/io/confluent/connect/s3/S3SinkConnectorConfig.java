@@ -774,6 +774,26 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
            : CompressionCodecName.fromConf(getString(PARQUET_CODEC_CONFIG));
   }
 
+  public boolean storeKafkaKeys() {
+    return getBoolean(STORE_KAFKA_KEYS_CONFIG);
+  }
+
+  public boolean storeKafkaHeaders() {
+    return getBoolean(STORE_KAFKA_HEADERS_CONFIG);
+  }
+
+  public Class keysFormatClass() {
+    return getClass(KEYS_FORMAT_CLASS_CONFIG);
+  }
+
+  public Class headersFormatClass() {
+    return getClass(HEADERS_FORMAT_CLASS_CONFIG);
+  }
+
+  public Class formatClass() {
+    return getClass(FORMAT_CLASS_CONFIG);
+  }
+
   public int getS3PartRetries() {
     return getInt(S3_PART_RETRIES_CONFIG);
   }
