@@ -23,26 +23,20 @@ import io.confluent.common.utils.IntegrationTest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
-import org.apache.kafka.connect.runtime.AbstractStatus;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+
+import io.confluent.connect.s3.util.S3Utils;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.experimental.categories.Category;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 @Category(IntegrationTest.class)
 public abstract class BaseConnectorIT {
-
-  private static final Logger log = LoggerFactory.getLogger(BaseConnectorIT.class);
-
   protected static final int MAX_TASKS = 3;
-  private static final long CONNECTOR_STARTUP_DURATION_MS = TimeUnit.MINUTES.toMillis(1);
-  private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(30);
+  private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
 
   protected static AmazonS3 S3Client;
   protected static final String TEST_BUCKET_NAME =
@@ -70,23 +64,6 @@ public abstract class BaseConnectorIT {
     connect.start();
   }
 
-  /**
-   * Wait up to {@link #CONNECTOR_STARTUP_DURATION_MS maximum time limit} for the connector with the
-   * given name to start the specified number of tasks.
-   *
-   * @param name     the name of the connector
-   * @param numTasks the minimum number of tasks that are expected
-   * @return the time this method discovered the connector has started, in milliseconds past epoch
-   * @throws InterruptedException if this was interrupted
-   */
-  protected long waitForConnectorToStart(String name, int numTasks) throws InterruptedException {
-    TestUtils.waitForCondition(
-        () -> assertConnectorAndTasksRunning(name, numTasks).orElse(false),
-        CONNECTOR_STARTUP_DURATION_MS,
-        "Connector tasks did not start in time."
-    );
-    return System.currentTimeMillis();
-  }
 
   /**
    * Wait up to {@link #S3_TIMEOUT_MS maximum time limit} for the connector to write the specified
@@ -98,74 +75,7 @@ public abstract class BaseConnectorIT {
    * @throws InterruptedException if this was interrupted
    */
   protected long waitForFilesInBucket(String bucketName, int numFiles) throws InterruptedException {
-    TestUtils.waitForCondition(
-        () -> assertFileCountInBucket(bucketName, numFiles).orElse(false),
-        S3_TIMEOUT_MS,
-        "Files not written to S3 bucket in time."
-    );
-    return System.currentTimeMillis();
-  }
-
-  /**
-   * Confirm that a connector with an exact number of tasks is running.
-   *
-   * @param connectorName the connector
-   * @param numTasks      the minimum number of tasks
-   * @return true if the connector and tasks are in RUNNING state; false otherwise
-   */
-  protected Optional<Boolean> assertConnectorAndTasksRunning(String connectorName, int numTasks) {
-    try {
-      ConnectorStateInfo info = connect.connectorStatus(connectorName);
-      boolean result = info != null
-          && info.tasks().size() >= numTasks
-          && info.connector().state().equals(AbstractStatus.State.RUNNING.toString())
-          && info.tasks().stream()
-          .allMatch(s -> s.state().equals(AbstractStatus.State.RUNNING.toString()));
-      return Optional.of(result);
-    } catch (Exception e) {
-      log.warn("Could not check connector state info.");
-      return Optional.empty();
-    }
-  }
-
-  /**
-   * Confirm that the file count in a bucket matches the expected number of files.
-   *
-   * @param bucketName the name of the bucket containing the files
-   * @param expectedNumFiles the number of files expected
-   * @return true if the number of files in the bucket match the expected number; false otherwise
-   */
-  protected Optional<Boolean> assertFileCountInBucket(String bucketName, int expectedNumFiles) {
-    try {
-      return Optional.of(getBucketFileCount(bucketName) == expectedNumFiles);
-    } catch (Exception e) {
-      log.warn("Could not check file count in bucket: {}", bucketName);
-      return Optional.empty();
-    }
-  }
-
-  /**
-   * Recursively query the bucket to get the total number of files that exist in the bucket.
-   *
-   * @param bucketName the name of the bucket containing the files.
-   * @return the number of files in the bucket
-   */
-  private int getBucketFileCount(String bucketName) {
-    int totalFilesInBucket = 0;
-    ListObjectsV2Request request = new ListObjectsV2Request().withBucketName(bucketName);
-    ListObjectsV2Result result;
-    do {
-      /*
-       Need the result object to extract the continuation token from the request as each request
-       to listObjectsV2() returns a maximum of 1000 files.
-       */
-      result = S3Client.listObjectsV2(request);
-      totalFilesInBucket += result.getKeyCount();
-      String token = result.getNextContinuationToken();
-      // To get the next batch of files.
-      request.setContinuationToken(token);
-    } while(result.isTruncated());
-    return totalFilesInBucket;
+    return S3Utils.waitForFilesInBucket(S3Client, bucketName, numFiles, S3_TIMEOUT_MS);
   }
 
   /**
@@ -211,9 +121,9 @@ public abstract class BaseConnectorIT {
    * @param expectedFiles the list of expected filenames for exact comparison
    * @return whether all the files in the bucket match the expected values
    */
-  protected boolean fileNamesValid(String bucketName, List<String> expectedFiles) {
+  protected void assertFileNamesValid(String bucketName, List<String> expectedFiles) {
     List<String> actualFiles = getBucketFileNames(bucketName);
-    return expectedFiles.equals(actualFiles);
+    assertThat(actualFiles).containsExactlyInAnyOrderElementsOf(expectedFiles);
   }
 
   /**

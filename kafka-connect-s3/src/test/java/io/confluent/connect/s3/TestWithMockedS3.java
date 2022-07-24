@@ -29,6 +29,7 @@ import com.amazonaws.services.s3.model.GetObjectTaggingResult;
 import com.amazonaws.services.s3.model.transform.XmlResponsesSaxParser;
 import io.confluent.connect.s3.format.parquet.ParquetUtils;
 import io.findify.s3mock.S3Mock;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.junit.After;
@@ -76,7 +77,9 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    port = url.substring(url.lastIndexOf(":") + 1);
+    if (StringUtils.isBlank(port)) {
+        port = url.substring(url.lastIndexOf(":") + 1);
+    }
     File s3mockDir = s3mockRoot.newFolder("s3-tests-" + UUID.randomUUID().toString());
     System.out.println("Create folder: " + s3mockDir.getCanonicalPath());
     s3mock = S3Mock.create(Integer.parseInt(port), s3mockDir.getCanonicalPath());
