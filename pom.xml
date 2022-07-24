@@ -175,7 +175,7 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>confluent-log4j</artifactId>
-            <version>${confluent-log4j.version}</version>
+            <version>${confluent.log4j.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -195,6 +195,10 @@
                 <exclusion>
                     <groupId>log4j</groupId>
                     <artifactId>log4j</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.google.guava</groupId>
+                    <artifactId>guava</artifactId>
                 </exclusion>
             </exclusions>
             <scope>test</scope>
