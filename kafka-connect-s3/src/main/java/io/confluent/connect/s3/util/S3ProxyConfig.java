@@ -55,7 +55,7 @@ public class S3ProxyConfig {
       pass = StringUtils.isNotBlank(password.value())
              ? password.value()
              : extractPass(url.getUserInfo());
-      log.info("Using proxy config {}", this);
+      log.debug("Using proxy config {}", this);
     } catch (MalformedURLException e) {
       throw new ConfigException(
           S3_PROXY_URL_CONFIG,
@@ -111,8 +111,8 @@ public class S3ProxyConfig {
         + "protocol=" + protocol
         + ", host='" + host + '\''
         + ", port=" + port
-        + ", user='" + user + '\''
-        + ", pass='" + pass + '\''
+        + ", user='*****************'"
+        + ", pass='*****************'"
         + '}';
   }
 }
