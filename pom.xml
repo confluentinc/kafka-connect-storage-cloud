@@ -175,11 +175,10 @@
                   <groupId>org.apache.maven.plugins</groupId>
                   <artifactId>maven-surefire-plugin</artifactId>
                   <configuration>
-                      <argLine>@{argLine} -Djava.awt.headless=true -XX:MaxPermSize=512m</argLine>
-                      <reuseForks>true</reuseForks>
-                      <forkCount>0</forkCount>
+                      <argLine>@{argLine} -Djava.awt.headless=true -Xmx1024m -XX:MaxPermSize=512m</argLine>
+                      <reuseForks>false</reuseForks>
+                      <forkCount>1</forkCount>
                   </configuration>
-                  <!--This commit has been causing surefire to fail. https://github.com/confluentinc/kafka-connect-storage-cloud/pull/460-->
               </plugin>
               <plugin>
                   <groupId>org.apache.maven.plugins</groupId>
