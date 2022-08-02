@@ -38,7 +38,6 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
@@ -60,7 +59,7 @@ public class S3OutputStream extends PositionOutputStream {
   private final int partSize;
   private final CannedAccessControlList cannedAcl;
   private boolean closed;
-  private final ByteBuffer buffer;
+  private final ByteBuf buffer;
   private MultipartUpload multiPartUpload;
   private final CompressionType compressionType;
   private final int compressionLevel;
@@ -80,7 +79,15 @@ public class S3OutputStream extends PositionOutputStream {
     this.partSize = conf.getPartSize();
     this.cannedAcl = conf.getCannedAcl();
     this.closed = false;
-    this.buffer = ByteBuffer.allocate(this.partSize);
+
+    final boolean elasticBufEnable = conf.getElasticBufferEnable();
+    if (elasticBufEnable) {
+      final int elasticBufInitialCap = conf.getElasticBufferInitCap();
+      this.buffer = new ElasticByteBuffer(this.partSize, elasticBufInitialCap);
+    } else {
+      this.buffer = new SimpleByteBuffer(this.partSize);
+    }
+
     this.progressListener = new ConnectProgressListener();
     this.multiPartUpload = null;
     this.compressionType = conf.getCompressionType();
