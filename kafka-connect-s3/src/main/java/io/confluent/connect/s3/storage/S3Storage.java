@@ -43,6 +43,7 @@ import java.util.stream.Collectors;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.util.S3ProxyConfig;
+import io.confluent.connect.s3.util.TrustStoreConfig;
 import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.Storage;
 import io.confluent.connect.storage.common.util.StringUtils;
@@ -54,6 +55,7 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_MAX_BACKOFF_TIME_MS;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.SSL_TRUSTSTORE_LOCATION_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
 
 /**
@@ -142,10 +144,13 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
           .withProxyPassword(proxyConfig.pass());
     }
     clientConfiguration.withUseExpectContinue(config.useExpectContinue());
-
+    if (StringUtils.isNotBlank(config.getString(SSL_TRUSTSTORE_LOCATION_CONFIG))) {
+      TrustStoreConfig trustStoreConfig = new TrustStoreConfig(config);
+      clientConfiguration.getApacheHttpClientConfig()
+          .setSslSocketFactory(trustStoreConfig.getSslSocketFactory());
+    }
     return clientConfiguration;
   }
-
 
   /**
    * Creates a retry policy, based on full jitter backoff strategy

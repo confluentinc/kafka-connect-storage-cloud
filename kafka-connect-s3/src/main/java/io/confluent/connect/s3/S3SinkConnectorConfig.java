@@ -50,6 +50,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.zip.Deflater;
+import java.security.KeyStore;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
@@ -98,6 +99,25 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String CREDENTIALS_PROVIDER_CLASS_CONFIG = "s3.credentials.provider.class";
   public static final Class<? extends AWSCredentialsProvider> CREDENTIALS_PROVIDER_CLASS_DEFAULT =
       DefaultAWSCredentialsProviderChain.class;
+
+  /**
+   * SSL Settings
+   */
+  public static final String SSL_TRUSTSTORE_LOCATION_CONFIG = "ssl.truststore.location";
+  public static final String SSL_TRUSTSTORE_LOCATION_DEFAULT = null;
+
+  public static final String SSL_TRUSTSTORE_PASSWORD_CONFIG = "ssl.truststore.password";
+  public static final Password SSL_TRUSTSTORE_PASSWORD_DEFAULT = new Password(null);
+
+  public static final String SSL_TRUSTSTORE_TYPE_CONFIG = "ssl.truststore.type";
+  public static final String SSL_TRUSTSTORE_TYPE_DEFAULT = KeyStore.getDefaultType();
+
+  private static final Collection<String> SSL_TRUSTSTORE_TYPE_VALID_VALUES = Arrays.<String>asList(
+      "pkcs12",
+      "jks",
+      "jceks"
+  );
+
   /**
    * The properties that begin with this prefix will be used to configure a class, specified by
    * {@code s3.credentials.provider.class} if it implements {@link Configurable}.
@@ -696,6 +716,44 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "Elastic buffer initial capacity"
       );
 
+      configDef.define(
+          SSL_TRUSTSTORE_LOCATION_CONFIG,
+          Type.STRING,
+          SSL_TRUSTSTORE_LOCATION_DEFAULT,
+          Importance.MEDIUM,
+          "The location of the trust store file, additional to the default Java trus store.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Trust store file location"
+      );
+
+      configDef.define(
+          SSL_TRUSTSTORE_PASSWORD_CONFIG,
+          Type.PASSWORD,
+          SSL_TRUSTSTORE_PASSWORD_DEFAULT,
+          Importance.MEDIUM,
+          "The password for the trust store file.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Trust store password"
+      );
+
+      configDef.define(
+          SSL_TRUSTSTORE_TYPE_CONFIG,
+          Type.STRING,
+          SSL_TRUSTSTORE_TYPE_DEFAULT,
+          new KeyStorageTypeValidator(),
+          Importance.MEDIUM,
+          "The file format of the trust store file",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Trust store type",
+          new KeyStorageTypeRecommender()
+      );
+
     }
     return configDef;
   }
@@ -942,6 +1000,38 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     @Override
     public String toString() {
       return "[" + Utils.join(RegionUtils.getRegions(), ", ") + "]";
+    }
+  }
+
+  private static class KeyStorageTypeRecommender implements ConfigDef.Recommender {
+    @Override
+    public List<Object> validValues(String name, Map<String, Object> connectorConfigs) {
+      return new ArrayList<>(SSL_TRUSTSTORE_TYPE_VALID_VALUES);
+    }
+
+    @Override
+    public boolean visible(String name, Map<String, Object> connectorConfigs) {
+      return true;
+    }
+  }
+
+  private static class KeyStorageTypeValidator implements ConfigDef.Validator {
+
+    @Override
+    public void ensureValid(String name, Object storageType) {
+      String storageTypeStr = ((String) storageType).toLowerCase().trim();
+      if (!SSL_TRUSTSTORE_TYPE_VALID_VALUES.contains(storageTypeStr)) {
+        throw new ConfigException(
+            name,
+            storageType,
+            "Value must be one of: " + Utils.join(SSL_TRUSTSTORE_TYPE_VALID_VALUES, ", ")
+        );
+      }
+    }
+
+    @Override
+    public String toString() {
+      return "[" + Utils.join(SSL_TRUSTSTORE_TYPE_VALID_VALUES, ", ") + "]";
     }
   }
 
