@@ -32,11 +32,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.KeyStore;
 
 import io.confluent.connect.s3.auth.AwsAssumeRoleCredentialsProvider;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.s3.util.TrustStoreConfig;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.partitioner.DailyPartitioner;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
@@ -53,6 +57,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.Assert.assertFalse;
 
 public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
@@ -561,5 +566,41 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     connectorConfig = new S3SinkConnectorConfig(properties);
     assertEquals(ParquetFormat.class, connectorConfig.getClass(HEADERS_FORMAT_CLASS_CONFIG));
   }
-}
 
+  @Test
+  public void testTrustStore () {
+    String filePath = "/path/to/file.p12";
+    properties.put(S3SinkConnectorConfig.SSL_TRUSTSTORE_LOCATION_CONFIG, filePath);
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    TrustStoreConfig trustStoreConfig = new TrustStoreConfig(connectorConfig);
+    Path location = Paths.get(filePath);
+    assertEquals(location, trustStoreConfig.trustStoreLocation());
+    assertNotNull(trustStoreConfig.getSslSocketFactory());
+  }
+
+  @Test
+  public void testTrustStoreEmptyPassword () {
+    properties.put(S3SinkConnectorConfig.SSL_TRUSTSTORE_LOCATION_CONFIG, "/path/to/file.p12");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    TrustStoreConfig trustStoreConfig = new TrustStoreConfig(connectorConfig);
+    assertNull(trustStoreConfig.password());
+  }
+
+  @Test
+  public void testTrustStorePassword () {
+    String passwordString = "Password";
+    properties.put(S3SinkConnectorConfig.SSL_TRUSTSTORE_LOCATION_CONFIG, "/path/to/file.p12");
+    properties.put(S3SinkConnectorConfig.SSL_TRUSTSTORE_PASSWORD_CONFIG, "Password");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    TrustStoreConfig trustStoreConfig = new TrustStoreConfig(connectorConfig);
+    assertEquals(passwordString, trustStoreConfig.password());
+  }
+
+  @Test
+  public void testTrustStoreDefaultType () {
+    properties.put(S3SinkConnectorConfig.SSL_TRUSTSTORE_LOCATION_CONFIG, "/path/to/file.p12");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    TrustStoreConfig trustStoreConfig = new TrustStoreConfig(connectorConfig);
+    assertEquals(KeyStore.getDefaultType(), trustStoreConfig.type());
+  }
+}

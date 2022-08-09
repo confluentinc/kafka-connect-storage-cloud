@@ -53,11 +53,11 @@ public class TrustStoreConfig {
       String typeValue = config.getString(SSL_TRUSTSTORE_TYPE_CONFIG);
       type = StringUtils.isNotBlank(typeValue)
           ? typeValue.toLowerCase().trim()
-          : KeyStore.getDefaultType().toString();
+          : KeyStore.getDefaultType();
       Password passwordValue = config.getPassword(SSL_TRUSTSTORE_PASSWORD_CONFIG);
       password = StringUtils.isNotBlank(passwordValue.value())
           ? passwordValue.value()
-          : new Password(null).toString();
+          : null;
       log.debug("Using Custom trust store {}", this);
     } catch (Exception e) {
       throw new ConfigException(
