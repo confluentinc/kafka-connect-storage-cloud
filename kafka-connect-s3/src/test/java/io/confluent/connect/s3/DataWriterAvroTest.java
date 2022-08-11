@@ -15,7 +15,6 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.internal.SkipMd5CheckStrategy;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import org.apache.avro.file.DataFileStream;
@@ -35,7 +34,6 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
-import org.powermock.api.mockito.PowerMockito;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -47,7 +45,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -60,32 +57,23 @@ import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
-import io.confluent.connect.storage.partitioner.DefaultPartitioner;
-import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.kafka.serializers.NonRecordContainer;
 
 import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 
-public class DataWriterAvroTest extends TestWithMockedS3 {
+public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
 
-  private static final String ZERO_PAD_FMT = "%010d";
-
-  private final String extension = ".avro";
-  protected S3Storage storage;
-  protected AmazonS3 s3;
-  AvroFormat format;
-  Partitioner<?> partitioner;
-  S3SinkTask task;
-  Map<String, String> localProps = new HashMap<>();
+  protected static final String EXTENSION = ".avro";
   private String prevMd5Prop = null;
+
+  public DataWriterAvroTest() {
+    super(AvroFormat.class);
+  }
 
   @Override
   protected Map<String, String> createProps() {
@@ -97,18 +85,6 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   //@Before should be omitted in order to be able to add properties per test.
   public void setUp() throws Exception {
     super.setUp();
-
-    s3 = PowerMockito.spy(newS3Client(connectorConfig));
-
-    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
-
-    partitioner = new DefaultPartitioner<>();
-    partitioner.configure(parsedConfig);
-    format = new AvroFormat(storage);
-
-    s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
-
     // Workaround to avoid AWS S3 client failing due to apparently incorrect S3Mock digest
     prevMd5Prop = System.getProperty(
         SkipMd5CheckStrategy.DISABLE_GET_OBJECT_MD5_VALIDATION_PROPERTY
@@ -116,27 +92,26 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     System.setProperty(SkipMd5CheckStrategy.DISABLE_GET_OBJECT_MD5_VALIDATION_PROPERTY, "true");
   }
 
+  @Override
+  protected String getFileExtension() {
+    return EXTENSION;
+  }
+
   //@Before should be omitted in order to be able to add properties per test.
   public void setUpWithCommitException() throws Exception {
     super.setUp();
 
-    s3 = PowerMockito.spy(newS3Client(connectorConfig));
-
+    // We'll replace 'storage' and 'format' here that were created by
+    // the base class.
     storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3) {
       private final AtomicInteger retries = new AtomicInteger(0);
 
       @Override
-      public S3OutputStream create(String path, boolean overwrite) {
+      public S3OutputStream create(String path, boolean overwrite, Class<?> formatClass) {
         return new TopicPartitionWriterTest.S3OutputStreamFlaky(path, this.conf(), s3, retries);
       }
     };
-
-    partitioner = new DefaultPartitioner<>();
-    partitioner.configure(parsedConfig);
     format = new AvroFormat(storage);
-
-    s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
   }
 
   @After
@@ -241,7 +216,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     // Upload partial file.
     List<SinkRecord> sinkRecords = createRecords(2);
     byte[] partialData = AvroUtils.putRecords(sinkRecords, format.getAvroData());
-    String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT);
+    String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, EXTENSION, ZERO_PAD_FMT);
     s3.putObject(S3_TEST_BUCKET_NAME, fileKey, new ByteArrayInputStream(partialData), null);
 
     // Accumulate rest of the records.
@@ -626,9 +601,9 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     long[] validOffsets3 = {6, 9, 12};
     verify(sinkRecords, validOffsets3, Collections.singleton(TOPIC_PARTITION3), true);
 
-    List<String> expectedFiles = getExpectedFiles(validOffsets1, TOPIC_PARTITION);
-    expectedFiles.addAll(getExpectedFiles(validOffsets2, TOPIC_PARTITION2));
-    expectedFiles.addAll(getExpectedFiles(validOffsets3, TOPIC_PARTITION3));
+    List<String> expectedFiles = getExpectedFiles(validOffsets1, TOPIC_PARTITION, EXTENSION);
+    expectedFiles.addAll(getExpectedFiles(validOffsets2, TOPIC_PARTITION2, EXTENSION));
+    expectedFiles.addAll(getExpectedFiles(validOffsets3, TOPIC_PARTITION3, EXTENSION));
     verifyFileListing(expectedFiles);
   }
 
@@ -703,8 +678,26 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
       task.close(context.assignment());
       task.stop();
       long[] validOffsets = {};
-      verify(Collections.<SinkRecord>emptyList(), validOffsets);
+      verify(Collections.emptyList(), validOffsets);
     }
+  }
+
+  @Test
+  public void testCorrectRecordWriterBasic() throws Exception {
+    // Test the base-case -- no known embedded extension
+    testCorrectRecordWriterHelper("this.is.dir");
+  }
+
+  @Test
+  public void testCorrectRecordWriterOther() throws Exception {
+    // Test with a different embedded extension
+    testCorrectRecordWriterHelper("this.is.json.dir");
+  }
+
+  @Test
+  public void testCorrectRecordWriterThis() throws Exception {
+    // Test with our embedded extension
+    testCorrectRecordWriterHelper("this.is" + EXTENSION + ".dir");
   }
 
   /**
@@ -847,6 +840,11 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     return sinkRecords;
   }
 
+  @Override
+  protected List<SinkRecord> createGenericRecords(int count, long firstOffset) {
+    return createRecordsNoVersion(count, firstOffset);
+  }
+
   protected List<SinkRecord> createRecordsNoVersion(int size, long startOffset) {
     String key = "key";
     Schema schemaNoVersion = SchemaBuilder.struct().name("record")
@@ -893,10 +891,16 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     return sinkRecords;
   }
 
-  protected List<SinkRecord> createRecordsInterleaved(int size, long startOffset, Set<TopicPartition> partitions) {
+  protected List<SinkRecord> createRecordsInterleaved(
+      int size,
+      long startOffset,
+      Set<TopicPartition> partitionSet
+  ) {
     String key = "key";
     Schema schema = createSchema();
     Struct record = createRecord(schema);
+
+    Collection<TopicPartition> partitions = sortedPartitions(partitionSet);
 
     List<SinkRecord> sinkRecords = new ArrayList<>();
     for (long offset = startOffset, total = 0; total < size; ++offset) {
@@ -917,37 +921,6 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   protected String getDirectory(String topic, int partition) {
     String encodedPartition = "partition=" + String.valueOf(partition);
     return partitioner.generatePartitionedPath(topic, encodedPartition);
-  }
-
-  protected List<String> getExpectedFiles(long[] validOffsets, TopicPartition tp) {
-    List<String> expectedFiles = new ArrayList<>();
-    for (int i = 1; i < validOffsets.length; ++i) {
-      long startOffset = validOffsets[i - 1];
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset,
-                                                  extension, ZERO_PAD_FMT));
-    }
-    return expectedFiles;
-  }
-
-  protected void verifyFileListing(long[] validOffsets, Set<TopicPartition> partitions) throws IOException {
-    List<String> expectedFiles = new ArrayList<>();
-    for (TopicPartition tp : partitions) {
-      expectedFiles.addAll(getExpectedFiles(validOffsets, tp));
-    }
-    verifyFileListing(expectedFiles);
-  }
-
-  protected void verifyFileListing(List<String> expectedFiles) {
-    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
-    List<String> actualFiles = new ArrayList<>();
-    for (S3ObjectSummary summary : summaries) {
-      String fileKey = summary.getKey();
-      actualFiles.add(fileKey);
-    }
-
-    Collections.sort(actualFiles);
-    Collections.sort(expectedFiles);
-    assertThat(actualFiles, is(expectedFiles));
   }
 
   protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records) {
@@ -990,11 +963,12 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
    *                     equals the expected size of the file, and last offset in exclusive.
    * @throws IOException
    */
-  protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets, Set<TopicPartition> partitions,
+  protected void verify(List<SinkRecord> sinkRecords, long[] validOffsets,
+                        Set<TopicPartition> partitions,
                         boolean skipFileListing)
       throws IOException {
     if (!skipFileListing) {
-      verifyFileListing(validOffsets, partitions);
+      verifyFileListing(validOffsets, partitions, EXTENSION);
     }
 
     for (TopicPartition tp : partitions) {
@@ -1002,9 +976,9 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
         long startOffset = validOffsets[i - 1];
         long size = validOffsets[i] - startOffset;
 
-        FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset, extension, ZERO_PAD_FMT);
+        FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset, EXTENSION, ZERO_PAD_FMT);
         Collection<Object> records = readRecords(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset,
-                                                 extension, ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
+                                                 EXTENSION, ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
         assertEquals(size, records.size());
         verifyContents(sinkRecords, j, records);
         j += size;
@@ -1012,8 +986,12 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     }
   }
 
-  protected void verifyOffsets(Map<TopicPartition, OffsetAndMetadata> actualOffsets, long[] validOffsets,
-                              Set<TopicPartition> partitions) {
+  protected void verifyOffsets(
+      Map<TopicPartition, OffsetAndMetadata> actualOffsets,
+      long[] validOffsets,
+      Set<TopicPartition> partitionSet
+  ) {
+    Collection<TopicPartition> partitions = sortedPartitions(partitionSet);
     int i = 0;
     Map<TopicPartition, OffsetAndMetadata> expectedOffsets = new HashMap<>();
     for (TopicPartition tp : partitions) {
@@ -1022,14 +1000,15 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
         expectedOffsets.put(tp, new OffsetAndMetadata(offset, ""));
       }
     }
-    assertTrue(Objects.equals(actualOffsets, expectedOffsets));
+    assertEquals(actualOffsets, expectedOffsets);
   }
 
   protected void verifyRawOffsets(
       Map<TopicPartition, Long> actualOffsets,
       long[] validOffsets,
-      Set<TopicPartition> partitions
+      Set<TopicPartition> partitionSet
   ) {
+    Collection<TopicPartition> partitions = sortedPartitions(partitionSet);
     int i = 0;
     Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
     for (TopicPartition tp : partitions) {
@@ -1038,7 +1017,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
         expectedOffsets.put(tp, offset);
       }
     }
-    assertTrue(Objects.equals(actualOffsets, expectedOffsets));
+    assertEquals(actualOffsets, expectedOffsets);
   }
 }
 
