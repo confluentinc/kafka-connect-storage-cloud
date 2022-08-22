@@ -66,8 +66,6 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
   private String roleSessionName;
 
   private BasicAWSCredentials basicCredentials;
-  private String accessKeyId;
-  private String secretKey;
 
   @Override
   public void configure(Map<String, ?> configs) {
@@ -89,8 +87,7 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
     if (basicCredentials != null) {
       return new STSAssumeRoleSessionCredentialsProvider.Builder(roleArn, roleSessionName)
               .withStsClient(AWSSecurityTokenServiceClientBuilder.standard()
-                 .withCredentials(new AWSStaticCredentialsProvider(
-                         new BasicAWSCredentials(accessKeyId, secretKey))).build())
+                 .withCredentials(new AWSStaticCredentialsProvider(basicCredentials)).build())
               .withExternalId(roleExternalId)
               .build()
               .getCredentials();
