@@ -787,14 +787,17 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         configs.remove(CREDENTIALS_PROVIDER_CLASS_CONFIG.substring(
             CREDENTIALS_PROVIDER_CONFIG_PREFIX.length()
         ));
+
+        configs.put(AWS_ACCESS_KEY_ID_CONFIG,
+                config.getString(AWS_ACCESS_KEY_ID_CONFIG));
+        configs.put(AWS_SECRET_ACCESS_KEY_CONFIG,
+                config.getPassword(AWS_SECRET_ACCESS_KEY_CONFIG).value()
+        );
         ((Configurable) provider).configure(configs);
       } else {
         final String accessKeyId = config.getString(AWS_ACCESS_KEY_ID_CONFIG);
         final String secretKey = config.getPassword(AWS_SECRET_ACCESS_KEY_CONFIG).value();
         if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
-          /*log.info("Returning new credentials provider using the access key id and "
-                  + "the secret access key that were directly supplied through the connector's "
-                  + "configuration"); */
           BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
           provider = new AWSStaticCredentialsProvider(basicCredentials);
         }

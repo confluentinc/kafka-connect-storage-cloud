@@ -73,8 +73,8 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
     roleArn = config.getString(ROLE_ARN_CONFIG);
     roleExternalId = config.getString(ROLE_EXTERNAL_ID_CONFIG);
     roleSessionName = config.getString(ROLE_SESSION_NAME_CONFIG);
-    final String accessKeyId = config.getString(AWS_ACCESS_KEY_ID_CONFIG);
-    final String secretKey = config.getPassword(AWS_SECRET_ACCESS_KEY_CONFIG).value();
+    final String accessKeyId = (String) configs.get(AWS_ACCESS_KEY_ID_CONFIG);
+    final String secretKey = (String) configs.get(AWS_SECRET_ACCESS_KEY_CONFIG);
     if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
       basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
     } else {
