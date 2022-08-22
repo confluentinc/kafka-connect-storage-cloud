@@ -17,11 +17,14 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
+import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -774,7 +777,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   @SuppressWarnings("unchecked")
-  public AWSCredentialsProvider getCredentialsProvider() {
+  public AWSCredentialsProvider getCredentialsProvider(S3SinkConnectorConfig config) {
     try {
       AWSCredentialsProvider provider = ((Class<? extends AWSCredentialsProvider>)
           getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
@@ -785,6 +788,16 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
             CREDENTIALS_PROVIDER_CONFIG_PREFIX.length()
         ));
         ((Configurable) provider).configure(configs);
+      } else {
+        final String accessKeyId = config.getString(AWS_ACCESS_KEY_ID_CONFIG);
+        final String secretKey = config.getPassword(AWS_SECRET_ACCESS_KEY_CONFIG).value();
+        if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
+          /*log.info("Returning new credentials provider using the access key id and "
+                  + "the secret access key that were directly supplied through the connector's "
+                  + "configuration"); */
+          BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
+          provider = new AWSStaticCredentialsProvider(basicCredentials);
+        }
       }
 
       return provider;
