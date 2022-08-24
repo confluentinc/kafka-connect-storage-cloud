@@ -772,12 +772,20 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return CannedAclValidator.ACLS_BY_HEADER_VALUE.get(getString(ACL_CANNED_CONFIG));
   }
 
+  public String awsAccessKeyId() {
+    return getString(AWS_ACCESS_KEY_ID_CONFIG);
+  }
+
+  public Password awsSecretKeyId() {
+    return getPassword(AWS_SECRET_ACCESS_KEY_CONFIG);
+  }
+
   public int getPartSize() {
     return getInt(PART_SIZE_CONFIG);
   }
 
   @SuppressWarnings("unchecked")
-  public AWSCredentialsProvider getCredentialsProvider(S3SinkConnectorConfig config) {
+  public AWSCredentialsProvider getCredentialsProvider() {
     try {
       AWSCredentialsProvider provider = ((Class<? extends AWSCredentialsProvider>)
           getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
@@ -788,15 +796,13 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
             CREDENTIALS_PROVIDER_CONFIG_PREFIX.length()
         ));
 
-        configs.put(AWS_ACCESS_KEY_ID_CONFIG,
-                config.getString(AWS_ACCESS_KEY_ID_CONFIG));
-        configs.put(AWS_SECRET_ACCESS_KEY_CONFIG,
-                config.getPassword(AWS_SECRET_ACCESS_KEY_CONFIG).value()
-        );
+        configs.put(AWS_ACCESS_KEY_ID_CONFIG, awsAccessKeyId());
+        configs.put(AWS_SECRET_ACCESS_KEY_CONFIG, awsSecretKeyId().value());
+
         ((Configurable) provider).configure(configs);
       } else {
-        final String accessKeyId = config.getString(AWS_ACCESS_KEY_ID_CONFIG);
-        final String secretKey = config.getPassword(AWS_SECRET_ACCESS_KEY_CONFIG).value();
+        final String accessKeyId = awsAccessKeyId();
+        final String secretKey = awsSecretKeyId().value();
         if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
           BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
           provider = new AWSStaticCredentialsProvider(basicCredentials);

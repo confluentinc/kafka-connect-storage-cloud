@@ -172,7 +172,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   protected AWSCredentialsProvider newCredentialsProvider(S3SinkConnectorConfig config) {
     log.info("Returning new credentials provider based on the configured "
            + "credentials provider class");
-    return config.getCredentialsProvider(config);
+    return config.getCredentialsProvider();
   }
 
   @Override

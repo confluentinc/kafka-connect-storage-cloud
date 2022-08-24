@@ -218,7 +218,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     );
     connectorConfig = new S3SinkConnectorConfig(properties);
 
-    AWSCredentialsProvider credentialsProvider = connectorConfig.getCredentialsProvider(connectorConfig);
+    AWSCredentialsProvider credentialsProvider = connectorConfig.getCredentialsProvider();
 
     assertEquals(ACCESS_KEY_VALUE, credentialsProvider.getCredentials().getAWSAccessKeyId());
     assertEquals(SECRET_KEY_VALUE, credentialsProvider.getCredentials().getAWSSecretKey());
@@ -246,7 +246,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     connectorConfig = new S3SinkConnectorConfig(properties);
 
     AwsAssumeRoleCredentialsProvider credentialsProvider =
-        (AwsAssumeRoleCredentialsProvider) connectorConfig.getCredentialsProvider(connectorConfig);
+        (AwsAssumeRoleCredentialsProvider) connectorConfig.getCredentialsProvider();
   }
 
   @Test
@@ -279,7 +279,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     );
 
     connectorConfig = new S3SinkConnectorConfig(properties);
-    assertThrows("are mandatory configuration properties", ConfigException.class, () -> connectorConfig.getCredentialsProvider(connectorConfig));
+    assertThrows("are mandatory configuration properties", ConfigException.class, () -> connectorConfig.getCredentialsProvider());
   }
 
   @Test
@@ -304,7 +304,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     connectorConfig = new S3SinkConnectorConfig(properties);
 
     AwsAssumeRoleCredentialsProvider credentialsProvider =
-        (AwsAssumeRoleCredentialsProvider) connectorConfig.getCredentialsProvider(connectorConfig);
+        (AwsAssumeRoleCredentialsProvider) connectorConfig.getCredentialsProvider();
 
     assertThrows("Missing required configuration", ConfigException.class, () -> credentialsProvider.configure(properties));
   }
