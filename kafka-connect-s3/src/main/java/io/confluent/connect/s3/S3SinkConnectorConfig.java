@@ -80,6 +80,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String S3_OBJECT_TAGGING_CONFIG = "s3.object.tagging";
   public static final boolean S3_OBJECT_TAGGING_DEFAULT = false;
 
+  public static final String S3_OBJECT_IGNORE_TAGGING_ERROR_CONFIG = "ignore.tagging.errors";
+  public static final boolean S3_OBJECT_IGNORE_TAGGING_ERROR_DEFAULT = true;
+
   public static final String SSEA_CONFIG = "s3.ssea.name";
   public static final String SSEA_DEFAULT = "";
 
@@ -269,6 +272,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "S3 Object Tagging"
+      );
+
+      configDef.define(
+              S3_OBJECT_IGNORE_TAGGING_ERROR_CONFIG,
+              Type.BOOLEAN,
+              S3_OBJECT_IGNORE_TAGGING_ERROR_DEFAULT,
+              Importance.LOW,
+              "Whether to ignore any S3 objects tagging error or not.",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "Ignore S3 Object Tagging Error"
       );
 
       configDef.define(

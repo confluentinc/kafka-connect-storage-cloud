@@ -68,6 +68,7 @@ public class TopicPartitionWriter {
   private final Queue<SinkRecord> buffer;
   private final SinkTaskContext context;
   private final boolean isTaggingEnabled;
+  private final boolean ignoreTaggingErrors;
   private int recordCount;
   private final int flushSize;
   private final long rotateIntervalMs;
@@ -127,6 +128,8 @@ public class TopicPartitionWriter {
                                   ? ((TimeBasedPartitioner) partitioner).getTimestampExtractor()
                                   : null;
     isTaggingEnabled = connectorConfig.getBoolean(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG);
+    ignoreTaggingErrors = connectorConfig.getBoolean(
+            S3SinkConnectorConfig.S3_OBJECT_IGNORE_TAGGING_ERROR_CONFIG);
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
@@ -659,10 +662,18 @@ public class TopicPartitionWriter {
       log.info("Tagged S3 object {} with starting offset {}, ending offset {}, record count {}",
           s3ObjectPath, startOffset, endOffset, recordCount);
     } catch (SdkClientException e) {
-      log.warn("Unable to tag S3 object {}. Ignoring.", s3ObjectPath, e);
+      if (ignoreTaggingErrors) {
+        log.warn("Unable to tag S3 object {}. Ignoring.", s3ObjectPath, e);
+      } else {
+        throw new ConnectException(String.format("Unable to tag S3 object %s.", s3ObjectPath), e);
+      }
     } catch (Exception e) {
-      log.warn("Unrecoverable exception while attempting to tag S3 object {}. Ignoring.",
-          s3ObjectPath, e);
+      if (ignoreTaggingErrors) {
+        log.warn("Unrecoverable exception while attempting to tag S3 object {}. Ignoring.",
+                s3ObjectPath, e);
+      } else {
+        throw new ConnectException(String.format("Unable to tag S3 object %s.", s3ObjectPath), e);
+      }
     }
   }
 }
