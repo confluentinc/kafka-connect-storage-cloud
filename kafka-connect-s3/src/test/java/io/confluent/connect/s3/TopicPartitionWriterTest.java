@@ -1136,49 +1136,18 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   @Test
   public void testFailS3ObjectTaggingSdkClientException() throws Exception {
-    ConnectException exception = assertThrows(ConnectException.class, () -> {
-      testS3ObjectTaggingErrorHelper(true, false);
-    });
+    ConnectException exception = assertThrows(ConnectException.class,
+            () -> testS3ObjectTaggingErrorHelper(true, false));
     assertEquals("Unable to tag S3 object topics_test-topic_partition=12_test-topic#12#0000000000.avro", exception.getMessage());
     assertEquals("Mock SdkClientException while tagging", exception.getCause().getMessage());
   }
 
   @Test
   public void testFailS3ObjectTaggingRuntimeException() throws Exception {
-    ConnectException exception = assertThrows(ConnectException.class, () -> {
-      testS3ObjectTaggingErrorHelper(false, false);
-    });
+    ConnectException exception = assertThrows(ConnectException.class, () ->
+            testS3ObjectTaggingErrorHelper(false, false));
     assertEquals("Unable to tag S3 object topics_test-topic_partition=12_test-topic#12#0000000000.avro", exception.getMessage());
     assertEquals("Mock RuntimeException while tagging", exception.getCause().getMessage());
-  }
-
-  public void testS3ObjectTaggingErrorHelper(boolean mockSdkClientException, boolean ignoreTaggingError) throws Exception {
-    // Enabling tagging and setting behavior for tagging error.
-    localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
-    localProps.put(S3SinkConnectorConfig.S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG, ignoreTaggingError ? "ignore" : "fail");
-
-    // Setup mock exception while tagging
-    setUpWithTaggingException(mockSdkClientException);
-
-    // Define the partitioner
-    Partitioner<?> partitioner = new DefaultPartitioner<>();
-    partitioner.configure(parsedConfig);
-    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
-
-    String key = "key";
-    Schema schema = createSchema();
-    List<Struct> records = createRecordBatches(schema, 3, 3);
-
-    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
-
-    for (SinkRecord record : sinkRecords) {
-      topicPartitionWriter.buffer(record);
-    }
-
-    // Invoke write so as to simulate tagging error.
-    topicPartitionWriter.write();
-    topicPartitionWriter.close();
   }
 
   @Test
@@ -1718,6 +1687,35 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       List<Tag> expectedTags = expectedTaggedFiles.get(fileKey);
       assertTrue(actualTags.containsAll(expectedTags));
     }
+  }
+
+  private void testS3ObjectTaggingErrorHelper(boolean mockSdkClientException, boolean ignoreTaggingError) throws Exception {
+    // Enabling tagging and setting behavior for tagging error.
+    localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
+    localProps.put(S3SinkConnectorConfig.S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG, ignoreTaggingError ? "ignore" : "fail");
+
+    // Setup mock exception while tagging
+    setUpWithTaggingException(mockSdkClientException);
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 3);
+
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Invoke write so as to simulate tagging error.
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
   }
 
   public static class MockedWallclockTimestampExtractor implements TimestampExtractor {

@@ -17,6 +17,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.SdkClientException;
 import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.s3.util.RetryUtil;
 import io.confluent.connect.storage.errors.PartitionException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
@@ -52,6 +53,9 @@ import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.connect.storage.partitioner.TimestampExtractor;
 import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
 import io.confluent.connect.storage.util.DateTimeUtils;
+
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
 
 public class TopicPartitionWriter {
   private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriter.class);
@@ -603,7 +607,11 @@ public class TopicPartitionWriter {
       String encodedPartition = entry.getKey();
       commitFile(encodedPartition);
       if (isTaggingEnabled) {
-        tagFile(encodedPartition, entry.getValue());
+        RetryUtil.exponentialBackoffRetry(() -> tagFile(encodedPartition, entry.getValue()),
+                ConnectException.class,
+                connectorConfig.getInt(S3_PART_RETRIES_CONFIG),
+                connectorConfig.getLong(S3_RETRY_BACKOFF_CONFIG)
+        );
       }
       startOffsets.remove(encodedPartition);
       endOffsets.remove(encodedPartition);
