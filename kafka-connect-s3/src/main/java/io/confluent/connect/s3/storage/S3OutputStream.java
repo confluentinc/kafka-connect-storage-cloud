@@ -168,8 +168,10 @@ public class S3OutputStream extends PositionOutputStream {
       if (multiPartUpload == null && buffer.hasRemaining()) {
         PutObjectRequest req = new PutObjectRequest(bucket, key,
                 new ByteArrayInputStream(buffer.array(), 0, buffer.position()), newObjectMetadata())
-                .withSSECustomerKey(sseCustomerKey)
                 .withCannedAcl(cannedAcl);
+        if (sseCustomerKey != null) {
+          req.withSSECustomerKey(sseCustomerKey);
+        }
         handleAmazonExceptions(() -> s3.putObject(req));
       } else if (buffer.hasRemaining()) {
         uploadPart(buffer.position());
