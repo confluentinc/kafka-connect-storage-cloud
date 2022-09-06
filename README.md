@@ -33,6 +33,7 @@ Integration tests are run as part of `mvn install`; however one needs to first c
 
 - Source Code: https://github.com/confluentinc/kafka-connect-storage-cloud
 - Issue Tracker: https://github.com/confluentinc/kafka-connect-storage-cloud/issues
+- Learn how to work with the connector's source code by reading our [Development and Contribution guidelines](CONTRIBUTING.md).
 
 
 # License
