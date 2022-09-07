@@ -83,7 +83,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG =
           "s3.object.behavior.on.tagging.error";
   public static final String S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_DEFAULT =
-          IgnoreFailBehavior.IGNORE.toString();
+          IgnoreOrFailBehavior.IGNORE.toString();
 
   public static final String SSEA_CONFIG = "s3.ssea.name";
   public static final String SSEA_DEFAULT = "";
@@ -157,7 +157,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       ClientConfiguration.DEFAULT_USE_EXPECT_CONTINUE;
 
   public static final String BEHAVIOR_ON_NULL_VALUES_CONFIG = "behavior.on.null.values";
-  public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = IgnoreFailBehavior.FAIL.toString();
+  public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = IgnoreOrFailBehavior.FAIL.toString();
 
   /**
    * Maximum back-off time when retrying failed requests.
@@ -290,7 +290,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
               S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG,
               Type.STRING,
               S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_DEFAULT,
-              IgnoreFailBehavior.VALIDATOR,
+              IgnoreOrFailBehavior.VALIDATOR,
               Importance.LOW,
               "How to handle S3 object tagging error. Valid options are 'ignore' and 'fail'.",
               group,
@@ -609,7 +609,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           BEHAVIOR_ON_NULL_VALUES_CONFIG,
           Type.STRING,
           BEHAVIOR_ON_NULL_VALUES_DEFAULT,
-          IgnoreFailBehavior.VALIDATOR,
+          IgnoreOrFailBehavior.VALIDATOR,
           Importance.LOW,
           "How to handle records with a null value (i.e. Kafka tombstone records)."
               + " Valid options are 'ignore' and 'fail'.",
@@ -1158,7 +1158,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getString(BEHAVIOR_ON_NULL_VALUES_CONFIG);
   }
 
-  public enum IgnoreFailBehavior {
+  public enum IgnoreOrFailBehavior {
     IGNORE,
     FAIL;
 
@@ -1182,7 +1182,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     };
 
     public static String[] names() {
-      IgnoreFailBehavior[] behaviors = values();
+      IgnoreOrFailBehavior[] behaviors = values();
       String[] result = new String[behaviors.length];
 
       for (int i = 0; i < behaviors.length; i++) {

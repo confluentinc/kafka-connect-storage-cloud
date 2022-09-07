@@ -134,7 +134,7 @@ public class TopicPartitionWriter {
     isTaggingEnabled = connectorConfig.getBoolean(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG);
     ignoreTaggingErrors = connectorConfig.getString(
             S3SinkConnectorConfig.S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG)
-            .equalsIgnoreCase(S3SinkConnectorConfig.IgnoreFailBehavior.IGNORE.toString());
+            .equalsIgnoreCase(S3SinkConnectorConfig.IgnoreOrFailBehavior.IGNORE.toString());
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
