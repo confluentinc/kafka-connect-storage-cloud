@@ -17,11 +17,14 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
+import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -787,6 +790,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return CannedAclValidator.ACLS_BY_HEADER_VALUE.get(getString(ACL_CANNED_CONFIG));
   }
 
+  public String awsAccessKeyId() {
+    return getString(AWS_ACCESS_KEY_ID_CONFIG);
+  }
+
+  public Password awsSecretKeyId() {
+    return getPassword(AWS_SECRET_ACCESS_KEY_CONFIG);
+  }
+
   public int getPartSize() {
     return getInt(PART_SIZE_CONFIG);
   }
@@ -802,7 +813,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         configs.remove(CREDENTIALS_PROVIDER_CLASS_CONFIG.substring(
             CREDENTIALS_PROVIDER_CONFIG_PREFIX.length()
         ));
+
+        configs.put(AWS_ACCESS_KEY_ID_CONFIG, awsAccessKeyId());
+        configs.put(AWS_SECRET_ACCESS_KEY_CONFIG, awsSecretKeyId().value());
+
         ((Configurable) provider).configure(configs);
+      } else {
+        final String accessKeyId = awsAccessKeyId();
+        final String secretKey = awsSecretKeyId().value();
+        if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
+          BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
+          provider = new AWSStaticCredentialsProvider(basicCredentials);
+        }
       }
 
       return provider;
