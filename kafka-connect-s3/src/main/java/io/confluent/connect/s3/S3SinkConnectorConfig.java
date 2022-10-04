@@ -66,6 +66,9 @@ import io.confluent.connect.storage.common.GenericRecommender;
 import io.confluent.connect.storage.common.ParentValueRecommender;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.Format;
+import io.confluent.connect.storage.hive.HiveConfig;
+import static io.confluent.connect.storage.hive.HiveConfig.HIVE_DATABASE_CONFIG;
+import static io.confluent.connect.storage.hive.HiveConfig.HIVE_INTEGRATION_CONFIG;
 import io.confluent.connect.storage.partitioner.DailyPartitioner;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.FieldPartitioner;
@@ -224,6 +227,19 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private static final ParentValueRecommender HEADERS_FORMAT_CLASS_RECOMMENDER =
       new ParentValueRecommender(
           STORE_KAFKA_HEADERS_CONFIG, true, HEADERS_FORMAT_CLASS_VALID_VALUES);
+
+  private static final String TOPIC_SUBSTITUTION = "${topic}";
+  public static final String HIVE_TABLE_NAME_CONFIG = "hive.table.name";
+  public static final String HIVE_TABLE_NAME_DEFAULT = TOPIC_SUBSTITUTION;
+  private static final String HIVE_TABLE_NAME_DOC = "The hive table name to use. "
+          + "It must contain '${topic}' to inject the corresponding topic name.";
+  private static final String HIVE_TABLE_NAME_DISPLAY = "Hive table name";
+
+  public static final String HIVE_S3_PROTOCOL_CONFIG = "hive.s3.protocol";
+  public static final String HIVE_S3_PROTOCOL_DEFAULT = "s3";
+  public static final String HIVE_S3_PROTOCOL_DOC = "The protocol used when generating Hive "
+          + "table LOCATION.";
+  public static final String HIVE_S3_PROTOCOL_DISPLAY = "Hive s3 protocol";
 
   static {
     STORAGE_CLASS_RECOMMENDER.addValidValues(
@@ -716,10 +732,38 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.LONG,
           "Elastic buffer initial capacity"
       );
+    }
 
+    {
+      final String group = "Hive";
+      int orderInGroup = 0;
+      configDef.define(
+          HIVE_TABLE_NAME_CONFIG,
+          Type.STRING,
+          HIVE_TABLE_NAME_DEFAULT,
+          Importance.LOW,
+          HIVE_TABLE_NAME_DOC,
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          HIVE_TABLE_NAME_DISPLAY
+      );
+
+      configDef.define(
+          HIVE_S3_PROTOCOL_CONFIG,
+          Type.STRING,
+          HIVE_S3_PROTOCOL_DEFAULT,
+          Importance.LOW,
+          HIVE_S3_PROTOCOL_DOC,
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          HIVE_S3_PROTOCOL_DISPLAY
+      );
     }
     return configDef;
   }
+
 
   public S3SinkConnectorConfig(Map<String, String> props) {
     this(newConfigDef(), props);
@@ -727,16 +771,24 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   protected S3SinkConnectorConfig(ConfigDef configDef, Map<String, String> props) {
     super(configDef, props);
+
+    this.name = parseName(originalsStrings());
+
     ConfigDef storageCommonConfigDef = StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER);
-    StorageCommonConfig commonConfig = new StorageCommonConfig(storageCommonConfigDef,
-        originalsStrings());
+    StorageCommonConfig commonConfig = new StorageCommonConfig(
+        storageCommonConfigDef,
+        originalsStrings()
+    );
+    addToGlobal(commonConfig);
+
     ConfigDef partitionerConfigDef = PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER);
     PartitionerConfig partitionerConfig = new PartitionerConfig(partitionerConfigDef,
         originalsStrings());
-
-    this.name = parseName(originalsStrings());
     addToGlobal(partitionerConfig);
-    addToGlobal(commonConfig);
+
+    HiveConfig hiveConfig = new HiveConfig(originalsStrings());
+    addToGlobal(hiveConfig);
+
     addToGlobal(this);
     validateTimezone();
   }
@@ -1164,6 +1216,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     addAllConfigKeys(visible, newConfigDef(), skip);
     addAllConfigKeys(visible, StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER), skip);
     addAllConfigKeys(visible, PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER), skip);
+    addAllConfigKeys(visible, HiveConfig.getConfig(), skip);
 
     return visible;
   }
@@ -1178,6 +1231,39 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public String nullValueBehavior() {
     return getString(BEHAVIOR_ON_NULL_VALUES_CONFIG);
+  }
+
+  public boolean hiveIntegrationEnabled() {
+    return getBoolean(HIVE_INTEGRATION_CONFIG);
+  }
+
+  public String hiveDatabase() {
+    return getString(HIVE_DATABASE_CONFIG);
+  }
+
+  private String getNormalizeHiveTableName(final String topicName) {
+    if (topicName != null) {
+      return topicName.replaceAll("[.-]", "_");
+    }
+    return topicName;
+  }
+
+  /**
+   * Performs all substitutions on {@value HIVE_TABLE_NAME_CONFIG} and calculates the final
+   * hive table name for the given topic
+   *
+   * @param topic String - the topic name
+   * @return String the hive table name
+   */
+  public String getHiveTableName(String topic) {
+    return getString(HIVE_TABLE_NAME_CONFIG).replace(
+              "${topic}",
+              getNormalizeHiveTableName(topic)
+            );
+  }
+
+  public String getHiveS3Protocol() {
+    return getString(HIVE_S3_PROTOCOL_CONFIG);
   }
 
   public enum IgnoreOrFailBehavior {

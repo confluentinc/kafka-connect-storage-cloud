@@ -40,14 +40,23 @@ import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
 import io.confluent.connect.s3.format.RecordViewSetter;
 import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
+import io.confluent.connect.s3.hive.HiveMetaStoreUpdaterImpl;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.StorageFactory;
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
+import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
+import java.util.Iterator;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import org.apache.kafka.common.config.ConfigException;
+import io.confluent.connect.s3.hive.HiveMetaStoreUpdater;
+import io.confluent.connect.s3.hive.NoOpHiveMetaStoreUpdater;
 
 public class S3SinkTask extends SinkTask {
   private static final Logger log = LoggerFactory.getLogger(S3SinkTask.class);
@@ -60,6 +69,7 @@ public class S3SinkTask extends SinkTask {
   private Partitioner<?> partitioner;
   private Format<S3SinkConnectorConfig, String> format;
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
+  private HiveMetaStoreUpdater hiveMetaStoreUpdater;
   private final Time time;
   private ErrantRecordReporter reporter;
 
@@ -69,19 +79,47 @@ public class S3SinkTask extends SinkTask {
   public S3SinkTask() {
     // no-arg constructor required by Connect framework.
     topicPartitionWriters = new HashMap<>();
+    hiveMetaStoreUpdater = new NoOpHiveMetaStoreUpdater();
     time = new SystemTime();
   }
 
   // visible for testing.
-  S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage,
-             Partitioner<?> partitioner, Format<S3SinkConnectorConfig, String> format,
-             Time time) throws Exception {
+  public S3SinkTask(
+      S3SinkConnectorConfig connectorConfig,
+      SinkTaskContext context,
+      S3Storage storage,
+      Partitioner<?> partitioner,
+      Format<S3SinkConnectorConfig, String> format,
+      Time time) throws Exception {
+
+    this(
+        connectorConfig,
+        context,
+        storage,
+        partitioner,
+        format,
+        new NoOpHiveMetaStoreUpdater(),
+        time
+    );
+  }
+
+  // visible for testing.
+  public S3SinkTask(
+      S3SinkConnectorConfig connectorConfig,
+      SinkTaskContext context,
+      S3Storage storage,
+      Partitioner<?> partitioner,
+      Format<S3SinkConnectorConfig, String> format,
+      HiveMetaStoreUpdater hiveMetaStoreUpdater,
+      Time time) throws Exception {
+
     this.topicPartitionWriters = new HashMap<>();
     this.connectorConfig = connectorConfig;
     this.context = context;
     this.storage = storage;
     this.partitioner = partitioner;
     this.format = format;
+    this.hiveMetaStoreUpdater = hiveMetaStoreUpdater;
     this.time = time;
 
     url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
@@ -96,6 +134,18 @@ public class S3SinkTask extends SinkTask {
   public void start(Map<String, String> props) {
     try {
       connectorConfig = new S3SinkConnectorConfig(props);
+
+      if (connectorConfig.hiveIntegrationEnabled()) {
+        StorageSchemaCompatibility compatibility = StorageSchemaCompatibility.getCompatibility(
+            connectorConfig.getString(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG)
+        );
+        if (compatibility == StorageSchemaCompatibility.NONE) {
+          throw new ConfigException(
+              "Hive Integration requires schema compatibility to be BACKWARD, FORWARD or FULL"
+          );
+        }
+      }
+
       url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
       timeoutMs = connectorConfig.getLong(S3SinkConnectorConfig.RETRY_BACKOFF_CONFIG);
 
@@ -111,6 +161,13 @@ public class S3SinkTask extends SinkTask {
       );
       if (!storage.bucketExists()) {
         throw new ConnectException("Non-existent S3 bucket: " + connectorConfig.getBucketName());
+      }
+
+      if (connectorConfig.hiveIntegrationEnabled()) {
+        hiveMetaStoreUpdater = new HiveMetaStoreUpdaterImpl(
+            connectorConfig,
+            newFormat(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG)
+        );
       }
 
       writerProvider = newRecordWriterProvider(connectorConfig);
@@ -133,8 +190,10 @@ public class S3SinkTask extends SinkTask {
       );
     } catch (ClassNotFoundException | IllegalAccessException | InstantiationException
         | InvocationTargetException | NoSuchMethodException e) {
+      hiveMetaStoreUpdater.shutdown();
       throw new ConnectException("Reflection exception: ", e);
     } catch (AmazonClientException e) {
+      hiveMetaStoreUpdater.shutdown();
       throw new ConnectException(e);
     }
   }
@@ -209,6 +268,29 @@ public class S3SinkTask extends SinkTask {
     return partitioner;
   }
 
+  private void waitForHiveUpdateFutures() {
+
+    Iterator<Future<Void>> iterator =
+        hiveMetaStoreUpdater.getHiveUpdateFutures().iterator();
+
+    while (iterator.hasNext()) {
+      try {
+        Future<Void> future = iterator.next();
+        if (future.isDone()) {
+          future.get();
+          iterator.remove();
+        } else {
+          break;
+        }
+      } catch (ExecutionException e) {
+        throw new RuntimeException(e);
+      } catch (InterruptedException e) {
+        // ignore
+      }
+    }
+
+  }
+
   @Override
   public void put(Collection<SinkRecord> records) throws ConnectException {
     for (SinkRecord record : records) {
@@ -224,6 +306,9 @@ public class S3SinkTask extends SinkTask {
       }
       topicPartitionWriters.get(tp).buffer(record);
     }
+
+    waitForHiveUpdateFutures();
+
     if (log.isDebugEnabled()) {
       log.debug("Read {} records from Kafka", records.size());
     }
@@ -300,6 +385,8 @@ public class S3SinkTask extends SinkTask {
   @Override
   public void stop() {
     try {
+      hiveMetaStoreUpdater.shutdown();
+
       if (storage != null) {
         storage.close();
       }
@@ -317,6 +404,7 @@ public class S3SinkTask extends SinkTask {
     return new TopicPartitionWriter(
         tp,
         storage,
+        hiveMetaStoreUpdater,
         writerProvider,
         partitioner,
         connectorConfig,

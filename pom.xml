@@ -65,6 +65,7 @@
             See https://github.com/confluentinc/common/pull/332 for details -->
         <dependency.check.version>6.1.6</dependency.check.version>
         <maven-surefire-plugin.version>3.0.0-M7</maven-surefire-plugin.version>
+        <maven-enforcer-plugin.version>3.1.0</maven-enforcer-plugin.version>
     </properties>
 
     <repositories>
@@ -78,8 +79,19 @@
     <dependencies>
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpcore</artifactId>
+            <version>4.4.15</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>
             <version>${httpclient.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.httpcomponents</groupId>
+                    <artifactId>httpcore</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
@@ -114,6 +126,16 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-format</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.avro</groupId>
+                    <artifactId>avro</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-hadoop</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
@@ -135,63 +157,19 @@
             <version>${jackson.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.apache.hadoop</groupId>
-            <artifactId>hadoop-common</artifactId>
-            <version>${hadoop.version}</version>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-reload4j</artifactId>
             <exclusions>
                 <exclusion>
-                    <groupId>org.apache.avro</groupId>
-                    <artifactId>avro</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>com.google.guava</groupId>
-                    <artifactId>guava</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.htrace</groupId>
-                    <artifactId>htrace-core</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.htrace</groupId>
-                    <artifactId>htrace-core4</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.mortbay.jetty</groupId>
-                    <artifactId>jetty-util</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>commons-beanutils</groupId>
-                    <artifactId>commons-beanutils-core</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.codehaus.jackson</groupId>
-                    <artifactId>jackson-mapper-asl</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>log4j</groupId>
-                    <artifactId>log4j</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>commons-httpclient</groupId>
-                    <artifactId>commons-httpclient</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>net.minidev</groupId>
-                    <artifactId>json-smart</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-codec</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-log4j12</artifactId>
+                  <groupId>ch.qos.reload4j</groupId>
+                  <artifactId>reload4j</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
         <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-reload4j</artifactId>
+            <groupId>ch.qos.reload4j</groupId>
+            <artifactId>reload4j</artifactId>
+            <version>1.2.22</version>
         </dependency>
         <dependency>
             <groupId>net.minidev</groupId>
@@ -201,30 +179,6 @@
             <groupId>commons-beanutils</groupId>
             <artifactId>commons-beanutils</artifactId>
             <version>1.9.4</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.hadoop</groupId>
-            <artifactId>hadoop-mapreduce-client-core</artifactId>
-            <version>${hadoop.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-log4j12</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.avro</groupId>
-                    <artifactId>avro</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>log4j</groupId>
-                    <artifactId>log4j</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>com.google.guava</groupId>
-                    <artifactId>guava</artifactId>
-                </exclusion>
-            </exclusions>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>junit</groupId>
@@ -273,24 +227,26 @@
             <plugins>
               <plugin>
                   <groupId>org.apache.maven.plugins</groupId>
-                  <artifactId>maven-surefire-plugin</artifactId>
-                  <version>${maven-surefire-plugin.version}</version>
-                  <configuration>
-                      <argLine>@{argLine} -Djava.awt.headless=true</argLine>
-                      <reuseForks>false</reuseForks>
-                      <forkCount>1</forkCount>
-                  </configuration>
-                  <dependencies>
-                      <dependency>
-                          <groupId>org.apache.maven.surefire</groupId>
-                          <artifactId>surefire-junit4</artifactId>
-                          <version>${maven-surefire-plugin.version}</version>
-                      </dependency>
-                  </dependencies>
+                  <artifactId>maven-assembly-plugin</artifactId>
               </plugin>
               <plugin>
-                  <groupId>org.apache.maven.plugins</groupId>
-                  <artifactId>maven-assembly-plugin</artifactId>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>${maven-enforcer-plugin.version}</version>
+                <configuration>
+                  <rules>
+                    <DependencyConvergence/>
+                  </rules>
+                </configuration>
+                <executions>
+                  <execution>
+                    <id>enforce</id>
+                    <goals>
+                      <goal>enforce</goal>
+                    </goals>
+                    <phase>validate</phase>
+                  </execution>
+                </executions>
               </plugin>
            </plugins>
         </pluginManagement>

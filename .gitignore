@@ -12,6 +12,14 @@ build/
 .project
 .settings/
 
+# Netbeans
+nb-configuration.xml
+nbactions.xml
+
+# Hive metastore
+metastore_db/
+derby.log
+
 # Documentation build output
 /docs/_build
 

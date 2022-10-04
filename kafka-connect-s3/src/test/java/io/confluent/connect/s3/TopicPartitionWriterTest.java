@@ -68,6 +68,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import io.confluent.common.utils.MockTime;
 import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.avro.AvroFormat;
+import io.confluent.connect.s3.hive.HiveMetaStoreUpdater;
+import io.confluent.connect.s3.hive.NoOpHiveMetaStoreUpdater;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
@@ -111,6 +113,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
+  private HiveMetaStoreUpdater hiveUpdater = new NoOpHiveMetaStoreUpdater();
   private S3Storage storage;
   private AvroFormat format;
   private static String extension;
@@ -200,7 +203,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner,  connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -233,7 +236,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner,  connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -267,7 +270,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner, connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -324,7 +327,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner, connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -382,7 +385,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockedWallclockTimestampExtractor.class.getName());
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner, connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -454,7 +457,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner, connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -511,7 +514,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner, connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -568,7 +571,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner, connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -599,7 +602,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Time systemTime = EasyMock.createMock(SystemTime.class);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, systemTime, null);
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner, connectorConfig, context, systemTime, null);
 
     // Freeze clock passed into topicPartitionWriter, so we know what time it will use for "now"
     long freezeTime = 3599000L;
@@ -652,7 +655,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     time.sleep(SYSTEM.milliseconds());
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time,
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner, connectorConfig, context, time,
         null);
 
     // sleep for 11 minutes after startup
@@ -716,7 +719,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     time.sleep(SYSTEM.milliseconds());
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time,
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner, connectorConfig, context, time,
         null);
 
     // sleep for 11 minutes after startup
@@ -811,7 +814,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Bring the clock to present.
     time.sleep(SYSTEM.milliseconds());
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time, null);
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner, connectorConfig, context, time, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -889,7 +892,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Bring the clock to present.
     time.sleep(SYSTEM.milliseconds());
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time, null);
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner, connectorConfig, context, time, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -925,7 +928,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner, connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchemaWithTimestampField();
@@ -997,7 +1000,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner,  connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -1031,7 +1034,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner,  connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -1060,7 +1063,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner,  connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -1094,7 +1097,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+            TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner,  connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -1216,7 +1219,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     SinkTaskContext mockContext = mock(SinkTaskContext.class);
     ErrantRecordReporter mockReporter = mock(ErrantRecordReporter.class);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, mockContext, mockReporter);
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner,  connectorConfig, mockContext, mockReporter);
 
     Schema schema = SchemaBuilder.struct().field(field, Schema.STRING_SCHEMA);
     Struct struct = new Struct(schema).put(field, "a");
@@ -1268,7 +1271,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(), partitioner,  connectorConfig, context, null);
+        TOPIC_PARTITION, storage, hiveUpdater, getKeyHeaderValueProvider(), partitioner,  connectorConfig, context, null);
 
     Schema schema = createSchema();
     List<Struct> records = createRecordBatches(schema, 3, 3);
@@ -1311,7 +1314,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, getKeyHeaderValueProviderJsonHeaders(), partitioner,  connectorConfig, context, null);
+        TOPIC_PARTITION, storage, hiveUpdater, getKeyHeaderValueProviderJsonHeaders(), partitioner,  connectorConfig, context, null);
 
     Schema schema = createSchema();
     List<Struct> records = createRecordBatches(schema, 3, 3);
@@ -1360,7 +1363,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     ErrantRecordReporter mockReporter = mock(ErrantRecordReporter.class);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(), partitioner,  connectorConfig, mockContext, mockReporter);
+        TOPIC_PARTITION, storage, hiveUpdater, getKeyHeaderValueProvider(), partitioner,  connectorConfig, mockContext, mockReporter);
 
     // create sample records to write
     Schema schema = createSchema();
@@ -1700,7 +1703,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+            TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner,  connectorConfig, context, null);
 
     String key = "key";
     Schema schema = createSchema();

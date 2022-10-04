@@ -1,0 +1,56 @@
+<assembly
+        xmlns="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2 http://maven.apache.org/xsd/assembly-1.1.2.xsd">
+    <id>bundle</id>
+    <formats>
+        <format>tar.gz</format>
+        <format>zip</format>
+        <format>tar</format>
+    </formats>
+    <includeBaseDirectory>false</includeBaseDirectory>
+    <fileSets>
+        <fileSet>
+            <directory>${project.parent.basedir}</directory>
+            <outputDirectory>doc/</outputDirectory>
+            <includes>
+                <include>version.txt</include>
+                <include>README*</include>
+                <include>LICENSE*</include>
+            </includes>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}</directory>
+            <outputDirectory>doc/</outputDirectory>
+            <includes>
+                <include>licenses.html</include>
+                <include>licenses/</include>
+                <include>notices/</include>
+            </includes>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/config</directory>
+            <outputDirectory>etc/</outputDirectory>
+            <includes>
+                <include>*</include>
+            </includes>
+        </fileSet>
+    </fileSets>
+    <dependencySets>
+        <dependencySet>
+            <outputDirectory>lib/</outputDirectory>
+            <useProjectArtifact>true</useProjectArtifact>
+            <useTransitiveFiltering>true</useTransitiveFiltering>
+<!--            <excludes>-->
+                <!-- Exclude these jars during packaging. This avoids conflicts of jars
+                shipped with Confluent platform and other dependencies such as Hadoop and Avro.
+                This allows correctly setup of CLASSPATH in kafka-run-class.sh when running
+                Kafka Connect connectors. -->
+<!--                <exclude>io.confluent:kafka-connect-storage-common</exclude>-->
+<!--                <exclude>io.confluent:kafka-connect-storage-core</exclude>-->
+<!--                <exclude>io.confluent:kafka-connect-storage-format</exclude>-->
+<!--                <exclude>io.confluent:kafka-connect-storage-partitioner</exclude>-->
+<!--            </excludes>-->
+        </dependencySet>
+    </dependencySets>
+</assembly>
