@@ -15,10 +15,8 @@
 
 package io.confluent.connect.s3;
 
-import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
-import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.storage.format.Format;
 import org.apache.kafka.common.config.Config;
@@ -54,11 +52,6 @@ public class S3SinkConnectorValidator {
       new HashMap<CompressionType, Set<Class<? extends Format>>>() {
           {
             put(CompressionType.GZIP, new HashSet<>(Arrays.asList(
-                    JsonFormat.class,
-                    ByteArrayFormat.class)));
-            put(CompressionType.NONE, new HashSet<>(Arrays.asList(
-                    AvroFormat.class,
-                    ParquetFormat.class,
                     JsonFormat.class,
                     ByteArrayFormat.class)));
           }
@@ -105,29 +98,32 @@ public class S3SinkConnectorValidator {
   public void validateCompression(CompressionType compressionType, Class formatClass,
         boolean storeKafkaKeys, Class keysFormatClass,
         boolean storeKafkaHeaders, Class headersFormatClass) {
-    Set<Class<? extends Format>> validFormats = COMPRESSION_SUPPORTED_FORMATS.get(compressionType);
-    if (!validFormats.contains(formatClass)) {
-      recordErrors(
-          String.format(FORMAT_CONFIG_ERROR_MESSAGE,
-              compressionType.name, "data", formatClass.getName()),
-          FORMAT_CLASS_CONFIG, COMPRESSION_TYPE_CONFIG);
-    }
-
-    if (storeKafkaKeys) {
-      if (!validFormats.contains(keysFormatClass)) {
+    if (!compressionType.equals(CompressionType.NONE)) {
+      Set<Class<? extends Format>> validFormats = COMPRESSION_SUPPORTED_FORMATS.get(
+          compressionType);
+      if (!validFormats.contains(formatClass)) {
         recordErrors(
             String.format(FORMAT_CONFIG_ERROR_MESSAGE,
-                compressionType.name, "keys", keysFormatClass.getName()),
-            STORE_KAFKA_KEYS_CONFIG, KEYS_FORMAT_CLASS_CONFIG, COMPRESSION_TYPE_CONFIG);
+                    compressionType.name, "data", formatClass.getName()),
+            FORMAT_CLASS_CONFIG, COMPRESSION_TYPE_CONFIG);
       }
-    }
 
-    if (storeKafkaHeaders) {
-      if (!validFormats.contains(headersFormatClass)) {
-        recordErrors(
-            String.format(FORMAT_CONFIG_ERROR_MESSAGE,
-                compressionType.name, "headers", headersFormatClass.getName()),
-            STORE_KAFKA_HEADERS_CONFIG, HEADERS_FORMAT_CLASS_CONFIG, COMPRESSION_TYPE_CONFIG);
+      if (storeKafkaKeys) {
+        if (!validFormats.contains(keysFormatClass)) {
+          recordErrors(
+              String.format(FORMAT_CONFIG_ERROR_MESSAGE,
+                  compressionType.name, "keys", keysFormatClass.getName()),
+              STORE_KAFKA_KEYS_CONFIG, KEYS_FORMAT_CLASS_CONFIG, COMPRESSION_TYPE_CONFIG);
+        }
+      }
+
+      if (storeKafkaHeaders) {
+        if (!validFormats.contains(headersFormatClass)) {
+          recordErrors(
+              String.format(FORMAT_CONFIG_ERROR_MESSAGE,
+                  compressionType.name, "headers", headersFormatClass.getName()),
+              STORE_KAFKA_HEADERS_CONFIG, HEADERS_FORMAT_CLASS_CONFIG, COMPRESSION_TYPE_CONFIG);
+        }
       }
     }
   }
