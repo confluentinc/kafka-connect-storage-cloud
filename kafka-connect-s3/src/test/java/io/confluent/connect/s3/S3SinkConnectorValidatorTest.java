@@ -6,6 +6,9 @@ import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
+import io.confluent.connect.storage.format.Format;
+import io.confluent.connect.storage.format.RecordWriterProvider;
+import io.confluent.connect.storage.format.SchemaFileReader;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigValue;
 import org.junit.After;
@@ -30,6 +33,25 @@ import static org.junit.Assert.assertEquals;
 public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
   protected Map<String, String> localProps = new HashMap<>();
   private S3SinkConnectorValidator s3SinkConnectorValidator;
+
+  private class CustomFormatClass implements Format<S3SinkConnectorConfig, String> {
+
+    @Override
+    public RecordWriterProvider<S3SinkConnectorConfig> getRecordWriterProvider() {
+      return null;
+    }
+
+    @Override
+    public SchemaFileReader<S3SinkConnectorConfig, String> getSchemaFileReader() {
+      return null;
+    }
+
+    @Override
+    @Deprecated
+    public Object getHiveFactory() {
+      return null;
+    }
+  }
 
   @Before
   @Override
@@ -62,7 +84,8 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
     // FORMAT_CLASS, STORE_KEY, KEY_FORMAT, STORE_HEADER, HEADER_FORMAT, COMPRESSION_TYPE
     Set<List<String>> testCases = Sets.cartesianProduct(
         ImmutableSet.of(AvroFormat.class.getName(), ParquetFormat.class.getName(),
-            JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
+            JsonFormat.class.getName(), ByteArrayFormat.class.getName(),
+            CustomFormatClass.class.getName()),
         ImmutableSet.of("true", "false"),
         ImmutableSet.of(AvroFormat.class.getName(), ParquetFormat.class.getName(),
             JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
@@ -76,7 +99,8 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
     // None compression
     noErrorCases.addAll(Sets.cartesianProduct(
         ImmutableSet.of(AvroFormat.class.getName(), ParquetFormat.class.getName(),
-            JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
+            JsonFormat.class.getName(), ByteArrayFormat.class.getName(),
+            CustomFormatClass.class.getName()),
         ImmutableSet.of("true", "false"),
         ImmutableSet.of(AvroFormat.class.getName(), ParquetFormat.class.getName(),
             JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
@@ -96,19 +120,43 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
             JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
         ImmutableSet.of("gzip")
     ));
-    // Gzip compression with json and byte array format
+    // Gzip compression with keys and headers format as json and byte array format
+    noErrorCases.addAll(Sets.cartesianProduct(
+        ImmutableSet.of(JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
+        ImmutableSet.of("true"),
+        ImmutableSet.of(JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
+        ImmutableSet.of("true"),
+        ImmutableSet.of(JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
+        ImmutableSet.of("gzip")
+    ));
+
+
+    // Gzip compression with keys format as json and byte array format
+    noErrorCases.addAll(Sets.cartesianProduct(
+        ImmutableSet.of(JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
+        ImmutableSet.of("true"),
+        ImmutableSet.of(JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
+        ImmutableSet.of("false"),
+        ImmutableSet.of(AvroFormat.class.getName(), ParquetFormat.class.getName(),
+            JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
+        ImmutableSet.of("gzip")
+    ));
+
+    // Gzip compression with headers format as json and byte array format
     noErrorCases.addAll(Sets.cartesianProduct(
         ImmutableSet.of(JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
         ImmutableSet.of("false"),
-        ImmutableSet.of(JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
-        ImmutableSet.of("false"),
+        ImmutableSet.of(AvroFormat.class.getName(), ParquetFormat.class.getName(),
+            JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
+        ImmutableSet.of("true"),
         ImmutableSet.of(JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
         ImmutableSet.of("gzip")
     ));
 
     // data format Error cases
     Set<List<String>> dataErrorCases = Sets.cartesianProduct(
-        ImmutableSet.of(AvroFormat.class.getName(), ParquetFormat.class.getName()),
+        ImmutableSet.of(AvroFormat.class.getName(), ParquetFormat.class.getName(),
+            CustomFormatClass.class.getName()),
         ImmutableSet.of("true", "false"),
         ImmutableSet.of(AvroFormat.class.getName(), ParquetFormat.class.getName(),
             JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
@@ -121,7 +169,8 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
     // Keys format Error cases
     Set<List<String>> keysErrorCases = Sets.cartesianProduct(
         ImmutableSet.of(AvroFormat.class.getName(), ParquetFormat.class.getName(),
-            JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
+            JsonFormat.class.getName(), ByteArrayFormat.class.getName(),
+            CustomFormatClass.class.getName()),
         ImmutableSet.of("true"),
         ImmutableSet.of(AvroFormat.class.getName(), ParquetFormat.class.getName()),
         ImmutableSet.of("true", "false"),
@@ -133,7 +182,8 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
     // Headers format Error cases
     Set<List<String>> headersErrorCases = Sets.cartesianProduct(
         ImmutableSet.of(AvroFormat.class.getName(), ParquetFormat.class.getName(),
-            JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
+            JsonFormat.class.getName(), ByteArrayFormat.class.getName(),
+            CustomFormatClass.class.getName()),
         ImmutableSet.of("true", "false"),
         ImmutableSet.of(AvroFormat.class.getName(), ParquetFormat.class.getName(),
             JsonFormat.class.getName(), ByteArrayFormat.class.getName()),
@@ -154,6 +204,9 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
       Config configs = s3SinkConnectorValidator.validate();
       if (noErrorCases.contains(matrix)) {
         for(ConfigValue configValue: configs.configValues()) {
+          for(String error: configValue.errorMessages()){
+            System.out.println(error);
+          }
           assertEquals(0, configValue.errorMessages().size());
         }
       } else {
