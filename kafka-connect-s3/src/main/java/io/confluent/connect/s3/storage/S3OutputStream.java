@@ -166,8 +166,10 @@ public class S3OutputStream extends PositionOutputStream {
     try {
       compressionType.finalize(compressionFilter);
       if (multiPartUpload == null && buffer.hasRemaining()) {
+        ObjectMetadata metadata = newObjectMetadata();
+        metadata.setContentLength(buffer.position());
         PutObjectRequest req = new PutObjectRequest(bucket, key,
-                new ByteArrayInputStream(buffer.array(), 0, buffer.position()), newObjectMetadata())
+                new ByteArrayInputStream(buffer.array(), 0, buffer.position()), metadata)
                 .withCannedAcl(cannedAcl);
         if (sseCustomerKey != null) {
           req.withSSECustomerKey(sseCustomerKey);
