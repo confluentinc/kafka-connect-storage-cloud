@@ -17,9 +17,7 @@ package io.confluent.connect.s3.hive.parquet;
 
 import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
-import io.confluent.connect.s3.S3SinkTask;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
-import io.confluent.connect.s3.hive.HiveMetaStoreUpdaterImpl;
 import io.confluent.connect.s3.hive.HiveTestBase;
 import io.confluent.connect.s3.hive.HiveTestUtils;
 import io.confluent.connect.s3.util.TimeUtils;

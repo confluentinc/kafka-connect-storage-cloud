@@ -16,9 +16,7 @@
 package io.confluent.connect.s3.hive.avro;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
-import io.confluent.connect.s3.S3SinkTask;
 import io.confluent.connect.s3.format.avro.AvroFormat;
-import io.confluent.connect.s3.hive.HiveMetaStoreUpdaterImpl;
 import io.confluent.connect.s3.hive.HiveTestBase;
 import io.confluent.connect.s3.hive.HiveTestUtils;
 import io.confluent.connect.s3.util.TimeUtils;
