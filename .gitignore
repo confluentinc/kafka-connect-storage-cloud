@@ -1,6 +1,7 @@
 # Build products
 target/
 build/
+kafka-connect-s3/dependency-reduced-pom.xml
 
 # IntelliJ data
 *.iml
