@@ -19,8 +19,6 @@ import com.amazonaws.ClientConfiguration;
 import com.amazonaws.PredefinedClientConfigurations;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.retry.PredefinedBackoffStrategies;
@@ -47,8 +45,6 @@ import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.Storage;
 import io.confluent.connect.storage.common.util.StringUtils;
 
-import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
@@ -174,17 +170,8 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   }
 
   protected AWSCredentialsProvider newCredentialsProvider(S3SinkConnectorConfig config) {
-    final String accessKeyId = config.getString(AWS_ACCESS_KEY_ID_CONFIG);
-    final String secretKey = config.getPassword(AWS_SECRET_ACCESS_KEY_CONFIG).value();
-    if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
-      log.info("Returning new credentials provider using the access key id and "
-          + "the secret access key that were directly supplied through the connector's "
-          + "configuration");
-      BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
-      return new AWSStaticCredentialsProvider(basicCredentials);
-    }
-    log.info(
-        "Returning new credentials provider based on the configured credentials provider class");
+    log.info("Returning new credentials provider based on the configured "
+           + "credentials provider class");
     return config.getCredentialsProvider();
   }
 
