@@ -25,6 +25,7 @@ import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PartETag;
+import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
 import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import com.amazonaws.services.s3.model.SSECustomerKey;
@@ -164,10 +165,20 @@ public class S3OutputStream extends PositionOutputStream {
 
     try {
       compressionType.finalize(compressionFilter);
-      if (buffer.hasRemaining()) {
+      if (multiPartUpload == null && buffer.hasRemaining()) {
+        ObjectMetadata metadata = newObjectMetadata();
+        metadata.setContentLength(buffer.position());
+        PutObjectRequest req = new PutObjectRequest(bucket, key,
+                new ByteArrayInputStream(buffer.array(), 0, buffer.position()), metadata)
+                .withCannedAcl(cannedAcl);
+        if (sseCustomerKey != null) {
+          req.withSSECustomerKey(sseCustomerKey);
+        }
+        handleAmazonExceptions(() -> s3.putObject(req));
+      } else if (buffer.hasRemaining()) {
         uploadPart(buffer.position());
+        multiPartUpload.complete();
       }
-      multiPartUpload.complete();
       log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
     } catch (IOException e) {
       log.error(
