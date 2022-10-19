@@ -63,6 +63,7 @@ public class TopicPartitionWriter {
   private final Map<String, String> commitFiles;
   private final Map<String, RecordWriter> writers;
   private final Map<String, Schema> currentSchemas;
+  private final Map<String, String> partitionPaths;
   private final TopicPartition tp;
   private final S3Storage storage;
   private final Partitioner<?> partitioner;
@@ -99,6 +100,8 @@ public class TopicPartitionWriter {
   private final S3SinkConnectorConfig connectorConfig;
   private static final Time SYSTEM_TIME = new SystemTime();
   private ErrantRecordReporter reporter;
+  private final boolean enablePartitionBasedSchema;
+  private final boolean rotateOnSchemaChange;
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
@@ -138,6 +141,10 @@ public class TopicPartitionWriter {
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
+    enablePartitionBasedSchema = connectorConfig.getBoolean(
+            S3SinkConnectorConfig.ENABLE_SCHEMA_BASED_PARTITION_CONFIG);
+    rotateOnSchemaChange = connectorConfig.getBoolean(
+            S3SinkConnectorConfig.ROTATE_ON_SCHEMA_CHANGE_CONFIG);
     if (rotateIntervalMs > 0 && timestampExtractor == null) {
       log.warn(
           "Property '{}' is set to '{}ms' but partitioner is not an instance of '{}'. This property"
@@ -160,6 +167,7 @@ public class TopicPartitionWriter {
     commitFiles = new HashMap<>();
     writers = new HashMap<>();
     currentSchemas = new HashMap<>();
+    partitionPaths = new HashMap<>();
     startOffsets = new HashMap<>();
     endOffsets = new HashMap<>();
     recordCounts = new HashMap<>();
@@ -235,7 +243,21 @@ public class TopicPartitionWriter {
         Schema valueSchema = record.valueSchema();
         String encodedPartition;
         try {
-          encodedPartition = partitioner.encodePartition(record, now);
+          String baseEncodedPartition;
+          baseEncodedPartition = partitioner.encodePartition(record, now);
+          if (valueSchema != null && (!rotateOnSchemaChange || enablePartitionBasedSchema)) {
+            encodedPartition = generateSchemaAdjustedEncodedPartition(
+                valueSchema, baseEncodedPartition);
+          } else {
+            encodedPartition = baseEncodedPartition;
+          }
+          String partitionPath;
+          if (enablePartitionBasedSchema) {
+            partitionPath = encodedPartition;
+          } else {
+            partitionPath = baseEncodedPartition;
+          }
+          partitionPaths.put(encodedPartition, partitionPath);
         } catch (PartitionException e) {
           if (reporter != null) {
             reporter.report(record, e);
@@ -387,7 +409,7 @@ public class TopicPartitionWriter {
   }
 
   private String getDirectoryPrefix(String encodedPartition) {
-    return partitioner.generatePartitionedPath(tp.topic(), encodedPartition);
+    return partitioner.generatePartitionedPath(tp.topic(), partitionPaths.get(encodedPartition));
   }
 
   private void nextState() {
@@ -481,6 +503,13 @@ public class TopicPartitionWriter {
         messageSizeRotation
     );
     return messageSizeRotation;
+  }
+
+  private String generateSchemaAdjustedEncodedPartition(
+      Schema valueSchema, String encodedPartition) {
+    return encodedPartition
+        + dirDelim + "schema=" + valueSchema.name()
+        + dirDelim + "version=" + valueSchema.version();
   }
 
   private void pause() {
@@ -622,6 +651,7 @@ public class TopicPartitionWriter {
     offsetToCommit = currentOffset + 1;
     commitFiles.clear();
     currentSchemas.clear();
+    partitionPaths.clear();
     recordCount = 0;
     baseRecordTimestamp = null;
     log.info("Files committed to S3. Target commit offset for {} is {}", tp, offsetToCommit);

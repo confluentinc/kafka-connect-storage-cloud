@@ -190,6 +190,13 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String ELASTIC_BUFFER_INIT_CAPACITY = "s3.elastic.buffer.init.capacity";
   public static final int ELASTIC_BUFFER_INIT_CAPACITY_DEFAULT = 128 * 1024;  // 128KB
 
+  public static final String ROTATE_ON_SCHEMA_CHANGE_CONFIG = "rotate.on.schema.change";
+  public static final boolean ROTATE_ON_SCHEMA_CHANGE_DEFAULT = true;
+
+  public static final String ENABLE_SCHEMA_BASED_PARTITION_CONFIG =
+      "s3.enable.schema.based.partition";
+  public static final boolean ENABLE_SCHEMA_BASED_PARTITION_DEFAULT = false;
+
   private final String name;
 
   private final Map<String, ComposableConfig> propertyToConfig = new HashMap<>();
@@ -715,6 +722,30 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "Elastic buffer initial capacity"
+      );
+
+      configDef.define(
+          ROTATE_ON_SCHEMA_CHANGE_CONFIG,
+          Type.BOOLEAN,
+          ROTATE_ON_SCHEMA_CHANGE_DEFAULT,
+          Importance.LOW,
+          "Rotate On Schema Change.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Rotate On Schema Change"
+      );
+
+      configDef.define(
+          ENABLE_SCHEMA_BASED_PARTITION_CONFIG,
+          Type.BOOLEAN,
+          ENABLE_SCHEMA_BASED_PARTITION_DEFAULT,
+          Importance.LOW,
+          "Enable Schema Based Partition",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Enable Schema Based Partition"
       );
 
     }
