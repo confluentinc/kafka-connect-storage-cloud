@@ -56,6 +56,7 @@ import io.confluent.connect.storage.util.DateTimeUtils;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
+import io.confluent.connect.s3.hive.HiveMetaStoreUpdater;
 
 public class TopicPartitionWriter {
   private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriter.class);
@@ -65,6 +66,9 @@ public class TopicPartitionWriter {
   private final Map<String, Schema> currentSchemas;
   private final TopicPartition tp;
   private final S3Storage storage;
+  private final boolean hiveIntegration;
+  private final HiveMetaStoreUpdater hiveMetaStoreUpdater;
+  private final String hiveTableName;
   private final Partitioner<?> partitioner;
   private final TimestampExtractor timestampExtractor;
   private String topicsDir;
@@ -102,17 +106,20 @@ public class TopicPartitionWriter {
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
+                              HiveMetaStoreUpdater hiveMetaStoreUpdater,
                               RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
                               Partitioner<?> partitioner,
                               S3SinkConnectorConfig connectorConfig,
                               SinkTaskContext context,
                               ErrantRecordReporter reporter) {
-    this(tp, storage, writerProvider, partitioner, connectorConfig, context, SYSTEM_TIME, reporter);
+    this(tp, storage, hiveMetaStoreUpdater, writerProvider, partitioner,
+         connectorConfig, context, SYSTEM_TIME, reporter);
   }
 
   // Visible for testing
   TopicPartitionWriter(TopicPartition tp,
                        S3Storage storage,
+                       HiveMetaStoreUpdater hiveMetaStoreUpdater,
                        RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
                        Partitioner<?> partitioner,
                        S3SinkConnectorConfig connectorConfig,
@@ -124,6 +131,9 @@ public class TopicPartitionWriter {
     this.time = time;
     this.tp = tp;
     this.storage = storage;
+    this.hiveIntegration = connectorConfig.hiveIntegrationEnabled();
+    this.hiveMetaStoreUpdater = hiveMetaStoreUpdater;
+    this.hiveTableName = connectorConfig.getHiveTableName(tp.topic());
     this.context = context;
     this.writerProvider = writerProvider;
     this.partitioner = partitioner;
@@ -249,6 +259,14 @@ public class TopicPartitionWriter {
         if (currentValueSchema == null) {
           currentSchemas.put(encodedPartition, valueSchema);
           currentValueSchema = valueSchema;
+
+          hiveMetaStoreUpdater.createHiveTable(
+              hiveTableName,
+              currentValueSchema,
+              partitioner,
+              tp
+          );
+          hiveMetaStoreUpdater.addHivePartition(hiveTableName, encodedPartition);
         }
 
         if (!checkRotationOrAppend(
@@ -263,6 +281,7 @@ public class TopicPartitionWriter {
         // fallthrough
       case SHOULD_ROTATE:
         commitFiles();
+        hiveMetaStoreUpdater.apply();
         nextState();
         // fallthrough
       case FILE_COMMITTED:
@@ -303,6 +322,16 @@ public class TopicPartitionWriter {
           currentOffset
       );
       currentSchemas.put(encodedPartition, valueSchema);
+
+      hiveMetaStoreUpdater.createHiveTable(
+          hiveTableName,
+          currentValueSchema,
+          partitioner,
+          tp
+      );
+      hiveMetaStoreUpdater.alterHiveSchema(hiveTableName, currentValueSchema);
+      hiveMetaStoreUpdater.apply();
+
       nextState();
       return true;
     }
@@ -503,6 +532,11 @@ public class TopicPartitionWriter {
     );
     RecordWriter writer = writerProvider.getRecordWriter(connectorConfig, commitFilename);
     writers.put(encodedPartition, writer);
+
+    if (hiveIntegration) {
+      hiveMetaStoreUpdater.addHivePartition(hiveTableName, encodedPartition);
+    }
+
     return writer;
   }
 

@@ -81,7 +81,7 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
         port = url.substring(url.lastIndexOf(":") + 1);
     }
     File s3mockDir = s3mockRoot.newFolder("s3-tests-" + UUID.randomUUID().toString());
-    System.out.println("Create folder: " + s3mockDir.getCanonicalPath());
+    log.info("Create folder: " + s3mockDir.getCanonicalPath());
     s3mock = S3Mock.create(Integer.parseInt(port), s3mockDir.getCanonicalPath());
     s3mock.start();
   }

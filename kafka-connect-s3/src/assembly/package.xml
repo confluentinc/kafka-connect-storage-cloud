@@ -64,6 +64,19 @@
                 <exclude>io.confluent:kafka-connect-storage-core</exclude>
                 <exclude>io.confluent:kafka-connect-storage-format</exclude>
                 <exclude>io.confluent:kafka-connect-storage-partitioner</exclude>
+                <!-- Exclude jars which are only needed for Hive MetaStore integration -->
+                <exclude>ch.qos.reload4j:reload4j</exclude>
+                <exclude>com.amazonaws:aws-java-sdk-bundle</exclude>
+                <exclude>com.lmax:disruptor</exclude>
+                <exclude>io.confluent:kafka-connect-storage-hive</exclude>
+                <exclude>org.apache.avro:avro</exclude>
+                <exclude>org.apache.hadoop:hadoop-aws</exclude>
+                <exclude>org.apache.hadoop:hadoop-common</exclude>
+                <exclude>org.apache.hive:hive-common</exclude>
+                <exclude>org.apache.hive:hive-exec</exclude>
+                <exclude>org.apache.hive:hive-storage-api</exclude>
+                <exclude>org.apache.hive.hcatalog:hive-hcatalog-core</exclude>
+                <exclude>org.apache.parquet:parquet-hadoop-bundle</exclude>
             </excludes>
         </dependencySet>
     </dependencySets>

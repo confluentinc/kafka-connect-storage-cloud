@@ -15,6 +15,9 @@
 
 package io.confluent.connect.s3.integration;
 
+import io.confluent.connect.s3.integration.parquet.tools.JsonRecordFormatter;
+import io.confluent.connect.s3.integration.parquet.tools.SimpleRecord;
+import io.confluent.connect.s3.integration.parquet.tools.SimpleReadSupport;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG;
@@ -94,9 +97,6 @@ import org.apache.kafka.test.IntegrationTest;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
-import org.apache.parquet.tools.json.JsonRecordFormatter;
-import org.apache.parquet.tools.read.SimpleReadSupport;
-import org.apache.parquet.tools.read.SimpleRecord;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;

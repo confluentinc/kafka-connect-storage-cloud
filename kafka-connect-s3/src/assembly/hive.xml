@@ -1,0 +1,45 @@
+<assembly
+        xmlns="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2 http://maven.apache.org/xsd/assembly-1.1.2.xsd">
+    <id>hive</id>
+    <formats>
+        <format>dir</format>
+        <format>tar.gz</format>
+    </formats>
+    <includeBaseDirectory>false</includeBaseDirectory>
+    <fileSets>
+        <fileSet>
+            <directory>${project.parent.basedir}</directory>
+            <outputDirectory>doc/</outputDirectory>
+            <includes>
+                <include>version.txt</include>
+                <include>README*</include>
+                <include>LICENSE*</include>
+            </includes>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}</directory>
+            <outputDirectory>doc/</outputDirectory>
+            <includes>
+                <include>licenses.html</include>
+                <include>licenses/</include>
+                <include>notices/</include>
+            </includes>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/config</directory>
+            <outputDirectory>etc/</outputDirectory>
+            <includes>
+                <include>*</include>
+            </includes>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/target</directory>
+            <outputDirectory>lib/</outputDirectory>
+            <includes>
+                <include>${project.name}-*-shaded.jar</include>
+            </includes>
+        </fileSet>
+    </fileSets>
+</assembly>

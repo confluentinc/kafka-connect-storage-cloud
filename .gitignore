@@ -1,6 +1,7 @@
 # Build products
 target/
 build/
+kafka-connect-s3/dependency-reduced-pom.xml
 
 # IntelliJ data
 *.iml
@@ -11,6 +12,14 @@ build/
 .classpath
 .project
 .settings/
+
+# Netbeans
+nb-configuration.xml
+nbactions.xml
+
+# Hive metastore
+metastore_db/
+derby.log
 
 # Documentation build output
 /docs/_build
