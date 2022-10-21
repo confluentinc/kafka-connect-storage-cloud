@@ -190,6 +190,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String ELASTIC_BUFFER_INIT_CAPACITY = "s3.elastic.buffer.init.capacity";
   public static final int ELASTIC_BUFFER_INIT_CAPACITY_DEFAULT = 128 * 1024;  // 128KB
 
+  public static final String MAX_OPEN_FILES_PER_PARTITION_CONFIG = "max.open.files.per.partition";
+  public static final int MAX_OPEN_FILES_PER_PARTITION_DEFAULT = 1;
+
   private final String name;
 
   private final Map<String, ComposableConfig> propertyToConfig = new HashMap<>();
@@ -715,6 +718,19 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "Elastic buffer initial capacity"
+      );
+
+      configDef.define(
+          MAX_OPEN_FILES_PER_PARTITION_CONFIG,
+          Type.INT,
+          MAX_OPEN_FILES_PER_PARTITION_DEFAULT,
+          atLeast(1),
+          Importance.LOW,
+          "Max open files per partition.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Max open files per partition"
       );
 
     }
