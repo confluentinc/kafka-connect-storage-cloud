@@ -12,3 +12,4 @@ COPY pub_i18n.properties /etc/schema-registry/
 COPY pub_euro_i18n.properties /etc/schema-registry/
 COPY pub_asia_i18n.properties /etc/schema-registry/
 COPY push2.properties /etc/schema-registry/
+COPY novastaging.properties /etc/schema-registry/
