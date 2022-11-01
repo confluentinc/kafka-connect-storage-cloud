@@ -309,7 +309,9 @@ public class TopicPartitionWriter {
       );
       currentSchemas.put(encodedPartition, valueSchema);
       nextState();
-      return true;
+      if (!currentValueSchema.name().equals(valueSchema.name())) {
+        return true;
+      }
     }
 
     SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
@@ -490,13 +492,16 @@ public class TopicPartitionWriter {
     return writer;
   }
 
+  // encodedPartition添加了schema id
   private String getCommitFilename(String encodedPartition) {
     String commitFile;
     if (commitFiles.containsKey(encodedPartition)) {
       commitFile = commitFiles.get(encodedPartition);
     } else {
       long startOffset = startOffsets.get(encodedPartition);
+      // avro的prefix去掉了schema_name
       String prefix = getDirectoryPrefix(encodedPartition);
+      //
       commitFile = fileKeyToCommit(prefix, startOffset);
       commitFiles.put(encodedPartition, commitFile);
     }
