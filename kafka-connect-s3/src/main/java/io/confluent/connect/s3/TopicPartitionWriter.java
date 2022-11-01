@@ -308,10 +308,8 @@ public class TopicPartitionWriter {
               currentOffset
       );
       currentSchemas.put(encodedPartition, valueSchema);
-      nextState();
-      if (!currentValueSchema.name().equals(valueSchema.name())) {
-        return true;
-      }
+//      nextState();
+//      return true;
     }
 
     SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
