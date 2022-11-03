@@ -35,10 +35,12 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.Set;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
@@ -61,6 +63,7 @@ public class TopicPartitionWriter {
   private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriter.class);
 
   private final Map<String, String> commitFiles;
+  private final Set<String> commitFilesNames;
   private final Map<String, RecordWriter> writers;
   private final Map<String, Schema> currentSchemas;
   private final TopicPartition tp;
@@ -158,6 +161,7 @@ public class TopicPartitionWriter {
 
     buffer = new LinkedList<>();
     commitFiles = new HashMap<>();
+    commitFilesNames = new HashSet<>();
     writers = new HashMap<>();
     currentSchemas = new HashMap<>();
     startOffsets = new HashMap<>();
@@ -360,6 +364,7 @@ public class TopicPartitionWriter {
     }
     writers.clear();
     startOffsets.clear();
+    commitFilesNames.clear();
   }
 
   public void buffer(SinkRecord sinkRecord) {
@@ -370,6 +375,14 @@ public class TopicPartitionWriter {
     Long latest = offsetToCommit;
     offsetToCommit = null;
     return latest;
+  }
+
+  public Set<String> getCommitFilesNames() {
+    return new HashSet<>(commitFilesNames);
+  }
+
+  public void removeCommitedFilesNames(Set<String> fileNames) {
+    commitFilesNames.removeAll(fileNames);
   }
 
   public Long currentStartOffset() {
@@ -620,6 +633,7 @@ public class TopicPartitionWriter {
     }
 
     offsetToCommit = currentOffset + 1;
+    commitFilesNames.addAll(commitFiles.values());
     commitFiles.clear();
     currentSchemas.clear();
     recordCount = 0;

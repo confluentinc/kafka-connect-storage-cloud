@@ -17,6 +17,9 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
 import io.confluent.connect.s3.S3SinkConnectorConfig.IgnoreOrFailBehavior;
+import io.confluent.connect.s3.hooks.KafkaPreCommitHook;
+import io.confluent.connect.s3.hooks.NoopPreCommitHook;
+import io.confluent.connect.s3.hooks.PreCommitHook;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -33,6 +36,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
@@ -58,6 +62,7 @@ public class S3SinkTask extends SinkTask {
   private S3Storage storage;
   private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
   private Partitioner<?> partitioner;
+  private PreCommitHook preCommitHook;
   private Format<S3SinkConnectorConfig, String> format;
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private final Time time;
@@ -74,13 +79,14 @@ public class S3SinkTask extends SinkTask {
 
   // visible for testing.
   S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage,
-             Partitioner<?> partitioner, Format<S3SinkConnectorConfig, String> format,
+             Partitioner<?> partitioner, PreCommitHook preCommitHook, Format<S3SinkConnectorConfig, String> format,
              Time time) throws Exception {
     this.topicPartitionWriters = new HashMap<>();
     this.connectorConfig = connectorConfig;
     this.context = context;
     this.storage = storage;
     this.partitioner = partitioner;
+    this.preCommitHook = preCommitHook;
     this.format = format;
     this.time = time;
 
@@ -91,6 +97,12 @@ public class S3SinkTask extends SinkTask {
     log.info("Started S3 connector task with assigned partitions {}",
         topicPartitionWriters.keySet()
     );
+  }
+
+  S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage,
+             Partitioner<?> partitioner, Format<S3SinkConnectorConfig, String> format,
+             Time time) throws Exception {
+    this(connectorConfig, context, storage, partitioner, new NoopPreCommitHook(), format, time);
   }
 
   public void start(Map<String, String> props) {
@@ -115,6 +127,7 @@ public class S3SinkTask extends SinkTask {
 
       writerProvider = newRecordWriterProvider(connectorConfig);
       partitioner = newPartitioner(connectorConfig);
+      preCommitHook = newPrecommitSend(connectorConfig);
 
       open(context.assignment());
       try {
@@ -209,6 +222,15 @@ public class S3SinkTask extends SinkTask {
     return partitioner;
   }
 
+  private PreCommitHook newPrecommitSend(S3SinkConnectorConfig config) {
+    if (!config.getPrecommitKafkaBootstrapServers().isEmpty()) {
+      KafkaPreCommitHook kafkaPrecommitSend = new KafkaPreCommitHook();
+      kafkaPrecommitSend.init(config);
+      return kafkaPrecommitSend;
+    }
+    return new NoopPreCommitHook();
+  }
+
   @Override
   public void put(Collection<SinkRecord> records) throws ConnectException {
     for (SinkRecord record : records) {
@@ -275,13 +297,30 @@ public class S3SinkTask extends SinkTask {
       Map<TopicPartition, OffsetAndMetadata> offsets
   ) {
     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
+    Map<TopicPartition, Set<String>> filesToCommit = new HashMap<>();
     for (TopicPartition tp : topicPartitionWriters.keySet()) {
       Long offset = topicPartitionWriters.get(tp).getOffsetToCommitAndReset();
+      Set<String> files = topicPartitionWriters.get(tp).getCommitFilesNames();
       if (offset != null) {
         log.trace("Forwarding to framework request to commit offset: {} for {}", offset, tp);
         offsetsToCommit.put(tp, new OffsetAndMetadata(offset));
       }
+      if (!files.isEmpty()) {
+        log.debug("Adding files to pre-commit hook: {} for topic partition: {}", files, tp);
+        filesToCommit.put(tp, files);
+      }
     }
+
+    Map<TopicPartition, Set<String>> committedFiles = preCommitHook.execute(filesToCommit);
+    // only after a successful commit we would like to reset.
+    for (TopicPartition tp : committedFiles.keySet()) {
+      topicPartitionWriters.get(tp).removeCommitedFilesNames(committedFiles.get(tp));
+      // if there are uncommitted files we do not want to commit the offset to kafka
+      if (!topicPartitionWriters.get(tp).getCommitFilesNames().isEmpty()) {
+        offsetsToCommit.remove(tp);
+      }
+    }
+
     return offsetsToCommit;
   }
 
@@ -303,6 +342,7 @@ public class S3SinkTask extends SinkTask {
       if (storage != null) {
         storage.close();
       }
+      preCommitHook.close();
     } catch (Exception e) {
       throw new ConnectException(e);
     }

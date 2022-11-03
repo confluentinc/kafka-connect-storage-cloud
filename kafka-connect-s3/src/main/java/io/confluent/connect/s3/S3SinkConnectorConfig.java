@@ -96,6 +96,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String SSE_KMS_KEY_ID_CONFIG = "s3.sse.kms.key.id";
   public static final String SSE_KMS_KEY_ID_DEFAULT = "";
+  
+  public static final String PRECOMMIT_KAFKA_BOOTSTRAP_SERVERS = "s3.hooks.kafka.bootstrap.servers";
+  public static final String PRECOMMIT_KAFKA_BOOTSTRAP_SERVERS_DEFAULT = "";
+  public static final String PRECOMMIT_KAFKA_TOPIC = "s3.hooks.kafka.topic";
+  public static final String PRECOMMIT_KAFKA_TOPIC_DEFAULT = "";
 
   public static final String PART_SIZE_CONFIG = "s3.part.size";
   public static final int PART_SIZE_DEFAULT = 25 * 1024 * 1024;
@@ -314,6 +319,30 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.LONG,
           "AWS region",
           new RegionRecommender()
+      );
+
+      configDef.define(
+              PRECOMMIT_KAFKA_BOOTSTRAP_SERVERS,
+              Type.STRING,
+              PRECOMMIT_KAFKA_BOOTSTRAP_SERVERS_DEFAULT,
+              Importance.LOW,
+              "boostrap kafka server for pre commit hooks",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "Kafka precoomitt boostrap"
+      );
+
+      configDef.define(
+              PRECOMMIT_KAFKA_TOPIC,
+              Type.STRING,
+              PRECOMMIT_KAFKA_TOPIC_DEFAULT,
+              Importance.LOW,
+              "kafka topic for pre commit hooks",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "Kafka topic for precoomit messages"
       );
 
       configDef.define(
@@ -780,6 +809,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public String getSseKmsKeyId() {
     return getString(SSE_KMS_KEY_ID_CONFIG);
+  }
+
+  public String getPrecommitKafkaBootstrapServers() {
+    return getString(PRECOMMIT_KAFKA_BOOTSTRAP_SERVERS);
+  }
+
+  public String getPrecommitKafkaTopic() {
+    return getString(PRECOMMIT_KAFKA_TOPIC);
   }
 
   public boolean useExpectContinue() {
