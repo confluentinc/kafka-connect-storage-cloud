@@ -23,7 +23,7 @@ public class AvroSchemaAndTimeBasedPartitioner<T> extends TimeBasedPartitioner<T
 
   @Override
   public String encodePartition(SinkRecord sinkRecord, long nowInMillis) {
-    return sinkRecord.valueSchema().name() + getDelim()
+    return sinkRecord.valueSchema().version() + getDelim()
       + super.encodePartition(sinkRecord, nowInMillis);
   }
 
