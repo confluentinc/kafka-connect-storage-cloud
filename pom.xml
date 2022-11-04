@@ -61,6 +61,8 @@
     <properties>
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
         <licenses.version>5.4.11-SNAPSHOT</licenses.version>
+        <hadoop.version>3.2.3</hadoop.version>
+        <jettison.version>1.5.1</jettison.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
     </properties>
 
@@ -135,12 +137,8 @@
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-common</artifactId>
-            <version>3.2.3</version>
+            <version>${hadoop.version}</version>
             <exclusions>
-                <exclusion>
-                    <groupId>com.sun.jersey</groupId>
-                    <artifactId>jersey-json</artifactId>
-                </exclusion>
                 <exclusion>
                     <groupId>org.apache.avro</groupId>
                     <artifactId>avro</artifactId>
@@ -203,20 +201,9 @@
             <version>1.9.4</version>
         </dependency>
         <dependency>
-            <groupId>com.sun.jersey</groupId>
-            <artifactId>jersey-json</artifactId>
-            <version>1.19</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.codehaus.jettison</groupId>
-                    <artifactId>jettison</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
             <groupId>org.codehaus.jettison</groupId>
             <artifactId>jettison</artifactId>
-            <version>1.5.1</version>
+            <version>${jettison.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.hadoop</groupId>
