@@ -29,7 +29,7 @@ public class AvroSchemaAndTimeBasedPartitioner<T> extends TimeBasedPartitioner<T
 
   @Override
   public String encodePartition(SinkRecord sinkRecord) {
-    return sinkRecord.valueSchema().name() + getDelim() + super.encodePartition(sinkRecord);
+    return sinkRecord.valueSchema().version() + getDelim() + super.encodePartition(sinkRecord);
   }
 
   public boolean shouldRotateOnTime(String encodedPartition, String currentEncodedPartition) {
