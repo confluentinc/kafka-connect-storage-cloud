@@ -80,9 +80,6 @@ public class AvroRecordWriterProvider extends RecordViewSetter
           }
         }
         log.trace("Sink record with view {}: {}", recordView, record);
-        log.info(recordView.getView(record, false).toString());
-        log.info(schema.schema().name());
-        log.info(schema.fields().toString());
         Object value = avroData.fromConnectData(schema, recordView.getView(record, false));
         try {
           // AvroData wraps primitive types so their schema can be included. We need to unwrap
