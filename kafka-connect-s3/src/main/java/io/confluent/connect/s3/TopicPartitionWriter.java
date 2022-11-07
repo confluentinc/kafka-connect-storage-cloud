@@ -522,9 +522,6 @@ public class TopicPartitionWriter {
   }
 
   private boolean writeRecord(SinkRecord record, String encodedPartition) {
-//    log.info("current encodedPartition: " + encodedPartition);
-//    log.info("current value: " + record.value());
-//    log.info("current version: " + record.valueSchema().version());
     RecordWriter writer = writers.get(encodedPartition);
     long currentOffsetIfSuccessful = record.kafkaOffset();
     boolean shouldRemoveWriter = false;
