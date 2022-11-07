@@ -23,12 +23,13 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>5.5.13-SNAPSHOT</version>
+        <version>11.0.15</version>
     </parent>
 
     <groupId>io.confluent</groupId>
     <artifactId>kafka-connect-storage-cloud</artifactId>
     <packaging>pom</packaging>
+    <version>10.0.14-SNAPSHOT</version>
     <name>kafka-connect-storage-cloud</name>
     <organization>
         <name>Confluent, Inc.</name>
@@ -51,7 +52,7 @@
         <connection>scm:git:git://github.com/confluentinc/kafka-connect-storage-cloud.git</connection>
         <developerConnection>scm:git:git@github.com:confluentinc/kafka-connect-storage-cloud.git</developerConnection>
         <url>https://github.com/confluentinc/kafka-connect-storage-cloud</url>
-        <tag>HEAD</tag>
+        <tag>10.0.x</tag>
     </scm>
 
     <modules>
@@ -60,9 +61,11 @@
 
     <properties>
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
-        <licenses.version>5.5.13-SNAPSHOT</licenses.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <maven.release.plugin.version>2.5.3</maven.release.plugin.version>
+        <!-- temporary fix by pinning the version until we upgrade to a version of common that contains this or newer version.
+            See https://github.com/confluentinc/common/pull/332 for details -->
+        <dependency.check.version>6.1.6</dependency.check.version>
         <hadoop.version>3.2.3</hadoop.version>
         <jettison.version>1.5.1</jettison.version>
     </properties>
