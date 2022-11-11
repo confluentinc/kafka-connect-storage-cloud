@@ -65,6 +65,7 @@
         <hadoop.version>3.2.4</hadoop.version>
         <jettison.version>1.5.1</jettison.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
+        <kafka.connect.storage.common.version>5.4.10</kafka.connect.storage.common.version>
     </properties>
 
     <repositories>
