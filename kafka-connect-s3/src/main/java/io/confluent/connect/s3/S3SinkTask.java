@@ -16,7 +16,9 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
+import io.confluent.connect.s3.metrics.S3SinkTaskMetrics2;
 import io.confluent.connect.s3.S3SinkConnectorConfig.OutputWriteBehavior;
+import io.confluent.connect.s3.metrics.S3SinkTaskMetricsMXBean;
 import io.confluent.connect.s3.util.TombstoneSupportedPartitioner;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -63,6 +65,7 @@ public class S3SinkTask extends SinkTask {
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private final Time time;
   private ErrantRecordReporter reporter;
+  private S3SinkTaskMetricsMXBean s3SinkTaskMetricsMXBean;
 
   /**
    * No-arg constructor. Used by Connect framework.
@@ -99,6 +102,8 @@ public class S3SinkTask extends SinkTask {
       connectorConfig = new S3SinkConnectorConfig(props);
       url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
       timeoutMs = connectorConfig.getLong(S3SinkConnectorConfig.RETRY_BACKOFF_CONFIG);
+      String connectorName = connectorConfig.getName();
+      s3SinkTaskMetricsMXBean = new S3SinkTaskMetrics2(topicPartitionWriters, connectorName, props);
 
       @SuppressWarnings("unchecked")
       Class<? extends S3Storage> storageClass =

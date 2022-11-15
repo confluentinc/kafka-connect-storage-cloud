@@ -68,9 +68,10 @@ public class S3SinkConnector extends SinkConnector {
 
   @Override
   public List<Map<String, String>> taskConfigs(int maxTasks) {
-    Map<String, String> taskProps = new HashMap<>(configProps);
     List<Map<String, String>> taskConfigs = new ArrayList<>(maxTasks);
     for (int i = 0; i < maxTasks; ++i) {
+      Map<String, String> taskProps = new HashMap<>(configProps);
+      taskProps.put("task.id", Integer.toString(i));
       taskConfigs.add(taskProps);
     }
     return taskConfigs;
