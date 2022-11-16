@@ -66,6 +66,7 @@
         <dependency.check.version>6.1.6</dependency.check.version>
         <hadoop.version>3.2.4</hadoop.version>
         <jettison.version>1.5.1</jettison.version>
+        <woodstox.version>5.4.0</woodstox.version>
     </properties>
 
     <repositories>
@@ -145,6 +146,11 @@
             <groupId>commons-lang</groupId>
             <artifactId>commons-lang</artifactId>
             <version>2.6</version>
+        </dependency>
+        <dependency>
+    	    <groupId>com.fasterxml.woodstox</groupId>
+            <artifactId>woodstox-core</artifactId>
+            <version>${woodstox.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.hadoop</groupId>
