@@ -52,7 +52,7 @@
         <connection>scm:git:git://github.com/confluentinc/kafka-connect-storage-cloud.git</connection>
         <developerConnection>scm:git:git@github.com:confluentinc/kafka-connect-storage-cloud.git</developerConnection>
         <url>https://github.com/confluentinc/kafka-connect-storage-cloud</url>
-        <tag>HEAD</tag>
+        <tag>5.5.x</tag>
     </scm>
 
     <modules>
@@ -67,6 +67,7 @@
         <hadoop.version>3.2.4</hadoop.version>
         <jettison.version>1.5.1</jettison.version>
         <jetty.version>9.4.44.v20210927</jetty.version>
+        <kafka.connect.storage.common.version>5.4.10</kafka.connect.storage.common.version>
         <woodstox.version>5.4.0</woodstox.version>
     </properties>
 
@@ -117,15 +118,17 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-format</artifactId>
+            <version>${kafka.connect.storage.common.version}</version>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-partitioner</artifactId>
+            <version>${kafka.connect.storage.common.version}</version>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-common-htrace-core4-shaded</artifactId>
-            <version>${project.parent.version}</version>
+            <version>${kafka.connect.storage.common.version}</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -344,3 +347,4 @@
         </pluginManagement>
     </build>
 </project>
+
