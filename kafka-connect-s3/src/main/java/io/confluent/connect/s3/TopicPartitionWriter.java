@@ -469,7 +469,9 @@ public class TopicPartitionWriter {
       return false;
     }
 
-    final Long baseRecordTimestamp = baseRecordTimestamps.getOrDefault(encodedPartition, -1L);
+    final Long baseRecordTimestamp =
+        baseRecordTimestamps.getOrDefault(encodedPartition, currentTimestamp);
+
     // rotateIntervalMs > 0 implies timestampExtractor != null
     final boolean hasTimestampExtractor = rotateIntervalMs > 0 && timestampExtractor != null;
     boolean periodicRotation = hasTimestampExtractor

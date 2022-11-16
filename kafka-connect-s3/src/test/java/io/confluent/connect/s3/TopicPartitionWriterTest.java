@@ -1402,24 +1402,19 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       )
     );
 
-    // next 8 records for hour 10
+    // next 3 records for hour 10
     // 2 for previously open S3 file
-    // 4 for new S3 file due to passing 1 minute rotate interval
+    // 1 new event past rotate.interval.ms to force flush of open files
     sinkRecords.addAll(
       Arrays.asList(
         new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(6), 6,
             timestampFirst + 5000, TimestampType.CREATE_TIME),
         new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(7), 7,
             timestampFirst + 15000, TimestampType.CREATE_TIME),
-        // this one exceeds the 1-minute rotate interval so will cause rotate/commit of all open files
+        // this one exceeds the 1-minute rotate interval for hour 10 so will cause rotate/commit of all open files
+        // however, it will not be flushed/written (still in buffer)
         new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(8), 8,
-            timestampFirst + 60000, TimestampType.CREATE_TIME),
-        new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(9), 9,
-            timestampFirst + 61000, TimestampType.CREATE_TIME),
-        new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(10), 10,
-            timestampFirst + 62000, TimestampType.CREATE_TIME),
-        new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(11), 11,
-            timestampFirst + 63000, TimestampType.CREATE_TIME)
+            timestampFirst + 60000, TimestampType.CREATE_TIME)
       )
     );
 
@@ -1435,7 +1430,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC, encodedPartitionFirst);
     List<String> expectedFiles = new ArrayList<>();
-    for (int i : new int[]{0, 8}) {
+    for (int i : new int[]{0}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
                                                   ZERO_PAD_FMT));
     }
