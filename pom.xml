@@ -67,7 +67,7 @@
         <hadoop.version>3.2.4</hadoop.version>
         <jettison.version>1.5.1</jettison.version>
         <jetty.version>9.4.44.v20210927</jetty.version>
-        <kafka.connect.storage.common.version>5.4.10</kafka.connect.storage.common.version>
+        <kafka.connect.storage.common.version>5.5.13</kafka.connect.storage.common.version>
         <woodstox.version>5.4.0</woodstox.version>
     </properties>
 
