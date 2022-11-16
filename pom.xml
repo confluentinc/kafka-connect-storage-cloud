@@ -52,7 +52,7 @@
         <connection>scm:git:git://github.com/confluentinc/kafka-connect-storage-cloud.git</connection>
         <developerConnection>scm:git:git@github.com:confluentinc/kafka-connect-storage-cloud.git</developerConnection>
         <url>https://github.com/confluentinc/kafka-connect-storage-cloud</url>
-        <tag>5.4.x</tag>
+        <tag>HEAD</tag>
     </scm>
 
     <modules>
@@ -64,6 +64,7 @@
         <licenses.version>5.4.11-SNAPSHOT</licenses.version>
         <hadoop.version>3.2.4</hadoop.version>
         <jettison.version>1.5.1</jettison.version>
+        <woodstox.version>5.4.0</woodstox.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
     </properties>
 
@@ -134,7 +135,11 @@
             <artifactId>jackson-core</artifactId>
             <version>${jackson.version}</version>
         </dependency>
-
+        <dependency>
+    	    <groupId>com.fasterxml.woodstox</groupId>
+            <artifactId>woodstox-core</artifactId>
+            <version>${woodstox.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-common</artifactId>
