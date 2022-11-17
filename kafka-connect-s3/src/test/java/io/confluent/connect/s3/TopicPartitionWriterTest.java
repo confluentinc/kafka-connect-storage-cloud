@@ -716,8 +716,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     time.sleep(SYSTEM.milliseconds());
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time,
-        null);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time, null);
 
     // sleep for 11 minutes after startup
     time.sleep(TimeUnit.MINUTES.toMillis(11));

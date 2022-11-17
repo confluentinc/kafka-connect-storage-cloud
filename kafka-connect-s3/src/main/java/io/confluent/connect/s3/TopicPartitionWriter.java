@@ -16,6 +16,8 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.SdkClientException;
+import io.confluent.connect.s3.hooks.NoopPostCommitHook;
+import io.confluent.connect.s3.hooks.PostCommitHook;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.RetryUtil;
 import io.confluent.connect.storage.errors.PartitionException;
@@ -35,6 +37,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Optional;
@@ -66,6 +69,7 @@ public class TopicPartitionWriter {
   private final TopicPartition tp;
   private final S3Storage storage;
   private final Partitioner<?> partitioner;
+  private final PostCommitHook postCommitHook;
   private final TimestampExtractor timestampExtractor;
   private String topicsDir;
   private State state;
@@ -100,21 +104,36 @@ public class TopicPartitionWriter {
   private static final Time SYSTEM_TIME = new SystemTime();
   private ErrantRecordReporter reporter;
 
-  public TopicPartitionWriter(TopicPartition tp,
+  // Visible for testing
+  TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
                               RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
                               Partitioner<?> partitioner,
                               S3SinkConnectorConfig connectorConfig,
                               SinkTaskContext context,
                               ErrantRecordReporter reporter) {
-    this(tp, storage, writerProvider, partitioner, connectorConfig, context, SYSTEM_TIME, reporter);
+    this(tp, storage, writerProvider, partitioner, new NoopPostCommitHook(), connectorConfig,
+            context, SYSTEM_TIME, reporter);
   }
 
   // Visible for testing
   TopicPartitionWriter(TopicPartition tp,
+                              S3Storage storage,
+                              RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
+                              Partitioner<?> partitioner,
+                              S3SinkConnectorConfig connectorConfig,
+                              SinkTaskContext context,
+                              Time time,
+                              ErrantRecordReporter reporter) {
+    this(tp, storage, writerProvider, partitioner, new NoopPostCommitHook(), connectorConfig,
+            context, time, reporter);
+  }
+
+  public TopicPartitionWriter(TopicPartition tp,
                        S3Storage storage,
                        RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
                        Partitioner<?> partitioner,
+                       PostCommitHook postCommitHook,
                        S3SinkConnectorConfig connectorConfig,
                        SinkTaskContext context,
                        Time time,
@@ -127,6 +146,7 @@ public class TopicPartitionWriter {
     this.context = context;
     this.writerProvider = writerProvider;
     this.partitioner = partitioner;
+    this.postCommitHook = postCommitHook;
     this.reporter = reporter;
     this.timestampExtractor = partitioner instanceof TimeBasedPartitioner
                                   ? ((TimeBasedPartitioner) partitioner).getTimestampExtractor()
@@ -613,6 +633,12 @@ public class TopicPartitionWriter {
                 connectorConfig.getLong(S3_RETRY_BACKOFF_CONFIG)
         );
       }
+    }
+
+    postCommitHook.put(new HashSet<>(commitFiles.values()));
+
+    for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
+      String encodedPartition = entry.getKey();
       startOffsets.remove(encodedPartition);
       endOffsets.remove(encodedPartition);
       recordCounts.remove(encodedPartition);

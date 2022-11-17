@@ -17,6 +17,9 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
 import io.confluent.connect.s3.S3SinkConnectorConfig.IgnoreOrFailBehavior;
+import io.confluent.connect.s3.hooks.BlockingKafkaPostCommitHook;
+import io.confluent.connect.s3.hooks.NoopPostCommitHook;
+import io.confluent.connect.s3.hooks.PostCommitHook;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -58,6 +61,7 @@ public class S3SinkTask extends SinkTask {
   private S3Storage storage;
   private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
   private Partitioner<?> partitioner;
+  private PostCommitHook postCommitHook;
   private Format<S3SinkConnectorConfig, String> format;
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private final Time time;
@@ -74,13 +78,14 @@ public class S3SinkTask extends SinkTask {
 
   // visible for testing.
   S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage,
-             Partitioner<?> partitioner, Format<S3SinkConnectorConfig, String> format,
-             Time time) throws Exception {
+             Partitioner<?> partitioner, PostCommitHook postCommitHook,
+             Format<S3SinkConnectorConfig, String> format, Time time) {
     this.topicPartitionWriters = new HashMap<>();
     this.connectorConfig = connectorConfig;
     this.context = context;
     this.storage = storage;
     this.partitioner = partitioner;
+    this.postCommitHook = postCommitHook;
     this.format = format;
     this.time = time;
 
@@ -91,6 +96,12 @@ public class S3SinkTask extends SinkTask {
     log.info("Started S3 connector task with assigned partitions {}",
         topicPartitionWriters.keySet()
     );
+  }
+
+  S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage,
+             Partitioner<?> partitioner, Format<S3SinkConnectorConfig, String> format,
+             Time time) throws Exception {
+    this(connectorConfig, context, storage, partitioner, new NoopPostCommitHook(), format, time);
   }
 
   public void start(Map<String, String> props) {
@@ -115,6 +126,7 @@ public class S3SinkTask extends SinkTask {
 
       writerProvider = newRecordWriterProvider(connectorConfig);
       partitioner = newPartitioner(connectorConfig);
+      postCommitHook = createAndInitPostCommitHook(connectorConfig);
 
       open(context.assignment());
       try {
@@ -209,6 +221,23 @@ public class S3SinkTask extends SinkTask {
     return partitioner;
   }
 
+  private PostCommitHook createAndInitPostCommitHook(S3SinkConnectorConfig config) {
+    PostCommitHook postCommitHook = createPostCommitHook(config);
+    postCommitHook.init(config);
+    return postCommitHook;
+  }
+
+  private PostCommitHook createPostCommitHook(S3SinkConnectorConfig config) {
+    if (!config.getPostCommitKafkaBootstrapBrokers().trim().isEmpty()
+            && !config.getPostCommitKafkaTopic().trim().isEmpty()) {
+      log.info("Going to use BlockingKafkaPostCommitHook, sending to topic: {}",
+              config.getPostCommitKafkaTopic());
+      return new BlockingKafkaPostCommitHook();
+    }
+    log.info("Going to use NoopPostCommitHook");
+    return new NoopPostCommitHook();
+  }
+
   @Override
   public void put(Collection<SinkRecord> records) throws ConnectException {
     for (SinkRecord record : records) {
@@ -300,6 +329,7 @@ public class S3SinkTask extends SinkTask {
   @Override
   public void stop() {
     try {
+      postCommitHook.close();
       if (storage != null) {
         storage.close();
       }
@@ -319,6 +349,7 @@ public class S3SinkTask extends SinkTask {
         storage,
         writerProvider,
         partitioner,
+        postCommitHook,
         connectorConfig,
         context,
         time,
