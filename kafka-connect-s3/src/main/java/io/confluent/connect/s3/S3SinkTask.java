@@ -16,6 +16,8 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
+import io.confluent.connect.s3.S3SinkConnectorConfig.OutputWriteBehavior;
+import io.confluent.connect.s3.util.TombstoneSupportedPartitioner;
 import io.confluent.connect.s3.S3SinkConnectorConfig.IgnoreOrFailBehavior;
 import io.confluent.connect.s3.util.SchemaPartitioner;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -208,6 +210,10 @@ public class S3SinkTask extends SinkTask {
     if (config.getSchemaPartitionAffixType() != S3SinkConnectorConfig.AffixType.NONE) {
       partitioner = new SchemaPartitioner<>(partitioner);
     }
+    if (config.isTombstoneWriteEnabled()) {
+      String tomebstonePartition = config.getTombstoneEncodedPartition();
+      partitioner = new TombstoneSupportedPartitioner<>(partitioner, tomebstonePartition);
+    }
     partitioner.configure(plainValues);
     return partitioner;
   }
@@ -252,7 +258,7 @@ public class S3SinkTask extends SinkTask {
   private boolean maybeSkipOnNullValue(SinkRecord record) {
     if (record.value() == null) {
       if (connectorConfig.nullValueBehavior()
-          .equalsIgnoreCase(IgnoreOrFailBehavior.IGNORE.toString())) {
+          .equalsIgnoreCase(OutputWriteBehavior.IGNORE.toString())) {
         log.debug(
             "Null valued record from topic '{}', partition {} and offset {} was skipped.",
             record.topic(),
@@ -260,7 +266,17 @@ public class S3SinkTask extends SinkTask {
             record.kafkaOffset()
         );
         return true;
+      } else if (connectorConfig.nullValueBehavior()
+          .equalsIgnoreCase(OutputWriteBehavior.WRITE.toString())) {
+        log.debug(
+            "Null valued record from topic '{}', partition {} and offset {} was written.",
+            record.topic(),
+            record.kafkaPartition(),
+            record.kafkaOffset()
+        );
+        return false;
       } else {
+        // Fail
         throw new ConnectException("Null valued records are not writeable with current "
             + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " 'settings.");
       }

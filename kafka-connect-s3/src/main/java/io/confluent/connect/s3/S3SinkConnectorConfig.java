@@ -30,6 +30,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
@@ -160,7 +161,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       ClientConfiguration.DEFAULT_USE_EXPECT_CONTINUE;
 
   public static final String BEHAVIOR_ON_NULL_VALUES_CONFIG = "behavior.on.null.values";
-  public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = IgnoreOrFailBehavior.FAIL.toString();
+  public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = OutputWriteBehavior.FAIL.toString();
 
   /**
    * Maximum back-off time when retrying failed requests.
@@ -189,6 +190,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String ELASTIC_BUFFER_INIT_CAPACITY = "s3.elastic.buffer.init.capacity";
   public static final int ELASTIC_BUFFER_INIT_CAPACITY_DEFAULT = 128 * 1024;  // 128KB
+
+  public static final String TOMBSTONE_ENCODED_PARTITION = "tombstone.encoded.partition";
+  public static final String TOMBSTONE_ENCODED_PARTITION_DEFAULT = "tombstone";
 
   /**
    * Append schema name in s3-path
@@ -629,15 +633,34 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           BEHAVIOR_ON_NULL_VALUES_CONFIG,
           Type.STRING,
           BEHAVIOR_ON_NULL_VALUES_DEFAULT,
-          IgnoreOrFailBehavior.VALIDATOR,
+          OutputWriteBehavior.VALIDATOR,
           Importance.LOW,
           "How to handle records with a null value (i.e. Kafka tombstone records)."
-              + " Valid options are 'ignore' and 'fail'.",
+              + " Valid options are 'ignore', 'fail' and 'write'."
+              + " In case of the write tombstone option, the connector redirects tombstone records"
+              + " to a separate directory mentioned in the config tombstone.encoded.partition."
+              + " The storage of keys is mandatory when this option is selected and the file for"
+              + " values is not generated.",
           group,
           ++orderInGroup,
           Width.SHORT,
           "Behavior for null-valued records"
       );
+
+      // This is done to avoid aggressive schema based rotations resulting out of interleaving
+      // of tombstones with regular records.
+      configDef.define(
+          TOMBSTONE_ENCODED_PARTITION,
+          Type.STRING,
+          TOMBSTONE_ENCODED_PARTITION_DEFAULT,
+          Importance.LOW,
+          "Output partition to write the tombstone records to.",
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Tombstone Encoded Partition"
+      );
+
 
       configDef.define(
           SCHEMA_PARTITION_AFFIX_TYPE_CONFIG,
@@ -663,7 +686,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Type.BOOLEAN,
           false,
           Importance.LOW,
-          "Enable or disable writing keys to storage.",
+          "Enable or disable writing keys to storage. "
+              + "This config is mandatory when the writing of tombstone records is enabled.",
           group,
           ++orderInGroup,
           Width.SHORT,
@@ -924,6 +948,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public int getElasticBufferInitCap() {
     return getInt(ELASTIC_BUFFER_INIT_CAPACITY);
+  }
+
+  public boolean isTombstoneWriteEnabled() {
+    return OutputWriteBehavior.WRITE.toString().equalsIgnoreCase(nullValueBehavior());
+  }
+
+  public String getTombstoneEncodedPartition() {
+    return getString(TOMBSTONE_ENCODED_PARTITION);
   }
 
   protected static String parseName(Map<String, String> props) {
@@ -1219,24 +1251,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     IGNORE,
     FAIL;
 
-    public static final ConfigDef.Validator VALIDATOR = new ConfigDef.Validator() {
-      private final ConfigDef.ValidString validator = ConfigDef.ValidString.in(names());
-
-      @Override
-      public void ensureValid(String name, Object value) {
-        if (value instanceof String) {
-          value = ((String) value).toLowerCase(Locale.ROOT);
-        }
-        validator.ensureValid(name, value);
-      }
-
-      // Overridden here so that ConfigDef.toEnrichedRst shows possible values correctly
-      @Override
-      public String toString() {
-        return validator.toString();
-      }
-
-    };
+    public static final ConfigDef.Validator VALIDATOR = new EnumValidator(names());
 
     public static String[] names() {
       IgnoreOrFailBehavior[] behaviors = values();
@@ -1252,6 +1267,53 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     @Override
     public String toString() {
       return name().toLowerCase(Locale.ROOT);
+    }
+  }
+
+  public enum OutputWriteBehavior {
+    IGNORE,
+    FAIL,
+    WRITE;
+
+    public static final ConfigDef.Validator VALIDATOR = new EnumValidator(names());
+
+    public static String[] names() {
+      OutputWriteBehavior[] behaviors = values();
+      String[] result = new String[behaviors.length];
+
+      for (int i = 0; i < behaviors.length; i++) {
+        result[i] = behaviors[i].toString();
+      }
+
+      return result;
+    }
+
+    @Override
+    public String toString() {
+      return name().toLowerCase(Locale.ROOT);
+    }
+  }
+
+  private static class EnumValidator implements Validator {
+
+    private final ConfigDef.ValidString validator;
+
+    private EnumValidator(String[] validValues) {
+      this.validator = ConfigDef.ValidString.in(validValues);
+    }
+
+    @Override
+    public void ensureValid(String name, Object value) {
+      if (value instanceof String) {
+        value = ((String) value).toLowerCase(Locale.ROOT);
+      }
+      validator.ensureValid(name, value);
+    }
+
+    // Overridden here so that ConfigDef.toEnrichedRst shows possible values correctly
+    @Override
+    public String toString() {
+      return validator.toString();
     }
   }
 
