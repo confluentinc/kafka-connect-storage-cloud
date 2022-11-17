@@ -18,9 +18,11 @@ package io.confluent.connect.s3;
 import com.amazonaws.SdkClientException;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.RetryUtil;
+import io.confluent.connect.s3.util.TombstoneTimestampExtractor;
 import io.confluent.connect.storage.errors.PartitionException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
@@ -66,7 +68,7 @@ public class TopicPartitionWriter {
   private final TopicPartition tp;
   private final S3Storage storage;
   private final Partitioner<?> partitioner;
-  private final TimestampExtractor timestampExtractor;
+  private TimestampExtractor timestampExtractor;
   private String topicsDir;
   private State state;
   private final Queue<SinkRecord> buffer;
@@ -128,9 +130,15 @@ public class TopicPartitionWriter {
     this.writerProvider = writerProvider;
     this.partitioner = partitioner;
     this.reporter = reporter;
-    this.timestampExtractor = partitioner instanceof TimeBasedPartitioner
-                                  ? ((TimeBasedPartitioner) partitioner).getTimestampExtractor()
-                                  : null;
+    this.timestampExtractor = null;
+
+    if (partitioner instanceof TimeBasedPartitioner) {
+      this.timestampExtractor = ((TimeBasedPartitioner) partitioner).getTimestampExtractor();
+      if (connectorConfig.isTombstoneWriteEnabled()) {
+        this.timestampExtractor = new TombstoneTimestampExtractor(timestampExtractor);
+      }
+    }
+
     isTaggingEnabled = connectorConfig.getBoolean(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG);
     ignoreTaggingErrors = connectorConfig.getString(
             S3SinkConnectorConfig.S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG)

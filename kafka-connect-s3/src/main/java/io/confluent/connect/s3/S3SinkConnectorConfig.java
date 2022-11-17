@@ -160,7 +160,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       ClientConfiguration.DEFAULT_USE_EXPECT_CONTINUE;
 
   public static final String BEHAVIOR_ON_NULL_VALUES_CONFIG = "behavior.on.null.values";
-  public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = IgnoreOrFailBehavior.FAIL.toString();
+  public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = OutputWriteBehavior.FAIL.toString();
 
   /**
    * Maximum back-off time when retrying failed requests.
@@ -612,10 +612,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           BEHAVIOR_ON_NULL_VALUES_CONFIG,
           Type.STRING,
           BEHAVIOR_ON_NULL_VALUES_DEFAULT,
-          IgnoreOrFailBehavior.VALIDATOR,
+          OutputWriteBehavior.VALIDATOR,
           Importance.LOW,
           "How to handle records with a null value (i.e. Kafka tombstone records)."
-              + " Valid options are 'ignore' and 'fail'.",
+              + " Valid options are 'ignore', 'fail' and 'write'.",
           group,
           ++orderInGroup,
           Width.SHORT,
@@ -632,7 +632,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Type.BOOLEAN,
           false,
           Importance.LOW,
-          "Enable or disable writing keys to storage.",
+          "Enable or disable writing keys to storage. "
+              + "This config is mandatory when the writing of tombstone records is enabled.",
           group,
           ++orderInGroup,
           Width.SHORT,
@@ -893,6 +894,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public int getElasticBufferInitCap() {
     return getInt(ELASTIC_BUFFER_INIT_CAPACITY);
+  }
+
+  public boolean isTombstoneWriteEnabled() {
+    return OutputWriteBehavior.WRITE.toString().equalsIgnoreCase(nullValueBehavior());
   }
 
   protected static String parseName(Map<String, String> props) {
@@ -1205,6 +1210,47 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
     public static String[] names() {
       IgnoreOrFailBehavior[] behaviors = values();
+      String[] result = new String[behaviors.length];
+
+      for (int i = 0; i < behaviors.length; i++) {
+        result[i] = behaviors[i].toString();
+      }
+
+      return result;
+    }
+
+    @Override
+    public String toString() {
+      return name().toLowerCase(Locale.ROOT);
+    }
+  }
+
+  public enum OutputWriteBehavior {
+    IGNORE,
+    FAIL,
+    WRITE;
+
+    public static final ConfigDef.Validator VALIDATOR = new ConfigDef.Validator() {
+      private final ConfigDef.ValidString validator = ConfigDef.ValidString.in(names());
+
+      @Override
+      public void ensureValid(String name, Object value) {
+        if (value instanceof String) {
+          value = ((String) value).toLowerCase(Locale.ROOT);
+        }
+        validator.ensureValid(name, value);
+      }
+
+      // Overridden here so that ConfigDef.toEnrichedRst shows possible values correctly
+      @Override
+      public String toString() {
+        return validator.toString();
+      }
+
+    };
+
+    public static String[] names() {
+      OutputWriteBehavior[] behaviors = values();
       String[] result = new String[behaviors.length];
 
       for (int i = 0; i < behaviors.length; i++) {
