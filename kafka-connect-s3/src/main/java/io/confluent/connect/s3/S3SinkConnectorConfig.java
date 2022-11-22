@@ -251,7 +251,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         )
     );
 
-    SCHEMA_PARTITION_AFFIX_TYPE_RECOMMENDER.addValidValues(Arrays.asList(AffixType.names()));
+    SCHEMA_PARTITION_AFFIX_TYPE_RECOMMENDER.addValidValues(
+        Arrays.stream(AffixType.names()).collect(Collectors.toList()));
   }
 
   public static ConfigDef newConfigDef() {

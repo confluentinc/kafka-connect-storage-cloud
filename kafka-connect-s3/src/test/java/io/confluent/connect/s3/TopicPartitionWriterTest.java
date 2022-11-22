@@ -28,6 +28,7 @@ import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.CompressionType;
+import io.confluent.connect.s3.util.SchemaPartitioner;
 import io.confluent.connect.storage.errors.PartitionException;
 import io.confluent.kafka.serializers.NonRecordContainer;
 import java.util.HashSet;
@@ -622,6 +623,216 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     expectedFiles.add(FileUtils.fileKeyToCommit(
         topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
     verify(expectedFiles, 6, schema, records);
+  }
+
+  @Test
+  public void testWriteSchemaPartitionerWithPrefix() throws Exception {
+    localProps.put(FLUSH_SIZE_CONFIG, "9");
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> basePartitioner = new DefaultPartitioner<>();
+    Partitioner<?> partitioner = new SchemaPartitioner<>(
+            parsedConfig, S3SinkConnectorConfig.AffixType.PREFIX, basePartitioner);
+    basePartitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+            TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+    String key = "key";
+    Schema schema1 = SchemaBuilder.struct()
+            .name(null)
+            .version(null)
+            .field("boolean", Schema.BOOLEAN_SCHEMA)
+            .field("int", Schema.INT32_SCHEMA)
+            .field("long", Schema.INT64_SCHEMA)
+            .field("float", Schema.FLOAT32_SCHEMA)
+            .field("double", Schema.FLOAT64_SCHEMA)
+            .build();
+    List<Struct> records1 = createRecordBatches(schema1, 3, 6);
+
+    Schema schema2 = SchemaBuilder.struct()
+            .name("record1")
+            .version(1)
+            .field("boolean", Schema.BOOLEAN_SCHEMA)
+            .field("int", Schema.INT32_SCHEMA)
+            .field("long", Schema.INT64_SCHEMA)
+            .field("float", Schema.FLOAT32_SCHEMA)
+            .field("double", Schema.FLOAT64_SCHEMA)
+            .build();
+
+
+    List<Struct> records2 = createRecordBatches(schema2, 3, 6);
+
+    Schema schema3 = SchemaBuilder.struct()
+            .name("record2")
+            .version(1)
+            .field("boolean", Schema.BOOLEAN_SCHEMA)
+            .field("int", Schema.INT32_SCHEMA)
+            .field("long", Schema.INT64_SCHEMA)
+            .field("float", Schema.FLOAT32_SCHEMA)
+            .field("double", Schema.FLOAT64_SCHEMA)
+            .build();
+
+
+    List<Struct> records3 = createRecordBatches(schema3, 3, 6);
+
+    int offset = 0;
+    for (int i=0; i<records1.size(); i++) {
+      topicPartitionWriter.buffer(
+              new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1, records1.get(i),
+                      offset++));
+      topicPartitionWriter.buffer(
+              new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2, records2.get(i),
+                      offset++));
+      topicPartitionWriter.buffer(
+              new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema3, records3.get(i),
+                      offset++));
+    }
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String dirPrefix1 = partitioner.generatePartitionedPath(TOPIC,
+            "schema_name" + "=" + "null" + "_partition=" + PARTITION);
+    String dirPrefix2 = partitioner.generatePartitionedPath(TOPIC,
+            "schema_name" + "=" + "record1" + "_partition=" + PARTITION);
+    String dirPrefix3 = partitioner.generatePartitionedPath(TOPIC,
+            "schema_name" + "=" + "record2" + "_partition=" + PARTITION);
+
+    List<Struct> expectedRecords = new ArrayList<>();
+    int ibase = 16;
+    float fbase = 12.2f;
+    // The expected sequence of records is constructed taking into account that sorting of files occurs in verify
+    for (int i = 0; i < 6; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        expectedRecords.add(createRecord(schema1, ibase + j, fbase + j));
+      }
+    }
+    for (int i = 0; i < 6; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        expectedRecords.add(createRecord(schema2, ibase + j, fbase + j));
+      }
+    }
+    for (int i = 0; i < 6; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        expectedRecords.add(createRecord(schema3, ibase + j, fbase + j));
+      }
+    }
+
+    List<String> expectedFiles = new ArrayList<>();
+    for(int i = 0; i < 54; i += 9) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix2, TOPIC_PARTITION, i+1, extension, ZERO_PAD_FMT));
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix3, TOPIC_PARTITION, i+2, extension, ZERO_PAD_FMT));
+    }
+
+    verify(expectedFiles, 3, schema1, expectedRecords);
+  }
+
+  @Test
+  public void testWriteSchemaPartitionerWithSuffix() throws Exception {
+    localProps.put(FLUSH_SIZE_CONFIG, "9");
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> basePartitioner = new DefaultPartitioner<>();
+    Partitioner<?> partitioner = new SchemaPartitioner<>(
+            parsedConfig, S3SinkConnectorConfig.AffixType.SUFFIX, basePartitioner);
+    basePartitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+            TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+    String key = "key";
+    Schema schema1 = SchemaBuilder.struct()
+            .name(null)
+            .version(null)
+            .field("boolean", Schema.BOOLEAN_SCHEMA)
+            .field("int", Schema.INT32_SCHEMA)
+            .field("long", Schema.INT64_SCHEMA)
+            .field("float", Schema.FLOAT32_SCHEMA)
+            .field("double", Schema.FLOAT64_SCHEMA)
+            .build();
+    List<Struct> records1 = createRecordBatches(schema1, 3, 6);
+
+    Schema schema2 = SchemaBuilder.struct()
+            .name("record1")
+            .version(1)
+            .field("boolean", Schema.BOOLEAN_SCHEMA)
+            .field("int", Schema.INT32_SCHEMA)
+            .field("long", Schema.INT64_SCHEMA)
+            .field("float", Schema.FLOAT32_SCHEMA)
+            .field("double", Schema.FLOAT64_SCHEMA)
+            .build();
+
+
+    List<Struct> records2 = createRecordBatches(schema2, 3, 6);
+
+    Schema schema3 = SchemaBuilder.struct()
+            .name("record2")
+            .version(1)
+            .field("boolean", Schema.BOOLEAN_SCHEMA)
+            .field("int", Schema.INT32_SCHEMA)
+            .field("long", Schema.INT64_SCHEMA)
+            .field("float", Schema.FLOAT32_SCHEMA)
+            .field("double", Schema.FLOAT64_SCHEMA)
+            .build();
+
+
+    List<Struct> records3 = createRecordBatches(schema3, 3, 6);
+
+    int offset = 0;
+    for (int i=0; i<records1.size(); i++) {
+      topicPartitionWriter.buffer(
+              new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1, records1.get(i),
+                      offset++));
+      topicPartitionWriter.buffer(
+              new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2, records2.get(i),
+                      offset++));
+      topicPartitionWriter.buffer(
+              new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema3, records3.get(i),
+                      offset++));
+    }
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String dirPrefix1 = partitioner.generatePartitionedPath(TOPIC,
+            "partition=" + PARTITION + "_schema_name" + "=" + "null" );
+    String dirPrefix2 = partitioner.generatePartitionedPath(TOPIC,
+            "partition=" + PARTITION + "_schema_name" + "=" + "record1" );
+    String dirPrefix3 = partitioner.generatePartitionedPath(TOPIC,
+            "partition=" + PARTITION + "_schema_name" + "=" + "record2" );
+
+    List<Struct> expectedRecords = new ArrayList<>();
+    int ibase = 16;
+    float fbase = 12.2f;
+    // The expected sequence of records is constructed taking into account that sorting of files occurs in verify
+    for (int i = 0; i < 6; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        expectedRecords.add(createRecord(schema1, ibase + j, fbase + j));
+      }
+    }
+    for (int i = 0; i < 6; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        expectedRecords.add(createRecord(schema2, ibase + j, fbase + j));
+      }
+    }
+    for (int i = 0; i < 6; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        expectedRecords.add(createRecord(schema3, ibase + j, fbase + j));
+      }
+    }
+
+    List<String> expectedFiles = new ArrayList<>();
+    for(int i = 0; i < 54; i += 9) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix2, TOPIC_PARTITION, i+1, extension, ZERO_PAD_FMT));
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix3, TOPIC_PARTITION, i+2, extension, ZERO_PAD_FMT));
+    }
+
+    verify(expectedFiles, 3, schema1, expectedRecords);
   }
 
   @Test
@@ -1549,7 +1760,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       Collection<Object> actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3);
       assertEquals(expectedSize, actualRecords.size());
       for (Object avroRecord : actualRecords) {
-        Object expectedRecord = format.getAvroData().fromConnectData(schema, records.get(index++));
+        Object expectedRecord = format.getAvroData().fromConnectData(records.get(index).schema(), records.get(index++));
         assertEquals(expectedRecord, avroRecord);
       }
     }
