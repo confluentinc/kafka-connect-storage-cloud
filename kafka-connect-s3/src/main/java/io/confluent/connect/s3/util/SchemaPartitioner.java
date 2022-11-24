@@ -24,22 +24,24 @@ import java.util.Map;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.sink.SinkRecord;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.SCHEMA_PARTITION_AFFIX_TYPE_CONFIG;
+
 public class SchemaPartitioner<T> implements Partitioner<T> {
 
   private final Partitioner<T> delegatePartitioner;
-  private final S3SinkConnectorConfig.AffixType schemaAffixType;
-  protected String delim;
+  private S3SinkConnectorConfig.AffixType schemaAffixType;
+  private String delim;
 
-  public SchemaPartitioner(Map<String, Object> config,
-      S3SinkConnectorConfig.AffixType schemaAffixType, Partitioner<T> delegatePartitioner) {
-    this.delim = (String)config.get(StorageCommonConfig.DIRECTORY_DELIM_CONFIG);
+  public SchemaPartitioner(Partitioner<T> delegatePartitioner) {
     this.delegatePartitioner = delegatePartitioner;
-    this.schemaAffixType = schemaAffixType;
   }
 
   @Override
-  public void configure(Map<String, Object> map) {
-    delegatePartitioner.configure(map);
+  public void configure(Map<String, Object> config) {
+    this.delim = (String)config.get(StorageCommonConfig.DIRECTORY_DELIM_CONFIG);
+    this.schemaAffixType = S3SinkConnectorConfig.AffixType.valueOf(
+        (String) config.get(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG));
+    delegatePartitioner.configure(config);
   }
 
   @Override

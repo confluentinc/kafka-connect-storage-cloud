@@ -189,6 +189,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String ELASTIC_BUFFER_INIT_CAPACITY = "s3.elastic.buffer.init.capacity";
   public static final int ELASTIC_BUFFER_INIT_CAPACITY_DEFAULT = 128 * 1024;  // 128KB
+
+  /**
+   * Append schema name in s3-path
+   */
+
   public static final String SCHEMA_PARTITION_AFFIX_TYPE_CONFIG =
       "s3.schema.partition.affix.type";
   public static final String SCHEMA_PARTITION_AFFIX_TYPE_DEFAULT = AffixType.NONE.name();

@@ -205,11 +205,10 @@ public class S3SinkTask extends SinkTask {
         plainValues.put(originalKey, originals.get(originalKey));
       }
     }
-    partitioner.configure(plainValues);
     if (config.getSchemaPartitionAffixType() != S3SinkConnectorConfig.AffixType.NONE) {
-      partitioner = new SchemaPartitioner<>(
-          plainValues, config.getSchemaPartitionAffixType(), partitioner);
+      partitioner = new SchemaPartitioner<>(partitioner);
     }
+    partitioner.configure(plainValues);
     return partitioner;
   }
 

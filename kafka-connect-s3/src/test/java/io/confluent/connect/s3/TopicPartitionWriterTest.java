@@ -87,6 +87,7 @@ import io.confluent.connect.storage.partitioner.TimestampExtractor;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.SCHEMA_PARTITION_AFFIX_TYPE_CONFIG;
 import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.partitioner.PartitionerConfig.PARTITION_FIELD_NAME_CONFIG;
@@ -632,9 +633,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     // Define the partitioner
     Partitioner<?> basePartitioner = new DefaultPartitioner<>();
-    Partitioner<?> partitioner = new SchemaPartitioner<>(
-            parsedConfig, S3SinkConnectorConfig.AffixType.PREFIX, basePartitioner);
-    basePartitioner.configure(parsedConfig);
+    parsedConfig.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.PREFIX.name());
+    Partitioner<?> partitioner = new SchemaPartitioner<>(basePartitioner);
+    partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
             TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
@@ -735,11 +736,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     localProps.put(FLUSH_SIZE_CONFIG, "9");
     setUp();
 
+    parsedConfig.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.SUFFIX.name());
     // Define the partitioner
     Partitioner<?> basePartitioner = new DefaultPartitioner<>();
-    Partitioner<?> partitioner = new SchemaPartitioner<>(
-            parsedConfig, S3SinkConnectorConfig.AffixType.SUFFIX, basePartitioner);
-    basePartitioner.configure(parsedConfig);
+    Partitioner<?> partitioner = new SchemaPartitioner<>(basePartitioner);
+    partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
             TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
