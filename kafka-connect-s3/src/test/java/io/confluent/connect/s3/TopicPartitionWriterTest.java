@@ -27,6 +27,7 @@ import io.confluent.connect.s3.format.RecordViewSetter;
 import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
 import io.confluent.connect.s3.format.json.JsonFormat;
+import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.storage.errors.PartitionException;
 import io.confluent.kafka.serializers.NonRecordContainer;
@@ -64,6 +65,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import io.confluent.common.utils.MockTime;
 import io.confluent.common.utils.Time;
@@ -189,6 +191,44 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void tearDown() throws Exception {
     super.tearDown();
     localProps.clear();
+  }
+
+  @Test
+  public void testWriteRecordRotateFileMultipleSchema() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG, "2");
+    localProps.put(S3SinkConnectorConfig.ROTATE_MULTIPLE_SCHEMA_CONFIG, "false");
+    localProps.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, TimeBasedPartitioner.class.getName());
+    localProps.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'dt'=YYYY-MM-dd/'hh'=HH/'minute'=mm");
+    localProps.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, "900000");
+    localProps.put(PartitionerConfig.TIMEZONE_CONFIG, "UTC");
+    localProps.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "60000");
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10");
+    localProps.put(StorageCommonConfig.DIRECTORY_DELIM_CONFIG, "/");
+    localProps.put(StorageCommonConfig.FILE_DELIM_CONFIG, "+");
+    setUp();
+
+    // Define parquet format
+    Format<S3SinkConnectorConfig, String> format = new ParquetFormat(storage);
+    writerProvider = format.getRecordWriterProvider();
+    extension = writerProvider.getExtension();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new TimeBasedPartitioner<>();
+    partitioner.configure(parsedConfig);
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+
+    // Mock sink records
+    List<SinkRecord> sinkRecords = createSinkRecordsWithTwoSchemas(10);
+    sinkRecords.stream().forEach(record -> topicPartitionWriter.buffer(record));
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<String> actualFiles = summaries.stream().map(m -> m.getKey()).collect(Collectors.toList());
+    assertEquals(4, actualFiles.size());
   }
 
   @Test
@@ -1451,6 +1491,28 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         null,
         headerWriterProvider
     );
+  }
+
+  private List<SinkRecord> createSinkRecordsWithTwoSchemas(int size) {
+    String key = "key";
+    List<Struct> records = createRecordBatch(createSchema(), size);
+    Schema newSchema = createNewSchema();
+    for (int i = 0; i < size; i ++) {
+      records.add(new Struct(newSchema)
+          .put("boolean", true)
+          .put("int", 12)
+          .put("long", 12L)
+          .put("float", 12.2f)
+          .put("double", 12.2)
+          .put("string", "def" + i));
+    }
+    Collections.shuffle(records);
+
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    for (int i = 0; i < records.size(); i++) {
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, records.get(i).schema(), records.get(i), i));
+    }
+    return sinkRecords;
   }
 
   private Struct createRecord(Schema schema, int ibase, float fbase) {
