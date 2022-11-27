@@ -1343,6 +1343,106 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     verifyRecordElement(expectedHeaderFiles, 3, sinkRecords, RecordElement.HEADERS);
   }
 
+  @Test
+  public void testWriteRecordLateRecordsMaxOpenFilesPerPartitionGreaterThanOne() throws Exception {
+    // Do not roll on size, only based on time.
+    localProps.put(FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.MINUTES.toMillis(1))
+    );
+    localProps.put(
+        S3SinkConnectorConfig.MAX_OPEN_FILES_PER_PARTITION_CONFIG,
+        String.valueOf(2)
+    );
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new HourlyPartitioner<>();
+    parsedConfig.put(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG, TimeUnit.MINUTES.toMillis(1));
+    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 2, 6);
+
+    // hour 10
+    DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
+    long timestampFirst = first.getMillis();
+    // hour 9
+    long timestampEarlier = first.minusHours(1).getMillis();
+
+    Collection<SinkRecord> sinkRecords = new ArrayList<>();
+
+    // first 2 records for hour 10
+    sinkRecords.addAll(
+      createSinkRecordsWithTimestamp(
+        records.subList(0, 2),
+        key,
+        schema,
+        0,
+        timestampFirst,
+        1000
+      )
+    );
+
+    // next 4 records for hour 9
+    sinkRecords.addAll(
+      createSinkRecordsWithTimestamp(
+        records.subList(2, 6),
+        key,
+        schema,
+        2,
+        timestampEarlier,
+        1000
+      )
+    );
+
+    // next 3 records for hour 10
+    // 2 for previously open S3 file
+    // 1 new event past rotate.interval.ms to force flush of open files
+    sinkRecords.addAll(
+      Arrays.asList(
+        new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(6), 6,
+            timestampFirst + 5000, TimestampType.CREATE_TIME),
+        new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(7), 7,
+            timestampFirst + 15000, TimestampType.CREATE_TIME),
+        // this one exceeds the 1-minute rotate interval for hour 10 so will cause rotate/commit of all open files
+        // however, it will not be flushed/written (still in buffer)
+        new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(8), 8,
+            timestampFirst + 60000, TimestampType.CREATE_TIME)
+      )
+    );
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String encodedPartitionFirst = getTimebasedEncodedPartition(timestampFirst);
+    String encodedPartitionEarlier = getTimebasedEncodedPartition(timestampEarlier);
+
+    String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC, encodedPartitionFirst);
+    List<String> expectedFiles = new ArrayList<>();
+    for (int i : new int[]{0}) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
+                                                  ZERO_PAD_FMT));
+    }
+
+    String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionEarlier);
+    for (int i : new int[]{2}) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
+                                                  ZERO_PAD_FMT));
+    }
+    verify(expectedFiles, 4, schema, records);
+  }
+
   // Test if a given exception type was reported to the DLQ
   private <T extends DataException> void testExceptionReportedToDLQ(
       SinkRecord faultyRecord,
