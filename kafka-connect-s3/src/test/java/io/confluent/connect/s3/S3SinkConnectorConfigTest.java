@@ -220,7 +220,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     );
     properties.put(
         configPrefix.concat(DummyAssertiveCredentialsProvider.CONFIGS_NUM_KEY_NAME),
-        "3"
+        "5"
     );
     connectorConfig = new S3SinkConnectorConfig(properties);
 
