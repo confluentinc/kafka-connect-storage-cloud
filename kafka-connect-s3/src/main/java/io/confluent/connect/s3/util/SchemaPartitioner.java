@@ -48,27 +48,23 @@ public class SchemaPartitioner<T> implements Partitioner<T> {
   public String encodePartition(SinkRecord sinkRecord) {
     String encodePartition = this.delegatePartitioner.encodePartition(sinkRecord);
     Schema valueSchema = sinkRecord.valueSchema();
-    if (valueSchema != null) {
-      encodePartition = generateSchemaBasedPath(encodePartition, valueSchema);
-    }
-    return encodePartition;
+    String valueSchemaName = valueSchema != null ? valueSchema.name() : null;
+    return generateSchemaBasedPath(encodePartition, valueSchemaName);
   }
 
   @Override
   public String encodePartition(SinkRecord sinkRecord, long nowInMillis) {
     String encodePartition = this.delegatePartitioner.encodePartition(sinkRecord, nowInMillis);
     Schema valueSchema = sinkRecord.valueSchema();
-    if (valueSchema != null) {
-      encodePartition = generateSchemaBasedPath(encodePartition, valueSchema);
-    }
-    return encodePartition;
+    String valueSchemaName = valueSchema != null ? valueSchema.name() : null;
+    return generateSchemaBasedPath(encodePartition, valueSchemaName);
   }
 
-  private String generateSchemaBasedPath(String encodedPartition, Schema valueSchema) {
+  private String generateSchemaBasedPath(String encodedPartition, String schemaName) {
     if (schemaAffixType == S3SinkConnectorConfig.AffixType.PREFIX) {
-      return "schema_name=" + valueSchema.name() + this.delim + encodedPartition;
+      return "schema_name=" + schemaName + this.delim + encodedPartition;
     } else {
-      return encodedPartition + this.delim + "schema_name=" + valueSchema.name();
+      return encodedPartition + this.delim + "schema_name=" + schemaName;
     }
   }
 
