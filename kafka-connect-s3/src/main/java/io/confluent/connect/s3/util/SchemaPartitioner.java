@@ -38,7 +38,7 @@ public class SchemaPartitioner<T> implements Partitioner<T> {
 
   @Override
   public void configure(Map<String, Object> config) {
-    this.delim = (String)config.get(StorageCommonConfig.DIRECTORY_DELIM_CONFIG);
+    this.delim = (String) config.get(StorageCommonConfig.DIRECTORY_DELIM_CONFIG);
     this.schemaAffixType = S3SinkConnectorConfig.AffixType.valueOf(
         (String) config.get(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG));
     delegatePartitioner.configure(config);
