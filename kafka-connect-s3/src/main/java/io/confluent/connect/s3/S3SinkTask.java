@@ -17,6 +17,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
 import io.confluent.connect.s3.S3SinkConnectorConfig.IgnoreOrFailBehavior;
+import io.confluent.connect.s3.util.SchemaPartitioner;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -204,8 +205,10 @@ public class S3SinkTask extends SinkTask {
         plainValues.put(originalKey, originals.get(originalKey));
       }
     }
+    if (config.getSchemaPartitionAffixType() != S3SinkConnectorConfig.AffixType.NONE) {
+      partitioner = new SchemaPartitioner<>(partitioner);
+    }
     partitioner.configure(plainValues);
-
     return partitioner;
   }
 

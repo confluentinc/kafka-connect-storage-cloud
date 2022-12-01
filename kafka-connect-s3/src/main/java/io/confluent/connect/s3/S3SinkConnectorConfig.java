@@ -190,6 +190,20 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String ELASTIC_BUFFER_INIT_CAPACITY = "s3.elastic.buffer.init.capacity";
   public static final int ELASTIC_BUFFER_INIT_CAPACITY_DEFAULT = 128 * 1024;  // 128KB
 
+  /**
+   * Append schema name in s3-path
+   */
+
+  public static final String SCHEMA_PARTITION_AFFIX_TYPE_CONFIG =
+      "s3.schema.partition.affix.type";
+  public static final String SCHEMA_PARTITION_AFFIX_TYPE_DEFAULT = AffixType.NONE.name();
+  public static final String SCHEMA_PARTITION_AFFIX_TYPE_DOC = "Append the record schema name "
+      + "to prefix or suffix in the s3 path after the topic name."
+      + " None will not append the schema name in the s3 path.";
+
+  private static final GenericRecommender SCHEMA_PARTITION_AFFIX_TYPE_RECOMMENDER =
+      new GenericRecommender();
+
   private final String name;
 
   private final Map<String, ComposableConfig> propertyToConfig = new HashMap<>();
@@ -241,6 +255,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
             FieldPartitioner.class
         )
     );
+
+    SCHEMA_PARTITION_AFFIX_TYPE_RECOMMENDER.addValidValues(
+        Arrays.stream(AffixType.names()).collect(Collectors.toList()));
   }
 
   public static ConfigDef newConfigDef() {
@@ -621,6 +638,20 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.SHORT,
           "Behavior for null-valued records"
       );
+
+      configDef.define(
+          SCHEMA_PARTITION_AFFIX_TYPE_CONFIG,
+          Type.STRING,
+          SCHEMA_PARTITION_AFFIX_TYPE_DEFAULT,
+          ConfigDef.ValidString.in(AffixType.names()),
+          Importance.LOW,
+          SCHEMA_PARTITION_AFFIX_TYPE_DOC,
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Schema Partition Affix Type",
+          SCHEMA_PARTITION_AFFIX_TYPE_RECOMMENDER
+      );
     }
 
     {
@@ -921,6 +952,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return map;
   }
 
+  public AffixType getSchemaPartitionAffixType() {
+    return AffixType.valueOf(getString(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG));
+  }
+
   private static class PartRange implements ConfigDef.Validator {
     // S3 specific limit
     final int min = 5 * 1024 * 1024;
@@ -1217,6 +1252,16 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     @Override
     public String toString() {
       return name().toLowerCase(Locale.ROOT);
+    }
+  }
+
+  public enum AffixType {
+    SUFFIX,
+    PREFIX,
+    NONE;
+
+    public static String[] names() {
+      return Arrays.stream(values()).map(AffixType::name).toArray(String[]::new);
     }
   }
 
