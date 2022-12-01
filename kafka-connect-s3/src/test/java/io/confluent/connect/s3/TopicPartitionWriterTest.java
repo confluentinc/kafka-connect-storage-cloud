@@ -1849,7 +1849,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       );
       assertEquals(expectedSize, actualRecords.size());
       for (Object currentRecord : actualRecords) {
-        System.out.println(currentRecord);
         SinkRecord expectedRecord = expectedRecords.get(index++);
         Object expectedValue = expectedRecord.value();
         JsonConverter converter = new JsonConverter();
