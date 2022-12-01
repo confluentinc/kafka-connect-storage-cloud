@@ -1479,7 +1479,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     );
   }
 
-  public void testWriteSchemaPartitionerWithAffix(boolean testWithSchemaData, S3SinkConnectorConfig.AffixType affixType) throws Exception {
+  public void testWriteSchemaPartitionerWithAffix(
+      boolean testWithSchemaData, S3SinkConnectorConfig.AffixType affixType
+  ) throws Exception {
     localProps.put(FLUSH_SIZE_CONFIG, "9");
     localProps.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
     setUp();
@@ -1491,11 +1493,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     parsedConfig.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, affixType.name());
     // Define the partitioner
     Partitioner<?> basePartitioner = new DefaultPartitioner<>();
-    Partitioner<?> partitioner =  new SchemaPartitioner<>(basePartitioner);;
+    Partitioner<?> partitioner = new SchemaPartitioner<>(basePartitioner);
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-            TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null
+    );
 
     List<Object> testData;
     if (testWithSchemaData) {
@@ -1510,68 +1513,76 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<String> expectedFiles = (List<String>) testData.get(3);
 
 
-    for (int i=0; i<actualRecords.size(); i++) {
-      topicPartitionWriter.buffer(actualRecords.get(i));
+    for (SinkRecord actualRecord : actualRecords) {
+      topicPartitionWriter.buffer(actualRecord);
     }
     // Test actual write
     topicPartitionWriter.write();
     topicPartitionWriter.close();
 
     verifyWithJsonOutput(
-        expectedFiles, expectedRecords.size()/expectedFiles.size(), expectedRecords, CompressionType.NONE);
+        expectedFiles, expectedRecords.size() / expectedFiles.size(), expectedRecords, CompressionType.NONE
+    );
   }
 
-  private List<Object> generateTestDataWithSchema(Partitioner<?> partitioner, S3SinkConnectorConfig.AffixType affixType) {
+  private List<Object> generateTestDataWithSchema(
+      Partitioner<?> partitioner, S3SinkConnectorConfig.AffixType affixType
+  ) {
     String key = "key";
 
     Schema schema1 = SchemaBuilder.struct()
-            .name(null)
-            .version(null)
-            .field("boolean", Schema.BOOLEAN_SCHEMA)
-            .field("int", Schema.INT32_SCHEMA)
-            .field("long", Schema.INT64_SCHEMA)
-            .field("float", Schema.FLOAT32_SCHEMA)
-            .field("double", Schema.FLOAT64_SCHEMA)
-            .build();
+        .name(null)
+        .version(null)
+        .field("boolean", Schema.BOOLEAN_SCHEMA)
+        .field("int", Schema.INT32_SCHEMA)
+        .field("long", Schema.INT64_SCHEMA)
+        .field("float", Schema.FLOAT32_SCHEMA)
+        .field("double", Schema.FLOAT64_SCHEMA)
+        .build();
     List<Struct> records1 = createRecordBatches(schema1, 3, 6);
 
     Schema schema2 = SchemaBuilder.struct()
-            .name("record1")
-            .version(1)
-            .field("boolean", Schema.BOOLEAN_SCHEMA)
-            .field("int", Schema.INT32_SCHEMA)
-            .field("long", Schema.INT64_SCHEMA)
-            .field("float", Schema.FLOAT32_SCHEMA)
-            .field("double", Schema.FLOAT64_SCHEMA)
-            .build();
+        .name("record1")
+        .version(1)
+        .field("boolean", Schema.BOOLEAN_SCHEMA)
+        .field("int", Schema.INT32_SCHEMA)
+        .field("long", Schema.INT64_SCHEMA)
+        .field("float", Schema.FLOAT32_SCHEMA)
+        .field("double", Schema.FLOAT64_SCHEMA)
+        .build();
 
     List<Struct> records2 = createRecordBatches(schema2, 3, 6);
 
     Schema schema3 = SchemaBuilder.struct()
-            .name("record2")
-            .version(1)
-            .field("boolean", Schema.BOOLEAN_SCHEMA)
-            .field("int", Schema.INT32_SCHEMA)
-            .field("long", Schema.INT64_SCHEMA)
-            .field("float", Schema.FLOAT32_SCHEMA)
-            .field("double", Schema.FLOAT64_SCHEMA)
-            .build();
-
+        .name("record2")
+        .version(1)
+        .field("boolean", Schema.BOOLEAN_SCHEMA)
+        .field("int", Schema.INT32_SCHEMA)
+        .field("long", Schema.INT64_SCHEMA)
+        .field("float", Schema.FLOAT32_SCHEMA)
+        .field("double", Schema.FLOAT64_SCHEMA)
+        .build();
 
     List<Struct> records3 = createRecordBatches(schema3, 3, 6);
 
     ArrayList<SinkRecord> actualData = new ArrayList<>();
     int offset = 0;
-    for (int i=0; i<records1.size(); i++) {
+    for (int i = 0; i < records1.size(); i++) {
       actualData.add(
-              new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1, records1.get(i),
-                      offset++));
+          new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1, records1.get(i),
+              offset++
+          )
+      );
       actualData.add(
-              new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2, records2.get(i),
-                      offset++));
+          new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2, records2.get(i),
+              offset++
+          )
+      );
       actualData.add(
-              new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema3, records3.get(i),
-                      offset++));
+          new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema3, records3.get(i),
+              offset++
+          )
+      );
     }
     List<SinkRecord> expectedRecords = new ArrayList<>();
     int ibase = 16;
@@ -1582,46 +1593,64 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     for (int i = 0; i < 6; ++i) {
       for (int j = 0; j < 3; ++j) {
         expectedRecords.add(
-                new SinkRecord(
-                        TOPIC, PARTITION, Schema.STRING_SCHEMA,
-                        key, schema1, createRecord(schema1, ibase + j, fbase + j),
-                        offset++));
+            new SinkRecord(
+                TOPIC, PARTITION, Schema.STRING_SCHEMA,
+                key, schema1, createRecord(schema1, ibase + j, fbase + j),
+                offset++
+            )
+        );
       }
     }
     for (int i = 0; i < 6; ++i) {
       for (int j = 0; j < 3; ++j) {
         expectedRecords.add(
-                new SinkRecord(
-                        TOPIC, PARTITION, Schema.STRING_SCHEMA,
-                        key, schema2, createRecord(schema2, ibase + j, fbase + j),
-                        offset++));
+            new SinkRecord(
+                TOPIC, PARTITION, Schema.STRING_SCHEMA,
+                key, schema2, createRecord(schema2, ibase + j, fbase + j),
+                offset++
+            )
+        );
       }
     }
     for (int i = 0; i < 6; ++i) {
       for (int j = 0; j < 3; ++j) {
         expectedRecords.add(
-                new SinkRecord(
-                        TOPIC, PARTITION, Schema.STRING_SCHEMA,
-                        key, schema3, createRecord(schema3, ibase + j, fbase + j),
-                        offset++));
+            new SinkRecord(
+                TOPIC, PARTITION, Schema.STRING_SCHEMA,
+                key, schema3, createRecord(schema3, ibase + j, fbase + j),
+                offset++
+            )
+        );
       }
     }
 
     String dirPrefix1 = generateS3DirectoryPathWithDefaultPartitioner(
-            partitioner, affixType, PARTITION, TOPIC, "null");
+        partitioner, affixType, PARTITION, TOPIC, "null"
+    );
     String dirPrefix2 = generateS3DirectoryPathWithDefaultPartitioner(
-            partitioner, affixType, PARTITION, TOPIC, "record1");
+        partitioner, affixType, PARTITION, TOPIC, "record1"
+    );
     String dirPrefix3 = generateS3DirectoryPathWithDefaultPartitioner(
-            partitioner, affixType, PARTITION, TOPIC, "record2");
+        partitioner, affixType, PARTITION, TOPIC, "record2"
+    );
     List<String> expectedFiles = new ArrayList<>();
-    for(int i = 0; i < 54; i += 9) {
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix2, TOPIC_PARTITION, i+1, extension, ZERO_PAD_FMT));
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix3, TOPIC_PARTITION, i+2, extension, ZERO_PAD_FMT));
+    for (int i = 0; i < 54; i += 9) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(
+          topicsDir, dirPrefix1, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT
+      ));
+      expectedFiles.add(FileUtils.fileKeyToCommit(
+          topicsDir, dirPrefix2, TOPIC_PARTITION, i + 1, extension, ZERO_PAD_FMT
+      ));
+      expectedFiles.add(FileUtils.fileKeyToCommit(
+          topicsDir, dirPrefix3, TOPIC_PARTITION, i + 2, extension, ZERO_PAD_FMT
+      ));
     }
     return Arrays.asList(key, actualData, expectedRecords, expectedFiles);
   }
-  private List<Object> generateTestDataWithoutSchema(Partitioner<?> partitioner, S3SinkConnectorConfig.AffixType affixType) {
+
+  private List<Object> generateTestDataWithoutSchema(
+      Partitioner<?> partitioner, S3SinkConnectorConfig.AffixType affixType
+  ) {
     String key = "key";
     List<String> records = createJsonRecordsWithoutSchema(18);
 
@@ -1629,16 +1658,21 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     int offset = 0;
     for (String record : records) {
       actualData.add(
-          new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, null, record,
-              offset++));
+          new SinkRecord(
+              TOPIC, PARTITION, Schema.STRING_SCHEMA, key, null, record, offset++
+          )
+      );
     }
     List<SinkRecord> expectedRecords = new ArrayList<>(actualData);
 
     String dirPrefix = generateS3DirectoryPathWithDefaultPartitioner(
-            partitioner, affixType, PARTITION, TOPIC, "null");
+        partitioner, affixType, PARTITION, TOPIC, "null"
+    );
     List<String> expectedFiles = new ArrayList<>();
-    for(int i = 0; i < 18; i += 9) {
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
+    for (int i = 0; i < 18; i += 9) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(
+          topicsDir, dirPrefix, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT
+      ));
     }
     return Arrays.asList(key, actualData, expectedRecords, expectedFiles);
   }
@@ -1646,15 +1680,16 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   private String generateS3DirectoryPathWithDefaultPartitioner(
       Partitioner<?> basePartitioner,
       S3SinkConnectorConfig.AffixType affixType, int partition,
-      String topic, String schema_name) {
+      String topic, String schema_name
+  ) {
     if (affixType == S3SinkConnectorConfig.AffixType.SUFFIX) {
       return basePartitioner.generatePartitionedPath(topic,
           "partition=" + partition + parsedConfig.get(DIRECTORY_DELIM_CONFIG)
-          + "schema_name" + "=" + schema_name);
-    } else if(affixType == S3SinkConnectorConfig.AffixType.PREFIX) {
+              + "schema_name" + "=" + schema_name);
+    } else if (affixType == S3SinkConnectorConfig.AffixType.PREFIX) {
       return basePartitioner.generatePartitionedPath(topic,
           "schema_name" + "=" + schema_name
-          + parsedConfig.get(DIRECTORY_DELIM_CONFIG) + "partition=" + partition);
+              + parsedConfig.get(DIRECTORY_DELIM_CONFIG) + "partition=" + partition);
     } else {
       return basePartitioner.generatePartitionedPath(topic,
           "partition=" + partition);
@@ -1679,7 +1714,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
           "\"floatField\":" + String.valueOf(fbase + i) + "," +
           "\"doubleField\":" + String.valueOf((double) (fbase + i)) +
           "}}";
-        records.add(record);
+      records.add(record);
     }
     return records;
   }
