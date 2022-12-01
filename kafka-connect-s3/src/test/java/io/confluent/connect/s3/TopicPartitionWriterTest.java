@@ -637,18 +637,23 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @DataPoints("affixType")
   public static S3SinkConnectorConfig.AffixType[] affixTypeValues(){
     return new S3SinkConnectorConfig.AffixType[]{
-        S3SinkConnectorConfig.AffixType.PREFIX, S3SinkConnectorConfig.AffixType.SUFFIX};
+        S3SinkConnectorConfig.AffixType.PREFIX, S3SinkConnectorConfig.AffixType.SUFFIX
+    };
   }
+
   @DataPoints("testWithSchemaData")
   public static boolean[] testWithSchemaDataValues(){
     return new boolean[]{true, false};
   }
+
   @Theory
   public void testWriteSchemaPartitionerWithAffix(
       @FromDataPoints("affixType")S3SinkConnectorConfig.AffixType affixType,
-      @FromDataPoints("testWithSchemaData") boolean testWithSchemaData) throws Exception {
+      @FromDataPoints("testWithSchemaData") boolean testWithSchemaData
+  ) throws Exception {
     testWriteSchemaPartitionerWithAffix(testWithSchemaData, affixType);
   }
+
 
   @Test
   public void testWriteRecordsAfterScheduleRotationExpiryButNoResetShouldGoToSameFile()
