@@ -1828,8 +1828,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   private void verifyWithJsonOutput(
       List<String> expectedFileKeys, int expectedSize,
-      List<SinkRecord> expectedRecords, CompressionType compressionType)
-          throws IOException {
+      List<SinkRecord> expectedRecords, CompressionType compressionType
+  ) throws IOException {
     List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
     List<String> actualFiles = new ArrayList<>();
     for (S3ObjectSummary summary : summaries) {
@@ -1845,7 +1845,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     for (String fileKey : actualFiles) {
       Collection<Object> actualRecords = readRecordsJson(
           S3_TEST_BUCKET_NAME, fileKey,
-          s3, compressionType);
+          s3, compressionType
+      );
       assertEquals(expectedSize, actualRecords.size());
       for (Object currentRecord : actualRecords) {
         System.out.println(currentRecord);
