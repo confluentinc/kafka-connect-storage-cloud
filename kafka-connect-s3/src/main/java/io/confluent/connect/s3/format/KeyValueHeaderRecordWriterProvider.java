@@ -110,37 +110,21 @@ public class KeyValueHeaderRecordWriterProvider
           );
         }
 
-        if (sinkRecord.value() == null) {
-          validateTombstoneWriteEnabled(sinkRecord);
-        } else {
-          writeValue(sinkRecord);
-        }
-        keyWriter.ifPresent(writer -> writer.write(sinkRecord));
-        headerWriter.ifPresent(writer -> writer.write(sinkRecord));
-      }
-
-      private void writeValue(SinkRecord sinkRecord) {
         if (valueWriter.isPresent()) {
           valueWriter.get().write(sinkRecord);
         } else {
-          throw new ConnectException(
-              String.format("Value writer not configured for SinkRecord: %s."
-                      + " fileName: %s, tombstonePartition: %s",
-                  sinkRecordToLoggableString(sinkRecord), filename,
-                  conf.getTombstoneEncodedPartition())
-          );
+          // Should only encounter tombstones here.
+          if (sinkRecord.value() != null) {
+            throw new ConnectException(
+                String.format("Value writer not configured for SinkRecord: %s."
+                        + " fileName: %s, tombstonePartition: %s",
+                    sinkRecordToLoggableString(sinkRecord), filename,
+                    conf.getTombstoneEncodedPartition())
+            );
+          }
         }
-      }
-
-      private void validateTombstoneWriteEnabled(SinkRecord sinkRecord) {
-        if (conf.isTombstoneWriteEnabled()) {
-          // Skip the record value writing, the corresponding key should be written.
-        } else {
-          throw new ConnectException(
-              String.format("Tombstone write must be enabled to sink null valued SinkRecord: %s",
-                  sinkRecordToLoggableString(sinkRecord))
-          );
-        }
+        keyWriter.ifPresent(writer -> writer.write(sinkRecord));
+        headerWriter.ifPresent(writer -> writer.write(sinkRecord));
       }
 
       @Override

@@ -18,7 +18,6 @@ package io.confluent.connect.s3;
 import com.amazonaws.AmazonClientException;
 import io.confluent.connect.s3.S3SinkConnectorConfig.OutputWriteBehavior;
 import io.confluent.connect.s3.util.TombstoneSupportedPartitioner;
-import io.confluent.connect.s3.S3SinkConnectorConfig.IgnoreOrFailBehavior;
 import io.confluent.connect.s3.util.SchemaPartitioner;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -269,10 +268,12 @@ public class S3SinkTask extends SinkTask {
       } else if (connectorConfig.nullValueBehavior()
           .equalsIgnoreCase(OutputWriteBehavior.WRITE.toString())) {
         log.debug(
-            "Null valued record from topic '{}', partition {} and offset {} was written.",
+            "Null valued record from topic '{}', partition {} and offset {} was written in the"
+                + "partition {}.",
             record.topic(),
             record.kafkaPartition(),
-            record.kafkaOffset()
+            record.kafkaOffset(),
+            connectorConfig.getTombstoneEncodedPartition()
         );
         return false;
       } else {

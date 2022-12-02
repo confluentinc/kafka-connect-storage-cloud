@@ -637,10 +637,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Importance.LOW,
           "How to handle records with a null value (i.e. Kafka tombstone records)."
               + " Valid options are 'ignore', 'fail' and 'write'."
+              + " Ignore would skip the tombstone record and fail would cause the connector task to"
+              + " throw an exception."
               + " In case of the write tombstone option, the connector redirects tombstone records"
               + " to a separate directory mentioned in the config tombstone.encoded.partition."
-              + " The storage of keys is mandatory when this option is selected and the file for"
-              + " values is not generated.",
+              + " The storage of Kafka record keys is mandatory when this option is selected and"
+              + " the file for values is not generated for tombstone records.",
           group,
           ++orderInGroup,
           Width.SHORT,
@@ -654,7 +656,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Type.STRING,
           TOMBSTONE_ENCODED_PARTITION_DEFAULT,
           Importance.LOW,
-          "Output partition to write the tombstone records to.",
+          "Output s3 folder to write the tombstone records to. The configured"
+              + " partitioner would map tombstone records to this output folder.",
           group,
           ++orderInGroup,
           Width.SHORT,

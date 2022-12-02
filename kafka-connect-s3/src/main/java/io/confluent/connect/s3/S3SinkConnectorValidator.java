@@ -134,7 +134,8 @@ public class S3SinkConnectorValidator {
   public void validateTombstoneWriter(boolean isTombstoneWriteEnabled, boolean isStoreKeysEnabled) {
     if (isTombstoneWriteEnabled && !isStoreKeysEnabled) {
       recordErrors(
-          "Writing keys to storage is mandatory when tombstone writing is enabled.",
+          "Writing Kafka record keys to storage is mandatory when tombstone writing is"
+              + " enabled.",
           STORE_KAFKA_KEYS_CONFIG, BEHAVIOR_ON_NULL_VALUES_CONFIG);
     }
   }
