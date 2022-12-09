@@ -108,7 +108,6 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
 
   @Override
   public void refresh() {
-    // STSAssumeRoleSessionCredentialsProvider refreshes credentials every 900s, but refresh()
     // performs a force refresh of credentials
     if (stsCredentialProvider != null) {
       stsCredentialProvider.refresh();
