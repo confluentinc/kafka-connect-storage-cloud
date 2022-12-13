@@ -16,7 +16,7 @@ public class NoopPostCommitHook implements PostCommitHook {
   }
 
   @Override
-  public void put(Set<String> s3ObjectPaths) {
+  public void put(Set<String> s3ObjectPaths, Long baseRecordTimestamp) {
 
   }
 

@@ -635,7 +635,7 @@ public class TopicPartitionWriter {
       }
     }
 
-    postCommitHook.put(new HashSet<>(commitFiles.values()));
+    postCommitHook.put(new HashSet<>(commitFiles.values()), baseRecordTimestamp);
 
     for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
       String encodedPartition = entry.getKey();

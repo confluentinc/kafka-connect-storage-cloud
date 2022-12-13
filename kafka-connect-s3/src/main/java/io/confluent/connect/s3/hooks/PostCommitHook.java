@@ -15,7 +15,7 @@ public interface PostCommitHook {
 
   void init(S3SinkConnectorConfig config);
 
-  void put(Set<String> s3ObjectPath);
+  void put(Set<String> s3ObjectPaths, Long baseRecordTimestamp);
 
   void close();
 }

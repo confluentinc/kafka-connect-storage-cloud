@@ -168,6 +168,9 @@ public class S3OutputStream extends PositionOutputStream {
       if (multiPartUpload == null && buffer.hasRemaining()) {
         ObjectMetadata metadata = newObjectMetadata();
         metadata.setContentLength(buffer.position());
+        if (CompressionType.GZIP == compressionType) {
+          metadata.setContentType("application/gzip");
+        }
         PutObjectRequest req = new PutObjectRequest(bucket, key,
                 new ByteArrayInputStream(buffer.array(), 0, buffer.position()), metadata)
                 .withCannedAcl(cannedAcl);

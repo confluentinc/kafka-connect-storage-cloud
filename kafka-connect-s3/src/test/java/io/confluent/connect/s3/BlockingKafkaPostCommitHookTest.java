@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Set;
 
 import static io.confluent.connect.s3.DataWriterAvroTest.EXTENSION;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 
 public class BlockingKafkaPostCommitHookTest extends DataWriterTestBase<AvroFormat> {
 
@@ -43,8 +45,8 @@ public class BlockingKafkaPostCommitHookTest extends DataWriterTestBase<AvroForm
     task.put(sinkRecords1);
     task.preCommit(null);
 
-    inOrder.verify(kafkaPostCommitSend).put(getExpectedFiles(0, TOPIC_PARTITION));
-    inOrder.verify(kafkaPostCommitSend).put(getExpectedFiles(0, TOPIC_PARTITION2));
+    inOrder.verify(kafkaPostCommitSend).put(getExpectedFiles(0, TOPIC_PARTITION), anyLong());
+    inOrder.verify(kafkaPostCommitSend).put(getExpectedFiles(0, TOPIC_PARTITION2), anyLong());
 
     List<SinkRecord> sinkRecords2 = createRecordsInterleaved(2 * partitions.size(), 3, partitions);
 
@@ -58,8 +60,8 @@ public class BlockingKafkaPostCommitHookTest extends DataWriterTestBase<AvroForm
     task.put(sinkRecords3);
     task.preCommit(null);
 
-    inOrder.verify(kafkaPostCommitSend).put(getExpectedFiles(3, TOPIC_PARTITION));
-    inOrder.verify(kafkaPostCommitSend).put(getExpectedFiles(3, TOPIC_PARTITION2));
+    inOrder.verify(kafkaPostCommitSend).put(getExpectedFiles(3, TOPIC_PARTITION), anyLong());
+    inOrder.verify(kafkaPostCommitSend).put(getExpectedFiles(3, TOPIC_PARTITION2), anyLong());
 
     List<SinkRecord> sinkRecords4 = createRecordsInterleaved(3 * partitions.size(), 6, partitions);
 
@@ -67,7 +69,7 @@ public class BlockingKafkaPostCommitHookTest extends DataWriterTestBase<AvroForm
     task.put(sinkRecords4.subList(0, 3 * partitions.size() - 1));
     task.preCommit(null);
 
-    inOrder.verify(kafkaPostCommitSend).put(getExpectedFiles(6, TOPIC_PARTITION));
+    inOrder.verify(kafkaPostCommitSend).put(getExpectedFiles(6, TOPIC_PARTITION), anyLong());
 
     task.close(partitions);
     task.stop();
