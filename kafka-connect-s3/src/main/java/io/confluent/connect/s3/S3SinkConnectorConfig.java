@@ -123,6 +123,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String AWS_SECRET_ACCESS_KEY_CONFIG = "aws.secret.access.key";
   public static final Password AWS_SECRET_ACCESS_KEY_DEFAULT = new Password(null);
 
+  public static final String AWS_SESSION_TOKEN_CONFIG = "aws.session.token";
+
+  public static final String AWS_SESSION_TOKEN_DEFAULT = "";
+
   public static final String REGION_CONFIG = "s3.region";
   public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
 
@@ -397,6 +401,20 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "AWS Secret Access Key"
+      );
+
+      configDef.define(
+              AWS_SESSION_TOKEN_CONFIG,
+              Type.STRING,
+              AWS_SESSION_TOKEN_DEFAULT,
+              Importance.HIGH,
+              "Test documentation"
+                      + CREDENTIALS_PROVIDER_CLASS_CONFIG
+                      + "``",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "AWS Secret Access Key"
       );
 
       List<String> validSsea = new ArrayList<>(SSEAlgorithm.values().length + 1);
@@ -856,6 +874,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getPassword(AWS_SECRET_ACCESS_KEY_CONFIG);
   }
 
+  public String awsSessionToken() {
+    return getString(AWS_SESSION_TOKEN_CONFIG);
+  }
+
   public int getPartSize() {
     return getInt(PART_SIZE_CONFIG);
   }
@@ -874,6 +896,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
         configs.put(AWS_ACCESS_KEY_ID_CONFIG, awsAccessKeyId());
         configs.put(AWS_SECRET_ACCESS_KEY_CONFIG, awsSecretKeyId().value());
+        configs.put(AWS_SESSION_TOKEN_CONFIG, awsSessionToken());
 
         ((Configurable) provider).configure(configs);
       } else {
