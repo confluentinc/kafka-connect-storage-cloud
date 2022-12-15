@@ -18,7 +18,7 @@ package io.confluent.connect.s3.auth;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.auth.BasicSessionCredentials;
 import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
@@ -31,6 +31,7 @@ import java.util.Map;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SESSION_TOKEN_CONFIG;
 
 /**
  * AWS credentials provider that uses the AWS Security Token Service to assume a Role and create a
@@ -65,7 +66,7 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
   private String roleExternalId;
   private String roleSessionName;
 
-  private BasicAWSCredentials basicCredentials;
+  private BasicSessionCredentials basicCredentials;
 
   @Override
   public void configure(Map<String, ?> configs) {
@@ -75,8 +76,10 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
     roleSessionName = config.getString(ROLE_SESSION_NAME_CONFIG);
     final String accessKeyId = (String) configs.get(AWS_ACCESS_KEY_ID_CONFIG);
     final String secretKey = (String) configs.get(AWS_SECRET_ACCESS_KEY_CONFIG);
-    if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
-      basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
+    final String sessionToken = (String) configs.get(AWS_SESSION_TOKEN_CONFIG);
+    if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)
+            && StringUtils.isNotBlank(sessionToken)) {
+      basicCredentials = new BasicSessionCredentials(accessKeyId, secretKey, sessionToken);
     } else {
       basicCredentials = null;
     }
