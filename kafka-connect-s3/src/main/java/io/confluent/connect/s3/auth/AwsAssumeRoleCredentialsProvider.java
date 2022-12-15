@@ -67,6 +67,10 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
 
   private BasicAWSCredentials basicCredentials;
 
+  // STSAssumeRoleSessionCredentialsProvider takes care of refreshing short-lived
+  // credentials 60 seconds before it's expiry
+  private STSAssumeRoleSessionCredentialsProvider stsCredentialProvider;
+
   @Override
   public void configure(Map<String, ?> configs) {
     AbstractConfig config = new AbstractConfig(STS_CONFIG_DEF, configs);
@@ -77,32 +81,37 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
     final String secretKey = (String) configs.get(AWS_SECRET_ACCESS_KEY_CONFIG);
     if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
       basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
+      stsCredentialProvider = new STSAssumeRoleSessionCredentialsProvider
+          .Builder(roleArn, roleSessionName)
+          .withStsClient(AWSSecurityTokenServiceClientBuilder
+              .standard()
+              .withCredentials(new AWSStaticCredentialsProvider(basicCredentials)).build()
+          )
+          .withExternalId(roleExternalId)
+          .build();
     } else {
       basicCredentials = null;
+      stsCredentialProvider = new STSAssumeRoleSessionCredentialsProvider
+          .Builder(roleArn, roleSessionName)
+          // default sts client will internally use default credentials chain provider
+          // https://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/credentials.html#credentials-default
+          .withStsClient(AWSSecurityTokenServiceClientBuilder.defaultClient())
+          .withExternalId(roleExternalId)
+          .build();
     }
   }
 
   @Override
   public AWSCredentials getCredentials() {
-    if (basicCredentials != null) {
-      return new STSAssumeRoleSessionCredentialsProvider.Builder(roleArn, roleSessionName)
-              .withStsClient(AWSSecurityTokenServiceClientBuilder.standard()
-                 .withCredentials(new AWSStaticCredentialsProvider(basicCredentials)).build())
-              .withExternalId(roleExternalId)
-              .build()
-              .getCredentials();
-    } else {
-      return new STSAssumeRoleSessionCredentialsProvider.Builder(roleArn, roleSessionName)
-            .withStsClient(AWSSecurityTokenServiceClientBuilder.defaultClient())
-            .withExternalId(roleExternalId)
-            .build()
-            .getCredentials();
-    }
+    return stsCredentialProvider.getCredentials();
   }
 
   @Override
   public void refresh() {
-    // Nothing to do really, since we acquire a new session every getCredentials() call.
+    // performs a force refresh of credentials
+    if (stsCredentialProvider != null) {
+      stsCredentialProvider.refresh();
+    }
   }
 
 }
