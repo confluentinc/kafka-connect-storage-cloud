@@ -35,10 +35,11 @@ import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
@@ -91,6 +92,7 @@ public class TopicPartitionWriter {
   private final Map<String, Long> startOffsets;
   private final Map<String, Long> endOffsets;
   private final Map<String, Long> recordCounts;
+  private final Map<String, Long> encodedPartitionToEarliestRecordTimestamp;
   private long timeoutMs;
   private long failureTime;
   private final StorageSchemaCompatibility compatibility;
@@ -182,6 +184,7 @@ public class TopicPartitionWriter {
     currentSchemas = new HashMap<>();
     startOffsets = new HashMap<>();
     endOffsets = new HashMap<>();
+    encodedPartitionToEarliestRecordTimestamp = new HashMap<>();
     recordCounts = new HashMap<>();
     state = State.WRITE_STARTED;
     failureTime = -1L;
@@ -619,7 +622,25 @@ public class TopicPartitionWriter {
 
     recordCounts.put(currentEncodedPartition, recordCounts.get(currentEncodedPartition) + 1);
     endOffsets.put(currentEncodedPartition, currentOffset);
+    updateBaseRecordTimestampOfEncodedPartition(record, encodedPartition);
     return true;
+  }
+
+  private void updateBaseRecordTimestampOfEncodedPartition(SinkRecord record,
+                                                           String encodedPartition) {
+    if (timestampExtractor != null) {
+      Long timestamp = encodedPartitionToEarliestRecordTimestamp.get(encodedPartition);
+      if (timestamp == null) {
+        encodedPartitionToEarliestRecordTimestamp.put(encodedPartition,
+                timestampExtractor.extract(record));
+        return;
+      }
+      Long recordTimestamp = timestampExtractor.extract(record);
+      if (recordTimestamp < timestamp) {
+        encodedPartitionToEarliestRecordTimestamp.put(encodedPartition,
+                timestampExtractor.extract(record));
+      }
+    }
   }
 
   private void commitFiles() {
@@ -635,13 +656,20 @@ public class TopicPartitionWriter {
       }
     }
 
-    postCommitHook.put(new HashSet<>(commitFiles.values()), baseRecordTimestamp);
+    List<String> s3ObjectPaths = new ArrayList<>();
+    List<Long> s3ObjectToBaseRecordPath = new ArrayList<>();
+    for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
+      s3ObjectPaths.add(entry.getValue());
+      s3ObjectToBaseRecordPath.add(encodedPartitionToEarliestRecordTimestamp.get(entry.getKey()));
+    }
+    postCommitHook.put(s3ObjectPaths, s3ObjectToBaseRecordPath);
 
     for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
       String encodedPartition = entry.getKey();
       startOffsets.remove(encodedPartition);
       endOffsets.remove(encodedPartition);
       recordCounts.remove(encodedPartition);
+      encodedPartitionToEarliestRecordTimestamp.remove(encodedPartition);
       log.debug("Committed {} for {}", entry.getValue(), tp);
     }
 

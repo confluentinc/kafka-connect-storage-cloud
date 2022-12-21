@@ -31,23 +31,19 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.IntStream;
 
 public class BlockingKafkaPostCommitHook implements PostCommitHook {
 
   private static final Logger log = LoggerFactory.getLogger(BlockingKafkaPostCommitHook.class);
   private static final DateTimeFormatter timeFormatter =
-          DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:00");
+          DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
   private Pattern pattern;
-
-  private long partitionDurationMinutes;
   private String kafkaTopic;
   private KafkaProducer<String, String> kafkaProducer;
 
@@ -67,34 +63,28 @@ public class BlockingKafkaPostCommitHook implements PostCommitHook {
     String topicsDir = config.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     pattern = Pattern.compile(topicsDir + "/(\\d+)/");
 
-    long rotateScheduleMS = config.getLong(
-            S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG);
-    partitionDurationMinutes = TimeUnit.MILLISECONDS.toMinutes(rotateScheduleMS);
-    if (partitionDurationMinutes < 1) {
-      throw new IllegalArgumentException("rotate.schedule.interval.ms must be bigger than 1"
-              + " minute to use this hook");
-    }
     kafkaTopic = config.getPostCommitKafkaTopic();
     kafkaProducer = newKafkaPostCommitProducer(config);
     log.info("BlockingKafkaPostCommitHook initialized successfully");
   }
 
   @Override
-  public void put(Set<String> s3ObjectPaths, Long baseRecordTimestamp) {
+  public void put(List<String> s3ObjectPaths, List<Long> s3ObjectToBaseRecordTimestamp) {
     try {
       kafkaProducer.beginTransaction();
       log.info("Transaction began");
 
-      for (String s3ObjectPath : s3ObjectPaths) {
+      IntStream.range(0, s3ObjectPaths.size()).forEach(i -> {
         List<Header> headers = new ArrayList<>();
+        String s3ObjectPath = s3ObjectPaths.get(i);
         headers.add(new RecordHeader("accountId", getAccountId(s3ObjectPath).getBytes()));
-        headers.add(new RecordHeader("fileTimestamp",
-                roundTimeToPartitonTime(baseRecordTimestamp).getBytes()));
+        headers.add(new RecordHeader("fileTimestamp", getLocalDateTime(s3ObjectPath,
+                s3ObjectToBaseRecordTimestamp.get(i)).getBytes()));
         headers.add(new RecordHeader("pathHash",
                 getPathHash(s3ObjectPath).getBytes()));
         kafkaProducer.send(new ProducerRecord<>(kafkaTopic,
                 null, null, null, s3ObjectPath, headers));
-      }
+      });
 
       kafkaProducer.commitTransaction();
       log.info("Transaction committed");
@@ -109,12 +99,17 @@ public class BlockingKafkaPostCommitHook implements PostCommitHook {
     }
   }
 
-  private String roundTimeToPartitonTime(Long baseRecordTimestamp) {
+  private String getLocalDateTime(String s3ObjectPath, Long baseRecordTimestamp) {
+    if (baseRecordTimestamp == null) {
+      return null;
+    }
     LocalDateTime localDateTime = LocalDateTime.ofInstant(
             Instant.ofEpochMilli(baseRecordTimestamp), ZoneOffset.UTC);
-    LocalDateTime roundedDateTime = localDateTime.truncatedTo(ChronoUnit.HOURS).plusMinutes(
-            (localDateTime.getMinute() / partitionDurationMinutes) * partitionDurationMinutes);
-    return roundedDateTime.format(timeFormatter);
+
+    String formattedTimestamp = localDateTime.format(timeFormatter);
+    log.debug("Object: {} has base record timestamp of: {}",
+            s3ObjectPath, formattedTimestamp);
+    return formattedTimestamp;
   }
 
   private String getPathHash(String s3ObjectPath) {

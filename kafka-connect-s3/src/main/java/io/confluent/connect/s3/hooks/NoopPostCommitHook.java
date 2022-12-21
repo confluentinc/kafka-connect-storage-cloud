@@ -6,7 +6,7 @@ package io.confluent.connect.s3.hooks;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 
-import java.util.Set;
+import java.util.List;
 
 public class NoopPostCommitHook implements PostCommitHook {
 
@@ -16,7 +16,7 @@ public class NoopPostCommitHook implements PostCommitHook {
   }
 
   @Override
-  public void put(Set<String> s3ObjectPaths, Long baseRecordTimestamp) {
+  public void put(List<String> s3ObjectPaths, List<Long> s3ObjectToBaseRecordTimestamp) {
 
   }
 
