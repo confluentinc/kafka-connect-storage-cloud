@@ -21,9 +21,6 @@ import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.format.SchemaFileReader;
 
-import java.util.HashMap;
-import java.util.Map;
-
 public class CsvFormat implements Format<S3SinkConnectorConfig, String> {
 
   private final S3Storage storage;
@@ -32,9 +29,9 @@ public class CsvFormat implements Format<S3SinkConnectorConfig, String> {
   public CsvFormat(S3Storage storage) {
     this.storage = storage;
     this.converter = new CsvConverter();
-    Map<String, Object> converterConfig = new HashMap<>();
-    this.converter.configure(storage.conf().originals() != null
-           ? storage.conf().originals() : converterConfig, false);
+    if (storage != null) {
+      this.converter.configure(CsvConverterConfig.csvConverterConfig(storage.conf()));
+    }
   }
 
   @Override

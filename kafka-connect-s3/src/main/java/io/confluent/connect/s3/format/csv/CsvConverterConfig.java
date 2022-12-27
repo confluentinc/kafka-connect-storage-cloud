@@ -15,44 +15,53 @@
 
 package io.confluent.connect.s3.format.csv;
 
+import io.confluent.connect.s3.S3SinkConnectorConfig;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 
+import java.util.HashMap;
 import java.util.Map;
 
 public class CsvConverterConfig extends AbstractConfig {
 
-  private static final ConfigDef CONFIG;
+  static CsvConverterConfig csvConverterConfig(S3SinkConnectorConfig config) {
+    Map<String, Object> props = new HashMap();
+    props.put("csv.field.sep", config.get("csv.field.sep"));
+    props.put("csv.line.sep", config.get("csv.line.sep"));
+    props.put("csv.fields.list", config.get("csv.fields.list"));
+    return new CsvConverterConfig(props);
+  }
 
-  static {
-    CONFIG = new ConfigDef();
-    CONFIG.define("csv.field.sep",
+  private static ConfigDef baseConfigDef() {
+    ConfigDef configDef = new ConfigDef();
+    configDef.define("csv.field.sep",
             ConfigDef.Type.STRING,
             ",",
             ConfigDef.Importance.HIGH,
             "CSV field separator character(s)"
     );
-    CONFIG.define("csv.line.sep",
+    configDef.define("csv.line.sep",
             ConfigDef.Type.STRING,
             "\n",
             ConfigDef.Importance.HIGH,
             "CSV line separator character(s)"
     );
-    CONFIG.define("csv.fields.list",
+    configDef.define("csv.fields.list",
             ConfigDef.Type.LIST,
             "",
             ConfigDef.Importance.MEDIUM,
             "Defines header and order of fields. If the field is not mentioned "
-                + "it will be skipped."
+                    + "it will be skipped."
     );
+    return configDef;
   }
 
   public CsvConverterConfig(Map<String, ?> props) {
-    super(CONFIG, props);
+    super(baseConfigDef(), props);
   }
 
   public static ConfigDef configDef() {
-    return CONFIG;
+    return baseConfigDef();
   }
 
 }

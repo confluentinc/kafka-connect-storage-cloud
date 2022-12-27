@@ -1305,28 +1305,16 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       IgnoreOrFailBehavior[] behaviors = values();
       String[] result = new String[behaviors.length];
 
-      for (int i = 0; i < behaviors.length; i++) {
-        result[i] = behaviors[i].toString();
+      // Overridden here so that ConfigDef.toEnrichedRst shows possible values correctly
+      @Override
+      public String toString() {
+        return validator.toString();
       }
 
-      return result;
-    }
-
-    @Override
-    public String toString() {
-      return name().toLowerCase(Locale.ROOT);
-    }
-  }
-
-  public enum OutputWriteBehavior {
-    IGNORE,
-    FAIL,
-    WRITE;
-
-    public static final ConfigDef.Validator VALIDATOR = new EnumValidator(names());
+    };
 
     public static String[] names() {
-      OutputWriteBehavior[] behaviors = values();
+      BehaviorOnNullValues[] behaviors = values();
       String[] result = new String[behaviors.length];
 
       for (int i = 0; i < behaviors.length; i++) {

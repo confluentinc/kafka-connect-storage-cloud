@@ -53,11 +53,16 @@ public class CsvConverter implements Converter, HeaderConverter {
     return CONFIG_DEF;
   }
 
-  public void configure(Map<String, ?> configs) {
-    this.config = new CsvConverterConfig(configs);
+  public void configure(CsvConverterConfig config) {
+    this.config = config;
     this.fieldSeparator = config.getString("csv.field.sep");
     this.fieldsList = config.getList("csv.fields.list");
     this.fixedHeader = prepareConfiguredHeader();
+  }
+
+  public void configure(Map<String, ?> configs) {
+    this.config = new CsvConverterConfig(configs);
+    configure(this.config);
   }
 
   public void configure(Map<String, ?> configs, boolean isKey) {
