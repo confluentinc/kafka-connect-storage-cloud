@@ -32,8 +32,7 @@ public class CsvConverterConfig extends AbstractConfig {
     return new CsvConverterConfig(props);
   }
 
-  private static ConfigDef baseConfigDef() {
-    ConfigDef configDef = new ConfigDef();
+  public static ConfigDef addConfig(ConfigDef configDef) {
     configDef.define("csv.field.sep",
             ConfigDef.Type.STRING,
             ",",
@@ -53,6 +52,12 @@ public class CsvConverterConfig extends AbstractConfig {
             "Defines header and order of fields. If the field is not mentioned "
                     + "it will be skipped."
     );
+    return configDef;
+  }
+
+  private static ConfigDef baseConfigDef() {
+    ConfigDef configDef = new ConfigDef();
+    addConfig(configDef);
     return configDef;
   }
 

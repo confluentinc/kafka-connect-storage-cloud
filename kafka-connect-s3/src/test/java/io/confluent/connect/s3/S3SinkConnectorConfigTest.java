@@ -17,6 +17,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.google.common.collect.Lists;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.csv.CsvFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
@@ -329,16 +330,6 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     properties.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "false");
     connectorConfig = new S3SinkConnectorConfig(properties);
     assertEquals(false, connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG));
-
-    properties.put(S3SinkConnectorConfig.S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG, "ignore");
-    connectorConfig = new S3SinkConnectorConfig(properties);
-    assertEquals("ignore",
-            connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG));
-
-    properties.put(S3SinkConnectorConfig.S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG, "fail");
-    connectorConfig = new S3SinkConnectorConfig(properties);
-    assertEquals("fail",
-            connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG));
   }
 
   private void assertDefaultPartitionerVisibility(List<ConfigValue> values) {

@@ -301,6 +301,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         latestOrderInGroup
     );
 
+    CsvConverterConfig.addConfig(configDef);
+
     {
       final String group = "S3";
       int orderInGroup = 0;
@@ -1278,7 +1280,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     addAllConfigKeys(visible, newConfigDef(), skip);
     addAllConfigKeys(visible, StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER), skip);
     addAllConfigKeys(visible, PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER), skip);
-    addAllConfigKeys(visible, CsvConverterConfig.configDef(), skip);
 
     return visible;
   }
