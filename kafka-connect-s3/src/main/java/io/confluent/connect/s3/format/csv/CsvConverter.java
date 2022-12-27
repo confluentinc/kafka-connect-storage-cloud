@@ -15,7 +15,7 @@
 
 package io.confluent.connect.s3.format.csv;
 
-import org.apache.commons.lang.StringUtils;
+import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
