@@ -16,10 +16,24 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.SdkClientException;
+import io.confluent.common.utils.SystemTime;
+import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.RetryUtil;
 import io.confluent.connect.s3.util.TombstoneTimestampExtractor;
 import io.confluent.connect.storage.errors.PartitionException;
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
+import io.confluent.connect.storage.common.StorageCommonConfig;
+import io.confluent.connect.storage.common.util.StringUtils;
+import io.confluent.connect.storage.format.RecordWriter;
+import io.confluent.connect.storage.format.RecordWriterProvider;
+import io.confluent.connect.storage.partitioner.Partitioner;
+import io.confluent.connect.storage.partitioner.PartitionerConfig;
+import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
+import io.confluent.connect.storage.partitioner.TimestampExtractor;
+import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
+import io.confluent.connect.storage.util.DateTimeUtils;
+import org.apache.directory.api.util.Strings;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -34,11 +48,14 @@ import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Comparator;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.List;
 import java.util.Optional;
+import java.util.Comparator;
 import java.util.Queue;
 
 import io.confluent.common.utils.SystemTime;
@@ -101,6 +118,8 @@ public class TopicPartitionWriter {
   private static final Time SYSTEM_TIME = new SystemTime();
   private ErrantRecordReporter reporter;
   private final String filenamePattern;
+  private final DateTimeFormatter filenameDateTimeFormatter;
+  private final Map<String, String> mappedNames = new HashMap<>();
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
@@ -177,13 +196,30 @@ public class TopicPartitionWriter {
     dirDelim = connectorConfig.getString(StorageCommonConfig.DIRECTORY_DELIM_CONFIG);
     fileDelim = connectorConfig.getString(StorageCommonConfig.FILE_DELIM_CONFIG);
     filenamePattern = connectorConfig.getString(S3SinkConnectorConfig.S3_FILENAME_PATTERN_CONFIG);
+    addMappedNames(connectorConfig.getList(S3SinkConnectorConfig.SCHEMA_MAPPING_CONFIG));
     extension = writerProvider.getExtension();
     zeroPadOffsetFormat = "%0"
         + connectorConfig.getInt(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG)
         + "d";
+    if (Strings.isNotEmpty(connectorConfig.getString(
+            S3SinkConnectorConfig.S3_FILENAME_DATE_FORMAT_CONFIG))) {
+      filenameDateTimeFormatter = DateTimeFormatter.ofPattern(
+              connectorConfig.getString(S3SinkConnectorConfig.S3_FILENAME_DATE_FORMAT_CONFIG));
+    } else {
+      filenameDateTimeFormatter = DateTimeFormatter.ISO_INSTANT;
+    }
 
     // Initialize scheduled rotation timer if applicable
     setNextScheduledRotation();
+  }
+
+  private void addMappedNames(List<String> mappings) {
+    for (String p : mappings) {
+      String[] pair = p.split(":");
+      if (pair.length == 2) {
+        mappedNames.put(pair[0], pair[1]);
+      }
+    }
   }
 
   private enum State {
@@ -504,7 +540,8 @@ public class TopicPartitionWriter {
 
   private RecordWriter newWriter(SinkRecord record, String encodedPartition)
       throws ConnectException {
-    String commitFilename = getCommitFilename(encodedPartition);
+    String commitFilename =
+            replaceSchemaName(record.valueSchema(), getCommitFilename(encodedPartition));
     log.debug(
         "Creating new writer encodedPartition='{}' filename='{}'",
         encodedPartition,
@@ -515,6 +552,15 @@ public class TopicPartitionWriter {
     return writer;
   }
 
+  private String replaceSchemaName(Schema schema, String fileName) {
+    if (schema != null && schema.name() != null) {
+      return fileName.replaceAll("__SCHEMA_NAME__",
+              mappedNames.getOrDefault(schema.name(), schema.name()));
+    } else {
+      return fileName;
+    }
+  }
+
   private String getCommitFilename(String encodedPartition) {
     String commitFile;
     if (commitFiles.containsKey(encodedPartition)) {
@@ -523,7 +569,7 @@ public class TopicPartitionWriter {
       long startOffset = startOffsets.get(encodedPartition);
       String prefix = getDirectoryPrefix(encodedPartition);
       if (this.filenamePattern != null && !this.filenamePattern.isEmpty()) {
-        commitFile = patternBasedFileKeyToCommit(topicsDir, startOffset);
+        commitFile = patternBasedFileKeyToCommit(prefix, startOffset);
       } else {
         commitFile = fileKeyToCommit(prefix, startOffset);
       }
@@ -554,6 +600,7 @@ public class TopicPartitionWriter {
             .replaceAll("%t", tp.topic())
             .replaceAll("%p", String.valueOf(tp.partition()))
             .replaceAll("%o", String.format(zeroPadOffsetFormat, startOffset))
+            .replaceAll("%n", filenameDateTimeFormatter.format(LocalDateTime.now()))
             + extension;
     return fileKey(topicsDir, dirPrefix, name);
   }

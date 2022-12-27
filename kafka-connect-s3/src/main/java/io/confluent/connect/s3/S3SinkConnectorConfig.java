@@ -17,20 +17,16 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
-import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
@@ -164,8 +160,19 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String BEHAVIOR_ON_NULL_VALUES_CONFIG = "behavior.on.null.values";
   public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = OutputWriteBehavior.FAIL.toString();
 
-  public static final String S3_FILENAME_PATTERN_CONFIG = "s3.path.filename.format";
+  public static final String S3_FILENAME_PATTERN_CONFIG = "s3.path.filename.pattern";
   public static final String S3_FILENAME_PATTERN_DEFAULT = "";
+
+  public static final String S3_FILENAME_DATE_FORMAT_CONFIG = "s3.path.filename.date.format";
+  public static final String S3_FILENAME_DATE_FORMAT_DEFAULT = "YYYYMMDD_HHmmSS";
+
+
+  public static final String SCHEMA_MAPPING_CONFIG = "s3.schema.name.mapping";
+  public static final String SCHEMA_MAPPING_DOC =
+          "Mapping of schema name to value for $SCHEMA_NAME in path. Name and mapped name is "
+            + "delimited by \":\". Multiple entries can be specified delimited by comma (',').";
+  public static final String SCHEMA_MAPPING_DEFAULT = "";
+  public static final String SCHEMA_MAPPING_DISPLAY = "Schema name mapping";
 
   /**
    * Maximum back-off time when retrying failed requests.
@@ -213,6 +220,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       new GenericRecommender();
 
   private final String name;
+
+  private final StorageCommonConfig commonConfig;
+  private final PartitionerConfig partitionerConfig;
 
   private final Map<String, ComposableConfig> propertyToConfig = new HashMap<>();
   private final Set<AbstractConfig> allConfigs = new HashSet<>();
@@ -640,13 +650,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           OutputWriteBehavior.VALIDATOR,
           Importance.LOW,
           "How to handle records with a null value (i.e. Kafka tombstone records)."
-              + " Valid options are 'ignore', 'fail' and 'write'."
-              + " Ignore would skip the tombstone record and fail would cause the connector task to"
-              + " throw an exception."
-              + " In case of the write tombstone option, the connector redirects tombstone records"
-              + " to a separate directory mentioned in the config tombstone.encoded.partition."
-              + " The storage of Kafka record keys is mandatory when this option is selected and"
-              + " the file for values is not generated for tombstone records.",
+              + " Valid options are 'ignore' and 'fail'.",
           group,
           ++orderInGroup,
           Width.SHORT,
@@ -790,6 +794,26 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.LONG,
           "Elastic buffer initial capacity"
       );
+
+      configDef.define(SCHEMA_MAPPING_CONFIG,
+              Type.LIST,
+              SCHEMA_MAPPING_DEFAULT,
+              Importance.LOW,
+              SCHEMA_MAPPING_DOC,
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              SCHEMA_MAPPING_DISPLAY);
+
+      configDef.define(S3_FILENAME_DATE_FORMAT_CONFIG,
+              Type.STRING,
+              S3_FILENAME_DATE_FORMAT_DEFAULT,
+              Importance.LOW,
+              "Specifies filename date format",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "Filename date format");
 
     }
     return configDef;
