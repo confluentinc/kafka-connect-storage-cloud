@@ -64,7 +64,7 @@ public class CsvRecordWriterProvider extends RecordViewSetter
 
       @Override
       public void write(SinkRecord record) {
-        log.trace("Sink record with view {}: {}", recordView, record);
+        log.warn("Sink record with view {}: {}", recordView, record);
         try {
           Object value = recordView.getView(record, false);
           // only Struct is supported. Anything else ignored
@@ -75,6 +75,7 @@ public class CsvRecordWriterProvider extends RecordViewSetter
                     value
             );
             if (!headerWritten.getAndSet(true)) {
+              log.warn("Writing header:" + new String(converter.getHeader()));
               // TODO: make this configurable
               s3outWrapper.write(converter.getHeader());
               s3outWrapper.write(LINE_SEPARATOR_BYTES);

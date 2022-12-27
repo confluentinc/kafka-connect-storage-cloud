@@ -721,6 +721,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * @param filePath the path of the downloaded parquet file
    * @return the rows of the file as JsonNodes
    */
+  @SuppressWarnings("deprecation")
   private static List<JsonNode> getContentsFromParquet(String filePath) {
     try {
       ParquetReader<SimpleRecord> reader = ParquetReader

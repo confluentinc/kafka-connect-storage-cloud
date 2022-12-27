@@ -31,6 +31,7 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.codehaus.plexus.util.StringUtils;
 import org.junit.After;
 import org.junit.Test;
+import org.powermock.api.mockito.PowerMockito;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -49,21 +50,27 @@ import io.confluent.common.utils.MockTime;
 import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.format.parquet.ParquetUtils;
+import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
+import io.confluent.connect.storage.partitioner.DefaultPartitioner;
+import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.kafka.serializers.NonRecordContainer;
 import org.testcontainers.shaded.com.google.common.collect.ImmutableList;
 
 import static org.apache.kafka.common.utils.Time.SYSTEM;
+import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
 
-  private static final String EXTENSION = ".snappy.parquet";
+  private static final String ZERO_PAD_FMT = "%010d";
 
   public DataWriterParquetTest() {
     super(ParquetFormat.class);
@@ -80,6 +87,21 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
   @Override
   protected String getFileExtension() {
     return EXTENSION;
+  }
+
+  public void setUp() throws Exception {
+    super.setUp();
+
+    s3 = PowerMockito.spy(newS3Client(connectorConfig));
+
+    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+
+    partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+    format = new ParquetFormat(storage);
+
+    s3.createBucket(S3_TEST_BUCKET_NAME);
+    assertTrue(s3.doesBucketExist(S3_TEST_BUCKET_NAME));
   }
 
   @After
@@ -908,6 +930,27 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     }
   }
 
+  protected void verifyFileListing(long[] validOffsets, Set<TopicPartition> partitions, String extension) {
+    List<String> expectedFiles = new ArrayList<>();
+    for (TopicPartition tp : partitions) {
+      expectedFiles.addAll(getExpectedFiles(validOffsets, tp, extension));
+    }
+    verifyFileListing(expectedFiles);
+  }
+
+  protected void verifyFileListing(List<String> expectedFiles) {
+    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<String> actualFiles = new ArrayList<>();
+    for (S3ObjectSummary summary : summaries) {
+      String fileKey = summary.getKey();
+      actualFiles.add(fileKey);
+    }
+
+    Collections.sort(actualFiles);
+    Collections.sort(expectedFiles);
+    assertThat(actualFiles, is(expectedFiles));
+  }
+
   protected void verifyContents(List<SinkRecord> expectedRecords, int startIndex, Collection<Object> records) {
     Schema expectedSchema = null;
     for (Object avroRecord : records) {
@@ -938,6 +981,20 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
   protected String getDirectory(String topic, int partition) {
     String encodedPartition = "partition=" + partition;
     return partitioner.generatePartitionedPath(topic, encodedPartition);
+  }
+
+  protected List<String> getExpectedFiles(long[] validOffsets, TopicPartition tp) {
+    return getExpectedFiles(validOffsets, tp, this.extension);
+  }
+
+  protected List<String> getExpectedFiles(long[] validOffsets, TopicPartition tp, String extension) {
+    List<String> expectedFiles = new ArrayList<>();
+    for (int i = 1; i < validOffsets.length; ++i) {
+      long startOffset = validOffsets[i - 1];
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset,
+              extension, ZERO_PAD_FMT));
+    }
+    return expectedFiles;
   }
 
   protected void verifyOffsets(Map<TopicPartition, OffsetAndMetadata> actualOffsets, Long[] validOffsets,

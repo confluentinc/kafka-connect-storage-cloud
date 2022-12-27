@@ -17,24 +17,27 @@ package io.confluent.connect.s3.format.csv;
 
 import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.connect.data.Field;
+import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 
 import java.nio.charset.Charset;
+import java.util.Date;
 import java.util.Map;
 import java.util.regex.Pattern;
 
 public class CsvConverter implements Converter, HeaderConverter {
 
   private static final ConfigDef CONFIG_DEF = CsvConverterConfig.configDef();
-  private static final Pattern CASE_CHANGE_PATTERN = Pattern.compile("([a-z])(A-Z)");
+  private static final Pattern CASE_CHANGE_PATTERN = Pattern.compile("([a-z])([A-Z])");
   private CsvConverterConfig config;
-  private String fieldSeparator;
+  private String fieldSeparator = ",";
   private Schema lastSchema;
 
   public CsvConverter() {
@@ -58,6 +61,9 @@ public class CsvConverter implements Converter, HeaderConverter {
       throw new DataException("CSVConverter requires schema to be set");
     } else {
       // TODO: allow to specify charset if needed.
+      if (schema.type() == Schema.Type.STRUCT) {
+        this.lastSchema = schema;
+      }
       return toCsvData(schema,
               value == null ? schema.defaultValue() : value).getBytes(Charset.defaultCharset());
     }
@@ -67,7 +73,6 @@ public class CsvConverter implements Converter, HeaderConverter {
     if (lastSchema == null) {
       return null;
     }
-    // TODO: allow to specify charset if needed in future.
     return schemaToHeader("", lastSchema).getBytes(Charset.defaultCharset());
   }
 
@@ -79,48 +84,72 @@ public class CsvConverter implements Converter, HeaderConverter {
           if (builder.length() > 0) {
             builder.append(this.fieldSeparator);
           }
-          builder.append('"');
-          builder.append(schemaToHeader(toSnakeCase(f.name()), f.schema()));
-          builder.append('"');
+          if (StringUtils.isBlank(prefix)) {
+            builder.append(schemaToHeader(toSnakeCase(f.name()), f.schema()));
+          } else {
+            builder.append(schemaToHeader(toSnakeCase(prefix + "_" + f.name()), f.schema()));
+          }
         }
         return builder.toString();
       default:
-        if (StringUtils.isBlank(prefix)) {
-          return toSnakeCase(schema.name());
+        if (prefix.isEmpty()) {
+          return prefix;
         } else {
-          return prefix + "_" + schema.name();
+          return "\"" + prefix + "\"";
         }
     }
   }
 
 
   private String toCsvData(Schema schema, Object value) {
-    this.lastSchema = schema;
-    if (schema == null) {
+    if (schema == null || value == null) {
       return "";
     }
     switch (schema.type()) {
       case STRUCT:
-        Struct struct = (Struct) value;
-        if (!struct.schema().equals(schema)) {
-          throw new DataException("Mismatching schema.");
-        }
-        StringBuilder buf = new StringBuilder();
-        for (Field f : struct.schema().fields()) {
-          if (buf.length() > 0) {
-            buf.append(this.fieldSeparator);
-          }
-          buf.append(toCsvData(f.schema(), struct.get(f)));
-        }
-        return buf.toString();
+        return structToString(schema, value);
       case MAP:
         throw new DataException("Map is not supported");
+      case INT32:
+      case INT64:
+        if (value != null) {
+          return intToString(schema, value);
+        } else {
+          return "";
+        }
       default:
         if (value != null) {
           return addQuotes(value);
         } else {
           return "";
         }
+    }
+  }
+
+  private String structToString(Schema schema, Object value) {
+    Struct struct = (Struct) value;
+    if (struct.schema() == null || !struct.schema().equals(schema)) {
+      throw new DataException("Missing or mismatching schema.");
+    }
+    StringBuilder buf = new StringBuilder();
+    for (Field f : struct.schema().fields()) {
+      if (buf.length() > 0) {
+        buf.append(this.fieldSeparator);
+      }
+      buf.append(toCsvData(f.schema(), struct.get(f)));
+    }
+    return buf.toString();
+  }
+
+  private String intToString(Schema schema, Object value) {
+    if (schema.name() != null && (
+            schema.name().equals(Timestamp.LOGICAL_NAME)
+            || schema.name().equals(Time.LOGICAL_NAME)
+            || schema.name().equals(org.apache.kafka.connect.data.Date.LOGICAL_NAME)
+        )) {
+      return addQuotes(((Date)value).toInstant());
+    } else {
+      return addQuotes(value);
     }
   }
 

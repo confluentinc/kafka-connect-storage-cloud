@@ -136,6 +136,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     return props;
   }
 
+  @SuppressWarnings("deprecation")
   public void setUp() throws Exception {
     super.setUp();
 
