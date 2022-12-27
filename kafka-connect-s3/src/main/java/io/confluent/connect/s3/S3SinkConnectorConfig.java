@@ -22,6 +22,7 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
+import io.confluent.connect.s3.format.csv.CsvConverterConfig;
 import io.confluent.connect.s3.format.csv.CsvFormat;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -1277,6 +1278,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     addAllConfigKeys(visible, newConfigDef(), skip);
     addAllConfigKeys(visible, StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER), skip);
     addAllConfigKeys(visible, PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER), skip);
+    addAllConfigKeys(visible, CsvConverterConfig.configDef(), skip);
 
     return visible;
   }
