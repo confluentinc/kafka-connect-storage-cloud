@@ -167,7 +167,7 @@
                 </exclusion>
                 <exclusion>
                     <groupId>org.apache.htrace</groupId>
-                    <artifactId>htrace-core4</artifactId>
+                    <artifactId>htrace-core</artifactId>
                 </exclusion>
                 <exclusion>
                     <groupId>org.mortbay.jetty</groupId>
