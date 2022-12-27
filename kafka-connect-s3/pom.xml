@@ -323,6 +323,7 @@
                             <descriptors>
                                 <descriptor>src/assembly/standalone.xml</descriptor>
                             </descriptors>
+                            <attach>true</attach>
                         </configuration>
                     </plugin>
                 </plugins>
