@@ -17,6 +17,8 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
@@ -24,6 +26,7 @@ import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
 import io.confluent.connect.s3.format.csv.CsvConverterConfig;
 import io.confluent.connect.s3.format.csv.CsvFormat;
+import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -222,9 +225,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       new GenericRecommender();
 
   private final String name;
-
-  private final StorageCommonConfig commonConfig;
-  private final PartitionerConfig partitionerConfig;
 
   private final Map<String, ComposableConfig> propertyToConfig = new HashMap<>();
   private final Set<AbstractConfig> allConfigs = new HashSet<>();
@@ -1296,26 +1296,15 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getString(BEHAVIOR_ON_NULL_VALUES_CONFIG);
   }
 
-  public enum IgnoreOrFailBehavior {
+  public enum OutputWriteBehavior {
     IGNORE,
-    FAIL;
+    FAIL,
+    WRITE;
 
     public static final ConfigDef.Validator VALIDATOR = new EnumValidator(names());
 
     public static String[] names() {
-      IgnoreOrFailBehavior[] behaviors = values();
-      String[] result = new String[behaviors.length];
-
-      // Overridden here so that ConfigDef.toEnrichedRst shows possible values correctly
-      @Override
-      public String toString() {
-        return validator.toString();
-      }
-
-    };
-
-    public static String[] names() {
-      BehaviorOnNullValues[] behaviors = values();
+      OutputWriteBehavior[] behaviors = values();
       String[] result = new String[behaviors.length];
 
       for (int i = 0; i < behaviors.length; i++) {
@@ -1331,7 +1320,30 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     }
   }
 
-  private static class EnumValidator implements Validator {
+  public enum IgnoreOrFailBehavior {
+    IGNORE,
+    FAIL;
+
+    public static final ConfigDef.Validator VALIDATOR = new EnumValidator(names());
+
+    public static String[] names() {
+      IgnoreOrFailBehavior[] behaviors = values();
+      String[] result = new String[behaviors.length];
+
+      for (int i = 0; i < behaviors.length; i++) {
+        result[i] = behaviors[i].toString();
+      }
+
+      return result;
+    }
+
+    @Override
+    public String toString() {
+      return name().toLowerCase(Locale.ROOT);
+    }
+  }
+
+  private static class EnumValidator implements ConfigDef.Validator {
 
     private final ConfigDef.ValidString validator;
 
