@@ -358,7 +358,8 @@ public class TopicPartitionWriter {
       if (recordCount > 0 && rotateOnTime(currentEncodedPartition, currentTimestamp, now)) {
         log.info(
             "Committing files after waiting for rotateIntervalMs time but less than flush.size "
-            + "records available."
+            + "records available. recordCount: {}, encodedPartition: {}",
+                recordCount, currentEncodedPartition
         );
         setNextScheduledRotation();
 
@@ -559,6 +560,10 @@ public class TopicPartitionWriter {
     return fileKey(topicsDir, dirPrefix, name);
   }
 
+  private boolean validRecord(SinkRecord record) {
+    return record.headers().lastWithName("_drop_record") == null;
+  }
+
   private boolean writeRecord(SinkRecord record, String encodedPartition) {
     RecordWriter writer = writers.get(encodedPartition);
     long currentOffsetIfSuccessful = record.kafkaOffset();
@@ -575,14 +580,17 @@ public class TopicPartitionWriter {
         startOffsets.put(encodedPartition, currentOffsetIfSuccessful);
         shouldRemoveStartOffset = true;
       }
-      if (writer == null) {
-        if (!commitFiles.containsKey(encodedPartition)) {
-          shouldRemoveCommitFilename = true;
+      // this records needs to be dropped, so we don't write it
+      if (validRecord(record)) {
+        if (writer == null) {
+          if (!commitFiles.containsKey(encodedPartition)) {
+            shouldRemoveCommitFilename = true;
+          }
+          writer = newWriter(record, encodedPartition);
+          shouldRemoveWriter = true;
         }
-        writer = newWriter(record, encodedPartition);
-        shouldRemoveWriter = true;
+        writer.write(record);
       }
-      writer.write(record);
     } catch (DataException e) {
       if (reporter != null) {
         if (shouldRemoveStartOffset) {
