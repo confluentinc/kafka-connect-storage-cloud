@@ -96,7 +96,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
           new AwsClientBuilder.EndpointConfiguration(url, region)
       );
     }
-
+    log.info("Created S3 client.");
     return builder.build();
   }
 
@@ -184,12 +184,14 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
   public S3OutputStream create(String path, boolean overwrite) {
     if (!overwrite) {
+      log.info("Creating a file without overwriting is not currently supported in S3 Connector");
       throw new UnsupportedOperationException(
           "Creating a file without overwriting is not currently supported in S3 Connector"
       );
     }
 
     if (StringUtils.isBlank(path)) {
+      log.error("Path can not be empty!");
       throw new IllegalArgumentException("Path can not be empty!");
     }
 
@@ -238,6 +240,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
   @Override
   public SeekableInput open(String path, S3SinkConnectorConfig conf) {
+    log.info("File reading is not currently supported in S3 Connector");
     throw new UnsupportedOperationException(
         "File reading is not currently supported in S3 Connector"
     );

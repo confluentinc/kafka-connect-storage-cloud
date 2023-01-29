@@ -146,6 +146,7 @@ public class S3OutputStream extends PositionOutputStream {
         multiPartUpload.abort();
         log.debug("Multipart upload aborted for bucket '{}' key '{}'.", bucket, key);
       }
+      log.error("Part upload failed: ", e.getCause());
       throw new IOException("Part upload failed: ", e.getCause());
     }
   }
@@ -226,10 +227,12 @@ public class S3OutputStream extends PositionOutputStream {
         // and that retrying this request will not result in a successful response. This includes
         // errors such as incorrect access keys, invalid parameter values, missing parameters, etc.
         // Therefore, the connector should propagate this exception and fail.
+        log.error("Unable to initiate MultipartUpload", e);
         throw new ConnectException("Unable to initiate MultipartUpload", e);
       }
       throw new IOException("Unable to initiate MultipartUpload.", e);
     } catch (AmazonClientException e) {
+      log.error("Unable to initiate MultipartUpload.", e);
       throw new IOException("Unable to initiate MultipartUpload.", e);
     }
   }

@@ -104,6 +104,7 @@ public class S3SinkTask extends SinkTask {
           url
       );
       if (!storage.bucketExists()) {
+        log.error("No-existent S3 bucket: " + connectorConfig.getBucketName());
         throw new DataException("No-existent S3 bucket: " + connectorConfig.getBucketName());
       }
 
@@ -116,8 +117,10 @@ public class S3SinkTask extends SinkTask {
       );
     } catch (ClassNotFoundException | IllegalAccessException | InstantiationException
         | InvocationTargetException | NoSuchMethodException e) {
+      log.error("Reflection exception: ", e);
       throw new ConnectException("Reflection exception: ", e);
     } catch (AmazonClientException e) {
+      log.error(e);
       throw new ConnectException(e);
     }
   }
@@ -215,6 +218,8 @@ public class S3SinkTask extends SinkTask {
         );
         return true;
       } else {
+        log.error("Null valued records are not writeable with current "
+                + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " 'settings.");
         throw new ConnectException("Null valued records are not writeable with current "
             + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " 'settings.");
       }
