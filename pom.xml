@@ -63,6 +63,7 @@
         <jettison.version>1.5.1</jettison.version>
         <woodstox.version>5.4.0</woodstox.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
+        <com.nimbusds.nimbus-jose-jwt.version>9.29</com.nimbusds.nimbus-jose-jwt.version>
     </properties>
 
     <repositories>
@@ -187,6 +188,11 @@
                     <artifactId>slf4j-log4j12</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.nimbusds</groupId>
+            <artifactId>nimbus-jose-jwt</artifactId>
+            <version>${com.nimbusds.nimbus-jose-jwt.version}</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
