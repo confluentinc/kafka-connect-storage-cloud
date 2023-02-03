@@ -17,8 +17,14 @@
 
 package io.confluent.connect.s3.format.parquet;
 
+import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
+import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
+
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.storage.IORecordWriter;
+import io.confluent.connect.s3.format.RecordViewSetter;
+import io.confluent.connect.s3.format.S3RetriableRecordWriter;
 import io.confluent.connect.s3.storage.S3ParquetOutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
@@ -26,7 +32,6 @@ import io.confluent.connect.storage.format.RecordWriterProvider;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.avro.AvroWriteSupport;
@@ -41,7 +46,8 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 
-public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
+public class ParquetRecordWriterProvider extends RecordViewSetter
+    implements RecordWriterProvider<S3SinkConnectorConfig> {
   private static final Logger log = LoggerFactory.getLogger(ParquetRecordWriterProvider.class);
   private static final String EXTENSION = ".parquet";
   private static final int PAGE_SIZE = 64 * 1024;
@@ -60,73 +66,63 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
 
   @Override
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
-    return new RecordWriter() {
-      Schema schema = null;
-      ParquetWriter<GenericRecord> writer;
-      S3ParquetOutputFile s3ParquetOutputFile;
+    return new S3RetriableRecordWriter(
+        new IORecordWriter() {
+          final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
+          Schema schema = null;
+          ParquetWriter<GenericRecord> writer;
+          S3ParquetOutputFile s3ParquetOutputFile;
 
-      @Override
-      public void write(SinkRecord record) {
-        if (schema == null) {
-          schema = record.valueSchema();
-          try {
-            log.info("Opening record writer for: {}", filename);
-            org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
-            s3ParquetOutputFile = new S3ParquetOutputFile(storage, filename);
-            AvroParquetWriter.Builder<GenericRecord> builder =
-                AvroParquetWriter.<GenericRecord>builder(s3ParquetOutputFile)
-                    .withSchema(avroSchema)
-                    .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
-                    .withDictionaryEncoding(true)
-                    .withCompressionCodec(storage.conf().parquetCompressionCodecName())
-                    .withPageSize(PAGE_SIZE);
-            if (schemaHasArrayOfOptionalItems(schema, /*seenSchemas=*/null)) {
-              // If the schema contains an array of optional items, then
-              // it is possible that the array may have null items during the
-              // writing process.  In this case, we set a flag so as not to
-              // incur a NullPointerException
-              log.debug(
-                  "Setting \"" + AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE
-                      + "\" to false because the schema contains an array "
-                      + "with optional items"
-              );
-              builder.config(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false");
+          @Override
+          public void write(SinkRecord record) throws IOException {
+            if (schema == null || writer == null) {
+              schema = recordView.getViewSchema(record, true);
+              log.info("Opening record writer for: {}", adjustedFilename);
+              org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
+              s3ParquetOutputFile = new S3ParquetOutputFile(storage, adjustedFilename);
+              AvroParquetWriter.Builder<GenericRecord> builder =
+                  AvroParquetWriter.<GenericRecord>builder(s3ParquetOutputFile)
+                      .withSchema(avroSchema)
+                      .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
+                      .withDictionaryEncoding(true)
+                      .withCompressionCodec(storage.conf().parquetCompressionCodecName())
+                      .withPageSize(PAGE_SIZE);
+              if (schemaHasArrayOfOptionalItems(schema, /*seenSchemas=*/null)) {
+                // If the schema contains an array of optional items, then
+                // it is possible that the array may have null items during the
+                // writing process.  In this case, we set a flag so as not to
+                // incur a NullPointerException
+                log.debug(
+                    "Setting \"" + AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE
+                        + "\" to false because the schema contains an array "
+                        + "with optional items"
+                );
+                builder.config(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false");
+              }
+              writer = builder.build();
             }
-            writer = builder.build();
-          } catch (IOException e) {
-            throw new ConnectException(e);
+            log.trace("Sink record with view {}: {}", recordView,
+                sinkRecordToLoggableString(record));
+            Object value = avroData.fromConnectData(schema, recordView.getView(record, true));
+            writer.write((GenericRecord) value);
+          }
+
+          @Override
+          public void close() throws IOException {
+            if (writer != null) {
+              writer.close();
+            }
+          }
+
+          @Override
+          public void commit() throws IOException {
+            s3ParquetOutputFile.s3out.setCommit();
+            if (writer != null) {
+              writer.close();
+            }
           }
         }
-        log.trace("Sink record: {}", record);
-        Object value = avroData.fromConnectData(schema, record.value());
-        try {
-          writer.write((GenericRecord) value);
-        } catch (IOException e) {
-          throw new ConnectException(e);
-        }
-      }
-
-      @Override
-      public void close() {
-        try {
-          writer.close();
-        } catch (IOException e) {
-          throw new ConnectException(e);
-        }
-      }
-
-      @Override
-      public void commit() {
-        try {
-          s3ParquetOutputFile.s3out.setCommit();
-          if (writer != null) {
-            writer.close();
-          }
-        } catch (IOException e) {
-          throw new ConnectException(e);
-        }
-      }
-    };
+    );
   }
 
   /**
@@ -155,7 +151,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
         return schemaHasArrayOfOptionalItems(schema.valueSchema(), seenSchemas);
       case ARRAY:
         return schema.valueSchema().isOptional()
-            || schemaHasArrayOfOptionalItems(schema.valueSchema(), seenSchemas);
+          || schemaHasArrayOfOptionalItems(schema.valueSchema(), seenSchemas);
       default:
         return false;
     }
@@ -174,7 +170,7 @@ public class ParquetRecordWriterProvider implements RecordWriterProvider<S3SinkC
 
     @Override
     public PositionOutputStream create(long blockSizeHint) {
-      s3out = (S3ParquetOutputStream) storage.create(filename, true);
+      s3out = (S3ParquetOutputStream) storage.create(filename, true, ParquetFormat.class);
       return s3out;
     }
 
