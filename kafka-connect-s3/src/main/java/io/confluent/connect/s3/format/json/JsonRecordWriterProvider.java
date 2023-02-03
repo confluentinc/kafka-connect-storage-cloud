@@ -15,11 +15,16 @@
 
 package io.confluent.connect.s3.format.json;
 
+import static io.confluent.connect.s3.util.S3ErrorUtils.throwConnectException;
+import static io.confluent.connect.s3.util.Utils.getAdjustedFilename;
+import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
+
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.connect.s3.storage.IORecordWriter;
+import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
+import io.confluent.connect.s3.format.S3RetriableRecordWriter;
 import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
@@ -30,12 +35,14 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.format.RecordViewSetter;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 
-public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
+public class JsonRecordWriterProvider extends RecordViewSetter
+    implements RecordWriterProvider<S3SinkConnectorConfig> {
 
   private static final Logger log = LoggerFactory.getLogger(JsonRecordWriterProvider.class);
   private static final String EXTENSION = ".json";
@@ -60,59 +67,57 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<S3SinkConn
   @Override
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     try {
-      return new RecordWriter() {
-        final S3OutputStream s3out = storage.create(filename, true);
-        final OutputStream s3outWrapper = s3out.wrapForCompression();
-        final JsonGenerator writer = mapper.getFactory()
-                                         .createGenerator(s3outWrapper)
-                                         .setRootValueSeparator(null);
+      return new S3RetriableRecordWriter(
+          new IORecordWriter() {
+            final String adjustedFilename = getAdjustedFilename(recordView, filename,
+                getExtension());
+            final S3OutputStream s3out = storage.create(adjustedFilename, true, JsonFormat.class);
+            final OutputStream s3outWrapper = s3out.wrapForCompression();
+            final JsonGenerator writer = mapper.getFactory()
+                .createGenerator(s3outWrapper)
+                .setRootValueSeparator(null);
 
-        @Override
-        public void write(SinkRecord record) {
-          log.trace("Sink record: {}", record);
-          try {
-            Object value = record.value();
-            if (value instanceof Struct) {
-              byte[] rawJson = converter.fromConnectData(
-                  record.topic(),
-                  record.valueSchema(),
-                  value
-              );
-              s3outWrapper.write(rawJson);
-              s3outWrapper.write(LINE_SEPARATOR_BYTES);
-            } else {
-              writer.writeObject(value);
-              writer.writeRaw(LINE_SEPARATOR);
+            @Override
+            public void write(SinkRecord record) throws IOException {
+              log.trace("Sink record with view {}: {}", recordView,
+                  sinkRecordToLoggableString(record));
+              // headers need to be enveloped for json format
+              boolean envelop = recordView instanceof HeaderRecordView;
+              Object value = recordView.getView(record, envelop);
+              if (value instanceof Struct) {
+                byte[] rawJson = converter.fromConnectData(
+                    record.topic(),
+                    recordView.getViewSchema(record, envelop),
+                    value
+                );
+                s3outWrapper.write(rawJson);
+                s3outWrapper.write(LINE_SEPARATOR_BYTES);
+              } else {
+                writer.writeObject(value);
+                writer.writeRaw(LINE_SEPARATOR);
+              }
             }
-          } catch (IOException e) {
-            throw new ConnectException(e);
-          }
-        }
 
-        @Override
-        public void commit() {
-          try {
-            // Flush is required here, because closing the writer will close the underlying S3
-            // output stream before committing any data to S3.
-            writer.flush();
-            s3out.commit();
-            s3outWrapper.close();
-          } catch (IOException e) {
-            throw new RetriableException(e);
-          }
-        }
+            @Override
+            public void commit() throws IOException {
+              // Flush is required here, because closing the writer will close the underlying S3
+              // output stream before committing any data to S3.
+              writer.flush();
+              s3out.commit();
+              s3outWrapper.close();
+            }
 
-        @Override
-        public void close() {
-          try {
-            writer.close();
-          } catch (IOException e) {
-            throw new ConnectException(e);
+            @Override
+            public void close() throws IOException {
+              writer.close();
+            }
           }
-        }
-      };
+      );
     } catch (IOException e) {
-      throw new ConnectException(e);
+      throwConnectException(e);
+      // compiler can't see that the above method is always throwing an exception,
+      // so had to add this useless return statement
+      return null;
     }
   }
 }

@@ -17,21 +17,24 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mockito;
 import org.powermock.api.easymock.PowerMock;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.io.ByteArrayInputStream;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +47,10 @@ import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.when;
 import static org.powermock.api.easymock.PowerMock.replayAll;
 import static org.powermock.api.easymock.PowerMock.verifyAll;
 
@@ -51,9 +58,6 @@ import static org.powermock.api.easymock.PowerMock.verifyAll;
 @PrepareForTest({S3SinkTask.class, StorageFactory.class})
 @PowerMockIgnore({"io.findify.s3mock.*", "akka.*", "javax.*", "org.xml.*", "com.sun.org.apache.xerces.*"})
 public class S3SinkTaskTest extends DataWriterAvroTest {
-
-  private static final String ZERO_PAD_FMT = "%010d";
-  private final String extension = ".avro";
 
   //@Before should be omitted in order to be able to add properties per test.
   public void setUp() throws Exception {
@@ -107,7 +111,12 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     setUp();
     replayAll();
     task = new S3SinkTask();
-    task.initialize(context);
+    SinkTaskContext mockContext = mock(SinkTaskContext.class);
+    ErrantRecordReporter reporter = mock(ErrantRecordReporter.class);
+    when(mockContext.errantRecordReporter()).thenReturn(reporter);
+    when(mockContext.assignment()).thenReturn(Collections.singleton(TOPIC_PARTITION));
+    task.initialize(mockContext);
+
     properties.put(S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG,
         S3SinkConnectorConfig.BehaviorOnNullValues.IGNORE.toString());
     task.start(properties);
@@ -122,7 +131,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     sinkRecords.addAll(createRecordsWithPrimitive(4, 3,
         Collections.singleton(new TopicPartition(TOPIC, PARTITION))));
     task.put(sinkRecords);
-    task.close(context.assignment());
+    task.close(mockContext.assignment());
     task.stop();
 
     long[] validOffsets = {0, 3, 6};
@@ -133,6 +142,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     expectedSinkRecords.addAll(createRecordsWithPrimitive(4, 3,
         Collections.singleton(new TopicPartition(TOPIC, PARTITION))));
     verify(expectedSinkRecords, validOffsets);
+    Mockito.verify(reporter, times(2)).report(any(), any(DataException.class));
   }
 
   @Test
@@ -160,7 +170,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     // Upload partial file.
     List<SinkRecord> sinkRecords = createRecords(2);
     byte[] partialData = AvroUtils.putRecords(sinkRecords, format.getAvroData());
-    String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT);
+    String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, EXTENSION, ZERO_PAD_FMT);
     s3.putObject(S3_TEST_BUCKET_NAME, fileKey, new ByteArrayInputStream(partialData), null);
 
     // Accumulate rest of the records.
