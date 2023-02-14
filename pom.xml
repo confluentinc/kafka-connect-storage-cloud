@@ -58,7 +58,6 @@
     </modules>
 
     <properties>
-        <confluent.maven.repo>https://packages.confluent.io/maven/</confluent.maven.repo>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <maven.release.plugin.version>2.5.3</maven.release.plugin.version>
         <!-- temporary fix by pinning the version until we upgrade to a version of common that contains this or newer version.
@@ -73,7 +72,7 @@
         <repository>
             <id>confluent</id>
             <name>Confluent</name>
-            <url>${confluent.maven.repo}</url>
+            <url>https://packages.confluent.io/maven/</url>
         </repository>
     </repositories>
 
