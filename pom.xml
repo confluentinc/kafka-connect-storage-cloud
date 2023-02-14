@@ -21,7 +21,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>11.0.15</version>
+        <version>11.0.19</version>
     </parent>
 
     <groupId>io.confluent</groupId>
@@ -296,6 +296,12 @@
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
             <version>2.19.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>jetty-http</artifactId>
+            <version>9.4.48.v20220622</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
