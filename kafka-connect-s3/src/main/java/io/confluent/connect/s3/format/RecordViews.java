@@ -22,10 +22,15 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.sink.SinkRecord;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 public final class RecordViews {
+
+  private static final Logger log = LoggerFactory.getLogger(RecordViews.class);
 
   public static final class ValueRecordView extends BaseRecordView {
     @Override
@@ -55,6 +60,7 @@ public final class RecordViews {
         keySchema = SchemaBuilder.struct().name(KEY_STRUCT_NAME)
             .field(KEY_FIELD_NAME, keySchema).build();
       }
+      log.debug("Created key record view schema.");
       return keySchema;
     }
 
@@ -90,6 +96,7 @@ public final class RecordViews {
         headerSchema = SchemaBuilder.struct().name(HEADER_STRUCT_NAME)
             .field(HEADER_FIELD_NAME, headerSchema).build();
       }
+      log.debug("Created header record view schema.");
       return headerSchema;
     }
 
