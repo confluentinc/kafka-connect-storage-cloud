@@ -14,3 +14,7 @@ common {
   downStreamValidate = false
   disableConcurrentBuilds = true
 }
+
+stage('custom') {
+    echo "test whether custom call it out or not"
+}
