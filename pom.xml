@@ -61,7 +61,8 @@
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <maven.release.plugin.version>2.5.3</maven.release.plugin.version>
         <hadoop.version>3.2.4</hadoop.version>
-        <jettison.version>1.5.2</jettison.version>
+        <jettison.version>1.5.4</jettison.version>
+        <json-smart.version>2.4.10</json-smart.version>
         <jetty.version>9.4.48.v20220622</jetty.version>
         <woodstox.version>5.4.0</woodstox.version>
     </properties>
