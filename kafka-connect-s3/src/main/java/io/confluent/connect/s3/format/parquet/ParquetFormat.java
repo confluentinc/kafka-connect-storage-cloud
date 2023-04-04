@@ -19,7 +19,6 @@ package io.confluent.connect.s3.format.parquet;
 
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
-import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;

@@ -83,7 +83,7 @@ public class S3SinkConnectorValidator {
     try {
       s3SinkConnectorConfig = new S3SinkConnectorConfig(config, connectorConfigs);
     } catch (ConfigException exception) {
-      log.info("Configuration not ready for cross validation.", exception);
+      log.error("Configuration not ready for cross validation.", exception);
     }
     if (s3SinkConnectorConfig != null) {
       validateCompression(
