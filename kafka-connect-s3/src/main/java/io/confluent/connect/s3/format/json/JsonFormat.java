@@ -15,7 +15,6 @@
 
 package io.confluent.connect.s3.format.json;
 
-import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import org.apache.kafka.connect.json.JsonConverter;
 
 import java.util.HashMap;

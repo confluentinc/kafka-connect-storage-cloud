@@ -15,7 +15,6 @@
 
 package io.confluent.connect.s3.storage;
 
-import io.confluent.connect.s3.format.RecordViews;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

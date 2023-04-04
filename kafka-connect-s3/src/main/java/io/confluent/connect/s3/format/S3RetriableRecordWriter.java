@@ -15,7 +15,6 @@
 
 package io.confluent.connect.s3.format;
 
-import io.confluent.connect.s3.storage.ElasticByteBuffer;
 import io.confluent.connect.s3.storage.IORecordWriter;
 import io.confluent.connect.storage.format.RecordWriter;
 import org.apache.kafka.connect.sink.SinkRecord;

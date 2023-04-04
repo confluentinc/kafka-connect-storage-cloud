@@ -211,7 +211,8 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     }
 
     if (ParquetFormat.class.isAssignableFrom(formatClass)) {
-      log.info("Create S3ParquetOutputStream for bucket '{}' key '{}'", this.conf.getBucketName(), path);
+      log.info("Create S3ParquetOutputStream for bucket '{}' key '{}'",
+              this.conf.getBucketName(), path);
       return new S3ParquetOutputStream(path, this.conf, s3);
     } else {
       // currently ignore what is passed as method argument.
