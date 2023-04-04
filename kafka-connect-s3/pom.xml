@@ -21,7 +21,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-cloud</artifactId>
-        <version>10.4.2-SNAPSHOT</version>
+        <version>10.4.3-SNAPSHOT</version>
     </parent>
 
     <artifactId>kafka-connect-s3</artifactId>
@@ -104,6 +104,18 @@
                     <artifactId>scala-library</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>javax.el</groupId>
+            <artifactId>javax.el-api</artifactId>
+            <version>3.0.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish</groupId>
+            <artifactId>javax.el</artifactId>
+            <version>3.0.0</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>

@@ -27,7 +27,7 @@
     <groupId>io.confluent</groupId>
     <artifactId>kafka-connect-storage-cloud</artifactId>
     <packaging>pom</packaging>
-    <version>10.4.2-SNAPSHOT</version>
+    <version>10.4.3-SNAPSHOT</version>
     <name>kafka-connect-storage-cloud</name>
     <organization>
         <name>Confluent, Inc.</name>
@@ -212,6 +212,22 @@
                     <artifactId>slf4j-log4j12</artifactId>
                 </exclusion>
                 <exclusion>
+                    <groupId>org.eclipse.jetty</groupId>
+                    <artifactId>jetty-server</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.eclipse.jetty</groupId>
+                    <artifactId>jetty-servlet</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.eclipse.jetty</groupId>
+                    <artifactId>jetty-webapp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.eclipse.jetty</groupId>
+                    <artifactId>jetty-util</artifactId>
+                </exclusion>
+                <exclusion>
                     <groupId>commons-net</groupId>
                     <artifactId>commons-net</artifactId>
                 </exclusion>
@@ -326,6 +342,37 @@
             <groupId>org.powermock</groupId>
             <artifactId>powermock-api-mockito2</artifactId>
             <version>${powermock.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-connect-avro-converter</artifactId>
+            <version>${confluent.version.range}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-connect-protobuf-converter</artifactId>
+            <version>${confluent.version.range}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-connect-json-schema-converter</artifactId>
+            <version>${confluent.version.range}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry</artifactId>
+            <version>${confluent.version.range}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry</artifactId>
+            <version>${confluent.version.range}</version>
             <scope>test</scope>
         </dependency>
         <!-- Temporary addition until powermock updates its mockito version -->
