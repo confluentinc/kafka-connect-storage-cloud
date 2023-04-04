@@ -15,6 +15,9 @@
 
 package io.confluent.connect.s3.storage;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.nio.BufferOverflowException;
 
 /**
@@ -22,6 +25,8 @@ import java.nio.BufferOverflowException;
  * The formula to expand: initCapacity * 2 ^ (incrementFactor * N)
  */
 public class ElasticByteBuffer implements ByteBuf {
+
+  private static final Logger log = LoggerFactory.getLogger(ElasticByteBuffer.class);
 
   public static final int INCREMENT_FACTOR = 1;
 
@@ -43,7 +48,8 @@ public class ElasticByteBuffer implements ByteBuf {
     }
 
     if (initPhysicalCap <= 0) {
-      throw new IllegalArgumentException("initial physical capacity must greater than zero");
+      log.debug("initial physical capacity must be greater than zero");
+      throw new IllegalArgumentException("initial physical capacity must be greater than zero");
     }
 
     this.capacity = capacity;

@@ -116,7 +116,9 @@ public class S3SinkTask extends SinkTask {
       }
 
       writerProvider = newRecordWriterProvider(connectorConfig);
+      log.info("Created S3 sink record writer provider.");
       partitioner = newPartitioner(connectorConfig);
+      log.info("Created S3 sink partitioner.");
 
       open(context.assignment());
       try {
@@ -127,7 +129,7 @@ public class S3SinkTask extends SinkTask {
       } catch (NoSuchMethodError | NoClassDefFoundError | UnsupportedOperationException e) {
         // Will occur in Connect runtimes earlier than 2.6
         log.warn("Connect versions prior to Apache Kafka 2.6 do not support "
-            + "the errant record reporter");
+            + "the errant record reporter", e);
       }
 
       log.info("Started S3 connector task with assigned partitions: {}",
