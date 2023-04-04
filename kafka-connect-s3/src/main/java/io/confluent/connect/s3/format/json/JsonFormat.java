@@ -19,6 +19,8 @@ import org.apache.kafka.connect.json.JsonConverter;
 
 import java.util.HashMap;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.storage.S3Storage;
@@ -27,6 +29,7 @@ import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.format.SchemaFileReader;
 
 public class JsonFormat implements Format<S3SinkConnectorConfig, String> {
+  private static final Logger log = LoggerFactory.getLogger(JsonFormat.class);
   private final S3Storage storage;
   private final JsonConverter converter;
 
@@ -49,12 +52,14 @@ public class JsonFormat implements Format<S3SinkConnectorConfig, String> {
 
   @Override
   public SchemaFileReader<S3SinkConnectorConfig, String> getSchemaFileReader() {
+    log.debug("Reading schemas from S3 is not currently supported");
     throw new UnsupportedOperationException("Reading schemas from S3 is not currently supported");
   }
 
   @Override
   @Deprecated
   public Object getHiveFactory() {
+    log.debug("Hive integration is not currently supported in S3 Connector");
     throw new UnsupportedOperationException(
         "Hive integration is not currently supported in S3 Connector"
     );

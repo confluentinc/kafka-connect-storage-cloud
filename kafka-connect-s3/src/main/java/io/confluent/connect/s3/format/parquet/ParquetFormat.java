@@ -23,8 +23,11 @@ import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.format.SchemaFileReader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ParquetFormat implements Format<S3SinkConnectorConfig, String> {
+  private static final Logger log = LoggerFactory.getLogger(ParquetFormat.class);
   private final S3Storage storage;
   private final AvroData avroData;
 
@@ -41,12 +44,14 @@ public class ParquetFormat implements Format<S3SinkConnectorConfig, String> {
 
   @Override
   public SchemaFileReader<S3SinkConnectorConfig, String> getSchemaFileReader() {
+    log.debug("Reading schemas from S3 is not currently supported");
     throw new UnsupportedOperationException("Reading schemas from S3 is not currently supported");
   }
 
   @Override
   @Deprecated
   public Object getHiveFactory() {
+    log.debug("Hive integration is not currently supported in S3 Connector");
     throw new UnsupportedOperationException(
             "Hive integration is not currently supported in S3 Connector"
     );
