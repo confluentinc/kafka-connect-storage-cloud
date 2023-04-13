@@ -61,6 +61,11 @@
                 <artifactId>aws-java-sdk-sts</artifactId>
                 <version>${aws.version}</version>
             </dependency>
+            <dependency>
+                <groupId>net.minidev</groupId>
+                <artifactId>json-smart</artifactId>
+                <version>${json-smart.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
