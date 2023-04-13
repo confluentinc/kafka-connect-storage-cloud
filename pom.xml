@@ -64,6 +64,7 @@
         <jettison.version>1.5.4</jettison.version>
         <json-smart.version>2.4.10</json-smart.version>
         <jetty.version>9.4.48.v20220622</jetty.version>
+        <snakeyaml.version>2.0</snakeyaml.version>
         <woodstox.version>5.4.0</woodstox.version>
     </properties>
 
@@ -74,6 +75,17 @@
             <url>https://packages.confluent.io/maven/</url>
         </repository>
     </repositories>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- band aid until connector catches up with the updated schema registry -->
+            <dependency>
+                <groupId>org.yaml</groupId>
+                <artifactId>snakeyaml</artifactId>
+                <version>${snakeyaml.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>
