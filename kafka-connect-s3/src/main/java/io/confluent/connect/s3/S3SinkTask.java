@@ -315,7 +315,7 @@ public class S3SinkTask extends SinkTask {
       } catch (ConnectException e) {
         log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
       }
-      topicPartitionWriter.remove(tp);
+      topicPartitionWriters.remove(tp);
     }
   }
 
