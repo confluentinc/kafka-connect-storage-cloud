@@ -232,6 +232,11 @@ public class S3SinkTask extends SinkTask {
       TopicPartitionWriter writer = topicPartitionWriters.get(tp);
       try {
         writer.write();
+        if (log.isDebugEnabled()) {
+          log.debug("TopicPartition: {}, SchemaCompatibility:{}, FileRotations: {}",
+              tp.toString(), writer.getSchemaCompatibility(),
+              writer.getFileRotationTracker().toString());
+        }
       } catch (RetriableException e) {
         log.error("Exception on topic partition {}: ", tp, e);
         Long currentStartOffset = writer.currentStartOffset();
