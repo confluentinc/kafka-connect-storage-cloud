@@ -17,7 +17,9 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.SdkClientException;
 import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.s3.util.FileRotationTracker;
 import io.confluent.connect.storage.errors.PartitionException;
+import io.confluent.connect.storage.schema.SchemaCompatibilityResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -54,6 +56,7 @@ import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
 import io.confluent.connect.storage.util.DateTimeUtils;
 
 public class TopicPartitionWriter {
+
   private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriter.class);
 
   private final Map<String, String> commitFiles;
@@ -94,6 +97,8 @@ public class TopicPartitionWriter {
   private final S3SinkConnectorConfig connectorConfig;
   private static final Time SYSTEM_TIME = new SystemTime();
   private ErrantRecordReporter reporter;
+
+  private final FileRotationTracker fileRotationTracker;
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
@@ -164,6 +169,7 @@ public class TopicPartitionWriter {
     zeroPadOffsetFormat = "%0"
         + connectorConfig.getInt(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG)
         + "d";
+    fileRotationTracker = new FileRotationTracker();
 
     // Initialize scheduled rotation timer if applicable
     setNextScheduledRotation();
@@ -284,8 +290,11 @@ public class TopicPartitionWriter {
       return true;
     }
 
-    if (compatibility.shouldChangeSchema(record, null, currentValueSchema)
-        && recordCount > 0) {
+    SchemaCompatibilityResult shouldChangeSchema =
+        compatibility.shouldChangeSchema(record, null, currentValueSchema);
+    if (shouldChangeSchema.isInCompatible() && recordCount > 0) {
+      fileRotationTracker.incrementRotationBySchemaChangeCount(encodedPartition,
+          shouldChangeSchema.getSchemaIncompatibilityType());
       // This branch is never true for the first record read by this TopicPartitionWriter
       log.trace(
           "Incompatible change of schema detected for record '{}' with encoded partition "
@@ -308,6 +317,7 @@ public class TopicPartitionWriter {
     }
 
     if (rotateOnSize()) {
+      fileRotationTracker.incrementRotationByFlushSizeCount(encodedPartition);
       log.info(
           "Starting commit and rotation for topic partition {} with start offset {}",
           tp,
@@ -372,6 +382,14 @@ public class TopicPartitionWriter {
     this.failureTime = when;
   }
 
+  public FileRotationTracker getFileRotationTracker() {
+    return fileRotationTracker;
+  }
+
+  public StorageSchemaCompatibility getSchemaCompatibility() {
+    return compatibility;
+  }
+
   private Long minStartOffset() {
     Optional<Long> minStartOffset = startOffsets.values().stream()
         .min(Comparator.comparing(Long::valueOf));
@@ -422,6 +440,11 @@ public class TopicPartitionWriter {
         currentEncodedPartition,
         periodicRotation
     );
+    if (periodicRotation) {
+      fileRotationTracker.incrementRotationByRotationIntervalCount(encodedPartition);
+    } else if (shouldApplyScheduledRotation(now)) {
+      fileRotationTracker.incrementRotationByScheduledRotationIntervalCount(encodedPartition);
+    }
     return periodicRotation || shouldApplyScheduledRotation(now);
   }
 
