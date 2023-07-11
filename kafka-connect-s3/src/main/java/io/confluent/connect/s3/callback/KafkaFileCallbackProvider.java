@@ -15,17 +15,34 @@
 
 package io.confluent.connect.s3.callback;
 
+import io.confluent.connect.s3.KafkaFileCallbackConfig;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+
 public class KafkaFileCallbackProvider implements FileCallbackProvider {
   private final String configJson;
+  private final KafkaFileCallbackConfig kafkaConfig;
 
   public KafkaFileCallbackProvider(String configJson) {
     this.configJson = configJson;
+    this.kafkaConfig = KafkaFileCallbackConfig.fromJsonString(configJson,
+            KafkaFileCallbackConfig.class);
   }
 
   @Override
   public void call(String topicName,String s3Partition, String filePath, int partition,
                    Long baseRecordTimestamp, Long currentTimestamp, int recordCount) {
     System.out.println(this.configJson + filePath);
+    String value = topicName;
+    try (final Producer<String, String> producer = new KafkaProducer<>(kafkaConfig.toProps())) {
+      producer.send(new ProducerRecord<>(kafkaConfig.getTopicName(), topicName, value),
+              (event, ex) -> {
+                if (ex != null) {
+                  ex.printStackTrace();
+                }
+              });
+    }
   }
 
 }
