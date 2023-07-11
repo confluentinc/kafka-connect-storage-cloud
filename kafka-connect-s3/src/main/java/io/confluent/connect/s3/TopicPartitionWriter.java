@@ -107,6 +107,7 @@ public class TopicPartitionWriter {
   private ErrantRecordReporter reporter;
 
   private final FileRotationTracker fileRotationTracker;
+  private final Optional<FileCallbackProvider> fileCallback;
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
@@ -190,6 +191,20 @@ public class TopicPartitionWriter {
 
     // Initialize scheduled rotation timer if applicable
     setNextScheduledRotation();
+
+    // Initialize callback if enabled
+    if (this.connectorConfig.getFileCallbackEnable()) {
+      try {
+        fileCallback = Optional.of((FileCallbackProvider)this.connectorConfig
+                .getFileCallbackClass().getConstructor(String.class)
+                .newInstance(connectorConfig.getFileCallbackConfigJson()));
+      } catch (InstantiationException | IllegalAccessException
+               | InvocationTargetException | NoSuchMethodException e) {
+        throw new RuntimeException(e);
+      }
+    } else {
+      fileCallback = Optional.empty();
+    }
   }
 
   private enum State {
@@ -638,7 +653,6 @@ public class TopicPartitionWriter {
     for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
       String encodedPartition = entry.getKey();
       commitFile(encodedPartition);
-      // apply callback if needed
       callbackFile(encodedPartition);
       if (isTaggingEnabled) {
         RetryUtil.exponentialBackoffRetry(() -> tagFile(encodedPartition, entry.getValue()),
@@ -677,19 +691,9 @@ public class TopicPartitionWriter {
   }
 
   private void callbackFile(String encodedPartition) {
-    if (this.connectorConfig.getFileCallbackEnable()) {
-      try {
-        // TODO: instanciate the callback once instead of each call
-        FileCallbackProvider fileCallback = (FileCallbackProvider)this.connectorConfig
-                .getFileCallbackClass().getConstructor(String.class)
-                .newInstance(connectorConfig.getFileCallbackConfigJson());
-        fileCallback.call(tp.topic(), encodedPartition, commitFiles.get(encodedPartition),
-                tp.partition(), baseRecordTimestamp, currentTimestamp, recordCount);
-      } catch (InstantiationException | IllegalAccessException
-               | InvocationTargetException | NoSuchMethodException e) {
-        throw new RuntimeException(e);
-      }
-    }
+    fileCallback.ifPresent(fs -> fs.call(tp.topic(), encodedPartition,
+            commitFiles.get(encodedPartition), tp.partition(), baseRecordTimestamp,
+            currentTimestamp, recordCount));
   }
 
   private void tagFile(String encodedPartition, String s3ObjectPath) {
