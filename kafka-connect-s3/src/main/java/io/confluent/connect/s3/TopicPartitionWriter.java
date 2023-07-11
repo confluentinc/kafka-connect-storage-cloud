@@ -16,6 +16,7 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.SdkClientException;
+import io.confluent.connect.s3.callback.FileCallbackProvider;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileRotationTracker;
 import io.confluent.connect.s3.util.RetryUtil;
@@ -36,6 +37,7 @@ import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -636,6 +638,8 @@ public class TopicPartitionWriter {
     for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
       String encodedPartition = entry.getKey();
       commitFile(encodedPartition);
+      // apply callback if needed
+      callbackFile(encodedPartition);
       if (isTaggingEnabled) {
         RetryUtil.exponentialBackoffRetry(() -> tagFile(encodedPartition, entry.getValue()),
                 ConnectException.class,
@@ -669,6 +673,22 @@ public class TopicPartitionWriter {
       writer.commit();
       writers.remove(encodedPartition);
       log.debug("Removed writer for '{}'", encodedPartition);
+    }
+  }
+
+  private void callbackFile(String encodedPartition) {
+    if (this.connectorConfig.getFileCallbackEnable()) {
+      try {
+        // TODO: instanciate the callback once instead of each call
+        FileCallbackProvider fileCallback = (FileCallbackProvider)this.connectorConfig
+                .getFileCallbackClass().getConstructor(String.class)
+                .newInstance(connectorConfig.getFileCallbackConfigJson());
+        fileCallback.call(tp.topic(), encodedPartition, commitFiles.get(encodedPartition),
+                tp.partition(), baseRecordTimestamp, currentTimestamp, recordCount);
+      } catch (InstantiationException | IllegalAccessException
+               | InvocationTargetException | NoSuchMethodException e) {
+        throw new RuntimeException(e);
+      }
     }
   }
 
