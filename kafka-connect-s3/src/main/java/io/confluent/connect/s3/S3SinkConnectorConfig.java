@@ -200,7 +200,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
    * Callback configs
    */
   public static final String FILE_CALLBACK_ENABLE = "s3.file.callback.enable";
-  public static final boolean FILE_CALLBACK_ENABLE_DEFAULT = true;
+  public static final boolean FILE_CALLBACK_ENABLE_DEFAULT = false;
   public static final String FILE_CALLBACK_CLASS = "s3.file.callback.class";
   public static final Class<? extends FileCallbackProvider> FILE_CALLBACK_CLASS_DEFAULT =
           KafkaFileCallbackProvider.class;

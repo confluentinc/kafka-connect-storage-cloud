@@ -20,6 +20,8 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
+import java.util.Arrays;
+
 public class KafkaFileCallbackProvider implements FileCallbackProvider {
   private final String configJson;
   private final KafkaFileCallbackConfig kafkaConfig;
@@ -33,8 +35,9 @@ public class KafkaFileCallbackProvider implements FileCallbackProvider {
   @Override
   public void call(String topicName,String s3Partition, String filePath, int partition,
                    Long baseRecordTimestamp, Long currentTimestamp, int recordCount) {
-    System.out.println(this.configJson + filePath);
-    String value = topicName;
+    String value = String.join("|", Arrays.asList(topicName, s3Partition, filePath,
+            String.valueOf(partition), String.valueOf(baseRecordTimestamp),
+            String.valueOf(currentTimestamp), String.valueOf(recordCount)));
     try (final Producer<String, String> producer = new KafkaProducer<>(kafkaConfig.toProps())) {
       producer.send(new ProducerRecord<>(kafkaConfig.getTopicName(), topicName, value),
               (event, ex) -> {
@@ -42,6 +45,8 @@ public class KafkaFileCallbackProvider implements FileCallbackProvider {
                   ex.printStackTrace();
                 }
               });
+    } catch (Exception e) {
+      System.out.println("foo");
     }
   }
 
