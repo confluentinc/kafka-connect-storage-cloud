@@ -39,7 +39,7 @@
         <parquet.tools.version>1.11.1</parquet.tools.version>
         <formatters.version>0.2.2</formatters.version>
         <confluent.connect.testcontainers.version>1.0.1</confluent.connect.testcontainers.version>
-        <org.testcontainer.version>1.15.0</org.testcontainer.version>
+        <org.testcontainer.version>1.18.3</org.testcontainer.version>
         <maven.failsafe.plugin.version>2.22.1</maven.failsafe.plugin.version>
         <skipIntegrationTests>false</skipIntegrationTests>
         <surefire-junit47.version>2.22.1</surefire-junit47.version>
