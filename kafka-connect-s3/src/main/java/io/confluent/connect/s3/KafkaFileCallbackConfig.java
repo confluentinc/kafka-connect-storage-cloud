@@ -24,35 +24,34 @@ public class KafkaFileCallbackConfig extends AbstractFileCallbackConfig {
   private String topicPassword;
   private String bootstrapServers;
   private String securityProtocols;
+
+
+  private String schemaRegistryUrl;
   private String keySerializer = "org.apache.kafka.common.serialization.StringSerializer";
+  private String valueSerializer = "io.confluent.kafka.serializers.KafkaAvroSerializer";
 
   public KafkaFileCallbackConfig() {
   }
 
   public KafkaFileCallbackConfig(String topicName, String topicUser, String topicPassword,
-                                 String bootstrapServers, String securityProtocols) {
+                                 String bootstrapServers, String securityProtocols, String schemaRegistryUrl) {
     this.topicName = topicName;
     this.topicUser = topicUser;
     this.topicPassword = topicPassword;
     this.bootstrapServers = bootstrapServers;
     this.securityProtocols = securityProtocols;
+    this.schemaRegistryUrl = schemaRegistryUrl;
   }
 
 
-  @Override
-  public Properties toProps() {
-    Properties prop = new Properties();
-    prop.setProperty("bootstrap.servers", bootstrapServers);
-    prop.setProperty("topic.name", topicName);
-    prop.setProperty("key.serializer", keySerializer);
-    prop.setProperty("value.serializer", keySerializer);
-    return prop;
-  }
 
   public String getTopicName() {
     return topicName;
   }
 
+  public String getSchemaRegistryUrl() {
+    return schemaRegistryUrl;
+  }
   public String getTopicUser() {
     return topicUser;
   }
@@ -80,8 +79,19 @@ public class KafkaFileCallbackConfig extends AbstractFileCallbackConfig {
     sb.append(", \"topic_password\": \"").append(topicPassword).append('"');
     sb.append(", \"bootstrap_servers\": \"").append(bootstrapServers).append('"');
     sb.append(", \"security_protocols\": \"").append(securityProtocols).append('"');
-    sb.append(", \"key_serializer\": \"").append(keySerializer).append('"');
+    sb.append(", \"schema_registry_url\": \"").append(schemaRegistryUrl).append('"');
     sb.append('}');
     return sb.toString();
+  }
+
+  @Override
+  public Properties toProps() {
+    Properties prop = new Properties();
+    prop.setProperty("bootstrap.servers", bootstrapServers);
+    prop.setProperty("topic.name", topicName);
+    prop.setProperty("key.serializer", keySerializer);
+    prop.setProperty("value.serializer", valueSerializer);
+    prop.setProperty("schema.registry.url", schemaRegistryUrl);
+    return prop;
   }
 }

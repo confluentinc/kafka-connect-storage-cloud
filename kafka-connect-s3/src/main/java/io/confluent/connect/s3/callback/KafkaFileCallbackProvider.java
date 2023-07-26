@@ -16,6 +16,7 @@
 package io.confluent.connect.s3.callback;
 
 import io.confluent.connect.s3.KafkaFileCallbackConfig;
+import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -38,8 +39,11 @@ public class KafkaFileCallbackProvider implements FileCallbackProvider {
     String value = String.join("|", Arrays.asList(topicName, s3Partition, filePath,
             String.valueOf(partition), String.valueOf(baseRecordTimestamp),
             String.valueOf(currentTimestamp), String.valueOf(recordCount)));
-    try (final Producer<String, String> producer = new KafkaProducer<>(kafkaConfig.toProps())) {
-      producer.send(new ProducerRecord<>(kafkaConfig.getTopicName(), topicName, value),
+    Callback callback = new Callback(topicName, s3Partition, filePath, partition,
+            baseRecordTimestamp, currentTimestamp, recordCount);
+    try (final Producer<String, SpecificRecord> producer =
+                 new KafkaProducer<>(kafkaConfig.toProps())) {
+      producer.send(new ProducerRecord<>(kafkaConfig.getTopicName(), topicName, callback),
               (event, ex) -> {
                 if (ex != null) {
                   ex.printStackTrace();
