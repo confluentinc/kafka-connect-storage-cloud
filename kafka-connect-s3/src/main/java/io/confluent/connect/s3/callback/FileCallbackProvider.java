@@ -15,8 +15,15 @@
 
 package io.confluent.connect.s3.callback;
 
-public interface FileCallbackProvider {
+public abstract class FileCallbackProvider {
+  protected final String configJson;
+  protected final boolean skipError;
 
-  void call(String topicName, String s3Partition, String filePath, int partition,
+  public FileCallbackProvider(String configJson, boolean skipError) {
+    this.configJson = configJson;
+    this.skipError = skipError;
+  }
+
+  abstract public void call(String topicName, String s3Partition, String filePath, int partition,
             Long baseRecordTimestamp, Long currentTimestamp, int recordCount);
 }

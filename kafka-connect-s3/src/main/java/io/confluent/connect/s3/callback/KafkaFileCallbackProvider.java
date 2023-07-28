@@ -23,13 +23,12 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class KafkaFileCallbackProvider implements FileCallbackProvider {
+public class KafkaFileCallbackProvider extends FileCallbackProvider {
   private static final Logger log = LoggerFactory.getLogger(KafkaFileCallbackProvider.class);
-  private final String configJson;
   private final KafkaFileCallbackConfig kafkaConfig;
 
-  public KafkaFileCallbackProvider(String configJson) {
-    this.configJson = configJson;
+  public KafkaFileCallbackProvider(String configJson, boolean skipError) {
+    super(configJson, skipError);
     this.kafkaConfig = KafkaFileCallbackConfig.fromJsonString(configJson,
             KafkaFileCallbackConfig.class);
   }
@@ -48,7 +47,10 @@ public class KafkaFileCallbackProvider implements FileCallbackProvider {
                 }
               });
     } catch (Exception e) {
-      log.error(e.getMessage(), e);
+      if(skipError)
+        log.error(e.getMessage(), e);
+      else
+        throw new RuntimeException(e);
     }
   }
 

@@ -201,6 +201,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
    */
   public static final String FILE_CALLBACK_ENABLE = "s3.file.callback.enable";
   public static final boolean FILE_CALLBACK_ENABLE_DEFAULT = false;
+  public static final String FILE_CALLBACK_SKIP_ERROR = "s3.file.callback.skip.error";
+  public static final boolean FILE_CALLBACK_SKIP_ERROR_DEFAULT = false;
   public static final String FILE_CALLBACK_CLASS = "s3.file.callback.class";
   public static final Class<? extends FileCallbackProvider> FILE_CALLBACK_CLASS_DEFAULT =
           KafkaFileCallbackProvider.class;
@@ -801,6 +803,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       );
 
       configDef.define(
+              FILE_CALLBACK_SKIP_ERROR,
+              Type.BOOLEAN,
+              FILE_CALLBACK_SKIP_ERROR_DEFAULT,
+              Importance.LOW,
+              "In case of callback, then raise an error or fail silently. Default raise an error.",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "Fail when s3 file callback error"
+      );
+
+      configDef.define(
               FILE_CALLBACK_CLASS,
               Type.CLASS,
               FILE_CALLBACK_CLASS_DEFAULT,
@@ -1009,6 +1023,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public boolean getFileCallbackEnable() {
     return getBoolean(FILE_CALLBACK_ENABLE);
+  }
+
+  public boolean getFileCallbackSkipError() {
+    return getBoolean(FILE_CALLBACK_SKIP_ERROR);
   }
 
   public Class getFileCallbackClass() {
