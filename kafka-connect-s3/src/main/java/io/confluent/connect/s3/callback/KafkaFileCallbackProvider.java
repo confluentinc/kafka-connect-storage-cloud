@@ -36,11 +36,12 @@ public class KafkaFileCallbackProvider extends FileCallbackProvider {
   @Override
   public void call(String topicName,String s3Partition, String filePath, int partition,
                    Long baseRecordTimestamp, Long currentTimestamp, int recordCount) {
-    Callback callback = new Callback(topicName, s3Partition, filePath, partition,
+    String key = topicName;
+    Callback value = new Callback(topicName, s3Partition, filePath, partition,
             baseRecordTimestamp, currentTimestamp, recordCount);
     try (final Producer<String, SpecificRecord> producer =
                  new KafkaProducer<>(kafkaConfig.toProps())) {
-      producer.send(new ProducerRecord<>(kafkaConfig.getTopicName(), topicName, callback),
+      producer.send(new ProducerRecord<>(kafkaConfig.getTopicName(), key, value),
               (event, ex) -> {
                 if (ex != null) {
                   throw new RuntimeException(ex);

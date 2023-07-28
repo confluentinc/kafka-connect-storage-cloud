@@ -19,31 +19,66 @@ import java.util.Properties;
 
 public class KafkaFileCallbackConfig extends AbstractFileCallbackConfig {
 
+  private final String KEY_SERIALIZER = "org.apache.kafka.common.serialization.StringSerializer";
+  private final String VALUE_SERIALIZER = "io.confluent.kafka.serializers.KafkaAvroSerializer";
+
   private String topicName;
-  private String topicUser;
-  private String topicPassword;
   private String bootstrapServers;
-  private String securityProtocols;
-
-
+  private String securityProtocol;
   private String schemaRegistryUrl;
-  private String keySerializer = "org.apache.kafka.common.serialization.StringSerializer";
-  private String valueSerializer = "io.confluent.kafka.serializers.KafkaAvroSerializer";
+  private String saslMecanism;
+  private String saslJaasConfig;
 
+  /**
+   * empty constructor for jackson
+   */
   public KafkaFileCallbackConfig() {
   }
 
-  public KafkaFileCallbackConfig(String topicName, String topicUser, String topicPassword,
-                                 String bootstrapServers, String securityProtocols, String schemaRegistryUrl) {
+  public KafkaFileCallbackConfig(String topicName, String bootstrapServers,
+                                 String schemaRegistryUrl, String securityProtocol,
+                                 String saslMecanism, String saslJaasConfig) {
     this.topicName = topicName;
-    this.topicUser = topicUser;
-    this.topicPassword = topicPassword;
     this.bootstrapServers = bootstrapServers;
-    this.securityProtocols = securityProtocols;
     this.schemaRegistryUrl = schemaRegistryUrl;
+    this.securityProtocol = securityProtocol;
+    this.saslMecanism = saslMecanism;
+    this.saslJaasConfig = saslJaasConfig;
   }
 
+  public String toJson() {
+    final StringBuffer sb = new StringBuffer("{");
+    sb.append("\"topic_name\": \"").append(topicName).append('"');
+    sb.append(", \"bootstrap_servers\": \"").append(bootstrapServers).append('"');
+    sb.append(", \"schema_registry_url\": \"").append(schemaRegistryUrl).append('"');
+    if(securityProtocol != null)
+      sb.append(", \"security_protocol\": \"").append(securityProtocol).append('"');
+    if(saslMecanism != null)
+      sb.append(", \"sasl_mecanism\": \"").append(saslMecanism).append('"');
+    if(saslJaasConfig != null)
+      sb.append(", \"sasl_jaas_config\": \"").append(saslJaasConfig).append('"');
+    sb.append('}');
+    return sb.toString();
+  }
 
+  @Override
+  public Properties toProps() {
+    Properties prop = new Properties();
+    prop.setProperty("key.serializer", KEY_SERIALIZER);
+    prop.setProperty("value.serializer", VALUE_SERIALIZER);
+    // mandatory
+    prop.setProperty("bootstrap.servers", bootstrapServers);
+    prop.setProperty("topic.name", topicName);
+    prop.setProperty("schema.registry.url", schemaRegistryUrl);
+    // optional
+    if(saslMecanism != null)
+      prop.setProperty("sasl.mechanism", saslMecanism);
+    if(securityProtocol != null)
+      prop.setProperty("security.protocol", securityProtocol);
+    if(saslJaasConfig != null)
+      prop.setProperty("sasl.jaas.config", saslJaasConfig);
+    return prop;
+  }
 
   public String getTopicName() {
     return topicName;
@@ -52,46 +87,18 @@ public class KafkaFileCallbackConfig extends AbstractFileCallbackConfig {
   public String getSchemaRegistryUrl() {
     return schemaRegistryUrl;
   }
-  public String getTopicUser() {
-    return topicUser;
-  }
-
-  public String getTopicPassword() {
-    return topicPassword;
-  }
-
   public String getBootstrapServers() {
     return bootstrapServers;
   }
 
-  public String getSecurityProtocols() {
-    return securityProtocols;
+  public String getSecurityProtocol() {
+    return securityProtocol;
+  }
+  public String getSaslMecanism() {
+    return saslMecanism;
   }
 
-  public String getKeySerializer() {
-    return keySerializer;
-  }
-
-  public String toJson() {
-    final StringBuffer sb = new StringBuffer("{");
-    sb.append("\"topic_name\": \"").append(topicName).append('"');
-    sb.append(", \"topic_user\": \"").append(topicUser).append('"');
-    sb.append(", \"topic_password\": \"").append(topicPassword).append('"');
-    sb.append(", \"bootstrap_servers\": \"").append(bootstrapServers).append('"');
-    sb.append(", \"security_protocols\": \"").append(securityProtocols).append('"');
-    sb.append(", \"schema_registry_url\": \"").append(schemaRegistryUrl).append('"');
-    sb.append('}');
-    return sb.toString();
-  }
-
-  @Override
-  public Properties toProps() {
-    Properties prop = new Properties();
-    prop.setProperty("bootstrap.servers", bootstrapServers);
-    prop.setProperty("topic.name", topicName);
-    prop.setProperty("key.serializer", keySerializer);
-    prop.setProperty("value.serializer", valueSerializer);
-    prop.setProperty("schema.registry.url", schemaRegistryUrl);
-    return prop;
+  public String getSaslJaasConfig() {
+    return saslJaasConfig;
   }
 }

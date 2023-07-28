@@ -463,7 +463,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     String bootstrapServers = kafka.bootstrapServers();
     String callbackTopic = "callback_topic";
     kafka.createTopic(callbackTopic);
-    KafkaFileCallbackConfig kafkaFileCallbackConfig = new KafkaFileCallbackConfig(callbackTopic, "", "", bootstrapServers, "", restApp.restServer.getURI().toString());
+    KafkaFileCallbackConfig kafkaFileCallbackConfig =
+            new KafkaFileCallbackConfig(callbackTopic, bootstrapServers, restApp.restServer.getURI().toString(), null, null, null);
     KafkaFileCallbackProvider callBack = new KafkaFileCallbackProvider(kafkaFileCallbackConfig.toJson(), false);
     callBack.call("baz-topic", "version/event/hour", "hey.avro", 12, 1234L, 123L, 34);
     ConsumerRecords<byte[], byte[]> res = kafka.consume(1, 1000L, callbackTopic);
@@ -471,6 +472,5 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     String key = new String(next.key());
     String value = new String(next.value());
     System.out.println(key + value);
-
   }
 }
