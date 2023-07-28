@@ -13,14 +13,16 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.connect.s3;
+package io.confluent.connect.s3.callback;
 
 import java.util.Properties;
 
 public class KafkaFileCallbackConfig extends AbstractFileCallbackConfig {
 
-  private final String KEY_SERIALIZER = "org.apache.kafka.common.serialization.StringSerializer";
-  private final String VALUE_SERIALIZER = "io.confluent.kafka.serializers.KafkaAvroSerializer";
+  private static final String KEY_SERIALIZER =
+      "org.apache.kafka.common.serialization.StringSerializer";
+  private static final String VALUE_SERIALIZER =
+      "io.confluent.kafka.serializers.KafkaAvroSerializer";
 
   private String topicName;
   private String bootstrapServers;
@@ -29,15 +31,16 @@ public class KafkaFileCallbackConfig extends AbstractFileCallbackConfig {
   private String saslMecanism;
   private String saslJaasConfig;
 
-  /**
-   * empty constructor for jackson
-   */
-  public KafkaFileCallbackConfig() {
-  }
+  /** empty constructor for jackson */
+  public KafkaFileCallbackConfig() {}
 
-  public KafkaFileCallbackConfig(String topicName, String bootstrapServers,
-                                 String schemaRegistryUrl, String securityProtocol,
-                                 String saslMecanism, String saslJaasConfig) {
+  public KafkaFileCallbackConfig(
+      String topicName,
+      String bootstrapServers,
+      String schemaRegistryUrl,
+      String securityProtocol,
+      String saslMecanism,
+      String saslJaasConfig) {
     this.topicName = topicName;
     this.bootstrapServers = bootstrapServers;
     this.schemaRegistryUrl = schemaRegistryUrl;
@@ -46,17 +49,28 @@ public class KafkaFileCallbackConfig extends AbstractFileCallbackConfig {
     this.saslJaasConfig = saslJaasConfig;
   }
 
+  private void validateFields() {
+    if (topicName == null || bootstrapServers == null || schemaRegistryUrl == null) {
+      throw new RuntimeException(
+          "topic_name, boostrap_servers and schema_registry_url shall be defined");
+    }
+  }
+
+  @Override
   public String toJson() {
     final StringBuffer sb = new StringBuffer("{");
     sb.append("\"topic_name\": \"").append(topicName).append('"');
     sb.append(", \"bootstrap_servers\": \"").append(bootstrapServers).append('"');
     sb.append(", \"schema_registry_url\": \"").append(schemaRegistryUrl).append('"');
-    if(securityProtocol != null)
+    if (securityProtocol != null) {
       sb.append(", \"security_protocol\": \"").append(securityProtocol).append('"');
-    if(saslMecanism != null)
+    }
+    if (saslMecanism != null) {
       sb.append(", \"sasl_mecanism\": \"").append(saslMecanism).append('"');
-    if(saslJaasConfig != null)
+    }
+    if (saslJaasConfig != null) {
       sb.append(", \"sasl_jaas_config\": \"").append(saslJaasConfig).append('"');
+    }
     sb.append('}');
     return sb.toString();
   }
@@ -71,12 +85,15 @@ public class KafkaFileCallbackConfig extends AbstractFileCallbackConfig {
     prop.setProperty("topic.name", topicName);
     prop.setProperty("schema.registry.url", schemaRegistryUrl);
     // optional
-    if(saslMecanism != null)
+    if (saslMecanism != null) {
       prop.setProperty("sasl.mechanism", saslMecanism);
-    if(securityProtocol != null)
+    }
+    if (securityProtocol != null) {
       prop.setProperty("security.protocol", securityProtocol);
-    if(saslJaasConfig != null)
+    }
+    if (saslJaasConfig != null) {
       prop.setProperty("sasl.jaas.config", saslJaasConfig);
+    }
     return prop;
   }
 
@@ -87,6 +104,7 @@ public class KafkaFileCallbackConfig extends AbstractFileCallbackConfig {
   public String getSchemaRegistryUrl() {
     return schemaRegistryUrl;
   }
+
   public String getBootstrapServers() {
     return bootstrapServers;
   }
@@ -94,6 +112,7 @@ public class KafkaFileCallbackConfig extends AbstractFileCallbackConfig {
   public String getSecurityProtocol() {
     return securityProtocol;
   }
+
   public String getSaslMecanism() {
     return saslMecanism;
   }

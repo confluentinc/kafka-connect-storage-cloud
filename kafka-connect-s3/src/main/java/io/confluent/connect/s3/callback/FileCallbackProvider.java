@@ -24,6 +24,12 @@ public abstract class FileCallbackProvider {
     this.skipError = skipError;
   }
 
-  abstract public void call(String topicName, String s3Partition, String filePath, int partition,
-            Long baseRecordTimestamp, Long currentTimestamp, int recordCount);
+  public abstract void call(
+      String topicName,
+      String s3Partition,
+      String filePath,
+      int partition,
+      Long baseRecordTimestamp,
+      Long currentTimestamp,
+      int recordCount);
 }

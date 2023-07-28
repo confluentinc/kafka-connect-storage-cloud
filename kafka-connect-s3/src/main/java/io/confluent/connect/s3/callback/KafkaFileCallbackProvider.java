@@ -15,7 +15,6 @@
 
 package io.confluent.connect.s3.callback;
 
-import io.confluent.connect.s3.KafkaFileCallbackConfig;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -29,30 +28,44 @@ public class KafkaFileCallbackProvider extends FileCallbackProvider {
 
   public KafkaFileCallbackProvider(String configJson, boolean skipError) {
     super(configJson, skipError);
-    this.kafkaConfig = KafkaFileCallbackConfig.fromJsonString(configJson,
-            KafkaFileCallbackConfig.class);
+    this.kafkaConfig =
+        KafkaFileCallbackConfig.fromJsonString(configJson, KafkaFileCallbackConfig.class);
   }
 
   @Override
-  public void call(String topicName,String s3Partition, String filePath, int partition,
-                   Long baseRecordTimestamp, Long currentTimestamp, int recordCount) {
+  public void call(
+      String topicName,
+      String s3Partition,
+      String filePath,
+      int partition,
+      Long baseRecordTimestamp,
+      Long currentTimestamp,
+      int recordCount) {
     String key = topicName;
-    Callback value = new Callback(topicName, s3Partition, filePath, partition,
-            baseRecordTimestamp, currentTimestamp, recordCount);
+    Callback value =
+        new Callback(
+            topicName,
+            s3Partition,
+            filePath,
+            partition,
+            baseRecordTimestamp,
+            currentTimestamp,
+            recordCount);
     try (final Producer<String, SpecificRecord> producer =
-                 new KafkaProducer<>(kafkaConfig.toProps())) {
-      producer.send(new ProducerRecord<>(kafkaConfig.getTopicName(), key, value),
-              (event, ex) -> {
-                if (ex != null) {
-                  throw new RuntimeException(ex);
-                }
-              });
+        new KafkaProducer<>(kafkaConfig.toProps())) {
+      producer.send(
+          new ProducerRecord<>(kafkaConfig.getTopicName(), key, value),
+          (event, ex) -> {
+            if (ex != null) {
+              throw new RuntimeException(ex);
+            }
+          });
     } catch (Exception e) {
-      if(skipError)
+      if (skipError) {
         log.error(e.getMessage(), e);
-      else
+      } else {
         throw new RuntimeException(e);
+      }
     }
   }
-
 }

@@ -789,6 +789,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.LONG,
           "Elastic buffer initial capacity"
       );
+    }
+
+    {
+      final String group = "File callback";
+      int orderInGroup = 0;
 
       configDef.define(
               FILE_CALLBACK_ENABLE,
@@ -836,13 +841,15 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
               Type.STRING,
               FILE_CALLBACK_CONFIG_JSON_DEFAULT,
               Importance.LOW,
-              "File callback configuration as json format. By default an empty json.",
+              "File callback configuration as json format. "
+                      + "Mandatory Fields: bootstrap_servers, topic_name, schema_registry_url. "
+                      + "Optional fields: sasl_mechanism, security_protocol, sasl_jaas_config. "
+                      + "By default an empty json.",
               group,
               ++orderInGroup,
               Width.LONG,
               "File callback config json"
       );
-
     }
     return configDef;
   }

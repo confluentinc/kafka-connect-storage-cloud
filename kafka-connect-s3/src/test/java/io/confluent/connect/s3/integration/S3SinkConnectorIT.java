@@ -26,19 +26,16 @@ import static org.hamcrest.core.StringStartsWith.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import io.confluent.connect.s3.KafkaFileCallbackConfig;
+import io.confluent.connect.s3.callback.KafkaFileCallbackConfig;
 import io.confluent.connect.s3.S3SinkConnector;
 import io.confluent.connect.s3.S3SinkConnectorConfig.IgnoreOrFailBehavior;
 import io.confluent.connect.s3.S3SinkConnectorConfig.OutputWriteBehavior;
-import io.confluent.connect.s3.callback.Callback;
 import io.confluent.connect.s3.callback.KafkaFileCallbackProvider;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.storage.S3Storage;
 import java.io.File;
-import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -51,7 +48,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import io.confluent.connect.s3.util.EmbeddedConnectUtils;
-import jdk.nashorn.internal.codegen.CompilerConstants;
 import org.apache.commons.io.FileUtils;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -457,20 +453,28 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   @Test
-  public void testCallBackPartition() throws IOException {
+  public void testCallBackPartition() {
     EmbeddedKafkaCluster kafka = connect.kafka();
     kafka.start();
     String bootstrapServers = kafka.bootstrapServers();
     String callbackTopic = "callback_topic";
     kafka.createTopic(callbackTopic);
     KafkaFileCallbackConfig kafkaFileCallbackConfig =
-            new KafkaFileCallbackConfig(callbackTopic, bootstrapServers, restApp.restServer.getURI().toString(), null, null, null);
-    KafkaFileCallbackProvider callBack = new KafkaFileCallbackProvider(kafkaFileCallbackConfig.toJson(), false);
-    callBack.call("baz-topic", "version/event/hour", "hey.avro", 12, 1234L, 123L, 34);
-    ConsumerRecords<byte[], byte[]> res = kafka.consume(1, 1000L, callbackTopic);
-    ConsumerRecord<byte[], byte[]> next = res.iterator().next();
-    String key = new String(next.key());
-    String value = new String(next.value());
-    System.out.println(key + value);
+        new KafkaFileCallbackConfig(
+            callbackTopic,
+            bootstrapServers,
+            restApp.restServer.getURI().toString(),
+            null,
+            null,
+            null);
+    KafkaFileCallbackProvider callBack =
+        new KafkaFileCallbackProvider(kafkaFileCallbackConfig.toJson(), false);
+    callBack.call("baz-topic", "version/event/hour", "file1.avro", 12,
+            1234L, 123L, 34);
+    callBack.call("foo-topic", "version/event/hour", "fil2.avro", 8,
+            12345L, 1234L, 12);
+
+    // fails if two records are not present in kafka within 1s
+    kafka.consume(2, 1000L, callbackTopic);
   }
 }

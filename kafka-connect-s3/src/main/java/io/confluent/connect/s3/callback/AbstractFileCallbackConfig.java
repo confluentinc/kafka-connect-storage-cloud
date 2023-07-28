@@ -13,27 +13,26 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.connect.s3;
+package io.confluent.connect.s3.callback;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
-
 import java.io.IOException;
 import java.util.Properties;
 
 public abstract class AbstractFileCallbackConfig {
-  public static <T extends AbstractFileCallbackConfig> T fromJsonString(String jsonContent,
-                                                                        Class<T> clazz) {
+  public static <T extends AbstractFileCallbackConfig> T fromJsonString(
+      String jsonContent, Class<T> clazz) {
     try {
       if (jsonContent == null) {
         return clazz.newInstance();
       }
       ObjectMapper instanceMapper = new ObjectMapper();
       instanceMapper.setPropertyNamingStrategy(
-              PropertyNamingStrategy.CAMEL_CASE_TO_LOWER_CASE_WITH_UNDERSCORES);
+          PropertyNamingStrategy.CAMEL_CASE_TO_LOWER_CASE_WITH_UNDERSCORES);
       instanceMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
       instanceMapper.configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true);
       instanceMapper.enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS);
@@ -44,4 +43,6 @@ public abstract class AbstractFileCallbackConfig {
   }
 
   public abstract Properties toProps();
+
+  public abstract String toJson();
 }

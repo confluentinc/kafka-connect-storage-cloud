@@ -197,7 +197,8 @@ public class TopicPartitionWriter {
       try {
         fileCallback = Optional.of((FileCallbackProvider)this.connectorConfig
                 .getFileCallbackClass().getConstructor(FileCallbackProvider.class)
-                .newInstance(connectorConfig.getFileCallbackConfigJson(), connectorConfig.getFileCallbackSkipError()));
+                .newInstance(connectorConfig.getFileCallbackConfigJson(),
+                        connectorConfig.getFileCallbackSkipError()));
       } catch (InstantiationException | IllegalAccessException
                | InvocationTargetException | NoSuchMethodException e) {
         throw new RuntimeException(e);
