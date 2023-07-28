@@ -1,0 +1,43 @@
+{
+  "namespace": "io.confluent.connect.s3.callback",
+  "type": "record",
+  "name": "Callback",
+  "doc": "This event represents a callback Message",
+  "fields": [
+    {
+      "name": "topicName",
+      "type": "string",
+      "doc": "A unique event ID (UUID)"
+    },
+    {
+      "name": "s3Partition",
+      "type": "string",
+      "doc": "A unique event ID (UUID)"
+    },
+    {
+      "name": "filePath",
+      "type": "string",
+      "doc": "A unique event ID (UUID)"
+    },
+    {
+      "name": "partition",
+      "type": "int",
+      "doc": "A unique event ID (UUID)"
+    },
+    {
+      "name": "baseRecordTimestamp",
+      "type": "long",
+      "doc": "A unique event ID (UUID)"
+    },
+    {
+      "name": "currentTimestamp",
+      "type": "long",
+      "doc": "A unique event ID (UUID)"
+    },
+    {
+      "name": "recordCount",
+      "type": "int",
+      "doc": "A unique event ID (UUID)"
+    }
+  ]
+}

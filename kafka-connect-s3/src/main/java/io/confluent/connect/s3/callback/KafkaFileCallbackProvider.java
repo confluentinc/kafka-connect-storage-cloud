@@ -20,10 +20,11 @@ import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-
-import java.util.Arrays;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class KafkaFileCallbackProvider implements FileCallbackProvider {
+  private static final Logger log = LoggerFactory.getLogger(KafkaFileCallbackProvider.class);
   private final String configJson;
   private final KafkaFileCallbackConfig kafkaConfig;
 
@@ -36,9 +37,6 @@ public class KafkaFileCallbackProvider implements FileCallbackProvider {
   @Override
   public void call(String topicName,String s3Partition, String filePath, int partition,
                    Long baseRecordTimestamp, Long currentTimestamp, int recordCount) {
-    String value = String.join("|", Arrays.asList(topicName, s3Partition, filePath,
-            String.valueOf(partition), String.valueOf(baseRecordTimestamp),
-            String.valueOf(currentTimestamp), String.valueOf(recordCount)));
     Callback callback = new Callback(topicName, s3Partition, filePath, partition,
             baseRecordTimestamp, currentTimestamp, recordCount);
     try (final Producer<String, SpecificRecord> producer =
@@ -46,11 +44,11 @@ public class KafkaFileCallbackProvider implements FileCallbackProvider {
       producer.send(new ProducerRecord<>(kafkaConfig.getTopicName(), topicName, callback),
               (event, ex) -> {
                 if (ex != null) {
-                  ex.printStackTrace();
+                  throw new RuntimeException(ex);
                 }
               });
     } catch (Exception e) {
-      System.out.println("foo");
+      log.error(e.getMessage(), e);
     }
   }
 

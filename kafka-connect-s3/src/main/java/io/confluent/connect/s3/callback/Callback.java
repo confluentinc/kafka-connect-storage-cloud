@@ -16,16 +16,18 @@ import org.apache.avro.message.SchemaStore;
 @org.apache.avro.specific.AvroGenerated
 public class Callback extends org.apache.avro.specific.SpecificRecordBase implements org.apache.avro.specific.SpecificRecord {
   private static final long serialVersionUID = 5786357167649199011L;
-  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"Callback\",\"namespace\":\"io.confluent.connect.s3.callback\",\"doc\":\"This event represents a callback Message\",\"fields\":[{\"name\":\"topicName\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"},\"doc\":\"A unique event ID (UUID)\"},{\"name\":\"s3Partition\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"},\"doc\":\"A unique event ID (UUID)\"},{\"name\":\"filePath\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"},\"doc\":\"A unique event ID (UUID)\"},{\"name\":\"partition\",\"type\":\"int\",\"doc\":\"A unique event ID (UUID)\"},{\"name\":\"baseRecordTimestamp\",\"type\":\"long\",\"doc\":\"A unique event ID (UUID)\"},{\"name\":\"currentTimestamp\",\"type\":\"long\",\"doc\":\"A unique event ID (UUID)\"},{\"name\":\"recordCount\",\"type\":\"int\",\"doc\":\"A unique event ID (UUID)\"}]}");
+
+
+  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"Callback\",\"namespace\":\"io.confluent.connect.s3.callback\",\"doc\":\"This event represents a callback Message\",\"fields\":[{\"name\":\"topicName\",\"type\":\"string\",\"doc\":\"A unique event ID (UUID)\"},{\"name\":\"s3Partition\",\"type\":\"string\",\"doc\":\"A unique event ID (UUID)\"},{\"name\":\"filePath\",\"type\":\"string\",\"doc\":\"A unique event ID (UUID)\"},{\"name\":\"partition\",\"type\":\"int\",\"doc\":\"A unique event ID (UUID)\"},{\"name\":\"baseRecordTimestamp\",\"type\":\"long\",\"doc\":\"A unique event ID (UUID)\"},{\"name\":\"currentTimestamp\",\"type\":\"long\",\"doc\":\"A unique event ID (UUID)\"},{\"name\":\"recordCount\",\"type\":\"int\",\"doc\":\"A unique event ID (UUID)\"}]}");
   public static org.apache.avro.Schema getClassSchema() { return SCHEMA$; }
 
-  private static SpecificData MODEL$ = new SpecificData();
+  private static final SpecificData MODEL$ = new SpecificData();
 
   private static final BinaryMessageEncoder<Callback> ENCODER =
-          new BinaryMessageEncoder<Callback>(MODEL$, SCHEMA$);
+      new BinaryMessageEncoder<>(MODEL$, SCHEMA$);
 
   private static final BinaryMessageDecoder<Callback> DECODER =
-          new BinaryMessageDecoder<Callback>(MODEL$, SCHEMA$);
+      new BinaryMessageDecoder<>(MODEL$, SCHEMA$);
 
   /**
    * Return the BinaryMessageEncoder instance used by this class.
@@ -49,7 +51,7 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
    * @return a BinaryMessageDecoder instance for this class backed by the given SchemaStore
    */
   public static BinaryMessageDecoder<Callback> createDecoder(SchemaStore resolver) {
-    return new BinaryMessageDecoder<Callback>(MODEL$, SCHEMA$, resolver);
+    return new BinaryMessageDecoder<>(MODEL$, SCHEMA$, resolver);
   }
 
   /**
@@ -68,24 +70,24 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
    * @throws java.io.IOException if the given bytes could not be deserialized into an instance of this class
    */
   public static Callback fromByteBuffer(
-          java.nio.ByteBuffer b) throws java.io.IOException {
+      java.nio.ByteBuffer b) throws java.io.IOException {
     return DECODER.decode(b);
   }
 
   /** A unique event ID (UUID) */
-  @Deprecated public java.lang.String topicName;
+  private java.lang.CharSequence topicName;
   /** A unique event ID (UUID) */
-  @Deprecated public java.lang.String s3Partition;
+  private java.lang.CharSequence s3Partition;
   /** A unique event ID (UUID) */
-  @Deprecated public java.lang.String filePath;
+  private java.lang.CharSequence filePath;
   /** A unique event ID (UUID) */
-  @Deprecated public int partition;
+  private int partition;
   /** A unique event ID (UUID) */
-  @Deprecated public long baseRecordTimestamp;
+  private long baseRecordTimestamp;
   /** A unique event ID (UUID) */
-  @Deprecated public long currentTimestamp;
+  private long currentTimestamp;
   /** A unique event ID (UUID) */
-  @Deprecated public int recordCount;
+  private int recordCount;
 
   /**
    * Default constructor.  Note that this does not initialize fields
@@ -104,7 +106,7 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
    * @param currentTimestamp A unique event ID (UUID)
    * @param recordCount A unique event ID (UUID)
    */
-  public Callback(java.lang.String topicName, java.lang.String s3Partition, java.lang.String filePath, java.lang.Integer partition, java.lang.Long baseRecordTimestamp, java.lang.Long currentTimestamp, java.lang.Integer recordCount) {
+  public Callback(java.lang.CharSequence topicName, java.lang.CharSequence s3Partition, java.lang.CharSequence filePath, java.lang.Integer partition, java.lang.Long baseRecordTimestamp, java.lang.Long currentTimestamp, java.lang.Integer recordCount) {
     this.topicName = topicName;
     this.s3Partition = s3Partition;
     this.filePath = filePath;
@@ -114,34 +116,40 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
     this.recordCount = recordCount;
   }
 
+  @Override
   public org.apache.avro.specific.SpecificData getSpecificData() { return MODEL$; }
+
+  @Override
   public org.apache.avro.Schema getSchema() { return SCHEMA$; }
+
   // Used by DatumWriter.  Applications should not call.
+  @Override
   public java.lang.Object get(int field$) {
     switch (field$) {
-      case 0: return topicName;
-      case 1: return s3Partition;
-      case 2: return filePath;
-      case 3: return partition;
-      case 4: return baseRecordTimestamp;
-      case 5: return currentTimestamp;
-      case 6: return recordCount;
-      default: throw new org.apache.avro.AvroRuntimeException("Bad index");
+    case 0: return topicName;
+    case 1: return s3Partition;
+    case 2: return filePath;
+    case 3: return partition;
+    case 4: return baseRecordTimestamp;
+    case 5: return currentTimestamp;
+    case 6: return recordCount;
+    default: throw new IndexOutOfBoundsException("Invalid index: " + field$);
     }
   }
 
   // Used by DatumReader.  Applications should not call.
+  @Override
   @SuppressWarnings(value="unchecked")
   public void put(int field$, java.lang.Object value$) {
     switch (field$) {
-      case 0: topicName = (java.lang.String)value$; break;
-      case 1: s3Partition = (java.lang.String)value$; break;
-      case 2: filePath = (java.lang.String)value$; break;
-      case 3: partition = (java.lang.Integer)value$; break;
-      case 4: baseRecordTimestamp = (java.lang.Long)value$; break;
-      case 5: currentTimestamp = (java.lang.Long)value$; break;
-      case 6: recordCount = (java.lang.Integer)value$; break;
-      default: throw new org.apache.avro.AvroRuntimeException("Bad index");
+    case 0: topicName = (java.lang.CharSequence)value$; break;
+    case 1: s3Partition = (java.lang.CharSequence)value$; break;
+    case 2: filePath = (java.lang.CharSequence)value$; break;
+    case 3: partition = (java.lang.Integer)value$; break;
+    case 4: baseRecordTimestamp = (java.lang.Long)value$; break;
+    case 5: currentTimestamp = (java.lang.Long)value$; break;
+    case 6: recordCount = (java.lang.Integer)value$; break;
+    default: throw new IndexOutOfBoundsException("Invalid index: " + field$);
     }
   }
 
@@ -149,7 +157,7 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
    * Gets the value of the 'topicName' field.
    * @return A unique event ID (UUID)
    */
-  public java.lang.String getTopicName() {
+  public java.lang.CharSequence getTopicName() {
     return topicName;
   }
 
@@ -159,7 +167,7 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
    * A unique event ID (UUID)
    * @param value the value to set.
    */
-  public void setTopicName(java.lang.String value) {
+  public void setTopicName(java.lang.CharSequence value) {
     this.topicName = value;
   }
 
@@ -167,7 +175,7 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
    * Gets the value of the 's3Partition' field.
    * @return A unique event ID (UUID)
    */
-  public java.lang.String getS3Partition() {
+  public java.lang.CharSequence getS3Partition() {
     return s3Partition;
   }
 
@@ -177,7 +185,7 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
    * A unique event ID (UUID)
    * @param value the value to set.
    */
-  public void setS3Partition(java.lang.String value) {
+  public void setS3Partition(java.lang.CharSequence value) {
     this.s3Partition = value;
   }
 
@@ -185,7 +193,7 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
    * Gets the value of the 'filePath' field.
    * @return A unique event ID (UUID)
    */
-  public java.lang.String getFilePath() {
+  public java.lang.CharSequence getFilePath() {
     return filePath;
   }
 
@@ -195,7 +203,7 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
    * A unique event ID (UUID)
    * @param value the value to set.
    */
-  public void setFilePath(java.lang.String value) {
+  public void setFilePath(java.lang.CharSequence value) {
     this.filePath = value;
   }
 
@@ -308,15 +316,16 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
   /**
    * RecordBuilder for Callback instances.
    */
+  @org.apache.avro.specific.AvroGenerated
   public static class Builder extends org.apache.avro.specific.SpecificRecordBuilderBase<Callback>
-          implements org.apache.avro.data.RecordBuilder<Callback> {
+    implements org.apache.avro.data.RecordBuilder<Callback> {
 
     /** A unique event ID (UUID) */
-    private java.lang.String topicName;
+    private java.lang.CharSequence topicName;
     /** A unique event ID (UUID) */
-    private java.lang.String s3Partition;
+    private java.lang.CharSequence s3Partition;
     /** A unique event ID (UUID) */
-    private java.lang.String filePath;
+    private java.lang.CharSequence filePath;
     /** A unique event ID (UUID) */
     private int partition;
     /** A unique event ID (UUID) */
@@ -328,7 +337,7 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
 
     /** Creates a new Builder */
     private Builder() {
-      super(SCHEMA$);
+      super(SCHEMA$, MODEL$);
     }
 
     /**
@@ -372,7 +381,7 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
      * @param other The existing instance to copy.
      */
     private Builder(io.confluent.connect.s3.callback.Callback other) {
-      super(SCHEMA$);
+      super(SCHEMA$, MODEL$);
       if (isValidValue(fields()[0], other.topicName)) {
         this.topicName = data().deepCopy(fields()[0].schema(), other.topicName);
         fieldSetFlags()[0] = true;
@@ -404,22 +413,22 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
     }
 
     /**
-     * Gets the value of the 'topicName' field.
-     * A unique event ID (UUID)
-     * @return The value.
-     */
-    public java.lang.String getTopicName() {
+      * Gets the value of the 'topicName' field.
+      * A unique event ID (UUID)
+      * @return The value.
+      */
+    public java.lang.CharSequence getTopicName() {
       return topicName;
     }
 
 
     /**
-     * Sets the value of the 'topicName' field.
-     * A unique event ID (UUID)
-     * @param value The value of 'topicName'.
-     * @return This builder.
-     */
-    public io.confluent.connect.s3.callback.Callback.Builder setTopicName(java.lang.String value) {
+      * Sets the value of the 'topicName' field.
+      * A unique event ID (UUID)
+      * @param value The value of 'topicName'.
+      * @return This builder.
+      */
+    public io.confluent.connect.s3.callback.Callback.Builder setTopicName(java.lang.CharSequence value) {
       validate(fields()[0], value);
       this.topicName = value;
       fieldSetFlags()[0] = true;
@@ -427,20 +436,20 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
     }
 
     /**
-     * Checks whether the 'topicName' field has been set.
-     * A unique event ID (UUID)
-     * @return True if the 'topicName' field has been set, false otherwise.
-     */
+      * Checks whether the 'topicName' field has been set.
+      * A unique event ID (UUID)
+      * @return True if the 'topicName' field has been set, false otherwise.
+      */
     public boolean hasTopicName() {
       return fieldSetFlags()[0];
     }
 
 
     /**
-     * Clears the value of the 'topicName' field.
-     * A unique event ID (UUID)
-     * @return This builder.
-     */
+      * Clears the value of the 'topicName' field.
+      * A unique event ID (UUID)
+      * @return This builder.
+      */
     public io.confluent.connect.s3.callback.Callback.Builder clearTopicName() {
       topicName = null;
       fieldSetFlags()[0] = false;
@@ -448,22 +457,22 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
     }
 
     /**
-     * Gets the value of the 's3Partition' field.
-     * A unique event ID (UUID)
-     * @return The value.
-     */
-    public java.lang.String getS3Partition() {
+      * Gets the value of the 's3Partition' field.
+      * A unique event ID (UUID)
+      * @return The value.
+      */
+    public java.lang.CharSequence getS3Partition() {
       return s3Partition;
     }
 
 
     /**
-     * Sets the value of the 's3Partition' field.
-     * A unique event ID (UUID)
-     * @param value The value of 's3Partition'.
-     * @return This builder.
-     */
-    public io.confluent.connect.s3.callback.Callback.Builder setS3Partition(java.lang.String value) {
+      * Sets the value of the 's3Partition' field.
+      * A unique event ID (UUID)
+      * @param value The value of 's3Partition'.
+      * @return This builder.
+      */
+    public io.confluent.connect.s3.callback.Callback.Builder setS3Partition(java.lang.CharSequence value) {
       validate(fields()[1], value);
       this.s3Partition = value;
       fieldSetFlags()[1] = true;
@@ -471,20 +480,20 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
     }
 
     /**
-     * Checks whether the 's3Partition' field has been set.
-     * A unique event ID (UUID)
-     * @return True if the 's3Partition' field has been set, false otherwise.
-     */
+      * Checks whether the 's3Partition' field has been set.
+      * A unique event ID (UUID)
+      * @return True if the 's3Partition' field has been set, false otherwise.
+      */
     public boolean hasS3Partition() {
       return fieldSetFlags()[1];
     }
 
 
     /**
-     * Clears the value of the 's3Partition' field.
-     * A unique event ID (UUID)
-     * @return This builder.
-     */
+      * Clears the value of the 's3Partition' field.
+      * A unique event ID (UUID)
+      * @return This builder.
+      */
     public io.confluent.connect.s3.callback.Callback.Builder clearS3Partition() {
       s3Partition = null;
       fieldSetFlags()[1] = false;
@@ -492,22 +501,22 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
     }
 
     /**
-     * Gets the value of the 'filePath' field.
-     * A unique event ID (UUID)
-     * @return The value.
-     */
-    public java.lang.String getFilePath() {
+      * Gets the value of the 'filePath' field.
+      * A unique event ID (UUID)
+      * @return The value.
+      */
+    public java.lang.CharSequence getFilePath() {
       return filePath;
     }
 
 
     /**
-     * Sets the value of the 'filePath' field.
-     * A unique event ID (UUID)
-     * @param value The value of 'filePath'.
-     * @return This builder.
-     */
-    public io.confluent.connect.s3.callback.Callback.Builder setFilePath(java.lang.String value) {
+      * Sets the value of the 'filePath' field.
+      * A unique event ID (UUID)
+      * @param value The value of 'filePath'.
+      * @return This builder.
+      */
+    public io.confluent.connect.s3.callback.Callback.Builder setFilePath(java.lang.CharSequence value) {
       validate(fields()[2], value);
       this.filePath = value;
       fieldSetFlags()[2] = true;
@@ -515,20 +524,20 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
     }
 
     /**
-     * Checks whether the 'filePath' field has been set.
-     * A unique event ID (UUID)
-     * @return True if the 'filePath' field has been set, false otherwise.
-     */
+      * Checks whether the 'filePath' field has been set.
+      * A unique event ID (UUID)
+      * @return True if the 'filePath' field has been set, false otherwise.
+      */
     public boolean hasFilePath() {
       return fieldSetFlags()[2];
     }
 
 
     /**
-     * Clears the value of the 'filePath' field.
-     * A unique event ID (UUID)
-     * @return This builder.
-     */
+      * Clears the value of the 'filePath' field.
+      * A unique event ID (UUID)
+      * @return This builder.
+      */
     public io.confluent.connect.s3.callback.Callback.Builder clearFilePath() {
       filePath = null;
       fieldSetFlags()[2] = false;
@@ -536,21 +545,21 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
     }
 
     /**
-     * Gets the value of the 'partition' field.
-     * A unique event ID (UUID)
-     * @return The value.
-     */
+      * Gets the value of the 'partition' field.
+      * A unique event ID (UUID)
+      * @return The value.
+      */
     public int getPartition() {
       return partition;
     }
 
 
     /**
-     * Sets the value of the 'partition' field.
-     * A unique event ID (UUID)
-     * @param value The value of 'partition'.
-     * @return This builder.
-     */
+      * Sets the value of the 'partition' field.
+      * A unique event ID (UUID)
+      * @param value The value of 'partition'.
+      * @return This builder.
+      */
     public io.confluent.connect.s3.callback.Callback.Builder setPartition(int value) {
       validate(fields()[3], value);
       this.partition = value;
@@ -559,41 +568,41 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
     }
 
     /**
-     * Checks whether the 'partition' field has been set.
-     * A unique event ID (UUID)
-     * @return True if the 'partition' field has been set, false otherwise.
-     */
+      * Checks whether the 'partition' field has been set.
+      * A unique event ID (UUID)
+      * @return True if the 'partition' field has been set, false otherwise.
+      */
     public boolean hasPartition() {
       return fieldSetFlags()[3];
     }
 
 
     /**
-     * Clears the value of the 'partition' field.
-     * A unique event ID (UUID)
-     * @return This builder.
-     */
+      * Clears the value of the 'partition' field.
+      * A unique event ID (UUID)
+      * @return This builder.
+      */
     public io.confluent.connect.s3.callback.Callback.Builder clearPartition() {
       fieldSetFlags()[3] = false;
       return this;
     }
 
     /**
-     * Gets the value of the 'baseRecordTimestamp' field.
-     * A unique event ID (UUID)
-     * @return The value.
-     */
+      * Gets the value of the 'baseRecordTimestamp' field.
+      * A unique event ID (UUID)
+      * @return The value.
+      */
     public long getBaseRecordTimestamp() {
       return baseRecordTimestamp;
     }
 
 
     /**
-     * Sets the value of the 'baseRecordTimestamp' field.
-     * A unique event ID (UUID)
-     * @param value The value of 'baseRecordTimestamp'.
-     * @return This builder.
-     */
+      * Sets the value of the 'baseRecordTimestamp' field.
+      * A unique event ID (UUID)
+      * @param value The value of 'baseRecordTimestamp'.
+      * @return This builder.
+      */
     public io.confluent.connect.s3.callback.Callback.Builder setBaseRecordTimestamp(long value) {
       validate(fields()[4], value);
       this.baseRecordTimestamp = value;
@@ -602,41 +611,41 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
     }
 
     /**
-     * Checks whether the 'baseRecordTimestamp' field has been set.
-     * A unique event ID (UUID)
-     * @return True if the 'baseRecordTimestamp' field has been set, false otherwise.
-     */
+      * Checks whether the 'baseRecordTimestamp' field has been set.
+      * A unique event ID (UUID)
+      * @return True if the 'baseRecordTimestamp' field has been set, false otherwise.
+      */
     public boolean hasBaseRecordTimestamp() {
       return fieldSetFlags()[4];
     }
 
 
     /**
-     * Clears the value of the 'baseRecordTimestamp' field.
-     * A unique event ID (UUID)
-     * @return This builder.
-     */
+      * Clears the value of the 'baseRecordTimestamp' field.
+      * A unique event ID (UUID)
+      * @return This builder.
+      */
     public io.confluent.connect.s3.callback.Callback.Builder clearBaseRecordTimestamp() {
       fieldSetFlags()[4] = false;
       return this;
     }
 
     /**
-     * Gets the value of the 'currentTimestamp' field.
-     * A unique event ID (UUID)
-     * @return The value.
-     */
+      * Gets the value of the 'currentTimestamp' field.
+      * A unique event ID (UUID)
+      * @return The value.
+      */
     public long getCurrentTimestamp() {
       return currentTimestamp;
     }
 
 
     /**
-     * Sets the value of the 'currentTimestamp' field.
-     * A unique event ID (UUID)
-     * @param value The value of 'currentTimestamp'.
-     * @return This builder.
-     */
+      * Sets the value of the 'currentTimestamp' field.
+      * A unique event ID (UUID)
+      * @param value The value of 'currentTimestamp'.
+      * @return This builder.
+      */
     public io.confluent.connect.s3.callback.Callback.Builder setCurrentTimestamp(long value) {
       validate(fields()[5], value);
       this.currentTimestamp = value;
@@ -645,41 +654,41 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
     }
 
     /**
-     * Checks whether the 'currentTimestamp' field has been set.
-     * A unique event ID (UUID)
-     * @return True if the 'currentTimestamp' field has been set, false otherwise.
-     */
+      * Checks whether the 'currentTimestamp' field has been set.
+      * A unique event ID (UUID)
+      * @return True if the 'currentTimestamp' field has been set, false otherwise.
+      */
     public boolean hasCurrentTimestamp() {
       return fieldSetFlags()[5];
     }
 
 
     /**
-     * Clears the value of the 'currentTimestamp' field.
-     * A unique event ID (UUID)
-     * @return This builder.
-     */
+      * Clears the value of the 'currentTimestamp' field.
+      * A unique event ID (UUID)
+      * @return This builder.
+      */
     public io.confluent.connect.s3.callback.Callback.Builder clearCurrentTimestamp() {
       fieldSetFlags()[5] = false;
       return this;
     }
 
     /**
-     * Gets the value of the 'recordCount' field.
-     * A unique event ID (UUID)
-     * @return The value.
-     */
+      * Gets the value of the 'recordCount' field.
+      * A unique event ID (UUID)
+      * @return The value.
+      */
     public int getRecordCount() {
       return recordCount;
     }
 
 
     /**
-     * Sets the value of the 'recordCount' field.
-     * A unique event ID (UUID)
-     * @param value The value of 'recordCount'.
-     * @return This builder.
-     */
+      * Sets the value of the 'recordCount' field.
+      * A unique event ID (UUID)
+      * @param value The value of 'recordCount'.
+      * @return This builder.
+      */
     public io.confluent.connect.s3.callback.Callback.Builder setRecordCount(int value) {
       validate(fields()[6], value);
       this.recordCount = value;
@@ -688,20 +697,20 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
     }
 
     /**
-     * Checks whether the 'recordCount' field has been set.
-     * A unique event ID (UUID)
-     * @return True if the 'recordCount' field has been set, false otherwise.
-     */
+      * Checks whether the 'recordCount' field has been set.
+      * A unique event ID (UUID)
+      * @return True if the 'recordCount' field has been set, false otherwise.
+      */
     public boolean hasRecordCount() {
       return fieldSetFlags()[6];
     }
 
 
     /**
-     * Clears the value of the 'recordCount' field.
-     * A unique event ID (UUID)
-     * @return This builder.
-     */
+      * Clears the value of the 'recordCount' field.
+      * A unique event ID (UUID)
+      * @return This builder.
+      */
     public io.confluent.connect.s3.callback.Callback.Builder clearRecordCount() {
       fieldSetFlags()[6] = false;
       return this;
@@ -712,9 +721,9 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
     public Callback build() {
       try {
         Callback record = new Callback();
-        record.topicName = fieldSetFlags()[0] ? this.topicName : (java.lang.String) defaultValue(fields()[0]);
-        record.s3Partition = fieldSetFlags()[1] ? this.s3Partition : (java.lang.String) defaultValue(fields()[1]);
-        record.filePath = fieldSetFlags()[2] ? this.filePath : (java.lang.String) defaultValue(fields()[2]);
+        record.topicName = fieldSetFlags()[0] ? this.topicName : (java.lang.CharSequence) defaultValue(fields()[0]);
+        record.s3Partition = fieldSetFlags()[1] ? this.s3Partition : (java.lang.CharSequence) defaultValue(fields()[1]);
+        record.filePath = fieldSetFlags()[2] ? this.filePath : (java.lang.CharSequence) defaultValue(fields()[2]);
         record.partition = fieldSetFlags()[3] ? this.partition : (java.lang.Integer) defaultValue(fields()[3]);
         record.baseRecordTimestamp = fieldSetFlags()[4] ? this.baseRecordTimestamp : (java.lang.Long) defaultValue(fields()[4]);
         record.currentTimestamp = fieldSetFlags()[5] ? this.currentTimestamp : (java.lang.Long) defaultValue(fields()[5]);
@@ -730,26 +739,26 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
 
   @SuppressWarnings("unchecked")
   private static final org.apache.avro.io.DatumWriter<Callback>
-          WRITER$ = (org.apache.avro.io.DatumWriter<Callback>)MODEL$.createDatumWriter(SCHEMA$);
+    WRITER$ = (org.apache.avro.io.DatumWriter<Callback>)MODEL$.createDatumWriter(SCHEMA$);
 
   @Override public void writeExternal(java.io.ObjectOutput out)
-          throws java.io.IOException {
+    throws java.io.IOException {
     WRITER$.write(this, SpecificData.getEncoder(out));
   }
 
   @SuppressWarnings("unchecked")
   private static final org.apache.avro.io.DatumReader<Callback>
-          READER$ = (org.apache.avro.io.DatumReader<Callback>)MODEL$.createDatumReader(SCHEMA$);
+    READER$ = (org.apache.avro.io.DatumReader<Callback>)MODEL$.createDatumReader(SCHEMA$);
 
   @Override public void readExternal(java.io.ObjectInput in)
-          throws java.io.IOException {
+    throws java.io.IOException {
     READER$.read(this, SpecificData.getDecoder(in));
   }
 
   @Override protected boolean hasCustomCoders() { return true; }
 
   @Override public void customEncode(org.apache.avro.io.Encoder out)
-          throws java.io.IOException
+    throws java.io.IOException
   {
     out.writeString(this.topicName);
 
@@ -768,15 +777,15 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
   }
 
   @Override public void customDecode(org.apache.avro.io.ResolvingDecoder in)
-          throws java.io.IOException
+    throws java.io.IOException
   {
     org.apache.avro.Schema.Field[] fieldOrder = in.readFieldOrderIfDiff();
     if (fieldOrder == null) {
-      this.topicName = in.readString();
+      this.topicName = in.readString(this.topicName instanceof Utf8 ? (Utf8)this.topicName : null);
 
-      this.s3Partition = in.readString();
+      this.s3Partition = in.readString(this.s3Partition instanceof Utf8 ? (Utf8)this.s3Partition : null);
 
-      this.filePath = in.readString();
+      this.filePath = in.readString(this.filePath instanceof Utf8 ? (Utf8)this.filePath : null);
 
       this.partition = in.readInt();
 
@@ -789,38 +798,48 @@ public class Callback extends org.apache.avro.specific.SpecificRecordBase implem
     } else {
       for (int i = 0; i < 7; i++) {
         switch (fieldOrder[i].pos()) {
-          case 0:
-            this.topicName = in.readString();
-            break;
+        case 0:
+          this.topicName = in.readString(this.topicName instanceof Utf8 ? (Utf8)this.topicName : null);
+          break;
 
-          case 1:
-            this.s3Partition = in.readString();
-            break;
+        case 1:
+          this.s3Partition = in.readString(this.s3Partition instanceof Utf8 ? (Utf8)this.s3Partition : null);
+          break;
 
-          case 2:
-            this.filePath = in.readString();
-            break;
+        case 2:
+          this.filePath = in.readString(this.filePath instanceof Utf8 ? (Utf8)this.filePath : null);
+          break;
 
-          case 3:
-            this.partition = in.readInt();
-            break;
+        case 3:
+          this.partition = in.readInt();
+          break;
 
-          case 4:
-            this.baseRecordTimestamp = in.readLong();
-            break;
+        case 4:
+          this.baseRecordTimestamp = in.readLong();
+          break;
 
-          case 5:
-            this.currentTimestamp = in.readLong();
-            break;
+        case 5:
+          this.currentTimestamp = in.readLong();
+          break;
 
-          case 6:
-            this.recordCount = in.readInt();
-            break;
+        case 6:
+          this.recordCount = in.readInt();
+          break;
 
-          default:
-            throw new java.io.IOException("Corrupt ResolvingDecoder.");
+        default:
+          throw new java.io.IOException("Corrupt ResolvingDecoder.");
         }
       }
     }
   }
 }
+
+
+
+
+
+
+
+
+
+

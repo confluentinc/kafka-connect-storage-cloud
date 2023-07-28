@@ -41,6 +41,7 @@
         <confluent.connect.testcontainers.version>1.0.1</confluent.connect.testcontainers.version>
         <org.testcontainer.version>1.18.3</org.testcontainer.version>
         <maven.failsafe.plugin.version>2.22.1</maven.failsafe.plugin.version>
+        <maven.avro.plugin.version>1.9.2</maven.avro.plugin.version>
         <skipIntegrationTests>false</skipIntegrationTests>
         <surefire-junit47.version>2.22.1</surefire-junit47.version>
         <guava.version>30.1.1-jre</guava.version>
@@ -318,6 +319,23 @@
                         </goals>
                       </execution>
                     </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro-maven-plugin</artifactId>
+                <version>${maven.avro.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>schema</goal>
+                        </goals>
+                        <configuration>
+                            <sourceDirectory>${project.basedir}/src/main/resources/</sourceDirectory>
+                            <outputDirectory>${project.basedir}/src/main/java/</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
 
