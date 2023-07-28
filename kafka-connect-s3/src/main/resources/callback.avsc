@@ -7,37 +7,37 @@
     {
       "name": "topicName",
       "type": "string",
-      "doc": "A unique event ID (UUID)"
+      "doc": "The topic name of the record being written"
     },
     {
       "name": "s3Partition",
       "type": "string",
-      "doc": "A unique event ID (UUID)"
+      "doc": "The s3 partition produced by the partitioner"
     },
     {
       "name": "filePath",
       "type": "string",
-      "doc": "A unique event ID (UUID)"
+      "doc": "Current file path, including partition and file name"
     },
     {
       "name": "partition",
       "type": "int",
-      "doc": "A unique event ID (UUID)"
+      "doc": "The kafka partition being recorded"
     },
     {
       "name": "baseRecordTimestamp",
       "type": ["null", "long"],
-      "doc": "A unique event ID (UUID)"
+      "doc": "Time of the first record written in the file. Defined when partitioner is time based only."
     },
     {
       "name": "currentTimestamp",
       "type": ["null", "long"],
-      "doc": "A unique event ID (UUID)"
+      "doc": "Time of the last record written in the file. Defined when partitioner is time based only."
     },
     {
       "name": "recordCount",
       "type": "int",
-      "doc": "A unique event ID (UUID)"
+      "doc": "Number of records within the written file"
     }
   ]
 }
