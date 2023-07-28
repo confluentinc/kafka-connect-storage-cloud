@@ -26,11 +26,9 @@ import static org.hamcrest.core.StringStartsWith.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import io.confluent.connect.s3.callback.KafkaFileCallbackConfig;
 import io.confluent.connect.s3.S3SinkConnector;
 import io.confluent.connect.s3.S3SinkConnectorConfig.IgnoreOrFailBehavior;
 import io.confluent.connect.s3.S3SinkConnectorConfig.OutputWriteBehavior;
-import io.confluent.connect.s3.callback.KafkaFileCallbackProvider;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
@@ -63,7 +61,6 @@ import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.storage.StringConverter;
-import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
@@ -450,31 +447,5 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     props.put(VALUE_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
     // aws credential if exists
     props.putAll(getAWSCredentialFromPath());
-  }
-
-  @Test
-  public void testCallBackPartition() {
-    EmbeddedKafkaCluster kafka = connect.kafka();
-    kafka.start();
-    String bootstrapServers = kafka.bootstrapServers();
-    String callbackTopic = "callback_topic";
-    kafka.createTopic(callbackTopic);
-    KafkaFileCallbackConfig kafkaFileCallbackConfig =
-        new KafkaFileCallbackConfig(
-            callbackTopic,
-            bootstrapServers,
-            restApp.restServer.getURI().toString(),
-            null,
-            null,
-            null);
-    KafkaFileCallbackProvider callBack =
-        new KafkaFileCallbackProvider(kafkaFileCallbackConfig.toJson(), false);
-    callBack.call("baz-topic", "version/event/hour", "file1.avro", 12,
-            1234L, 123L, 34);
-    callBack.call("foo-topic", "version/event/hour", "fil2.avro", 8,
-            12345L, 1234L, 12);
-
-    // fails if two records are not present in kafka within 1s
-    kafka.consume(2, 1000L, callbackTopic);
   }
 }

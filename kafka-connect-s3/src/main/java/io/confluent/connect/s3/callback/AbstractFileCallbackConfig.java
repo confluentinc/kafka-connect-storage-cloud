@@ -36,11 +36,15 @@ public abstract class AbstractFileCallbackConfig {
       instanceMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
       instanceMapper.configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true);
       instanceMapper.enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS);
-      return instanceMapper.readValue(jsonContent, clazz);
+      T value = instanceMapper.readValue(jsonContent, clazz);
+      value.validateFields();
+      return  value;
     } catch (IllegalAccessException | InstantiationException | IOException e) {
       throw new RuntimeException(e);
     }
   }
+
+  protected abstract void validateFields() ;
 
   public abstract Properties toProps();
 

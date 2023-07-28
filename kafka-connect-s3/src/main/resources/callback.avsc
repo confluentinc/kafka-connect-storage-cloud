@@ -26,12 +26,12 @@
     },
     {
       "name": "baseRecordTimestamp",
-      "type": "long",
+      "type": ["null", "long"],
       "doc": "A unique event ID (UUID)"
     },
     {
       "name": "currentTimestamp",
-      "type": "long",
+      "type": ["null", "long"],
       "doc": "A unique event ID (UUID)"
     },
     {

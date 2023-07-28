@@ -32,7 +32,8 @@ public class KafkaFileCallbackConfig extends AbstractFileCallbackConfig {
   private String saslJaasConfig;
 
   /** empty constructor for jackson */
-  public KafkaFileCallbackConfig() {}
+  public KafkaFileCallbackConfig() {
+  }
 
   public KafkaFileCallbackConfig(
       String topicName,
@@ -49,7 +50,8 @@ public class KafkaFileCallbackConfig extends AbstractFileCallbackConfig {
     this.saslJaasConfig = saslJaasConfig;
   }
 
-  private void validateFields() {
+  @Override
+  protected void validateFields() {
     if (topicName == null || bootstrapServers == null || schemaRegistryUrl == null) {
       throw new RuntimeException(
           "topic_name, boostrap_servers and schema_registry_url shall be defined");
@@ -80,6 +82,7 @@ public class KafkaFileCallbackConfig extends AbstractFileCallbackConfig {
     Properties prop = new Properties();
     prop.setProperty("key.serializer", KEY_SERIALIZER);
     prop.setProperty("value.serializer", VALUE_SERIALIZER);
+    prop.setProperty("auto.create.topics.enable", "true");
     // mandatory
     prop.setProperty("bootstrap.servers", bootstrapServers);
     prop.setProperty("topic.name", topicName);

@@ -107,7 +107,7 @@ public class TopicPartitionWriter {
   private ErrantRecordReporter reporter;
 
   private final FileRotationTracker fileRotationTracker;
-  private final Optional<FileCallbackProvider> fileCallback;
+  private Optional<FileCallbackProvider> fileCallback = Optional.empty();
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
@@ -195,16 +195,15 @@ public class TopicPartitionWriter {
     // Initialize callback if enabled
     if (this.connectorConfig.getFileCallbackEnable()) {
       try {
-        fileCallback = Optional.of((FileCallbackProvider)this.connectorConfig
-                .getFileCallbackClass().getConstructor(FileCallbackProvider.class)
+        fileCallback = Optional.of((FileCallbackProvider)
+                        this.connectorConfig
+                .getFileCallbackClass().getConstructor(String.class, boolean.class)
                 .newInstance(connectorConfig.getFileCallbackConfigJson(),
                         connectorConfig.getFileCallbackSkipError()));
       } catch (InstantiationException | IllegalAccessException
                | InvocationTargetException | NoSuchMethodException e) {
         throw new RuntimeException(e);
       }
-    } else {
-      fileCallback = Optional.empty();
     }
   }
 
