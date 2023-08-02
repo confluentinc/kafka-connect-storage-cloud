@@ -59,7 +59,7 @@
     </modules>
 
     <properties>
-        <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
+        <confluent.maven.repo>https://packages.confluent.io/maven/</confluent.maven.repo>
         <licenses.version>5.5.3</licenses.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <hadoop.version>2.7.7</hadoop.version>
@@ -67,9 +67,25 @@
 
     <repositories>
         <repository>
+            <id>central</id>
+            <name>Central Repository</name>
+            <url>https://repo.maven.apache.org/maven2</url>
+            <layout>default</layout>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+        <repository>
             <id>confluent</id>
-            <name>Confluent</name>
-            <url>${confluent.maven.repo}</url>
+            <url>https://packages.confluent.io/maven/</url>
+        </repository>
+        <repository>
+            <id>data-platform</id>
+            <name>Data Platform</name>
+            <url>https://nexus.hotstar.com/repository/data-platform/</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
         </repository>
     </repositories>
 
@@ -105,6 +121,12 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-partitioner</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.hotstar</groupId>
+            <artifactId>kafka-connect-plugins_2.11</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
+<!--            <scope>provided</scope>-->
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
