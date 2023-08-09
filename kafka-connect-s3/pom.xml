@@ -33,7 +33,7 @@
     </description>
 
     <properties>
-        <aws.version>1.12.268</aws.version>
+        <aws.version>1.12.524</aws.version>
         <s3mock.version>0.2.5</s3mock.version>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <parquet.tools.version>1.11.1</parquet.tools.version>
@@ -43,7 +43,7 @@
         <maven.failsafe.plugin.version>2.22.1</maven.failsafe.plugin.version>
         <skipIntegrationTests>false</skipIntegrationTests>
         <surefire-junit47.version>2.22.1</surefire-junit47.version>
-        <guava.version>30.1.1-jre</guava.version>
+        <guava.version>32.1.2-jre</guava.version>
         <wiremock.version>2.31.0</wiremock.version>
     </properties>
 
