@@ -63,7 +63,7 @@
         <!-- temporary fix by pinning the version until we upgrade to a version of common that contains this or newer version.
             See https://github.com/confluentinc/common/pull/332 for details -->
         <dependency.check.version>6.1.6</dependency.check.version>
-        <hadoop.version>3.3.5</hadoop.version>
+        <hadoop.version>3.3.6</hadoop.version>
         <jettison.version>1.5.4</jettison.version>
         <json-smart.version>2.4.10</json-smart.version>
         <jetty.version>9.4.51.v20230217</jetty.version>
@@ -248,6 +248,10 @@
                 <exclusion>
                     <groupId>commons-net</groupId>
                     <artifactId>commons-net</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.hadoop.thirdparty </groupId>
+                    <artifactId>hadoop-shaded-protobuf_3_7</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
