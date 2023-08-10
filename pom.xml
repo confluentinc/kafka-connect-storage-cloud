@@ -57,7 +57,6 @@
     </modules>
 
     <properties>
-        <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
         <jackson.core.version>2.15.0</jackson.core.version>
         <snappy.java>1.1.10.1</snappy.java>
         <confluent.maven.repo>https://packages.confluent.io/maven/</confluent.maven.repo>
