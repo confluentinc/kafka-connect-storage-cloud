@@ -28,13 +28,14 @@ import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PartETag;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
-import com.amazonaws.services.s3.model.SSECustomerKey;
 import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
+import com.amazonaws.services.s3.model.SSECustomerKey;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.parquet.io.PositionOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,9 +51,10 @@ import java.util.List;
  *
  * <p>The implementation has borrowed the general structure of Hadoop's implementation.
  */
-public class S3OutputStream extends OutputStream {
+public class S3OutputStream extends PositionOutputStream {
   private static final Logger log = LoggerFactory.getLogger(S3OutputStream.class);
   private final AmazonS3 s3;
+  private final S3SinkConnectorConfig connectorConfig;
   private final String bucket;
   private final String key;
   private final String ssea;
@@ -67,9 +69,11 @@ public class S3OutputStream extends OutputStream {
   private final CompressionType compressionType;
   private final int compressionLevel;
   private volatile OutputStream compressionFilter;
+  private Long position;
 
   public S3OutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
     this.s3 = s3;
+    this.connectorConfig = conf;
     this.bucket = conf.getBucketName();
     this.key = key;
     this.ssea = conf.getSsea();
@@ -86,6 +90,7 @@ public class S3OutputStream extends OutputStream {
     this.multiPartUpload = null;
     this.compressionType = conf.getCompressionType();
     this.compressionLevel = conf.getCompressionLevel();
+    this.position = 0L;
     log.debug("Create S3OutputStream for bucket '{}' key '{}'", bucket, key);
   }
 
@@ -95,6 +100,7 @@ public class S3OutputStream extends OutputStream {
     if (!buffer.hasRemaining()) {
       uploadPart();
     }
+    position++;
   }
 
   @Override
@@ -110,10 +116,12 @@ public class S3OutputStream extends OutputStream {
     if (buffer.remaining() <= len) {
       int firstPart = buffer.remaining();
       buffer.put(b, off, firstPart);
+      position += firstPart;
       uploadPart();
       write(b, off + firstPart, len - firstPart);
     } else {
       buffer.put(b, off, len);
+      position += len;
     }
   }
 
@@ -165,12 +173,16 @@ public class S3OutputStream extends OutputStream {
     } finally {
       buffer.clear();
       multiPartUpload = null;
-      close();
+      internalClose();
     }
   }
 
   @Override
   public void close() throws IOException {
+    internalClose();
+  }
+
+  private void internalClose() throws IOException {
     if (closed) {
       return;
     }
@@ -199,8 +211,10 @@ public class S3OutputStream extends OutputStream {
 
     if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
         && StringUtils.isNotBlank(sseKmsKeyId)) {
+      log.debug("Using KMS Key ID: {}", sseKmsKeyId);
       initRequest.setSSEAwsKeyManagementParams(new SSEAwsKeyManagementParams(sseKmsKeyId));
     } else if (sseCustomerKey != null) {
+      log.debug("Using KMS Customer Key");
       initRequest.setSSECustomerKey(sseCustomerKey);
     }
 
@@ -281,5 +295,9 @@ public class S3OutputStream extends OutputStream {
     public void progressChanged(ProgressEvent progressEvent) {
       log.debug("Progress event: " + progressEvent);
     }
+  }
+
+  public long getPos() {
+    return position;
   }
 }

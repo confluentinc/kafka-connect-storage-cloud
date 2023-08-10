@@ -32,22 +32,28 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.zip.Deflater;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
+import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
+import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
@@ -134,6 +140,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final boolean HEADERS_USE_EXPECT_CONTINUE_DEFAULT =
       ClientConfiguration.DEFAULT_USE_EXPECT_CONTINUE;
 
+  public static final String BEHAVIOR_ON_NULL_VALUES_CONFIG = "behavior.on.null.values";
+  public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = BehaviorOnNullValues.FAIL.toString();
+
   /**
    * Maximum back-off time when retrying failed requests.
    */
@@ -158,6 +167,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private static final GenericRecommender PARTITIONER_CLASS_RECOMMENDER = new GenericRecommender();
   private static final ParentValueRecommender AVRO_COMPRESSION_RECOMMENDER
       = new ParentValueRecommender(FORMAT_CLASS_CONFIG, AvroFormat.class, AVRO_SUPPORTED_CODECS);
+  private static final ParquetCodecRecommender PARQUET_COMPRESSION_RECOMMENDER =
+      new ParquetCodecRecommender();
 
   static {
     STORAGE_CLASS_RECOMMENDER.addValidValues(
@@ -165,7 +176,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     );
 
     FORMAT_CLASS_RECOMMENDER.addValidValues(
-        Arrays.<Object>asList(AvroFormat.class, JsonFormat.class)
+        Arrays.<Object>asList(
+            AvroFormat.class,
+            JsonFormat.class,
+            ByteArrayFormat.class,
+            ParquetFormat.class
+        )
     );
 
     PARTITIONER_CLASS_RECOMMENDER.addValidValues(
@@ -184,6 +200,20 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         FORMAT_CLASS_RECOMMENDER,
         AVRO_COMPRESSION_RECOMMENDER
     );
+
+    final String connectorGroup = "Connector";
+    final int latestOrderInGroup = configDef.configKeys().values().stream()
+        .filter(c -> connectorGroup.equalsIgnoreCase(c.group))
+        .map(c -> c.orderInGroup)
+        .max(Integer::compare).orElse(0);
+
+    StorageSinkConnectorConfig.enableParquetConfig(
+        configDef,
+        PARQUET_COMPRESSION_RECOMMENDER,
+        connectorGroup,
+        latestOrderInGroup
+    );
+
     {
       final String group = "S3";
       int orderInGroup = 0;
@@ -471,6 +501,20 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       );
 
       configDef.define(
+          BEHAVIOR_ON_NULL_VALUES_CONFIG,
+          Type.STRING,
+          BEHAVIOR_ON_NULL_VALUES_DEFAULT,
+          BehaviorOnNullValues.VALIDATOR,
+          Importance.LOW,
+          "How to handle records with a null value (i.e. Kafka tombstone records)."
+              + " Valid options are 'ignore' and 'fail'.",
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Behavior for null-valued records"
+      );
+
+      configDef.define(
           S3_PATH_STYLE_ACCESS_ENABLED_CONFIG,
           Type.BOOLEAN,
           S3_PATH_STYLE_ACCESS_ENABLED_DEFAULT,
@@ -501,6 +545,21 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     addToGlobal(partitionerConfig);
     addToGlobal(commonConfig);
     addToGlobal(this);
+    validateTimezone();
+  }
+
+  private void validateTimezone() {
+    String timezone = getString(PartitionerConfig.TIMEZONE_CONFIG);
+    long rotateScheduleIntervalMs = getLong(ROTATE_SCHEDULE_INTERVAL_MS_CONFIG);
+    if (rotateScheduleIntervalMs > 0 && timezone.isEmpty()) {
+      throw new ConfigException(
+          String.format(
+              "%s configuration must be set when using %s",
+              PartitionerConfig.TIMEZONE_CONFIG,
+              ROTATE_SCHEDULE_INTERVAL_MS_CONFIG
+          )
+      );
+    }
   }
 
   private void addToGlobal(AbstractConfig config) {
@@ -572,6 +631,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public int getCompressionLevel() {
     return getInt(COMPRESSION_LEVEL_CONFIG);
+  }
+
+  public CompressionCodecName parquetCompressionCodecName() {
+    return "none".equalsIgnoreCase(getString(PARQUET_CODEC_CONFIG))
+           ? CompressionCodecName.fromConf(null)
+           : CompressionCodecName.fromConf(getString(PARQUET_CODEC_CONFIG));
   }
 
   public int getS3PartRetries() {
@@ -736,6 +801,41 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     }
   }
 
+  private static class ParquetCodecRecommender extends ParentValueRecommender
+      implements ConfigDef.Validator {
+    public static final Map<String, CompressionCodecName> TYPES_BY_NAME;
+    public static final List<String> ALLOWED_VALUES;
+
+    static {
+      TYPES_BY_NAME = Arrays.stream(CompressionCodecName.values())
+          .filter(c -> !CompressionCodecName.UNCOMPRESSED.equals(c))
+          .collect(Collectors.toMap(c -> c.name().toLowerCase(), Function.identity()));
+      TYPES_BY_NAME.put("none", CompressionCodecName.UNCOMPRESSED);
+      ALLOWED_VALUES = new ArrayList<>(TYPES_BY_NAME.keySet());
+      // Not a hard requirement but this call usually puts 'none' first in the list of allowed
+      // values
+      Collections.reverse(ALLOWED_VALUES);
+    }
+
+    public ParquetCodecRecommender() {
+      super(FORMAT_CLASS_CONFIG, ParquetFormat.class, ALLOWED_VALUES.toArray());
+    }
+
+    @Override
+    public void ensureValid(String name, Object compressionCodecName) {
+      String compressionCodecNameString = ((String) compressionCodecName).trim();
+      if (!TYPES_BY_NAME.containsKey(compressionCodecNameString)) {
+        throw new ConfigException(name, compressionCodecName,
+            "Value must be one of: " + ALLOWED_VALUES);
+      }
+    }
+
+    @Override
+    public String toString() {
+      return "[" + Utils.join(ALLOWED_VALUES, ", ") + "]";
+    }
+  }
+
   private static class CannedAclValidator implements ConfigDef.Validator {
     public static final Map<String, CannedAccessControlList> ACLS_BY_HEADER_VALUE = new HashMap<>();
     public static final String ALLOWED_VALUES;
@@ -834,6 +934,50 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       if (skip != null && !skip.contains(key.name)) {
         container.define(key);
       }
+    }
+  }
+
+  public String nullValueBehavior() {
+    return getString(BEHAVIOR_ON_NULL_VALUES_CONFIG);
+  }
+
+  public enum BehaviorOnNullValues {
+    IGNORE,
+    FAIL;
+
+    public static final ConfigDef.Validator VALIDATOR = new ConfigDef.Validator() {
+      private final ConfigDef.ValidString validator = ConfigDef.ValidString.in(names());
+
+      @Override
+      public void ensureValid(String name, Object value) {
+        if (value instanceof String) {
+          value = ((String) value).toLowerCase(Locale.ROOT);
+        }
+        validator.ensureValid(name, value);
+      }
+
+      // Overridden here so that ConfigDef.toEnrichedRst shows possible values correctly
+      @Override
+      public String toString() {
+        return validator.toString();
+      }
+
+    };
+
+    public static String[] names() {
+      BehaviorOnNullValues[] behaviors = values();
+      String[] result = new String[behaviors.length];
+
+      for (int i = 0; i < behaviors.length; i++) {
+        result[i] = behaviors[i].toString();
+      }
+
+      return result;
+    }
+
+    @Override
+    public String toString() {
+      return name().toLowerCase(Locale.ROOT);
     }
   }
 

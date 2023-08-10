@@ -19,6 +19,7 @@ import com.amazonaws.services.s3.model.CannedAccessControlList;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.data.Schema;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.After;
@@ -30,6 +31,7 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.io.ByteArrayInputStream;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -98,6 +100,39 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
 
     long[] validOffsets = {0, 3, 6};
     verify(sinkRecords, validOffsets);
+  }
+
+  @Test
+  public void testWriteNullRecords() throws Exception {
+    setUp();
+    replayAll();
+    task = new S3SinkTask();
+    task.initialize(context);
+    properties.put(S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG,
+        S3SinkConnectorConfig.BehaviorOnNullValues.IGNORE.toString());
+    task.start(properties);
+    verifyAll();
+
+    List<SinkRecord> sinkRecords = createRecordsWithPrimitive(3, 0,
+        Collections.singleton(new TopicPartition(TOPIC, PARTITION)));
+    sinkRecords.add(
+        new SinkRecord(TOPIC, PARTITION, null, null, Schema.OPTIONAL_STRING_SCHEMA, null,
+            0));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, null, null, null, null, 1));
+    sinkRecords.addAll(createRecordsWithPrimitive(4, 3,
+        Collections.singleton(new TopicPartition(TOPIC, PARTITION))));
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 3, 6};
+
+    // expect sink records like the ones we put, but without the null records
+    List<SinkRecord> expectedSinkRecords = createRecordsWithPrimitive(3, 0,
+        Collections.singleton(new TopicPartition(TOPIC, PARTITION)));
+    expectedSinkRecords.addAll(createRecordsWithPrimitive(4, 3,
+        Collections.singleton(new TopicPartition(TOPIC, PARTITION))));
+    verify(expectedSinkRecords, validOffsets);
   }
 
   @Test

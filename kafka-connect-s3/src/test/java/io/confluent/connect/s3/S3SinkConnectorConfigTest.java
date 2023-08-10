@@ -17,10 +17,13 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
+import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -96,7 +99,9 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     List<Object> expectedStorageClasses = Arrays.<Object>asList(S3Storage.class);
     List<Object> expectedFormatClasses = Arrays.<Object>asList(
         AvroFormat.class,
-        JsonFormat.class
+        JsonFormat.class,
+        ByteArrayFormat.class,
+        ParquetFormat.class
     );
     List<Object> expectedPartitionerClasses = Arrays.<Object>asList(
         DefaultPartitioner.class,
@@ -395,6 +400,74 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
           assertEquals((int) i, connectorConfig.getCompressionLevel());
         }
     );
+  }
+
+  @Test
+  public void testParquetCompressionTypeSupported() {
+    properties.put(S3SinkConnectorConfig.PARQUET_CODEC_CONFIG, "none");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(CompressionCodecName.UNCOMPRESSED, connectorConfig.parquetCompressionCodecName());
+
+    properties.put(S3SinkConnectorConfig.PARQUET_CODEC_CONFIG, "gzip");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(CompressionCodecName.GZIP, connectorConfig.parquetCompressionCodecName());
+
+    properties.put(S3SinkConnectorConfig.PARQUET_CODEC_CONFIG, "snappy");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(CompressionCodecName.SNAPPY, connectorConfig.parquetCompressionCodecName());
+
+    properties.put(S3SinkConnectorConfig.PARQUET_CODEC_CONFIG, "lz4");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(CompressionCodecName.LZ4, connectorConfig.parquetCompressionCodecName());
+
+    properties.put(S3SinkConnectorConfig.PARQUET_CODEC_CONFIG, "zstd");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(CompressionCodecName.ZSTD, connectorConfig.parquetCompressionCodecName());
+
+    properties.put(S3SinkConnectorConfig.PARQUET_CODEC_CONFIG, "brotli");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(CompressionCodecName.BROTLI, connectorConfig.parquetCompressionCodecName());
+
+    properties.put(S3SinkConnectorConfig.PARQUET_CODEC_CONFIG, "lzo");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(CompressionCodecName.LZO, connectorConfig.parquetCompressionCodecName());
+  }
+
+  @Test(expected = ConfigException.class)
+  public void testUnsupportedParquetCompressionType() {
+    properties.put(S3SinkConnectorConfig.PARQUET_CODEC_CONFIG, "uncompressed");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    connectorConfig.parquetCompressionCodecName();
+  }
+
+  @Test
+  public void testValidTimezoneWithScheduleIntervalAccepted (){
+    properties.put(PartitionerConfig.TIMEZONE_CONFIG, "CET");
+    properties.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "30");
+    new S3SinkConnectorConfig(properties);
+  }
+
+  @Test(expected = ConfigException.class)
+  public void testEmptyTimezoneThrowsExceptionOnScheduleInterval() {
+    properties.put(PartitionerConfig.TIMEZONE_CONFIG, PartitionerConfig.TIMEZONE_DEFAULT);
+    properties.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "30");
+    new S3SinkConnectorConfig(properties);
+  }
+
+  @Test
+  public void testEmptyTimezoneExceptionMessage() {
+    properties.put(PartitionerConfig.TIMEZONE_CONFIG, PartitionerConfig.TIMEZONE_DEFAULT);
+    properties.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "30");
+    String expectedError =  String.format(
+        "%s configuration must be set when using %s",
+        PartitionerConfig.TIMEZONE_CONFIG,
+        S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG
+    );
+    try {
+      new S3SinkConnectorConfig(properties);
+    } catch (ConfigException e) {
+      assertEquals(expectedError, e.getMessage());
+    }
   }
 }
 
