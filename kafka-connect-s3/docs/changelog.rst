@@ -3,6 +3,49 @@
 Changelog
 =========
 
+Version 4.1.2
+-------------
+
+S3 Connector
+~~~~~~~~~~~~~~
+
+No changes
+
+Version 4.1.1
+-------------
+
+S3 Connector
+~~~~~~~~~~~~~~
+
+* `PR-155 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/155>`_ - CC-918: Update build to generate plugin package
+* `PR-159 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/159>`_ - CC-1791: Added compression options to raw value example
+
+Version 4.1.0
+-------------
+
+S3 Connector
+~~~~~~~~~~~~~~
+
+* `PR-150 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/150>`_ - Make confluent CLI command output shared
+* `PR-148 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/148>`_ - Rely on jackson.version from common pom instead of defining it ourselves
+* `PR-149 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/149>`_ - Bump Jackson version
+* `PR-140 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/140>`_ - Fix for BufferOverflowException in S3OutputStream
+* `PR-106 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/106>`_ - Add s3.sse.kms.key.id to specify a particular key in AWS KMS
+* `PR-98 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/98>`_ - Add gzip compression support for json and byte array formats
+* `PR-143 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/143>`_ - Support for multiple fields in field partitioner
+* `PR-138 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/138>`_ - CC-1490: NPE when rotate.interval.ms is set but partitioner is not instance of TimeBasedPartitioner
+* `PR-132 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/132>`_ - CC-1214: Import all the AvroData configs to storage sink connectors
+* `PR-123 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/123>`_ - CC-1299: Refactor this code to use the AVRO_CODEC config key from storage-common
+* `PR-114 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/114>`_ - Update to PowerMock 2.0.x and Mockito 2
+* `PR-48 <https://github.com/confluentinc/kafka-connect-storage-common/pull/48>`_ - RecordField nested timestamp extraction
+* `PR-57 <https://github.com/confluentinc/kafka-connect-storage-common/pull/57>`_ - Issue-53. Multiple field support for partitioning.
+* `PR-55 <https://github.com/confluentinc/kafka-connect-storage-common/pull/55>`_ - CC-1489: NPE on records with null timestamp.
+* `PR-45 <https://github.com/confluentinc/kafka-connect-storage-common/pull/45>`_ - HOTFIX: Consider all the properties in AvroDataConfig.
+* `PR-52 <https://github.com/confluentinc/kafka-connect-storage-common/pull/52>`_ - CC-1333: Remove dependency on hive-exec and instead use hive-exec:core
+* `PR-51 <https://github.com/confluentinc/kafka-connect-storage-common/pull/51>`_ - CC-1333: Remove dependency on hive-exec and instead use hive-exec:core
+* `PR-50 <https://github.com/confluentinc/kafka-connect-storage-common/pull/50>`_ - CC-1333: Remove dependency on hive-exec and instead use hive-exec:core
+* `PR-46 <https://github.com/confluentinc/kafka-connect-storage-common/pull/46>`_ - CC-1299: Create AVRO_CODEC ConfigKey
+
 Version 4.0.1
 -------------
 

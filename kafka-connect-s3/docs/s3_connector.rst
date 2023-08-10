@@ -51,8 +51,8 @@ Kafka by the connector, then a re-upload will take place. However, such a re-upl
 bucket, who at any time will have access to the same records made eventually available by successful uploads to S3.
 
 In the current version, time-based partitioners, as opposed to default and field partitioners, depend on wall-clock time
-to partition data. A version of time-based partitioners based only on record timestamps that will guarantee exactly-once
-delivery to S3 will become soon available.
+to partition data. To achieve exactly-one delivery to S3, you must use one of the deterministic time-based partitioners:
+``Record`` or ``RecordField``.
 
 Schema Evolution
 ----------------
@@ -115,18 +115,9 @@ Next, start the services with one command using Confluent CLI:
 
 Every service will start in order, printing a message with its status:
 
-.. sourcecode:: bash
-
-    Starting zookeeper
-    zookeeper is [UP]
-    Starting kafka
-    kafka is [UP]
-    Starting schema-registry
-    schema-registry is [UP]
-    Starting kafka-rest
-    kafka-rest is [UP]
-    Starting connect
-    connect is [UP]
+.. include:: ../../../../includes/cli.rst
+    :start-line: 19
+    :end-line: 36
 
 .. note:: You need to make sure the connector user has write access to the S3 bucket
    specified in ``s3.bucket.name`` and has deployed credentials
@@ -235,33 +226,24 @@ Finally, stop the Connect worker as well as all the rest of the Confluent servic
 .. sourcecode:: bash
 
       $ confluent stop
-      Stopping connect
-      connect is [DOWN]
-      Stopping kafka-rest
-      kafka-rest is [DOWN]
-      Stopping schema-registry
-      schema-registry is [DOWN]
-      Stopping kafka
-      kafka is [DOWN]
-      Stopping zookeeper
-      zookeeper is [DOWN]
+
+Your output should resemble:
+
+.. include:: ../../../../includes/cli.rst
+    :start-line: 55
+    :end-line: 71
 
 or stop all the services and additionally wipe out any data generated during this quickstart by running:
 
 .. sourcecode:: bash
 
       $ confluent destroy
-      Stopping connect
-      connect is [DOWN]
-      Stopping kafka-rest
-      kafka-rest is [DOWN]
-      Stopping schema-registry
-      schema-registry is [DOWN]
-      Stopping kafka
-      kafka is [DOWN]
-      Stopping zookeeper
-      zookeeper is [DOWN]
-      Deleting: /tmp/confluent.w1CpYsaI
+
+Your output should resemble:
+
+.. include:: ../../../../includes/cli.rst
+    :start-line: 55
+    :end-line: 72
 
 Configuration
 -------------
@@ -338,6 +320,7 @@ Next we need to configure the particulars of Amazon S3:
   s3.bucket.name=confluent-kafka-connect-s3-testing
   s3.region=us-west-2
   s3.part.size=5242880
+  s3.compression.type=gzip
 
 The ``s3.bucket.name`` is mandatory and names your S3 bucket where the exported Kafka records
 should be written. Another useful setting is ``s3.region`` that you should set if you use a
@@ -346,6 +329,8 @@ region other than the default. And since the S3 connector uses
 you can use the ``s3.part.size`` to control the size of each of these continuous parts used to
 upload Kafka records into a single S3 object. The part size affects throughput and
 latency, as an S3 object is visible/available only after all parts are uploaded.
+The ``s3.compression.type`` specifies that we want the S3 connector to compress our S3 objects
+using GZIP compression, adding the ``.gz`` extension to any files (see below).
 
 So far this example configuration is relatively typical of most S3 connectors.
 Now lets define that we should read the raw message values and write them in
@@ -364,8 +349,10 @@ deserializing the message values and instead give the connector the message valu
 binary form. We use the ``format.class`` setting to instruct the S3 connector to write these
 binary message values as-is into S3 objects. By default the message values written to the same S3
 object will be separated by a newline character sequence, but you can control this with the
-``format.bytearray.separator`` setting. Also, by default the files written to S3 will have an
-extension of ``.bin``, or you can use the ``format.bytearray.extension`` setting to change this.
+``format.bytearray.separator`` setting, and you may want to consider this if your messages might
+contain newlines. Also, by default the files written to S3 will have an
+extension of ``.bin`` (before compression, if enabled), or you can use the
+``format.bytearray.extension`` setting to change the pre-compression filename extension.
 
 Next we need to decide how we want to partition the consumed messages in S3 objects. We have a few
 options, including the default partitioner that preserves the same partitions as in Kafka:
@@ -379,15 +366,18 @@ Or, we could instead partition by the timestamp of the Kafka messages:
 .. sourcecode:: bash
 
   partitioner.class=io.confluent.connect.storage.partitioner.TimeBasedPartitioner
-  timestamp.extract=Record
+  timestamp.extractor=Record
 
 or the timestamp that the S3 connector processes each message:
 
 .. sourcecode:: bash
 
   partitioner.class=io.confluent.connect.storage.partitioner.TimeBasedPartitioner
-  timestamp.extract=Wallclock
+  timestamp.extractor=Wallclock
 
 Custom partitioners are always an option, too. Just be aware that since the record value is
 an opaque binary value, we cannot extract timestamps from fields using the ``RecordField``
 option.
+
+The S3 connector configuration outlined above results in newline-delimited gzipped objects in S3
+with ``.bin.gz``.

@@ -21,6 +21,7 @@ import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
+import com.amazonaws.services.s3.model.SSEAlgorithm;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -35,16 +36,19 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
+import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.ComposableConfig;
 import io.confluent.connect.storage.common.GenericRecommender;
+import io.confluent.connect.storage.common.ParentValueRecommender;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.partitioner.DailyPartitioner;
@@ -62,6 +66,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String SSEA_CONFIG = "s3.ssea.name";
   public static final String SSEA_DEFAULT = "";
 
+  public static final String SSE_KMS_KEY_ID_CONFIG = "s3.sse.kms.key.id";
+  public static final String SSE_KMS_KEY_ID_DEFAULT = "";
+
   public static final String PART_SIZE_CONFIG = "s3.part.size";
   public static final int PART_SIZE_DEFAULT = 25 * 1024 * 1024;
 
@@ -78,8 +85,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String ACL_CANNED_CONFIG = "s3.acl.canned";
   public static final String ACL_CANNED_DEFAULT = null;
 
-  public static final String AVRO_CODEC_CONFIG = "avro.codec";
-  public static final String AVRO_CODEC_DEFAULT = "null";
+  public static final String COMPRESSION_TYPE_CONFIG = "s3.compression.type";
+  public static final String COMPRESSION_TYPE_DEFAULT = "none";
 
   public static final String S3_PART_RETRIES_CONFIG = "s3.part.retries";
   public static final int S3_PART_RETRIES_DEFAULT = 3;
@@ -111,6 +118,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private static final GenericRecommender STORAGE_CLASS_RECOMMENDER = new GenericRecommender();
   private static final GenericRecommender FORMAT_CLASS_RECOMMENDER = new GenericRecommender();
   private static final GenericRecommender PARTITIONER_CLASS_RECOMMENDER = new GenericRecommender();
+  private static final ParentValueRecommender AVRO_COMPRESSION_RECOMMENDER
+      = new ParentValueRecommender(FORMAT_CLASS_CONFIG, AvroFormat.class, AVRO_SUPPORTED_CODECS);
 
   static {
     STORAGE_CLASS_RECOMMENDER.addValidValues(
@@ -133,7 +142,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   public static ConfigDef newConfigDef() {
-    ConfigDef configDef = StorageSinkConnectorConfig.newConfigDef(FORMAT_CLASS_RECOMMENDER);
+    ConfigDef configDef = StorageSinkConnectorConfig.newConfigDef(
+        FORMAT_CLASS_RECOMMENDER,
+        AVRO_COMPRESSION_RECOMMENDER
+    );
     {
       final String group = "S3";
       int orderInGroup = 0;
@@ -190,16 +202,39 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "AWS Credentials Provider Class"
       );
 
+      List<String> validSsea = new ArrayList<>(SSEAlgorithm.values().length + 1);
+      validSsea.add("");
+      for (SSEAlgorithm algo : SSEAlgorithm.values()) {
+        validSsea.add(algo.toString());
+      }
       configDef.define(
           SSEA_CONFIG,
           Type.STRING,
           SSEA_DEFAULT,
+          ConfigDef.ValidString.in(validSsea.toArray(new String[validSsea.size()])),
           Importance.LOW,
           "The S3 Server Side Encryption Algorithm.",
           group,
           ++orderInGroup,
           Width.LONG,
-          "S3 Server Side Encryption Algorithm"
+          "S3 Server Side Encryption Algorithm",
+          new SseAlgorithmRecommender()
+      );
+
+      configDef.define(
+          SSE_KMS_KEY_ID_CONFIG,
+          Type.STRING,
+          SSE_KMS_KEY_ID_DEFAULT,
+          Importance.LOW,
+          "The name of the AWS Key Management Service (AWS-KMS) key to be used for server side "
+              + "encryption of the S3 objects. No encryption is used when no key is provided, but"
+              + " it is enabled when '" + SSEAlgorithm.KMS + "' is specified as encryption "
+              + "algorithm with a valid key name.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Server Side Encryption Key",
+          new SseKmsKeyIdRecommender()
       );
 
       configDef.define(
@@ -228,16 +263,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       );
 
       configDef.define(
-          AVRO_CODEC_CONFIG,
+          COMPRESSION_TYPE_CONFIG,
           Type.STRING,
-          AVRO_CODEC_DEFAULT,
+          COMPRESSION_TYPE_DEFAULT,
+          new CompressionTypeValidator(),
           Importance.LOW,
-          "The Avro compression codec to be used for output files. Available values: null, "
-              + "deflate, snappy and bzip2 (codec source is org.apache.avro.file.CodecFactory)",
+          "Compression type for file written to S3. "
+          + "Applied when using JsonFormat or ByteArrayFormat. "
+          + "Available values: none, gzip.",
           group,
           ++orderInGroup,
           Width.LONG,
-          "Avro compression codec"
+          "Compression type"
       );
 
       configDef.define(
@@ -332,6 +369,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.LONG,
           "S3 Proxy Password"
       );
+
     }
     return configDef;
   }
@@ -374,6 +412,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getString(SSEA_CONFIG);
   }
 
+  public String getSseKmsKeyId() {
+    return getString(SSE_KMS_KEY_ID_CONFIG);
+  }
+
   public CannedAccessControlList getCannedAcl() {
     return CannedAclValidator.ACLS_BY_HEADER_VALUE.get(getString(ACL_CANNED_CONFIG));
   }
@@ -395,8 +437,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     }
   }
 
-  public String getAvroCodec() {
-    return getString(AVRO_CODEC_CONFIG);
+  public CompressionType getCompressionType() {
+    return CompressionType.forName(getString(COMPRESSION_TYPE_CONFIG));
   }
 
   public int getS3PartRetries() {
@@ -506,6 +548,33 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     }
   }
 
+  private static class CompressionTypeValidator implements ConfigDef.Validator {
+    public static final Map<String, CompressionType> TYPES_BY_NAME = new HashMap<>();
+    public static final String ALLOWED_VALUES;
+
+    static {
+      List<String> names = new ArrayList<>();
+      for (CompressionType compressionType : CompressionType.values()) {
+        TYPES_BY_NAME.put(compressionType.name, compressionType);
+        names.add(compressionType.name);
+      }
+      ALLOWED_VALUES = Utils.join(names, ", ");
+    }
+
+    @Override
+    public void ensureValid(String name, Object compressionType) {
+      String compressionTypeString = ((String) compressionType).trim();
+      if (!TYPES_BY_NAME.containsKey(compressionTypeString)) {
+        throw new ConfigException(name, compressionType, "Value must be one of: " + ALLOWED_VALUES);
+      }
+    }
+
+    @Override
+    public String toString() {
+      return "[" + ALLOWED_VALUES + "]";
+    }
+  }
+
   private static class CannedAclValidator implements ConfigDef.Validator {
     public static final Map<String, CannedAccessControlList> ACLS_BY_HEADER_VALUE = new HashMap<>();
     public static final String ALLOWED_VALUES;
@@ -553,6 +622,35 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     @Override
     public String toString() {
       return "Any class implementing: " + AWSCredentialsProvider.class;
+    }
+  }
+
+  private static class SseAlgorithmRecommender implements ConfigDef.Recommender {
+    @Override
+    public List<Object> validValues(String name, Map<String, Object> connectorConfigs) {
+      List<SSEAlgorithm> list = Arrays.asList(SSEAlgorithm.values());
+      return new ArrayList<Object>(list);
+    }
+
+    @Override
+    public boolean visible(String name, Map<String, Object> connectorConfigs) {
+      return true;
+    }
+  }
+
+  public static class SseKmsKeyIdRecommender implements ConfigDef.Recommender {
+    public SseKmsKeyIdRecommender() {
+    }
+
+    @Override
+    public List<Object> validValues(String name, Map<String, Object> connectorConfigs) {
+      return new LinkedList<>();
+    }
+
+    @Override
+    public boolean visible(String name, Map<String, Object> connectorConfigs) {
+      return SSEAlgorithm.KMS.toString()
+          .equalsIgnoreCase((String) connectorConfigs.get(SSEA_CONFIG));
     }
   }
 

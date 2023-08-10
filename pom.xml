@@ -24,7 +24,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>4.0.4-SNAPSHOT</version>
+        <version>4.1.5-SNAPSHOT</version>
     </parent>
 
     <groupId>io.confluent</groupId>
@@ -61,9 +61,9 @@
 
     <properties>
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
-        <licenses.version>4.0.4-SNAPSHOT</licenses.version>
         <jackson.core.version>2.15.0</jackson.core.version>
         <snappy.java>1.1.10.1</snappy.java>
+        <licenses.version>4.1.5-SNAPSHOT</licenses.version>
     </properties>
 
     <repositories>
@@ -137,7 +137,8 @@
         </dependency>
         <dependency>
             <groupId>org.powermock</groupId>
-            <artifactId>powermock-api-mockito</artifactId>
+            <artifactId>powermock-api-mockito2</artifactId>
+            <version>${powermock.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>

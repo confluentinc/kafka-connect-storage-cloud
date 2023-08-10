@@ -29,6 +29,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 
 public class ByteArrayRecordWriterProvider implements RecordWriterProvider<S3SinkConnectorConfig> {
 
@@ -42,18 +44,21 @@ public class ByteArrayRecordWriterProvider implements RecordWriterProvider<S3Sin
     this.storage = storage;
     this.converter = converter;
     this.extension = storage.conf().getByteArrayExtension();
-    this.lineSeparatorBytes = storage.conf().getFormatByteArrayLineSeparator().getBytes();
+    this.lineSeparatorBytes = storage.conf()
+        .getFormatByteArrayLineSeparator()
+        .getBytes(StandardCharsets.UTF_8);
   }
 
   @Override
   public String getExtension() {
-    return extension;
+    return extension + storage.conf().getCompressionType().extension;
   }
 
   @Override
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
     return new RecordWriter() {
       final S3OutputStream s3out = storage.create(filename, true);
+      final OutputStream s3outWrapper = s3out.wrapForCompression();
 
       @Override
       public void write(SinkRecord record) {
@@ -61,8 +66,8 @@ public class ByteArrayRecordWriterProvider implements RecordWriterProvider<S3Sin
         try {
           byte[] bytes = converter.fromConnectData(
               record.topic(), record.valueSchema(), record.value());
-          s3out.write(bytes);
-          s3out.write(lineSeparatorBytes);
+          s3outWrapper.write(bytes);
+          s3outWrapper.write(lineSeparatorBytes);
         } catch (IOException | DataException e) {
           throw new ConnectException(e);
         }
@@ -72,6 +77,7 @@ public class ByteArrayRecordWriterProvider implements RecordWriterProvider<S3Sin
       public void commit() {
         try {
           s3out.commit();
+          s3outWrapper.close();
         } catch (IOException e) {
           throw new ConnectException(e);
         }
