@@ -57,6 +57,8 @@
     </modules>
 
     <properties>
+        <jackson.core.version>2.15.0</jackson.core.version>
+        <snappy.java>1.1.10.1</snappy.java>
         <confluent.maven.repo>https://packages.confluent.io/maven/</confluent.maven.repo>
         <licenses.version>5.4.12-SNAPSHOT</licenses.version>
         <hadoop.version>3.2.4</hadoop.version>
@@ -261,6 +263,16 @@
             <artifactId>powermock-api-mockito2</artifactId>
             <version>${powermock.version}</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.xerial.snappy</groupId>
+            <artifactId>snappy-java</artifactId>
+            <version>${snappy.java}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>${jackson.core.version}</version>
         </dependency>
         <!-- Temporary addition until powermock updates its mockito version -->
         <dependency>
