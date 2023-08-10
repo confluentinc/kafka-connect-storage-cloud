@@ -18,6 +18,8 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import io.confluent.common.utils.MockTime;
+import io.confluent.common.utils.Time;
 import org.apache.avro.file.DataFileStream;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.DatumReader;
@@ -36,6 +38,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
+import org.powermock.api.mockito.PowerMockito;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -52,8 +55,6 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import io.confluent.common.utils.MockTime;
-import io.confluent.common.utils.Time;
 import io.confluent.connect.avro.AvroDataConfig;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.avro.AvroUtils;
@@ -101,7 +102,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   public void setUp() throws Exception {
     super.setUp();
 
-    s3 = newS3Client(connectorConfig);
+    s3 = PowerMockito.spy(newS3Client(connectorConfig));
 
     storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
 
@@ -160,7 +161,25 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   }
 
   @Test
+  public void testWriteRecordsOfEnumsWithEnhancedAvroData() throws Exception {
+    localProps.put(StorageSinkConnectorConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, "true");
+    localProps.put(StorageSinkConnectorConfig.CONNECT_META_DATA_CONFIG, "true");
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    List<SinkRecord> sinkRecords = createRecordsWithEnums(7, 0, Collections.singleton(new TopicPartition(TOPIC, PARTITION)));
+
+    // Perform write
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 3, 6};
+    verify(sinkRecords, validOffsets);
+  }
+
+  @Test
   public void testWriteRecordsOfUnionsWithEnhancedAvroData() throws Exception {
+    localProps.put(StorageSinkConnectorConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, "true");
     localProps.put(StorageSinkConnectorConfig.CONNECT_META_DATA_CONFIG, "true");
     setUp();
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
@@ -369,10 +388,6 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
     parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
     parsedConfig.put(
-        PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG,
-        TimeBasedSchemaGenerator.class
-    );
-    parsedConfig.put(
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
         TopicPartitionWriterTest.MockedWallclockTimestampExtractor.class.getName()
     );
@@ -429,10 +444,6 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     // Define the partitioner
     TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
     parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
-    parsedConfig.put(
-        PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG,
-        TimeBasedSchemaGenerator.class
-    );
     parsedConfig.put(
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
         TopicPartitionWriterTest.MockedWallclockTimestampExtractor.class.getName()
@@ -491,10 +502,6 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     // Define the partitioner
     TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
     parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
-    parsedConfig.put(
-        PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG,
-        TimeBasedSchemaGenerator.class
-    );
     parsedConfig.put(
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
         TopicPartitionWriterTest.MockedWallclockTimestampExtractor.class.getName()
@@ -735,6 +742,30 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
       }
     }
     return sinkRecords;
+  }
+
+  protected List<SinkRecord> createRecordsWithEnums(int size, long startOffset, Set<TopicPartition> partitions) {
+    String key = "key";
+    Schema schema = createEnumSchema();
+    SchemaAndValue valueAndSchema = new SchemaAndValue(schema, "bar");
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    for (TopicPartition tp : partitions) {
+      for (long offset = startOffset; offset < startOffset + size; ++offset) {
+        sinkRecords.add(new SinkRecord(TOPIC, tp.partition(), Schema.STRING_SCHEMA, key, schema, valueAndSchema.value(), offset));
+      }
+    }
+    return sinkRecords;
+  }
+
+  public Schema createEnumSchema() {
+    // Enums are just converted to strings, original enum is preserved in parameters
+    SchemaBuilder builder = SchemaBuilder.string().name("TestEnum");
+    builder.parameter(CONNECT_ENUM_DOC_PROP, null);
+    builder.parameter(AVRO_TYPE_ENUM, "TestEnum");
+    for(String enumSymbol : new String[]{"foo", "bar", "baz"}) {
+      builder.parameter(AVRO_TYPE_ENUM+"."+enumSymbol, enumSymbol);
+    }
+    return builder.build();
   }
 
   protected List<SinkRecord> createRecordsWithUnion(

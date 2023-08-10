@@ -20,15 +20,18 @@ import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
+import com.amazonaws.services.s3.model.CannedAccessControlList;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -44,8 +47,6 @@ import io.confluent.connect.storage.common.ComposableConfig;
 import io.confluent.connect.storage.common.GenericRecommender;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.hive.HiveConfig;
-import io.confluent.connect.storage.hive.schema.DefaultSchemaGenerator;
-import io.confluent.connect.storage.hive.schema.TimeBasedSchemaGenerator;
 import io.confluent.connect.storage.partitioner.DailyPartitioner;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.FieldPartitioner;
@@ -74,8 +75,29 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String REGION_CONFIG = "s3.region";
   public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
 
+  public static final String ACL_CANNED_CONFIG = "s3.acl.canned";
+  public static final String ACL_CANNED_DEFAULT = null;
+
   public static final String AVRO_CODEC_CONFIG = "avro.codec";
   public static final String AVRO_CODEC_DEFAULT = "null";
+
+  public static final String S3_PART_RETRIES_CONFIG = "s3.part.retries";
+  public static final int S3_PART_RETRIES_DEFAULT = 3;
+
+  public static final String FORMAT_BYTEARRAY_EXTENSION_CONFIG = "format.bytearray.extension";
+  public static final String FORMAT_BYTEARRAY_EXTENSION_DEFAULT = ".bin";
+
+  public static final String FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG = "format.bytearray.separator";
+  public static final String FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT = System.lineSeparator();
+
+  public static final String S3_PROXY_URL_CONFIG = "s3.proxy.url";
+  public static final String S3_PROXY_URL_DEFAULT = "";
+
+  public static final String S3_PROXY_USER_CONFIG = "s3.proxy.user";
+  public static final String S3_PROXY_USER_DEFAULT = null;
+
+  public static final String S3_PROXY_PASS_CONFIG = "s3.proxy.password";
+  public static final Password S3_PROXY_PASS_DEFAULT = new Password(null);
 
   private final String name;
 
@@ -89,8 +111,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private static final GenericRecommender STORAGE_CLASS_RECOMMENDER = new GenericRecommender();
   private static final GenericRecommender FORMAT_CLASS_RECOMMENDER = new GenericRecommender();
   private static final GenericRecommender PARTITIONER_CLASS_RECOMMENDER = new GenericRecommender();
-  private static final GenericRecommender SCHEMA_GENERATOR_CLASS_RECOMMENDER =
-      new GenericRecommender();
 
   static {
     STORAGE_CLASS_RECOMMENDER.addValidValues(
@@ -110,14 +130,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
             FieldPartitioner.class
         )
     );
-
-    SCHEMA_GENERATOR_CLASS_RECOMMENDER.addValidValues(
-        Arrays.<Object>asList(
-            DefaultSchemaGenerator.class,
-            TimeBasedSchemaGenerator.class
-        )
-    );
-
   }
 
   public static ConfigDef newConfigDef() {
@@ -125,6 +137,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     {
       final String group = "S3";
       int orderInGroup = 0;
+
       configDef.define(
           S3_BUCKET_CONFIG,
           Type.STRING,
@@ -190,6 +203,19 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       );
 
       configDef.define(
+          ACL_CANNED_CONFIG,
+          Type.STRING,
+          ACL_CANNED_DEFAULT,
+          new CannedAclValidator(),
+          Importance.LOW,
+          "An S3 canned ACL header value to apply when writing objects.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Canned ACL"
+      );
+
+      configDef.define(
           WAN_MODE_CONFIG,
           Type.BOOLEAN,
           WAN_MODE_DEFAULT,
@@ -213,6 +239,99 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.LONG,
           "Avro compression codec"
       );
+
+      configDef.define(
+          S3_PART_RETRIES_CONFIG,
+          Type.INT,
+          S3_PART_RETRIES_DEFAULT,
+          Importance.MEDIUM,
+          "Number of upload retries of a single S3 part. Zero means no retries.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Part Upload Retries"
+      );
+
+      configDef.define(
+          FORMAT_BYTEARRAY_EXTENSION_CONFIG,
+          Type.STRING,
+          FORMAT_BYTEARRAY_EXTENSION_DEFAULT,
+          Importance.LOW,
+          String.format(
+              "Output file extension for ByteArrayFormat. Defaults to '%s'",
+              FORMAT_BYTEARRAY_EXTENSION_DEFAULT
+          ),
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Output file extension for ByteArrayFormat"
+      );
+
+      configDef.define(
+          FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG,
+          Type.STRING,
+          // Because ConfigKey automatically trims strings, we cannot set
+          // the default here and instead inject null;
+          // the default is applied in getFormatByteArrayLineSeparator().
+          null,
+          Importance.LOW,
+          "String inserted between records for ByteArrayFormat. "
+              + "Defaults to 'System.lineSeparator()' "
+              + "and may contain escape sequences like '\\n'. "
+              + "An input record that contains the line separator will look like "
+              + "multiple records in the output S3 object.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Line separator ByteArrayFormat"
+      );
+
+      configDef.define(
+          S3_PROXY_URL_CONFIG,
+          Type.STRING,
+          S3_PROXY_URL_DEFAULT,
+          Importance.LOW,
+          "S3 Proxy settings encoded in URL syntax. This property is meant to be used only if you"
+              + " need to access S3 through a proxy.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Proxy Settings"
+      );
+
+      configDef.define(
+          S3_PROXY_USER_CONFIG,
+          Type.STRING,
+          S3_PROXY_USER_DEFAULT,
+          Importance.LOW,
+          "S3 Proxy User. This property is meant to be used only if you"
+              + " need to access S3 through a proxy. Using ``"
+              + S3_PROXY_USER_CONFIG
+              + "`` instead of embedding the username and password in ``"
+              + S3_PROXY_URL_CONFIG
+              + "`` allows the password to be hidden in the logs.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Proxy User"
+      );
+
+      configDef.define(
+          S3_PROXY_PASS_CONFIG,
+          Type.PASSWORD,
+          S3_PROXY_PASS_DEFAULT,
+          Importance.LOW,
+          "S3 Proxy Password. This property is meant to be used only if you"
+              + " need to access S3 through a proxy. Using ``"
+              + S3_PROXY_PASS_CONFIG
+              + "`` instead of embedding the username and password in ``"
+              + S3_PROXY_URL_CONFIG
+              + "`` allows the password to be hidden in the logs.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Proxy Password"
+      );
     }
     return configDef;
   }
@@ -226,10 +345,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     ConfigDef storageCommonConfigDef = StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER);
     commonConfig = new StorageCommonConfig(storageCommonConfigDef, originalsStrings());
     hiveConfig = new HiveConfig(originalsStrings());
-    ConfigDef partitionerConfigDef = PartitionerConfig.newConfigDef(
-        PARTITIONER_CLASS_RECOMMENDER,
-        SCHEMA_GENERATOR_CLASS_RECOMMENDER
-    );
+    ConfigDef partitionerConfigDef = PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER);
     partitionerConfig = new PartitionerConfig(partitionerConfigDef, originalsStrings());
 
     this.name = parseName(originalsStrings());
@@ -254,8 +370,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getString(S3_BUCKET_CONFIG);
   }
 
-  public String getSSEA() {
+  public String getSsea() {
     return getString(SSEA_CONFIG);
+  }
+
+  public CannedAccessControlList getCannedAcl() {
+    return CannedAclValidator.ACLS_BY_HEADER_VALUE.get(getString(ACL_CANNED_CONFIG));
   }
 
   public int getPartSize() {
@@ -268,12 +388,32 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       return ((Class<? extends AWSCredentialsProvider>)
                   getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
     } catch (IllegalAccessException | InstantiationException e) {
-      throw new ConnectException("Invalid class for: " + S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG, e);
+      throw new ConnectException(
+          "Invalid class for: " + S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
+          e
+      );
     }
   }
 
   public String getAvroCodec() {
     return getString(AVRO_CODEC_CONFIG);
+  }
+
+  public int getS3PartRetries() {
+    return getInt(S3_PART_RETRIES_CONFIG);
+  }
+
+  public String getByteArrayExtension() {
+    return getString(FORMAT_BYTEARRAY_EXTENSION_CONFIG);
+  }
+
+  public String getFormatByteArrayLineSeparator() {
+    // White space is significant for line separators, but ConfigKey trims it out,
+    // so we need to check the originals rather than using the normal machinery.
+    if (originalsStrings().containsKey(FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG)) {
+      return originalsStrings().get(FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG);
+    }
+    return FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT;
   }
 
   protected static String parseName(Map<String, String> props) {
@@ -315,10 +455,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       }
       Number number = (Number) value;
       if (number.longValue() < min) {
-        throw new ConfigException(name, value, "Part size must be at least: " + min + " bytes (5MB)");
+        throw new ConfigException(
+            name,
+            value,
+            "Part size must be at least: " + min + " bytes (5MB)"
+        );
       }
       if (number.longValue() > max) {
-        throw new ConfigException(name, value, "Part size must be no more: " + Integer.MAX_VALUE + " bytes (~2GB)");
+        throw new ConfigException(
+            name,
+            value,
+            "Part size must be no more: " + Integer.MAX_VALUE + " bytes (~2GB)"
+        );
       }
     }
 
@@ -344,13 +492,47 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     public void ensureValid(String name, Object region) {
       String regionStr = ((String) region).toLowerCase().trim();
       if (RegionUtils.getRegion(regionStr) == null) {
-        throw new ConfigException(name, region, "Value must be one of: " + Utils.join(RegionUtils.getRegions(), ", "));
+        throw new ConfigException(
+            name,
+            region,
+            "Value must be one of: " + Utils.join(RegionUtils.getRegions(), ", ")
+        );
       }
     }
 
     @Override
     public String toString() {
       return "[" + Utils.join(RegionUtils.getRegions(), ", ") + "]";
+    }
+  }
+
+  private static class CannedAclValidator implements ConfigDef.Validator {
+    public static final Map<String, CannedAccessControlList> ACLS_BY_HEADER_VALUE = new HashMap<>();
+    public static final String ALLOWED_VALUES;
+
+    static {
+      List<String> aclHeaderValues = new ArrayList<>();
+      for (CannedAccessControlList acl : CannedAccessControlList.values()) {
+        ACLS_BY_HEADER_VALUE.put(acl.toString(), acl);
+        aclHeaderValues.add(acl.toString());
+      }
+      ALLOWED_VALUES = Utils.join(aclHeaderValues, ", ");
+    }
+
+    @Override
+    public void ensureValid(String name, Object cannedAcl) {
+      if (cannedAcl == null) {
+        return;
+      }
+      String aclStr = ((String) cannedAcl).trim();
+      if (!ACLS_BY_HEADER_VALUE.containsKey(aclStr)) {
+        throw new ConfigException(name, cannedAcl, "Value must be one of: " + ALLOWED_VALUES);
+      }
+    }
+
+    @Override
+    public String toString() {
+      return "[" + ALLOWED_VALUES + "]";
     }
   }
 
@@ -361,7 +543,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
               && AWSCredentialsProvider.class.isAssignableFrom((Class<?>) provider)) {
         return;
       }
-      throw new ConfigException(name, provider, "Class must extend: " + AWSCredentialsProvider.class);
+      throw new ConfigException(
+          name,
+          provider,
+          "Class must extend: " + AWSCredentialsProvider.class
+      );
     }
 
     @Override
@@ -371,25 +557,25 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   public static ConfigDef getConfig() {
-    Map<String, ConfigDef.ConfigKey> everything = new HashMap<>(newConfigDef().configKeys());
-    everything.putAll(StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER).configKeys());
-    everything.putAll(
-        PartitionerConfig.newConfigDef(
-            PARTITIONER_CLASS_RECOMMENDER,
-            SCHEMA_GENERATOR_CLASS_RECOMMENDER
-        ).configKeys()
-    );
+    // Define the names of the configurations we're going to override
+    Set<String> skip = new HashSet<>();
+    skip.add(StorageSinkConnectorConfig.SHUTDOWN_TIMEOUT_CONFIG);
 
-    Set<String> blacklist = new HashSet<>();
-    blacklist.add(StorageSinkConnectorConfig.SHUTDOWN_TIMEOUT_CONFIG);
-
+    // Order added is important, so that group order is maintained
     ConfigDef visible = new ConfigDef();
-    for (ConfigDef.ConfigKey key : everything.values()) {
-      if(!blacklist.contains(key.name)) {
-        visible.define(key);
+    addAllConfigKeys(visible, newConfigDef(), skip);
+    addAllConfigKeys(visible, StorageCommonConfig.newConfigDef(STORAGE_CLASS_RECOMMENDER), skip);
+    addAllConfigKeys(visible, PartitionerConfig.newConfigDef(PARTITIONER_CLASS_RECOMMENDER), skip);
+
+    return visible;
+  }
+
+  private static void addAllConfigKeys(ConfigDef container, ConfigDef other, Set<String> skip) {
+    for (ConfigDef.ConfigKey key : other.configKeys().values()) {
+      if (skip != null && !skip.contains(key.name)) {
+        container.define(key);
       }
     }
-    return visible;
   }
 
   public static void main(String[] args) {

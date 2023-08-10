@@ -16,11 +16,13 @@
 
 package io.confluent.connect.s3;
 
-import io.confluent.connect.storage.partitioner.DefaultPartitioner;
-import io.confluent.connect.storage.partitioner.PartitionerConfig;
-
+import com.amazonaws.SdkClientException;
+import com.amazonaws.services.s3.model.CannedAccessControlList;
+import com.amazonaws.services.s3.model.UploadPartRequest;
+import com.amazonaws.services.s3.model.UploadPartResult;
+import org.apache.avro.file.DataFileWriter;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.easymock.Capture;
@@ -28,27 +30,34 @@ import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 import org.powermock.api.easymock.PowerMock;
+import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.io.ByteArrayInputStream;
-import java.util.ArrayList;
-import java.util.Collection;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.format.avro.AvroUtils;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.StorageFactory;
-
-import static org.powermock.api.easymock.PowerMock.replayAll;
-import static org.powermock.api.easymock.PowerMock.verifyAll;
+import io.confluent.connect.storage.partitioner.DefaultPartitioner;
+import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
 import static org.junit.Assert.assertTrue;
+import static org.powermock.api.easymock.PowerMock.replayAll;
+import static org.powermock.api.easymock.PowerMock.verifyAll;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({S3SinkTask.class, StorageFactory.class})
@@ -171,6 +180,60 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
   }
 
   @Test
+  public void testWriteRecordsSpanningMultiplePartsWithRetry() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10000");
+    localProps.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "3");
+    setUp();
+
+    List<SinkRecord> sinkRecords = createRecords(11000);
+    int totalBytes = calcByteSize(sinkRecords);
+    final int parts = totalBytes / connectorConfig.getPartSize();
+
+    // From time to time fail S3 upload part method
+    final AtomicInteger count = new AtomicInteger();
+    PowerMockito.doAnswer(new Answer<UploadPartResult>() {
+      @Override
+      public UploadPartResult answer(InvocationOnMock invocationOnMock) throws Throwable {
+        if(count.getAndIncrement() % parts == 0){
+          throw new SdkClientException("Boom!");
+        } else {
+          return (UploadPartResult)invocationOnMock.callRealMethod();
+        }
+      }
+    }).when(s3).uploadPart(Mockito.isA(UploadPartRequest.class));
+
+
+    replayAll();
+
+    task = new S3SinkTask();
+    task.initialize(context);
+    task.start(properties);
+    verifyAll();
+
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 10000};
+    verify(sinkRecords, validOffsets);
+  }
+
+  private int calcByteSize(List<SinkRecord> sinkRecords) throws IOException {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    DataFileWriter<Object> writer = new DataFileWriter<>(new GenericDatumWriter<>());
+    AvroData avroData = new AvroData(1);
+    boolean writerInit = false;
+    for(SinkRecord sinkRecord: sinkRecords){
+      if(!writerInit){
+        writer.create(avroData.fromConnectSchema(sinkRecord.valueSchema()), baos);
+        writerInit = true;
+      }
+      writer.append(avroData.fromConnectData(sinkRecord.valueSchema(), sinkRecord.value()));
+    }
+    return baos.size();
+  }
+
+  @Test
   public void testPartitionerConfig() throws Exception {
     localProps.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, CustomPartitioner.class.getName());
     localProps.put("custom.partitioner.config", "arbitrary value");
@@ -188,5 +251,16 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
           map.containsKey("custom.partitioner.config"));
     }
   }
+
+  @Test
+  public void testAclCannedConfig() throws Exception {
+    localProps.put(S3SinkConnectorConfig.ACL_CANNED_CONFIG, CannedAccessControlList.BucketOwnerFullControl.toString());
+    setUp();
+    replayAll();
+    task = new S3SinkTask();
+    task.initialize(context);
+    task.start(properties);
+  }
+
 }
 

@@ -1,7 +1,7 @@
 .. _s3_configuration_options:
 
-Configuration Options
----------------------
+S3 Connector Configuration Options
+----------------------------------
 
 Connector
 ^^^^^^^^^
@@ -39,8 +39,15 @@ Connector
   * Default: 1000
   * Importance: low
 
+``enhanced.avro.schema.support``
+  Enable enhanced avro schema support in AvroConverter: Enum symbol preservation and Package Name awareness
+
+  * Type: boolean
+  * Default: false
+  * Importance: low
+
 ``connect.meta.data``
-  Allow connect converter to add its meta data to the output schema
+  Allow connect converter to add its metadata to the output schema
 
   * Type: boolean
   * Default: true
@@ -59,6 +66,13 @@ Connector
   * Type: int
   * Default: 10
   * Valid Values: [0,...]
+  * Importance: low
+
+``append.late.data``
+  If true, the connector will append late-arriving data intended for earlier partitions into the current, open partition. If false, late-arriving data intended for earlier partitions will be rolled into files marked with the partition indicated by the extracted time, even if this creates many small files.
+
+  * Type: boolean
+  * Default: false
   * Importance: low
 
 S3
@@ -87,7 +101,7 @@ S3
   * Importance: high
 
 ``s3.credentials.provider.class``
-  Credentials provider or provider chain to use for authentication to AWS. By default the  connector uses 'DefaultAWSCredentialsProviderChain'.
+  Credentials provider or provider chain to use for authentication to AWS. By default the connector uses 'DefaultAWSCredentialsProviderChain'.
 
   * Type: class
   * Default: com.amazonaws.auth.DefaultAWSCredentialsProviderChain
@@ -99,6 +113,14 @@ S3
 
   * Type: string
   * Default: ""
+  * Importance: low
+
+``s3.acl.canned``
+  An S3 canned ACL header value to apply when writing objects.
+
+  * Type: string
+  * Default: null
+  * Valid Values: [private, public-read, public-read-write, authenticated-read, log-delivery-write, bucket-owner-read, bucket-owner-full-control, aws-exec-read]
   * Importance: low
 
 ``s3.wan.mode``
@@ -113,6 +135,48 @@ S3
 
   * Type: string
   * Default: null
+  * Importance: low
+
+``s3.part.retries``
+  Number of upload retries of a single S3 part. Zero means no retries.
+
+  * Type: int
+  * Default: 3
+  * Importance: medium
+
+``format.bytearray.extension``
+  Output file extension for ByteArrayFormat. Defaults to '.bin'
+
+  * Type: string
+  * Default: .bin
+  * Importance: low
+
+``format.bytearray.separator``
+  String inserted between records for ByteArrayFormat. Defaults to 'System.lineSeparator()' and may contain escape sequences like '\n'. An input record that contains the line separator will look like multiple records in the output S3 object.
+
+  * Type: string
+  * Default: null
+  * Importance: low
+
+``s3.proxy.url``
+  S3 Proxy settings encoded in URL syntax. This property is meant to be used only if you need to access S3 through a proxy.
+
+  * Type: string
+  * Default: ""
+  * Importance: low
+
+``s3.proxy.user``
+  S3 Proxy User. This property is meant to be used only if you need to access S3 through a proxy. Using ``s3.proxy.user`` instead of embedding the username and password in ``s3.proxy.url`` allows the password to be hidden in the logs.
+
+  * Type: string
+  * Default: null
+  * Importance: low
+
+``s3.proxy.password``
+  S3 Proxy Password. This property is meant to be used only if you need to access S3 through a proxy. Using ``s3.proxy.password`` instead of embedding the username and password in ``s3.proxy.url`` allows the password to be hidden in the logs.
+
+  * Type: password
+  * Default: [hidden]
   * Importance: low
 
 Storage
@@ -161,13 +225,7 @@ Partitioner
   * Type: class
   * Default: io.confluent.connect.storage.partitioner.DefaultPartitioner
   * Importance: high
-  * Dependents: ``partition.field.name``, ``partition.duration.ms``, ``path.format``, ``locale``, ``timezone``, ``schema.generator.class``
-
-``schema.generator.class``
-  The schema generator to use with partitioners.
-
-  * Type: class
-  * Importance: high
+  * Dependents: ``partition.field.name``, ``partition.duration.ms``, ``path.format``, ``locale``, ``timezone``
 
 ``partition.field.name``
   The name of the partitioning field when FieldPartitioner is used.

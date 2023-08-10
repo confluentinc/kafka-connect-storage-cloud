@@ -20,17 +20,6 @@ import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import org.junit.After;
-import org.junit.Rule;
-import org.junit.rules.TestRule;
-import org.junit.rules.TestWatcher;
-import org.junit.runner.Description;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.HashMap;
-import java.util.Map;
-
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.avro.AvroFormat;
@@ -41,6 +30,17 @@ import io.confluent.connect.storage.hive.schema.DefaultSchemaGenerator;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.schema.SchemaCompatibility;
 import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
+import org.junit.After;
+import org.junit.Rule;
+import org.junit.rules.TestRule;
+import org.junit.rules.TestWatcher;
+import org.junit.runner.Description;
+import org.powermock.api.mockito.PowerMockito;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class S3SinkConnectorTestBase extends StorageSinkTestBase {
 
@@ -74,9 +74,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     props.put(StorageCommonConfig.STORAGE_CLASS_CONFIG, "io.confluent.connect.s3.storage.S3Storage");
     props.put(S3SinkConnectorConfig.S3_BUCKET_CONFIG, S3_TEST_BUCKET_NAME);
     props.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
-    props.put(MockS3SinkConnectorConfig.TEST_PART_SIZE_CONFIG, "1024");
     props.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, PartitionerConfig.PARTITIONER_CLASS_DEFAULT.getName());
-    props.put(PartitionerConfig.SCHEMA_GENERATOR_CLASS_CONFIG, DefaultSchemaGenerator.class.getName());
     props.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG, "int");
     props.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH");
     props.put(PartitionerConfig.LOCALE_CONFIG, "en");
@@ -89,7 +87,8 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    connectorConfig = new MockS3SinkConnectorConfig(properties);
+    connectorConfig = PowerMockito.spy(new S3SinkConnectorConfig(properties));
+    PowerMockito.doReturn(1024).when(connectorConfig).getPartSize();
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     parsedConfig = new HashMap<>(connectorConfig.plainValues());
     compatibility = StorageSchemaCompatibility.getCompatibility(

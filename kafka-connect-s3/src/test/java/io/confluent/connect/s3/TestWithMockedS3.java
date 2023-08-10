@@ -46,6 +46,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.confluent.connect.s3.format.avro.AvroUtils;
+import io.confluent.connect.s3.format.bytearray.ByteArrayUtils;
 import io.confluent.connect.s3.format.json.JsonUtils;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.util.FileUtils;
@@ -117,6 +118,11 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
         return readRecordsAvro(bucketName, fileKey, s3);
       } else if (".json".equals(extension)) {
         return readRecordsJson(bucketName, fileKey, s3);
+      } else if (".bin".equals(extension)) {
+        return readRecordsByteArray(bucketName, fileKey, s3,
+            S3SinkConnectorConfig.FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT.getBytes());
+      } else if (".SEPARATORjson".equals(extension)) {
+        return readRecordsByteArray(bucketName, fileKey, s3, "SEPARATOR".getBytes());
       } else {
         throw new IllegalArgumentException("Unknown extension: " + extension);
       }
@@ -134,6 +140,13 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
       InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
 
       return JsonUtils.getRecords(in);
+  }
+
+  public static Collection<Object> readRecordsByteArray(String bucketName, String fileKey, AmazonS3 s3, byte[] lineSeparatorBytes) throws IOException {
+      log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
+      InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
+
+      return ByteArrayUtils.getRecords(in, lineSeparatorBytes);
   }
 
   @Override

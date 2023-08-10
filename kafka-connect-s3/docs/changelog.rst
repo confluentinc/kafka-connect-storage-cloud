@@ -3,6 +3,45 @@
 Changelog
 =========
 
+Version 4.0.1
+-------------
+
+S3 Connector
+~~~~~~~~~~~~~~
+
+* `PR-148 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/148>`_ - Rely on jackson.version from common pom instead of defining it ourselves
+* `PR-149 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/149>`_ - Bump Jackson version
+* `PR-140 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/140>`_ - Fix for BufferOverflowException in S3OutputStream
+* `PR-138 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/138>`_ - CC-1490: NPE when rotate.interval.ms is set but partitioner is not instance of TimeBasedPartitioner
+* `PR-132 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/132>`_ - CC-1214: Import all the AvroData configs to storage sink connectors
+* `PR-55 <https://github.com/confluentinc/kafka-connect-storage-common/pull/55>`_ - CC-1489: NPE on records with null timestamp.
+* `PR-45 <https://github.com/confluentinc/kafka-connect-storage-common/pull/45>`_ - HOTFIX: Consider all the properties in AvroDataConfig.
+
+Version 4.0.0
+-------------
+
+S3 Connector
+~~~~~~~~~~~~~~
+
+* `PR-102 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/102>`_ - Allow to write records at the root of the bucket
+* `PR-105 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/105>`_ - Add instructions about upstream builds
+* `PR-97 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/97>`_ - MINOR: S3 Proxy Settings revisited
+* `PR-103 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/103>`_ - Remove unused imports
+* `PR-101 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/101>`_ - Remove unused imports
+* `PR-85 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/85>`_ - Add ByteArrayFormat
+* `PR-87 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/87>`_ - Add s3.canned.acl config
+* `PR-84 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/84>`_ - Create CONTRIBUTING.md
+* `PR-92 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/92>`_ - CC-1114: Switch to common pom and fix checkstyle issues.
+* `PR-78 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/78>`_ - Retry s3 part upload
+* `PR-80 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/80>`_ - HOTFIX: Remove refs to schema-generator config.
+* `PR-60 <https://github.com/confluentinc/kafka-connect-storage-cloud/pull/60>`_ - Add logging when creating a new RecordWriter
+* `PR-44 <https://github.com/confluentinc/kafka-connect-storage-common/pull/44>`_ - HOTFIX: Remove unused parameter in newConfigDef for PartitionerConfig.
+* `PR-41 <https://github.com/confluentinc/kafka-connect-storage-common/pull/41>`_ - HOTFIX: Update dependencies
+* `PR-40 <https://github.com/confluentinc/kafka-connect-storage-common/pull/40>`_ - HOTFIX: Make specific dependencies explicit.
+* `PR-37 <https://github.com/confluentinc/kafka-connect-storage-common/pull/37>`_ - Remove unused imports
+* `PR-35 <https://github.com/confluentinc/kafka-connect-storage-common/pull/35>`_ - Add missing modules to the dependencyManagement pom section so downstream projects will inherit the right version automatically.
+* `PR-31 <https://github.com/confluentinc/kafka-connect-storage-common/pull/31>`_ - Remove schema.generator.class config and have Formats specify their own SchemaGenerator internally
+
 Version 3.3.1
 -------------
 
