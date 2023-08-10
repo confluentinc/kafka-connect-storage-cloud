@@ -16,12 +16,14 @@
 
 package io.confluent.connect.s3;
 
+import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -40,6 +42,10 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.zip.Deflater;
 
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
@@ -58,6 +64,8 @@ import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   // S3 Group
@@ -65,6 +73,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String SSEA_CONFIG = "s3.ssea.name";
   public static final String SSEA_DEFAULT = "";
+
+  public static final String SSE_CUSTOMER_KEY = "s3.sse.customer.key";
+  public static final Password SSE_CUSTOMER_KEY_DEFAULT = new Password(null);
 
   public static final String SSE_KMS_KEY_ID_CONFIG = "s3.sse.kms.key.id";
   public static final String SSE_KMS_KEY_ID_DEFAULT = "";
@@ -78,6 +89,15 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String CREDENTIALS_PROVIDER_CLASS_CONFIG = "s3.credentials.provider.class";
   public static final Class<? extends AWSCredentialsProvider> CREDENTIALS_PROVIDER_CLASS_DEFAULT =
       DefaultAWSCredentialsProviderChain.class;
+  /**
+   * The properties that begin with this prefix will be used to configure a class, specified by
+   * {@code s3.credentials.provider.class} if it implements {@link Configurable}.
+   */
+  public static final String CREDENTIALS_PROVIDER_CONFIG_PREFIX =
+      CREDENTIALS_PROVIDER_CLASS_CONFIG.substring(
+          0,
+          CREDENTIALS_PROVIDER_CLASS_CONFIG.lastIndexOf(".") + 1
+      );
 
   public static final String REGION_CONFIG = "s3.region";
   public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
@@ -87,6 +107,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String COMPRESSION_TYPE_CONFIG = "s3.compression.type";
   public static final String COMPRESSION_TYPE_DEFAULT = "none";
+
+  public static final String COMPRESSION_LEVEL_CONFIG = "s3.compression.level";
+  public static final int COMPRESSION_LEVEL_DEFAULT = Deflater.DEFAULT_COMPRESSION;
+  private static final CompressionLevelValidator COMPRESSION_LEVEL_VALIDATOR =
+      new CompressionLevelValidator();
 
   public static final String S3_PART_RETRIES_CONFIG = "s3.part.retries";
   public static final int S3_PART_RETRIES_DEFAULT = 3;
@@ -105,6 +130,22 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String S3_PROXY_PASS_CONFIG = "s3.proxy.password";
   public static final Password S3_PROXY_PASS_DEFAULT = new Password(null);
+
+  public static final String HEADERS_USE_EXPECT_CONTINUE_CONFIG =
+      "s3.http.send.expect.continue";
+  public static final boolean HEADERS_USE_EXPECT_CONTINUE_DEFAULT =
+      ClientConfiguration.DEFAULT_USE_EXPECT_CONTINUE;
+
+  /**
+   * Maximum back-off time when retrying failed requests.
+   */
+  public static final int S3_RETRY_MAX_BACKOFF_TIME_MS = (int) TimeUnit.HOURS.toMillis(24);
+
+  public static final String S3_RETRY_BACKOFF_CONFIG = "s3.retry.backoff.ms";
+  public static final int S3_RETRY_BACKOFF_DEFAULT = 200;
+
+  public static final String S3_PATH_STYLE_ACCESS_ENABLED_CONFIG = "s3.path.style.access.enabled";
+  public static final boolean S3_PATH_STYLE_ACCESS_ENABLED_DEFAULT = true;
 
   private final String name;
 
@@ -195,7 +236,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           new CredentialsProviderValidator(),
           Importance.LOW,
           "Credentials provider or provider chain to use for authentication to AWS. By default "
-              + "the connector uses 'DefaultAWSCredentialsProviderChain'.",
+              + "the connector uses ``DefaultAWSCredentialsProviderChain``.",
           group,
           ++orderInGroup,
           Width.LONG,
@@ -222,13 +263,25 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       );
 
       configDef.define(
+          SSE_CUSTOMER_KEY,
+          Type.PASSWORD,
+          SSE_CUSTOMER_KEY_DEFAULT,
+          Importance.LOW,
+          "The S3 Server Side Encryption Customer-Provided Key (SSE-C).",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "S3 Server Side Encryption Customer-Provided Key (SSE-C)"
+      );
+
+      configDef.define(
           SSE_KMS_KEY_ID_CONFIG,
           Type.STRING,
           SSE_KMS_KEY_ID_DEFAULT,
           Importance.LOW,
           "The name of the AWS Key Management Service (AWS-KMS) key to be used for server side "
               + "encryption of the S3 objects. No encryption is used when no key is provided, but"
-              + " it is enabled when '" + SSEAlgorithm.KMS + "' is specified as encryption "
+              + " it is enabled when ``" + SSEAlgorithm.KMS + "`` is specified as encryption "
               + "algorithm with a valid key name.",
           group,
           ++orderInGroup,
@@ -268,7 +321,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           COMPRESSION_TYPE_DEFAULT,
           new CompressionTypeValidator(),
           Importance.LOW,
-          "Compression type for file written to S3. "
+          "Compression type for files written to S3. "
           + "Applied when using JsonFormat or ByteArrayFormat. "
           + "Available values: none, gzip.",
           group,
@@ -278,15 +331,50 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       );
 
       configDef.define(
+          COMPRESSION_LEVEL_CONFIG,
+          Type.INT,
+          COMPRESSION_LEVEL_DEFAULT,
+          COMPRESSION_LEVEL_VALIDATOR,
+          Importance.LOW,
+          "Compression level for files written to S3. "
+              + "Applied when using JsonFormat or ByteArrayFormat. ",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Compression type",
+          COMPRESSION_LEVEL_VALIDATOR
+      );
+
+      configDef.define(
           S3_PART_RETRIES_CONFIG,
           Type.INT,
           S3_PART_RETRIES_DEFAULT,
+          atLeast(0),
           Importance.MEDIUM,
-          "Number of upload retries of a single S3 part. Zero means no retries.",
+          "Maximum number of retry attempts for failed requests. Zero means no retries. "
+              + "The actual number of attempts is determined by the S3 client based on multiple "
+              + "factors including, but not limited to: the value of this parameter, type of "
+              + "exception occurred, and throttling settings of the underlying S3 client.",
           group,
           ++orderInGroup,
           Width.LONG,
           "S3 Part Upload Retries"
+      );
+
+      configDef.define(
+          S3_RETRY_BACKOFF_CONFIG,
+          Type.LONG,
+          S3_RETRY_BACKOFF_DEFAULT,
+          atLeast(0L),
+          Importance.LOW,
+          "How long to wait in milliseconds before attempting the first retry "
+              + "of a failed S3 request. Upon a failure, this connector may wait up to twice as "
+              + "long as the previous wait, up to the maximum number of retries. "
+              + "This avoids retrying in a tight loop under failure scenarios.",
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Retry Backoff (ms)"
       );
 
       configDef.define(
@@ -295,7 +383,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           FORMAT_BYTEARRAY_EXTENSION_DEFAULT,
           Importance.LOW,
           String.format(
-              "Output file extension for ByteArrayFormat. Defaults to '%s'",
+              "Output file extension for ByteArrayFormat. Defaults to ``%s``.",
               FORMAT_BYTEARRAY_EXTENSION_DEFAULT
           ),
           group,
@@ -313,8 +401,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           null,
           Importance.LOW,
           "String inserted between records for ByteArrayFormat. "
-              + "Defaults to 'System.lineSeparator()' "
-              + "and may contain escape sequences like '\\n'. "
+              + "Defaults to ``System.lineSeparator()`` "
+              + "and may contain escape sequences like ``\\n``. "
               + "An input record that contains the line separator will look like "
               + "multiple records in the output S3 object.",
           group,
@@ -370,6 +458,33 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "S3 Proxy Password"
       );
 
+      configDef.define(
+          HEADERS_USE_EXPECT_CONTINUE_CONFIG,
+          Type.BOOLEAN,
+          HEADERS_USE_EXPECT_CONTINUE_DEFAULT,
+          Importance.LOW,
+          "Enable/disable use of the HTTP/1.1 handshake using EXPECT: 100-CONTINUE during "
+              + "multi-part upload. If true, the client will wait for a 100 (CONTINUE) response "
+              + "before sending the request body. Else, the client uploads the entire request "
+              + "body without checking if the server is willing to accept the request.",
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "S3 HTTP Send Uses Expect Continue"
+      );
+
+      configDef.define(
+          S3_PATH_STYLE_ACCESS_ENABLED_CONFIG,
+          Type.BOOLEAN,
+          S3_PATH_STYLE_ACCESS_ENABLED_DEFAULT,
+          Importance.LOW,
+          "Specifies whether or not to enable path style access to the bucket used by the "
+              + "connector",
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Enable Path Style Access to S3"
+      );
     }
     return configDef;
   }
@@ -412,8 +527,16 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getString(SSEA_CONFIG);
   }
 
+  public String getSseCustomerKey() {
+    return getPassword(SSE_CUSTOMER_KEY).value();
+  }
+
   public String getSseKmsKeyId() {
     return getString(SSE_KMS_KEY_ID_CONFIG);
+  }
+
+  public boolean useExpectContinue() {
+    return getBoolean(HEADERS_USE_EXPECT_CONTINUE_CONFIG);
   }
 
   public CannedAccessControlList getCannedAcl() {
@@ -427,8 +550,19 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   @SuppressWarnings("unchecked")
   public AWSCredentialsProvider getCredentialsProvider() {
     try {
-      return ((Class<? extends AWSCredentialsProvider>)
-                  getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
+      AWSCredentialsProvider provider = ((Class<? extends AWSCredentialsProvider>)
+          getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
+
+      if (provider instanceof Configurable) {
+        Map<String, Object> configs = originalsWithPrefix(CREDENTIALS_PROVIDER_CONFIG_PREFIX);
+        configs.remove(CREDENTIALS_PROVIDER_CLASS_CONFIG.substring(
+            CREDENTIALS_PROVIDER_CONFIG_PREFIX.length(),
+            CREDENTIALS_PROVIDER_CLASS_CONFIG.length()
+        ));
+        ((Configurable) provider).configure(configs);
+      }
+
+      return provider;
     } catch (IllegalAccessException | InstantiationException e) {
       throw new ConnectException(
           "Invalid class for: " + S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
@@ -439,6 +573,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public CompressionType getCompressionType() {
     return CompressionType.forName(getString(COMPRESSION_TYPE_CONFIG));
+  }
+
+  public int getCompressionLevel() {
+    return getInt(COMPRESSION_LEVEL_CONFIG);
   }
 
   public int getS3PartRetries() {
@@ -572,6 +710,34 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     @Override
     public String toString() {
       return "[" + ALLOWED_VALUES + "]";
+    }
+  }
+
+  private static class CompressionLevelValidator
+      implements ConfigDef.Validator, ConfigDef.Recommender {
+    private static final int MIN = -1;
+    private static final int MAX = 9;
+    private static final ConfigDef.Range validRange = ConfigDef.Range.between(MIN, MAX);
+
+    @Override
+    public void ensureValid(String name, Object compressionLevel) {
+      validRange.ensureValid(name, compressionLevel);
+    }
+
+    @Override
+    public String toString() {
+      return "-1 for system default, or " + validRange.toString() + " for levels between no "
+          + "compression and best compression";
+    }
+
+    @Override
+    public List<Object> validValues(String s, Map<String, Object> map) {
+      return IntStream.range(MIN, MAX).boxed().collect(Collectors.toList());
+    }
+
+    @Override
+    public boolean visible(String s, Map<String, Object> map) {
+      return true;
     }
   }
 

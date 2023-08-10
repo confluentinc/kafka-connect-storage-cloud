@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.connect.s3;
+package io.confluent.connect.s3.storage;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.Protocol;
@@ -22,22 +22,18 @@ import com.amazonaws.services.s3.AmazonS3;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.mockito.Matchers;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.S3SinkConnectorTestBase;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class S3ProxyTest extends S3SinkConnectorTestBase {
-
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   protected S3Storage storage;
   protected AmazonS3 s3;
@@ -79,18 +75,14 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   public void testNoProtocolThrowsException() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "localhost");
     setUp();
-    thrown.expect(ConfigException.class);
-    thrown.expectMessage(Matchers.contains("no protocol: localhost"));
-    clientConfig = storage.newClientConfiguration(connectorConfig);
+    assertThrows("no protocol: localhost", ConfigException.class, () -> storage.newClientConfiguration(connectorConfig));
   }
 
   @Test
   public void testUnknownProtocolThrowsException() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "unknown://localhost");
     setUp();
-    thrown.expect(ConfigException.class);
-    thrown.expectMessage(Matchers.contains("unknown protocol: localhost"));
-    clientConfig = storage.newClientConfiguration(connectorConfig);
+    assertThrows("unknown protocol: localhost", ConfigException.class, () -> storage.newClientConfiguration(connectorConfig));
   }
 
   @Test

@@ -16,16 +16,23 @@
 
 package io.confluent.connect.s3;
 
+import com.amazonaws.ClientConfiguration;
+import com.amazonaws.auth.AWSCredentialsProvider;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
 
+import io.confluent.connect.s3.auth.AwsAssumeRoleCredentialsProvider;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.S3Storage;
@@ -41,10 +48,13 @@ import io.confluent.connect.avro.AvroDataConfig;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 
 public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
+
+  protected Map<String, String> localProps = new HashMap<>();
 
   @Before
   @Override
@@ -52,8 +62,22 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     super.setUp();
   }
 
+  @After
+  @Override
+  public void tearDown() throws Exception {
+    super.tearDown();
+    localProps.clear();
+  }
+
+  @Override
+  protected Map<String, String> createProps() {
+    Map<String, String> props = super.createProps();
+    props.putAll(localProps);
+    return props;
+  }
+
   @Test
-  public void testStorageClass() throws Exception {
+  public void testStorageClass() {
     // No real test case yet
     connectorConfig = new S3SinkConnectorConfig(properties);
     assertEquals(
@@ -63,14 +87,14 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   }
 
   @Test
-  public void testUndefinedURL() throws Exception {
+  public void testUndefinedURL() {
     properties.remove(StorageCommonConfig.STORE_URL_CONFIG);
     connectorConfig = new S3SinkConnectorConfig(properties);
     assertNull(connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG));
   }
 
   @Test
-  public void testRecommendedValues() throws Exception {
+  public void testRecommendedValues() {
     List<Object> expectedStorageClasses = Arrays.<Object>asList(S3Storage.class);
     List<Object> expectedFormatClasses = Arrays.<Object>asList(
         AvroFormat.class,
@@ -103,7 +127,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   }
 
   @Test
-  public void testAvroDataConfigSupported() throws Exception {
+  public void testAvroDataConfigSupported() {
     properties.put(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, "true");
     properties.put(AvroDataConfig.CONNECT_META_DATA_CONFIG, "false");
     connectorConfig = new S3SinkConnectorConfig(properties);
@@ -112,84 +136,28 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   }
 
   @Test
-  public void testVisibilityForPartitionerClassDependentConfigs() throws Exception {
+  public void testVisibilityForPartitionerClassDependentConfigs() {
     properties.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, DefaultPartitioner.class.getName());
     List<ConfigValue> values = S3SinkConnectorConfig.getConfig().validate(properties);
-    for (ConfigValue val : values) {
-      switch (val.name()) {
-        case PartitionerConfig.PARTITION_FIELD_NAME_CONFIG:
-        case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
-        case PartitionerConfig.PATH_FORMAT_CONFIG:
-        case PartitionerConfig.LOCALE_CONFIG:
-        case PartitionerConfig.TIMEZONE_CONFIG:
-          assertFalse(val.visible());
-          break;
-      }
-    }
+    assertDefaultPartitionerVisibility(values);
 
     properties.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, FieldPartitioner.class.getName());
-    values = S3SinkConnectorConfig.getConfig().validate(properties);
-    for (ConfigValue val : values) {
-      switch (val.name()) {
-        case PartitionerConfig.PARTITION_FIELD_NAME_CONFIG:
-          assertTrue(val.visible());
-          break;
-        case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
-        case PartitionerConfig.PATH_FORMAT_CONFIG:
-        case PartitionerConfig.LOCALE_CONFIG:
-        case PartitionerConfig.TIMEZONE_CONFIG:
-          assertFalse(val.visible());
-          break;
-      }
-    }
+    assertFieldPartitionerVisibility();
 
     properties.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, DailyPartitioner.class.getName());
     values = S3SinkConnectorConfig.getConfig().validate(properties);
-    for (ConfigValue val : values) {
-      switch (val.name()) {
-        case PartitionerConfig.PARTITION_FIELD_NAME_CONFIG:
-        case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
-        case PartitionerConfig.PATH_FORMAT_CONFIG:
-          assertFalse(val.visible());
-          break;
-        case PartitionerConfig.LOCALE_CONFIG:
-        case PartitionerConfig.TIMEZONE_CONFIG:
-          assertTrue(val.visible());
-          break;
-      }
-    }
+    assertTimeBasedPartitionerVisibility(values);
 
     properties.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, HourlyPartitioner.class.getName());
     values = S3SinkConnectorConfig.getConfig().validate(properties);
-    for (ConfigValue val : values) {
-      switch (val.name()) {
-        case PartitionerConfig.PARTITION_FIELD_NAME_CONFIG:
-        case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
-        case PartitionerConfig.PATH_FORMAT_CONFIG:
-          assertFalse(val.visible());
-          break;
-        case PartitionerConfig.LOCALE_CONFIG:
-        case PartitionerConfig.TIMEZONE_CONFIG:
-          assertTrue(val.visible());
-          break;
-      }
-    }
+    assertTimeBasedPartitionerVisibility(values);
 
     properties.put(
         PartitionerConfig.PARTITIONER_CLASS_CONFIG,
         TimeBasedPartitioner.class.getName()
     );
     values = S3SinkConnectorConfig.getConfig().validate(properties);
-    for (ConfigValue val : values) {
-      switch (val.name()) {
-        case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
-        case PartitionerConfig.PATH_FORMAT_CONFIG:
-        case PartitionerConfig.LOCALE_CONFIG:
-        case PartitionerConfig.TIMEZONE_CONFIG:
-          assertTrue(val.visible());
-          break;
-      }
-    }
+    assertNullPartitionerVisibility(values);
 
     Partitioner<?> klass = new Partitioner<FieldSchema>() {
       @Override
@@ -216,6 +184,173 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
         klass.getClass().getName()
     );
     values = S3SinkConnectorConfig.getConfig().validate(properties);
+    assertNullPartitionerVisibility(values);
+  }
+
+  @Test
+  public void testConfigurableCredentialProvider() {
+    final String ACCESS_KEY_VALUE = "AKIAAAAAKKKKIIIIAAAA";
+    final String SECRET_KEY_VALUE = "WhoIsJohnGalt?";
+
+    properties.put(
+        S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
+        DummyAssertiveCredentialsProvider.class.getName()
+    );
+    String configPrefix = S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
+    properties.put(
+        configPrefix.concat(DummyAssertiveCredentialsProvider.ACCESS_KEY_NAME),
+        ACCESS_KEY_VALUE
+    );
+    properties.put(
+        configPrefix.concat(DummyAssertiveCredentialsProvider.SECRET_KEY_NAME),
+        SECRET_KEY_VALUE
+    );
+    properties.put(
+        configPrefix.concat(DummyAssertiveCredentialsProvider.CONFIGS_NUM_KEY_NAME),
+        "3"
+    );
+    connectorConfig = new S3SinkConnectorConfig(properties);
+
+    AWSCredentialsProvider credentialsProvider = connectorConfig.getCredentialsProvider();
+
+    assertEquals(ACCESS_KEY_VALUE, credentialsProvider.getCredentials().getAWSAccessKeyId());
+    assertEquals(SECRET_KEY_VALUE, credentialsProvider.getCredentials().getAWSSecretKey());
+  }
+
+  @Test
+  public void testConfigurableAwsAssumeRoleCredentialsProvider() {
+    properties.put(
+        S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
+        AwsAssumeRoleCredentialsProvider.class.getName()
+    );
+    String configPrefix = S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_ARN_CONFIG),
+        "arn:aws:iam::012345678901:role/my-restricted-role"
+    );
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_SESSION_NAME_CONFIG),
+        "my-session-name"
+    );
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_EXTERNAL_ID_CONFIG),
+        "my-external-id"
+    );
+    connectorConfig = new S3SinkConnectorConfig(properties);
+
+    AwsAssumeRoleCredentialsProvider credentialsProvider =
+        (AwsAssumeRoleCredentialsProvider) connectorConfig.getCredentialsProvider();
+  }
+
+  @Test
+  public void testUseExpectContinueDefault() throws Exception {
+    setUp();
+    S3Storage storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, null);
+    ClientConfiguration clientConfig = storage.newClientConfiguration(connectorConfig);
+    assertEquals(true, clientConfig.isUseExpectContinue());
+  }
+
+  @Test
+  public void testUseExpectContinueFalse() throws Exception {
+    localProps.put(S3SinkConnectorConfig.HEADERS_USE_EXPECT_CONTINUE_CONFIG, "false");
+    setUp();
+    S3Storage storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, null);
+    ClientConfiguration clientConfig = storage.newClientConfiguration(connectorConfig);
+    assertEquals(false, clientConfig.isUseExpectContinue());
+  }
+
+  @Test
+  public void testConfigurableCredentialProviderMissingConfigs() {
+    String configPrefix = S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
+    properties.put(
+        S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
+        DummyAssertiveCredentialsProvider.class.getName()
+    );
+    properties.put(
+        configPrefix.concat(DummyAssertiveCredentialsProvider.CONFIGS_NUM_KEY_NAME),
+        "2"
+    );
+
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertThrows("are mandatory configuration properties", ConfigException.class, () -> connectorConfig.getCredentialsProvider());
+  }
+
+  @Test
+  public void testConfigurableAwsAssumeRoleCredentialsProviderMissingConfigs() {
+    properties.put(
+        S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
+        AwsAssumeRoleCredentialsProvider.class.getName()
+    );
+    String configPrefix = S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_ARN_CONFIG),
+        "arn:aws:iam::012345678901:role/my-restricted-role"
+    );
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_SESSION_NAME_CONFIG),
+        "my-session-name"
+    );
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_EXTERNAL_ID_CONFIG),
+        "my-external-id"
+    );
+    connectorConfig = new S3SinkConnectorConfig(properties);
+
+    AwsAssumeRoleCredentialsProvider credentialsProvider =
+        (AwsAssumeRoleCredentialsProvider) connectorConfig.getCredentialsProvider();
+
+    assertThrows("Missing required configuration", ConfigException.class, () -> credentialsProvider.configure(properties));
+  }
+
+  private void assertDefaultPartitionerVisibility(List<ConfigValue> values) {
+    for (ConfigValue val : values) {
+      switch (val.name()) {
+        case PartitionerConfig.PARTITION_FIELD_NAME_CONFIG:
+        case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
+        case PartitionerConfig.PATH_FORMAT_CONFIG:
+        case PartitionerConfig.LOCALE_CONFIG:
+        case PartitionerConfig.TIMEZONE_CONFIG:
+          assertFalse(val.visible());
+          break;
+      }
+    }
+  }
+
+  private void assertFieldPartitionerVisibility() {
+    List<ConfigValue> values;
+    values = S3SinkConnectorConfig.getConfig().validate(properties);
+    for (ConfigValue val : values) {
+      switch (val.name()) {
+        case PartitionerConfig.PARTITION_FIELD_NAME_CONFIG:
+          assertTrue(val.visible());
+          break;
+        case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
+        case PartitionerConfig.PATH_FORMAT_CONFIG:
+        case PartitionerConfig.LOCALE_CONFIG:
+        case PartitionerConfig.TIMEZONE_CONFIG:
+          assertFalse(val.visible());
+          break;
+      }
+    }
+  }
+
+  private void assertTimeBasedPartitionerVisibility(List<ConfigValue> values) {
+    for (ConfigValue val : values) {
+      switch (val.name()) {
+        case PartitionerConfig.PARTITION_FIELD_NAME_CONFIG:
+        case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
+        case PartitionerConfig.PATH_FORMAT_CONFIG:
+          assertFalse(val.visible());
+          break;
+        case PartitionerConfig.LOCALE_CONFIG:
+        case PartitionerConfig.TIMEZONE_CONFIG:
+          assertTrue(val.visible());
+          break;
+      }
+    }
+  }
+
+  private void assertNullPartitionerVisibility(List<ConfigValue> values) {
     for (ConfigValue val : values) {
       switch (val.name()) {
         case PartitionerConfig.PARTITION_DURATION_MS_CONFIG:
@@ -226,6 +361,40 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
           break;
       }
     }
+  }
+
+  @Test(expected = ConfigException.class)
+  public void testS3PartRetriesNegative() {
+    properties.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "-1");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+  }
+
+  @Test(expected = ConfigException.class)
+  public void testS3RetryBackoffNegative() {
+    properties.put(S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG, "-1");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+  }
+
+  @Test(expected = ConfigException.class)
+  public void testInvalidHighCompressionLevel() {
+    properties.put(S3SinkConnectorConfig.COMPRESSION_LEVEL_CONFIG, "10");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+  }
+
+  @Test(expected = ConfigException.class)
+  public void testInvalidLowCompressionLevel() {
+    properties.put(S3SinkConnectorConfig.COMPRESSION_LEVEL_CONFIG, "-2");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+  }
+
+  @Test
+  public void testValidCompressionLevels() {
+    IntStream.range(-1, 9).boxed().forEach(i -> {
+          properties.put(S3SinkConnectorConfig.COMPRESSION_LEVEL_CONFIG, String.valueOf(i));
+          connectorConfig = new S3SinkConnectorConfig(properties);
+          assertEquals((int) i, connectorConfig.getCompressionLevel());
+        }
+    );
   }
 }
 

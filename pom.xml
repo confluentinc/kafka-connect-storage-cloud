@@ -24,7 +24,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>4.1.5-SNAPSHOT</version>
+        <version>5.0.5-SNAPSHOT</version>
     </parent>
 
     <groupId>io.confluent</groupId>
@@ -63,7 +63,8 @@
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
         <jackson.core.version>2.15.0</jackson.core.version>
         <snappy.java>1.1.10.1</snappy.java>
-        <licenses.version>4.1.5-SNAPSHOT</licenses.version>
+        <licenses.version>5.0.5-SNAPSHOT</licenses.version>
+        <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
     </properties>
 
     <repositories>
@@ -75,6 +76,11 @@
     </repositories>
 
     <dependencies>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+            <version>${httpclient.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>connect-api</artifactId>
@@ -150,6 +156,12 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
             <version>${jackson.core.version}</version>
+        <!-- Temporary addition until powermock updates its mockito version -->
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>2.19.0</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
@@ -158,37 +170,9 @@
             <plugins>
               <plugin>
                   <groupId>org.apache.maven.plugins</groupId>
-                  <artifactId>maven-compiler-plugin</artifactId>
-                  <version>2.5.1</version>
-                  <configuration>
-                      <source>1.7</source>
-                      <target>1.7</target>
-                      <compilerArguments>
-                          <Xlint:all/>
-                          <!-- bootstrap class path not set in conjunction with -source 1.7 -->
-                          <Xlint:-options/>
-                          <!-- serializable class ... has no definition of serialVersionUID -->
-                          <Xlint:-serial/>
-                          <!-- bad path element ".../repository/org/apache/derby/derby/10.10.2.0/derbyLocale_*.jar": no such file or directory -->
-                          <Xlint:-path/>
-                          <!--
-                          WALFile.java:[333,16] [deprecation] sync() in Syncable has been deprecated
-                          Apparently SuppressWarnings("deprecation") doesn't cover this on JDK 7
-                          -->
-                          <Xlint:-deprecation/>
-                          <!-- Needed for DataWriter.java because @SuppressWarnings("unchecked") doesn't cover this on JDK 7 -->
-                          <Xlint:-unchecked/>
-                          <Werror/>
-                      </compilerArguments>
-                      <showWarnings>true</showWarnings>
-                      <showDeprecation>false</showDeprecation>
-                  </configuration>
-              </plugin>
-              <plugin>
-                  <groupId>org.apache.maven.plugins</groupId>
                   <artifactId>maven-surefire-plugin</artifactId>
                   <configuration>
-                      <argLine>@{argLine} -Djava.awt.headless=true -XX:MaxPermSize=512m</argLine>
+                      <argLine>@{argLine} -Djava.awt.headless=true</argLine>
                       <reuseForks>false</reuseForks>
                       <forkCount>1</forkCount>
                   </configuration>

@@ -27,7 +27,7 @@ import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.findify.s3mock.S3Mock;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.junit.After;
 import org.junit.Rule;
 import org.junit.rules.TemporaryFolder;
@@ -172,7 +172,7 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
 
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
                .withAccelerateModeEnabled(config.getBoolean(S3SinkConnectorConfig.WAN_MODE_CONFIG))
-               .withPathStyleAccessEnabled(true)
+               .withPathStyleAccessEnabled(config.getBoolean(S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG))
                .withCredentials(provider);
 
     builder = url == null ?
@@ -194,7 +194,7 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
     public void commit() throws IOException {
       if (retries.getAndIncrement() == 0) {
         close();
-        throw new ConnectException("Fake exception");
+        throw new RetriableException("Fake exception");
       }
       super.commit();
     }

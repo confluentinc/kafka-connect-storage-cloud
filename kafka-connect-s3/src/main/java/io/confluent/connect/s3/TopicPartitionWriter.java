@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
-import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.errors.SchemaProjectorException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -30,9 +29,11 @@ import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Queue;
 
 import io.confluent.common.utils.SystemTime;
@@ -194,13 +195,13 @@ public class TopicPartitionWriter {
       case WRITE_PARTITION_PAUSED:
         SinkRecord record = buffer.peek();
         if (timestampExtractor != null) {
-          currentTimestamp = timestampExtractor.extract(record);
+          currentTimestamp = timestampExtractor.extract(record, now);
           if (baseRecordTimestamp == null) {
             baseRecordTimestamp = currentTimestamp;
           }
         }
         Schema valueSchema = record.valueSchema();
-        String encodedPartition = partitioner.encodePartition(record);
+        String encodedPartition = partitioner.encodePartition(record, now);
         Schema currentValueSchema = currentSchemas.get(encodedPartition);
         if (currentValueSchema == null) {
           currentSchemas.put(encodedPartition, valueSchema);
@@ -326,11 +327,9 @@ public class TopicPartitionWriter {
   }
 
   private Long minStartOffset() {
-    long min = Long.MAX_VALUE;
-    for (Long startOffset : startOffsets.values()) {
-      min = Math.min(min, startOffset);
-    }
-    return min == Long.MAX_VALUE ? null : min;
+    Optional<Long> minStartOffset = startOffsets.values().stream()
+        .min(Comparator.comparing(Long::valueOf));
+    return minStartOffset.isPresent() ? minStartOffset.get() : null;
   }
 
   private String getDirectoryPrefix(String encodedPartition) {
@@ -490,13 +489,9 @@ public class TopicPartitionWriter {
 
   private void commitFiles() {
     currentStartOffset = minStartOffset();
-    try {
-      for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
-        commitFile(entry.getKey());
-        log.debug("Committed {} for {}", entry.getValue(), tp);
-      }
-    } catch (ConnectException e) {
-      throw new RetriableException(e);
+    for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
+      commitFile(entry.getKey());
+      log.debug("Committed {} for {}", entry.getValue(), tp);
     }
 
     offsetToCommit = currentOffset + 1;

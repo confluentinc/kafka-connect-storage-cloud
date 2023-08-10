@@ -26,6 +26,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.easymock.EasyMock;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.junit.After;
@@ -42,6 +43,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.confluent.common.utils.MockTime;
+import io.confluent.common.utils.SystemTime;
+import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
@@ -61,8 +64,8 @@ import io.confluent.connect.storage.partitioner.TimestampExtractor;
 
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
 
 public class TopicPartitionWriterTest extends TestWithMockedS3 {
   // The default
@@ -214,6 +217,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     topicPartitionWriter.write();
     topicPartitionWriter.close();
 
+    @SuppressWarnings("unchecked")
     List<String> partitionFields = (List<String>) parsedConfig.get(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG);
     String partitionField = partitionFields.get(0);
     String dirPrefix1 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(16));
@@ -514,6 +518,47 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
+  public void testWallclockUsesBatchTimePartitionBoundary() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "6");
+    setUp();
+
+    // Define the partitioner
+    TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
+    parsedConfig.put(
+        PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+        TimeBasedPartitioner.WallclockTimestampExtractor.class.getName());
+    partitioner.configure(parsedConfig);
+
+    Time systemTime = EasyMock.createMock(SystemTime.class);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, writerProvider, partitioner, connectorConfig, context, systemTime);
+
+    // Freeze clock passed into topicPartitionWriter, so we know what time it will use for "now"
+    long freezeTime = 3599000L;
+    EasyMock.expect(systemTime.milliseconds()).andReturn(freezeTime);
+    EasyMock.replay(systemTime);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 6);
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records.subList(0, 9), key, schema);
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // The Wallclock extractor should be passed the frozen time from topicPartitionWriter
+    topicPartitionWriter.write();
+
+    List<String> expectedFiles = new ArrayList<>();
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, getTimebasedEncodedPartition(freezeTime));
+    expectedFiles.add(FileUtils.fileKeyToCommit(
+        topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    verify(expectedFiles, 6, schema, records);
+  }
+
+  @Test
   public void testWriteRecordTimeBasedPartitionWallclockMockedWithScheduleRotation()
       throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
@@ -593,7 +638,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test(expected = RetriableException.class)
-  public void testPropagateErrorsDuringTimeBasedCommits() throws Exception {
+  public void testPropagateRetriableErrorsDuringTimeBasedCommits() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
     localProps.put(
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
@@ -618,7 +663,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     time.sleep(SYSTEM.milliseconds());
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, writerProvider, partitioner, connectorConfig, context, time);
-
 
     String key = "key";
     Schema schema = createSchema();

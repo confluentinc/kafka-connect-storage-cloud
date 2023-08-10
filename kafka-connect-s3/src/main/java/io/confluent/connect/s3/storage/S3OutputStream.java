@@ -17,7 +17,8 @@
 package io.confluent.connect.s3.storage;
 
 import com.amazonaws.AmazonClientException;
-import com.amazonaws.SdkClientException;
+import com.amazonaws.AmazonServiceException;
+import com.amazonaws.AmazonServiceException.ErrorType;
 import com.amazonaws.event.ProgressEvent;
 import com.amazonaws.event.ProgressListener;
 import com.amazonaws.services.s3.AmazonS3;
@@ -28,6 +29,7 @@ import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PartETag;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
+import com.amazonaws.services.s3.model.SSECustomerKey;
 import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
@@ -55,6 +57,7 @@ public class S3OutputStream extends OutputStream {
   private final String bucket;
   private final String key;
   private final String ssea;
+  private final SSECustomerKey sseCustomerKey;
   private final String sseKmsKeyId;
   private final ProgressListener progressListener;
   private final int partSize;
@@ -62,8 +65,8 @@ public class S3OutputStream extends OutputStream {
   private boolean closed;
   private ByteBuffer buffer;
   private MultipartUpload multiPartUpload;
-  private final int retries;
   private final CompressionType compressionType;
+  private final int compressionLevel;
   private volatile OutputStream compressionFilter;
 
   public S3OutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
@@ -71,15 +74,19 @@ public class S3OutputStream extends OutputStream {
     this.bucket = conf.getBucketName();
     this.key = key;
     this.ssea = conf.getSsea();
+    final String sseCustomerKeyConfig = conf.getSseCustomerKey();
+    this.sseCustomerKey = (SSEAlgorithm.AES256.toString().equalsIgnoreCase(ssea)
+        && StringUtils.isNotBlank(sseCustomerKeyConfig))
+      ? new SSECustomerKey(sseCustomerKeyConfig) : null;
     this.sseKmsKeyId = conf.getSseKmsKeyId();
     this.partSize = conf.getPartSize();
     this.cannedAcl = conf.getCannedAcl();
     this.closed = false;
-    this.retries = conf.getS3PartRetries();
     this.buffer = ByteBuffer.allocate(this.partSize);
     this.progressListener = new ConnectProgressListener();
     this.multiPartUpload = null;
     this.compressionType = conf.getCompressionType();
+    this.compressionLevel = conf.getCompressionLevel();
     log.debug("Create S3OutputStream for bucket '{}' key '{}'", bucket, key);
   }
 
@@ -126,13 +133,8 @@ public class S3OutputStream extends OutputStream {
       multiPartUpload = newMultipartUpload();
     }
     try {
-      retry(new Runnable() {
-        public void run() {
-          multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), size);
-        }
-      }, retries, "Part upload failed");
+      multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), size);
     } catch (Exception e) {
-      // TODO: elaborate on the exception interpretation. We might be able to retry.
       if (multiPartUpload != null) {
         multiPartUpload.abort();
         log.debug("Multipart upload aborted for bucket '{}' key '{}'.", bucket, key);
@@ -158,7 +160,7 @@ public class S3OutputStream extends OutputStream {
       }
       multiPartUpload.complete();
       log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
-    } catch (Exception e) {
+    } catch (IOException e) {
       log.error("Multipart upload failed to complete for bucket '{}' key '{}'", bucket, key);
       throw new DataException("Multipart upload failed to complete.", e);
     } finally {
@@ -199,50 +201,23 @@ public class S3OutputStream extends OutputStream {
     if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
         && StringUtils.isNotBlank(sseKmsKeyId)) {
       initRequest.setSSEAwsKeyManagementParams(new SSEAwsKeyManagementParams(sseKmsKeyId));
+    } else if (sseCustomerKey != null) {
+      initRequest.setSSECustomerKey(sseCustomerKey);
     }
 
     try {
       return new MultipartUpload(s3.initiateMultipartUpload(initRequest).getUploadId());
+    } catch (AmazonServiceException e) {
+      if (e.getErrorType() == ErrorType.Client) {
+        // S3 documentation states that this error type means there is a problem with the request
+        // and that retrying this request will not result in a successful response. This includes
+        // errors such as incorrect access keys, invalid parameter values, missing parameters, etc.
+        // Therefore, the connector should propagate this exception and fail.
+        throw new ConnectException("Unable to initiate MultipartUpload", e);
+      }
+      throw new IOException("Unable to initiate MultipartUpload.", e);
     } catch (AmazonClientException e) {
-      // TODO: elaborate on the exception interpretation. If this is an AmazonServiceException,
-      // there's more info to be extracted.
-      throw new IOException("Unable to initiate MultipartUpload: " + e, e);
-    }
-  }
-
-  /**
-   * Retries given runnable only in the case of com.amazonaws.SdkClientException
-   *
-   * @param runnable The method to run with retries
-   * @param maxRetries How many times to retry
-   * @param errorMsg Error message to show
-   * @throws ConnectException if it failed more then maxRetries
-   */
-  protected static void retry(Runnable runnable, int maxRetries, String errorMsg) {
-    int failCount = 0;
-    Throwable cause = null;
-    do {
-      if (failCount > 0) {
-        try {
-          Thread.sleep(200 << failCount);
-        } catch (InterruptedException e) {
-          log.error("Interrupted while sleeping due to retry", e);
-        }
-      }
-      try {
-        runnable.run();
-        break;
-      } catch (SdkClientException e) {
-        failCount++;
-        cause = e;
-        log.error(errorMsg + ", attempt: " + failCount, cause);
-      }
-    } while (failCount < maxRetries);
-    if (failCount >= maxRetries) {
-      throw new ConnectException(
-          String.format("Giving up after failing %d times", failCount),
-          cause
-      );
+      throw new IOException("Unable to initiate MultipartUpload.", e);
     }
   }
 
@@ -267,6 +242,7 @@ public class S3OutputStream extends OutputStream {
                                             .withBucketName(bucket)
                                             .withKey(key)
                                             .withUploadId(uploadId)
+                                            .withSSECustomerKey(sseCustomerKey)
                                             .withInputStream(inputStream)
                                             .withPartNumber(currentPartNumber)
                                             .withPartSize(partSize)
@@ -296,7 +272,7 @@ public class S3OutputStream extends OutputStream {
   public OutputStream wrapForCompression() {
     if (compressionFilter == null) {
       // Initialize compressionFilter the first time this method is called.
-      compressionFilter = compressionType.wrapForOutput(this);
+      compressionFilter = compressionType.wrapForOutput(this, compressionLevel);
     }
     return compressionFilter;
   }
