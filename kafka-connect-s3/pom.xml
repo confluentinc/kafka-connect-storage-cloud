@@ -23,7 +23,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-cloud</artifactId>
-        <version>5.1.5-SNAPSHOT</version>
+        <version>5.2.8-SNAPSHOT</version>
     </parent>
 
     <artifactId>kafka-connect-s3</artifactId>
@@ -36,16 +36,9 @@
 
     <properties>
         <aws.version>1.11.725</aws.version>
-        <s3mock.version>0.1.5</s3mock.version>
+        <s3mock.version>0.2.5</s3mock.version>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
     </properties>
-
-    <repositories>
-        <repository>
-            <id>findify</id>
-            <url>https://dl.bintray.com/findify/maven/</url>
-        </repository>
-    </repositories>
 
     <dependencyManagement>
         <dependencies>
@@ -69,6 +62,13 @@
             <groupId>com.amazonaws</groupId>
             <artifactId>aws-java-sdk-s3</artifactId>
         </dependency>
+        <!-- Pinning the version of this dependency to address CVE in alignment with
+            https://github.com/confluentinc/common/pull/342
+            Once the jackson version gets upgraded consider lifting this explicit listing -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-cbor</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.amazonaws</groupId>
             <artifactId>aws-java-sdk-sts</artifactId>
@@ -80,7 +80,7 @@
         </dependency>
         <dependency>
             <groupId>io.findify</groupId>
-            <artifactId>s3mock_2.11</artifactId>
+            <artifactId>s3mock_2.12</artifactId>
             <version>${s3mock.version}</version>
             <scope>test</scope>
         </dependency>
