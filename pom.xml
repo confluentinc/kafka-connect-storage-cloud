@@ -61,6 +61,8 @@
 
     <properties>
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
+        <jackson.core.version>2.15.0</jackson.core.version>
+        <snappy.java>1.1.10.1</snappy.java>
         <licenses.version>4.1.5-SNAPSHOT</licenses.version>
     </properties>
 
@@ -138,6 +140,16 @@
             <artifactId>powermock-api-mockito2</artifactId>
             <version>${powermock.version}</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.xerial.snappy</groupId>
+            <artifactId>snappy-java</artifactId>
+            <version>${snappy.java}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>${jackson.core.version}</version>
         </dependency>
     </dependencies>
 
