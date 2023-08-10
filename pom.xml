@@ -58,6 +58,8 @@
     </modules>
 
     <properties>
+        <jackson.core.version>2.15.0</jackson.core.version>
+        <snappy.java>1.1.10.1</snappy.java>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <maven.release.plugin.version>2.5.3</maven.release.plugin.version>
         <!-- temporary fix by pinning the version until we upgrade to a version of common that contains this or newer version.
@@ -345,6 +347,16 @@
             <artifactId>powermock-api-mockito2</artifactId>
             <version>${powermock.version}</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.xerial.snappy</groupId>
+            <artifactId>snappy-java</artifactId>
+            <version>${snappy.java}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>${jackson.core.version}</version>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
