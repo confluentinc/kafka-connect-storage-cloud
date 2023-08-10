@@ -156,6 +156,7 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
             <version>${jackson.core.version}</version>
+        </dependency>
         <!-- Temporary addition until powermock updates its mockito version -->
         <dependency>
             <groupId>org.mockito</groupId>
