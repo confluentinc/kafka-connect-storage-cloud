@@ -21,12 +21,13 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>5.5.16-SNAPSHOT</version>
+        <version>11.2.0</version>
     </parent>
 
     <groupId>io.confluent</groupId>
     <artifactId>kafka-connect-storage-cloud</artifactId>
     <packaging>pom</packaging>
+    <version>10.0.22-SNAPSHOT</version>
     <name>kafka-connect-storage-cloud</name>
     <organization>
         <name>Confluent, Inc.</name>
@@ -49,7 +50,7 @@
         <connection>scm:git:git://github.com/confluentinc/kafka-connect-storage-cloud.git</connection>
         <developerConnection>scm:git:git@github.com:confluentinc/kafka-connect-storage-cloud.git</developerConnection>
         <url>https://github.com/confluentinc/kafka-connect-storage-cloud</url>
-        <tag>HEAD</tag>
+        <tag>10.0.x</tag>
     </scm>
 
     <modules>
@@ -57,11 +58,13 @@
     </modules>
 
     <properties>
-        <licenses.version>5.5.16-SNAPSHOT</licenses.version>
         <jackson.core.version>2.15.0</jackson.core.version>
         <snappy.java>1.1.10.1</snappy.java>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <maven.release.plugin.version>2.5.3</maven.release.plugin.version>
+        <!-- temporary fix by pinning the version until we upgrade to a version of common that contains this or newer version.
+            See https://github.com/confluentinc/common/pull/332 for details -->
+        <dependency.check.version>6.1.6</dependency.check.version>
         <hadoop.version>3.2.4</hadoop.version>
         <jettison.version>1.5.4</jettison.version>
         <json-smart.version>2.4.10</json-smart.version>
@@ -120,10 +123,12 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-common</artifactId>
+            <version>${kafka.connect.storage.common.version}</version>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-core</artifactId>
+            <version>${kafka.connect.storage.common.version}</version>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
@@ -136,7 +141,7 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-common-htrace-core4-shaded</artifactId>
-            <version>${project.version}</version>
+            <version>${kafka.connect.storage.common.version}</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -204,6 +209,10 @@
                     <artifactId>commons-httpclient</artifactId>
                 </exclusion>
                 <exclusion>
+                    <groupId>net.minidev</groupId>
+                    <artifactId>json-smart</artifactId>
+                </exclusion>
+                <exclusion>
                     <groupId>io.netty</groupId>
                     <artifactId>netty-codec</artifactId>
                 </exclusion>
@@ -238,10 +247,8 @@
             <artifactId>slf4j-reload4j</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>confluent-log4j</artifactId>
-            <version>${confluent.log4j.version}</version>
-            <scope>test</scope>
+            <groupId>net.minidev</groupId>
+            <artifactId>json-smart</artifactId>
         </dependency>
         <dependency>
             <groupId>org.eclipse.jetty</groupId>
@@ -314,13 +321,20 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.easymock</groupId>
             <artifactId>easymock</artifactId>
+            <version>${easymock.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.powermock</groupId>
             <artifactId>powermock-module-junit4</artifactId>
+            <version>${powermock.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -343,6 +357,37 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
             <version>${jackson.core.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-connect-avro-converter</artifactId>
+            <version>${confluent.version.range}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-connect-protobuf-converter</artifactId>
+            <version>${confluent.version.range}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-connect-json-schema-converter</artifactId>
+            <version>${confluent.version.range}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry</artifactId>
+            <version>${confluent.version.range}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry</artifactId>
+            <version>${confluent.version.range}</version>
+            <scope>test</scope>
         </dependency>
         <!-- Temporary addition until powermock updates its mockito version -->
         <dependency>
@@ -373,4 +418,3 @@
         </pluginManagement>
     </build>
 </project>
-
