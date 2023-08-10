@@ -15,7 +15,6 @@
 
 package io.confluent.connect.s3;
 
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -38,11 +37,11 @@ import java.util.Queue;
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
-import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
@@ -57,7 +56,7 @@ public class TopicPartitionWriter {
   private final Map<String, RecordWriter> writers;
   private final Map<String, Schema> currentSchemas;
   private final TopicPartition tp;
-  private final Partitioner<FieldSchema> partitioner;
+  private final Partitioner<?> partitioner;
   private final TimestampExtractor timestampExtractor;
   private String topicsDir;
   private State state;
@@ -91,7 +90,7 @@ public class TopicPartitionWriter {
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
                               RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
-                              Partitioner<FieldSchema> partitioner,
+                              Partitioner<?> partitioner,
                               S3SinkConnectorConfig connectorConfig,
                               SinkTaskContext context) {
     this(tp, writerProvider, partitioner, connectorConfig, context, SYSTEM_TIME);
@@ -100,7 +99,7 @@ public class TopicPartitionWriter {
   // Visible for testing
   TopicPartitionWriter(TopicPartition tp,
                        RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
-                       Partitioner<FieldSchema> partitioner,
+                       Partitioner<?> partitioner,
                        S3SinkConnectorConfig connectorConfig,
                        SinkTaskContext context,
                        Time time) {
@@ -132,7 +131,7 @@ public class TopicPartitionWriter {
     }
     timeoutMs = connectorConfig.getLong(S3SinkConnectorConfig.RETRY_BACKOFF_CONFIG);
     compatibility = StorageSchemaCompatibility.getCompatibility(
-        connectorConfig.getString(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG));
+        connectorConfig.getString(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG));
 
     buffer = new LinkedList<>();
     commitFiles = new HashMap<>();

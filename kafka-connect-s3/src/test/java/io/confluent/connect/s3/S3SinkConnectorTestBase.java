@@ -22,10 +22,9 @@ import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.avro.AvroFormat;
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.StorageSinkTestBase;
 import io.confluent.connect.storage.common.StorageCommonConfig;
-import io.confluent.connect.storage.hive.HiveConfig;
-import io.confluent.connect.storage.hive.schema.DefaultSchemaGenerator;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.schema.SchemaCompatibility;
 import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
@@ -79,7 +78,6 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     props.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH");
     props.put(PartitionerConfig.LOCALE_CONFIG, "en");
     props.put(PartitionerConfig.TIMEZONE_CONFIG, "America/Los_Angeles");
-    props.put(HiveConfig.HIVE_CONF_DIR_CONFIG, "America/Los_Angeles");
     return props;
   }
 
@@ -91,8 +89,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     PowerMockito.doReturn(1024).when(connectorConfig).getPartSize();
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     parsedConfig = new HashMap<>(connectorConfig.plainValues());
-    compatibility = StorageSchemaCompatibility.getCompatibility(
-                    connectorConfig.getString(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG));
+    compatibility = StorageSchemaCompatibility.getCompatibility(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG);
   }
 
   @After

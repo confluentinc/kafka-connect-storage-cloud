@@ -22,7 +22,6 @@ import org.apache.avro.file.DataFileStream;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.util.Utf8;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.TimestampType;
@@ -61,7 +60,6 @@ import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
-import io.confluent.connect.storage.hive.HiveConfig;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
@@ -85,7 +83,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   protected S3Storage storage;
   protected AmazonS3 s3;
   AvroFormat format;
-  Partitioner<FieldSchema> partitioner;
+  Partitioner<?> partitioner;
   S3SinkTask task;
   Map<String, String> localProps = new HashMap<>();
   private String prevMd5Prop = null;
@@ -400,7 +398,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner
-    TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    TimeBasedPartitioner<?> partitioner = new TimeBasedPartitioner<>();
     parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
     parsedConfig.put(
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
@@ -457,7 +455,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner
-    TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    TimeBasedPartitioner<?> partitioner = new TimeBasedPartitioner<>();
     parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
     parsedConfig.put(
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
@@ -515,7 +513,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
     setUpWithCommitException();
 
     // Define the partitioner
-    TimeBasedPartitioner<FieldSchema> partitioner = new TimeBasedPartitioner<>();
+    TimeBasedPartitioner<?> partitioner = new TimeBasedPartitioner<>();
     parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
     parsedConfig.put(
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
@@ -638,7 +636,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   @Test
   public void testProjectBackward() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "2");
-    localProps.put(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG, "BACKWARD");
+    localProps.put(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG, "BACKWARD");
     setUp();
 
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
@@ -673,7 +671,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   @Test
   public void testProjectForward() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "2");
-    localProps.put(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG, "FORWARD");
+    localProps.put(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG, "FORWARD");
     setUp();
 
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
@@ -692,7 +690,7 @@ public class DataWriterAvroTest extends TestWithMockedS3 {
   @Test(expected=ConnectException.class)
   public void testProjectNoVersion() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "2");
-    localProps.put(HiveConfig.SCHEMA_COMPATIBILITY_CONFIG, "BACKWARD");
+    localProps.put(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG, "BACKWARD");
     setUp();
 
     task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);

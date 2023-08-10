@@ -17,7 +17,6 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -158,7 +157,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     values = S3SinkConnectorConfig.getConfig().validate(properties);
     assertNullPartitionerVisibility(values);
 
-    Partitioner<?> klass = new Partitioner<FieldSchema>() {
+    Partitioner<?> klass = new Partitioner<Object>() {
       @Override
       public void configure(Map<String, Object> config) {}
 
@@ -173,8 +172,10 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
       }
 
       @Override
-      public List<FieldSchema> partitionFields() {
-        return null;
+      public List<Object> partitionFields() {
+        throw new UnsupportedOperationException(
+            "Hive integration is not currently supported in S3 Connector"
+        );
       }
     };
 

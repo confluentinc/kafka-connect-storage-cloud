@@ -24,7 +24,7 @@ import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.Partitioner;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
+
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.converters.ByteArrayConverter;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -54,7 +54,7 @@ public class DataWriterByteArrayTest extends TestWithMockedS3 {
 
   protected S3Storage storage;
   protected AmazonS3 s3;
-  protected Partitioner<FieldSchema> partitioner;
+  protected Partitioner<?> partitioner;
   protected ByteArrayFormat format;
   protected S3SinkTask task;
   protected Map<String, String> localProps = new HashMap<>();
