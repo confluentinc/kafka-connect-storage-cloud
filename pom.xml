@@ -69,6 +69,8 @@
         <jetty.version>9.4.48.v20220622</jetty.version>
         <snakeyaml.version>2.0</snakeyaml.version>
         <woodstox.version>5.4.0</woodstox.version>
+        <jackson.core.version>2.15.0</jackson.core.version>
+        <snappy.java>1.1.10.1</snappy.java>
     </properties>
 
     <repositories>
@@ -149,7 +151,12 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
-            <version>${jackson.version}</version>
+            <version>${jackson.core.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.xerial.snappy</groupId>
+            <artifactId>snappy-java</artifactId>
+            <version>${snappy.java}</version>
         </dependency>
         <dependency>
             <groupId>org.codehaus.jettison</groupId>
