@@ -71,6 +71,8 @@
         <jetty.version>9.4.51.v20230217</jetty.version>
         <snakeyaml.version>2.0</snakeyaml.version>
         <woodstox.version>5.4.0</woodstox.version>
+        <kafka-connect-storage-format.version>11.2.0</kafka-connect-storage-format.version>
+
     </properties>
 
     <repositories>
@@ -101,15 +103,16 @@
                 <version>0.9.3</version>
             </dependency>
             <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-connect-storage-format</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>com.fasterxml.jackson.core</groupId>
-                    <artifactId>jackson-core</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-connect-storage-format</artifactId>
+                <version>${kafka-connect-storage-format.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>com.fasterxml.jackson.core</groupId>
+                        <artifactId>jackson-core</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
