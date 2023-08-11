@@ -144,6 +144,12 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-format</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.core</groupId>
+                    <artifactId>jackson-core</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
