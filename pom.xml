@@ -21,7 +21,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>11.2.0</version>
+        <version>11.2.1</version>
     </parent>
 
     <groupId>io.confluent</groupId>
@@ -64,15 +64,9 @@
             See https://github.com/confluentinc/common/pull/332 for details -->
         <dependency.check.version>6.1.6</dependency.check.version>
         <hadoop.version>3.3.6</hadoop.version>
-        <jackson.version>2.15.2</jackson.version>
-        <jackson.databind.version>2.15.2</jackson.databind.version>
         <jettison.version>1.5.4</jettison.version>
-        <json-smart.version>2.4.10</json-smart.version>
-        <jetty.version>9.4.51.v20230217</jetty.version>
         <snakeyaml.version>2.0</snakeyaml.version>
         <woodstox.version>5.4.0</woodstox.version>
-        <kafka-connect-storage-format.version>11.2.0</kafka-connect-storage-format.version>
-
     </properties>
 
     <repositories>
@@ -101,17 +95,6 @@
                 <groupId>org.bitbucket.b_c</groupId>
                 <artifactId>jose4j</artifactId>
                 <version>0.9.3</version>
-            </dependency>
-            <dependency>
-                <groupId>io.confluent</groupId>
-                <artifactId>kafka-connect-storage-format</artifactId>
-                <version>${kafka-connect-storage-format.version}</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>com.fasterxml.jackson.core</groupId>
-                        <artifactId>jackson-core</artifactId>
-                    </exclusion>
-                </exclusions>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -157,12 +140,6 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-format</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>com.fasterxml.jackson.core</groupId>
-                    <artifactId>jackson-core</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
