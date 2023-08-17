@@ -20,7 +20,7 @@ import java.util.Properties;
 public class KafkaFileCallbackConfig extends AbstractFileCallbackConfig {
 
   private static final String KEY_SERIALIZER =
-      "org.apache.kafka.common.serialization.StringSerializer";
+      "io.confluent.kafka.serializers.KafkaAvroSerializer";
   private static final String VALUE_SERIALIZER =
       "io.confluent.kafka.serializers.KafkaAvroSerializer";
 
