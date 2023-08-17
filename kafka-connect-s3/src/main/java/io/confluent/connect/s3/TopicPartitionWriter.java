@@ -693,7 +693,7 @@ public class TopicPartitionWriter {
   private void callbackFile(String encodedPartition) {
     fileCallback.ifPresent(fs -> fs.call(tp.topic(), encodedPartition,
             commitFiles.get(encodedPartition), tp.partition(), baseRecordTimestamp,
-            currentTimestamp, recordCount));
+            currentTimestamp, recordCount, time.milliseconds()));
   }
 
   private void tagFile(String encodedPartition, String s3ObjectPath) {

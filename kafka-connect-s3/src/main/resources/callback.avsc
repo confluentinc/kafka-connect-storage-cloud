@@ -38,6 +38,11 @@
       "name": "recordCount",
       "type": "int",
       "doc": "Number of records within the written file"
+    },
+    {
+      "name": "event_datetime",
+      "type": "long",
+      "doc": "The time of the callback event"
     }
   ]
 }

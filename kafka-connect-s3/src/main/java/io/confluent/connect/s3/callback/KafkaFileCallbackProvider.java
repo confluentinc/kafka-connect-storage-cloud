@@ -40,7 +40,8 @@ public class KafkaFileCallbackProvider extends FileCallbackProvider {
       int partition,
       Long baseRecordTimestamp,
       Long currentTimestamp,
-      int recordCount) {
+      int recordCount,
+      Long eventDatetime) {
     String key = topicName;
     Callback value =
         new Callback(
@@ -50,7 +51,8 @@ public class KafkaFileCallbackProvider extends FileCallbackProvider {
             partition,
             baseRecordTimestamp,
             currentTimestamp,
-            recordCount);
+            recordCount,
+            eventDatetime);
     try (final Producer<String, SpecificRecord> producer =
         new KafkaProducer<>(kafkaConfig.toProps())) {
       producer.send(

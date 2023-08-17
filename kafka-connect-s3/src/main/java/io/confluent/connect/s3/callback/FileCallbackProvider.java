@@ -31,5 +31,5 @@ public abstract class FileCallbackProvider {
       int partition,
       Long baseRecordTimestamp,
       Long currentTimestamp,
-      int recordCount);
+      int recordCount, Long eventDatetime);
 }
