@@ -42,6 +42,10 @@ public class JsonFormat implements Format<S3SinkConnectorConfig, String> {
         "schemas.cache.size",
         String.valueOf(storage.conf().get(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG))
     );
+    converterConfig.put(
+        "decimal.format",
+        String.valueOf(storage.conf().getJsonDecimalFormat())
+    );
     this.converter.configure(converterConfig, false);
   }
 
