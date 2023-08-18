@@ -17,10 +17,13 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
+
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
+
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.connect.json.DecimalFormat;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -47,6 +50,8 @@ import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.connect.avro.AvroDataConfig;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.DECIMAL_FORMAT_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.DECIMAL_FORMAT_DEFAULT;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.HEADERS_FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG;
 import static org.junit.Assert.assertEquals;
@@ -279,7 +284,11 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     );
 
     connectorConfig = new S3SinkConnectorConfig(properties);
-    assertThrows("are mandatory configuration properties", ConfigException.class, () -> connectorConfig.getCredentialsProvider());
+    assertThrows(
+        "are mandatory configuration properties",
+        ConfigException.class,
+        () -> connectorConfig.getCredentialsProvider()
+    );
   }
 
   @Test
@@ -306,7 +315,11 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     AwsAssumeRoleCredentialsProvider credentialsProvider =
         (AwsAssumeRoleCredentialsProvider) connectorConfig.getCredentialsProvider();
 
-    assertThrows("Missing required configuration", ConfigException.class, () -> credentialsProvider.configure(properties));
+    assertThrows(
+        "Missing required configuration",
+        ConfigException.class,
+        () -> credentialsProvider.configure(properties)
+    );
   }
 
   @Test
@@ -409,6 +422,16 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   }
 
   @Test
+  public void testJsonDecimalFormat() {
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(DecimalFormat.BASE64.name(), connectorConfig.getJsonDecimalFormat());
+
+    properties.put(S3SinkConnectorConfig.DECIMAL_FORMAT_CONFIG, DecimalFormat.NUMERIC.name());
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(DecimalFormat.NUMERIC.name(), connectorConfig.getJsonDecimalFormat());
+  }
+
+  @Test
   public void testValidCompressionLevels() {
     IntStream.range(-1, 9).boxed().forEach(i -> {
           properties.put(S3SinkConnectorConfig.COMPRESSION_LEVEL_CONFIG, String.valueOf(i));
@@ -457,7 +480,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   }
 
   @Test
-  public void testValidTimezoneWithScheduleIntervalAccepted (){
+  public void testValidTimezoneWithScheduleIntervalAccepted() {
     properties.put(PartitionerConfig.TIMEZONE_CONFIG, "CET");
     properties.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "30");
     new S3SinkConnectorConfig(properties);
@@ -474,7 +497,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   public void testEmptyTimezoneExceptionMessage() {
     properties.put(PartitionerConfig.TIMEZONE_CONFIG, PartitionerConfig.TIMEZONE_DEFAULT);
     properties.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "30");
-    String expectedError =  String.format(
+    String expectedError = String.format(
         "%s configuration must be set when using %s",
         PartitionerConfig.TIMEZONE_CONFIG,
         S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG
