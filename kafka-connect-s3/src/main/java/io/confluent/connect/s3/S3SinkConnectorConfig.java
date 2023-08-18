@@ -36,6 +36,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.json.DecimalFormat;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import java.util.ArrayList;
@@ -173,6 +174,13 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String S3_PATH_STYLE_ACCESS_ENABLED_CONFIG = "s3.path.style.access.enabled";
   public static final boolean S3_PATH_STYLE_ACCESS_ENABLED_DEFAULT = true;
+
+  public static final String DECIMAL_FORMAT_CONFIG = "json.decimal.format";
+  public static final String DECIMAL_FORMAT_DEFAULT = DecimalFormat.BASE64.name();
+  private static final String DECIMAL_FORMAT_DOC = "Controls which format json converter"
+      + " will serialize decimals in."
+      + " This value is case insensitive and can be either 'BASE64' (default) or 'NUMERIC'";
+  private static final String DECIMAL_FORMAT_DISPLAY = "Decimal Format";
 
   public static final String STORE_KAFKA_KEYS_CONFIG = "store.kafka.keys";
   public static final String STORE_KAFKA_HEADERS_CONFIG = "store.kafka.headers";
@@ -499,6 +507,20 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.LONG,
           "Compression Level",
           COMPRESSION_LEVEL_VALIDATOR
+      );
+
+      configDef.define(
+          DECIMAL_FORMAT_CONFIG,
+          ConfigDef.Type.STRING,
+          DECIMAL_FORMAT_DEFAULT,
+          ConfigDef.CaseInsensitiveValidString.in(
+                  DecimalFormat.BASE64.name(), DecimalFormat.NUMERIC.name()),
+          Importance.MEDIUM,
+          DECIMAL_FORMAT_DOC,
+          group,
+          ++orderInGroup,
+          Width.MEDIUM,
+          DECIMAL_FORMAT_DISPLAY
       );
 
       configDef.define(
@@ -900,6 +922,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public int getCompressionLevel() {
     return getInt(COMPRESSION_LEVEL_CONFIG);
+  }
+
+  public String getJsonDecimalFormat() {
+    return getString(DECIMAL_FORMAT_CONFIG);
   }
 
   public CompressionCodecName parquetCompressionCodecName() {
