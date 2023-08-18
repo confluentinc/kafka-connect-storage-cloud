@@ -16,9 +16,13 @@
 package io.confluent.connect.s3.integration;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.TOMBSTONE_ENCODED_PARTITION;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
@@ -31,6 +35,7 @@ import static org.junit.Assert.assertTrue;
 
 import io.confluent.connect.s3.S3SinkConnector;
 import io.confluent.connect.s3.S3SinkConnectorConfig.IgnoreOrFailBehavior;
+import io.confluent.connect.s3.S3SinkConnectorConfig.OutputWriteBehavior;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
@@ -82,6 +87,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   // DLQ Tests
   private static final String DLQ_TOPIC_CONFIG = "errors.deadletterqueue.topic.name";
   private static final String DLQ_TOPIC_NAME = "DLQ-topic";
+
+  private static final String TOMBSTONE_PARTITION = "TOMBSTONE_PARTITION";
 
   private static final List<String> KAFKA_TOPICS = Collections.singletonList(DEFAULT_TEST_TOPIC_NAME);
   private static final long CONSUME_MAX_DURATION_MS = TimeUnit.SECONDS.toMillis(10);
@@ -138,6 +145,17 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   @Test
+  public void testTombstoneRecordsWrittenJson() throws Throwable {
+    //add test specific props
+    props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+    props.put(BEHAVIOR_ON_NULL_VALUES_CONFIG, OutputWriteBehavior.WRITE.toString());
+    props.put(STORE_KAFKA_KEYS_CONFIG, "true");
+    props.put(KEYS_FORMAT_CLASS_CONFIG, "io.confluent.connect.s3.format.json.JsonFormat");
+    props.put(TOMBSTONE_ENCODED_PARTITION, TOMBSTONE_PARTITION);
+    testTombstoneRecordsWritten(JSON_EXTENSION, false);
+  }
+
+
   public void testFilesWrittenToBucketAvroWithExtInTopic() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
@@ -224,6 +242,60 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     // Now check that all files created by the sink have the contents that were sent
     // to the producer (they're all the same content)
     assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
+  }
+
+  private void testTombstoneRecordsWritten(
+      String expectedFileExtension,
+      boolean addExtensionInTopic
+  ) throws Throwable {
+    final String topicNameWithExt = "other." + expectedFileExtension + ".topic." + expectedFileExtension;
+
+    // Add an extra topic with this extension inside of the name
+    // Use a TreeSet for test determinism
+    Set<String> topicNames = new TreeSet<>(KAFKA_TOPICS);
+
+    if (addExtensionInTopic) {
+      topicNames.add(topicNameWithExt);
+      connect.kafka().createTopic(topicNameWithExt, 1);
+      props.replace(
+          "topics",
+          props.get("topics") + "," + topicNameWithExt
+      );
+    }
+
+    // start sink connector
+    connect.configureConnector(CONNECTOR_NAME, props);
+    // wait for tasks to spin up
+    EmbeddedConnectUtils.waitForConnectorToStart(connect, CONNECTOR_NAME, Math.min(topicNames.size(), MAX_TASKS));
+
+    for (String thisTopicName : topicNames) {
+      // Create and send records to Kafka using the topic name in the current 'thisTopicName'
+      SinkRecord sampleRecord = getSampleTopicRecord(thisTopicName, null, null);
+      produceRecordsWithHeadersNoValue(thisTopicName, NUM_RECORDS_INSERT, sampleRecord);
+    }
+
+    log.info("Waiting for files in S3...");
+    int countPerTopic = NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
+    int expectedTotalFileCount = countPerTopic * topicNames.size();
+    waitForFilesInBucket(TEST_BUCKET_NAME, expectedTotalFileCount);
+
+    Set<String> expectedTopicFilenames = new TreeSet<>();
+    for (String thisTopicName : topicNames) {
+      List<String> theseFiles = getExpectedTombstoneFilenames(
+          thisTopicName,
+          TOPIC_PARTITION,
+          FLUSH_SIZE_STANDARD,
+          NUM_RECORDS_INSERT,
+          expectedFileExtension,
+          TOMBSTONE_PARTITION
+      );
+      assertEquals(theseFiles.size(), countPerTopic);
+      expectedTopicFilenames.addAll(theseFiles);
+    }
+    // This check will catch any duplications
+    assertEquals(expectedTopicFilenames.size(), expectedTotalFileCount);
+    assertFileNamesValid(TEST_BUCKET_NAME, new ArrayList<>(expectedTopicFilenames));
+    assertTrue(keyfileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, "\"key\""));
   }
 
   @Test

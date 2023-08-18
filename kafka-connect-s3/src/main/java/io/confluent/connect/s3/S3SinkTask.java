@@ -16,7 +16,9 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
-import io.confluent.connect.s3.S3SinkConnectorConfig.IgnoreOrFailBehavior;
+import io.confluent.connect.s3.S3SinkConnectorConfig.OutputWriteBehavior;
+import io.confluent.connect.s3.util.TombstoneSupportedPartitioner;
+import io.confluent.connect.s3.util.SchemaPartitioner;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -114,7 +116,9 @@ public class S3SinkTask extends SinkTask {
       }
 
       writerProvider = newRecordWriterProvider(connectorConfig);
+      log.info("Created S3 sink record writer provider.");
       partitioner = newPartitioner(connectorConfig);
+      log.info("Created S3 sink partitioner.");
 
       open(context.assignment());
       try {
@@ -125,7 +129,7 @@ public class S3SinkTask extends SinkTask {
       } catch (NoSuchMethodError | NoClassDefFoundError | UnsupportedOperationException e) {
         // Will occur in Connect runtimes earlier than 2.6
         log.warn("Connect versions prior to Apache Kafka 2.6 do not support "
-            + "the errant record reporter");
+            + "the errant record reporter", e);
       }
 
       log.info("Started S3 connector task with assigned partitions: {}",
@@ -204,8 +208,14 @@ public class S3SinkTask extends SinkTask {
         plainValues.put(originalKey, originals.get(originalKey));
       }
     }
+    if (config.getSchemaPartitionAffixType() != S3SinkConnectorConfig.AffixType.NONE) {
+      partitioner = new SchemaPartitioner<>(partitioner);
+    }
+    if (config.isTombstoneWriteEnabled()) {
+      String tomebstonePartition = config.getTombstoneEncodedPartition();
+      partitioner = new TombstoneSupportedPartitioner<>(partitioner, tomebstonePartition);
+    }
     partitioner.configure(plainValues);
-
     return partitioner;
   }
 
@@ -254,7 +264,7 @@ public class S3SinkTask extends SinkTask {
   private boolean maybeSkipOnNullValue(SinkRecord record) {
     if (record.value() == null) {
       if (connectorConfig.nullValueBehavior()
-          .equalsIgnoreCase(IgnoreOrFailBehavior.IGNORE.toString())) {
+          .equalsIgnoreCase(OutputWriteBehavior.IGNORE.toString())) {
         log.debug(
             "Null valued record from topic '{}', partition {} and offset {} was skipped.",
             record.topic(),
@@ -262,7 +272,19 @@ public class S3SinkTask extends SinkTask {
             record.kafkaOffset()
         );
         return true;
+      } else if (connectorConfig.nullValueBehavior()
+          .equalsIgnoreCase(OutputWriteBehavior.WRITE.toString())) {
+        log.debug(
+            "Null valued record from topic '{}', partition {} and offset {} was written in the"
+                + "partition {}.",
+            record.topic(),
+            record.kafkaPartition(),
+            record.kafkaOffset(),
+            connectorConfig.getTombstoneEncodedPartition()
+        );
+        return false;
       } else {
+        // Fail
         throw new ConnectException("Null valued records are not writeable with current "
             + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " 'settings.");
       }
