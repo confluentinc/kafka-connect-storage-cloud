@@ -23,7 +23,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class KafkaFileCallbackProvider extends FileCallbackProvider {
-  private static final Logger log = LoggerFactory.getLogger(KafkaFileCallbackProvider.class);
   private final KafkaFileCallbackConfig kafkaConfig;
 
   public KafkaFileCallbackProvider(String configJson, boolean skipError) {
@@ -33,7 +32,7 @@ public class KafkaFileCallbackProvider extends FileCallbackProvider {
   }
 
   @Override
-  public void call(
+  public void callImpl(
       String topicName,
       String s3Partition,
       String filePath,
@@ -62,12 +61,6 @@ public class KafkaFileCallbackProvider extends FileCallbackProvider {
               throw new RuntimeException(ex);
             }
           });
-    } catch (Exception e) {
-      if (skipError) {
-        log.error(e.getMessage(), e);
-      } else {
-        throw new RuntimeException(e);
-      }
     }
   }
 }

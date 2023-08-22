@@ -15,7 +15,11 @@
 
 package io.confluent.connect.s3.callback;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public abstract class FileCallbackProvider {
+  private static final Logger log = LoggerFactory.getLogger(FileCallbackProvider.class);
   protected final String configJson;
   protected final boolean skipError;
 
@@ -24,7 +28,27 @@ public abstract class FileCallbackProvider {
     this.skipError = skipError;
   }
 
-  public abstract void call(
+  public void call(
+          String topicName,
+          String s3Partition,
+          String filePath,
+          int partition,
+          Long baseRecordTimestamp,
+          Long currentTimestamp,
+          int recordCount,
+          Long eventDatetime) {
+    try {
+      log.info("Running file callback : {}, {}", topicName, filePath);
+      callImpl(topicName, s3Partition, filePath, partition, baseRecordTimestamp, currentTimestamp, recordCount, eventDatetime);
+    } catch (Exception e) {
+      if (skipError) {
+        log.error(e.getMessage(), e);
+      } else {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+  public abstract void callImpl(
       String topicName,
       String s3Partition,
       String filePath,

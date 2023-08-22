@@ -147,9 +147,9 @@ public class S3SinkCallbackIT extends BaseConnectorIT {
     KafkaFileCallbackProvider callBack =
             new KafkaFileCallbackProvider(kafkaFileCallbackConfig.toJson(), false);
     callBack.call("baz-topic", "version/event/hour", "file1.avro", 12,
-            1234L, 123L, 34);
+            1234L, 123L, 34, 1234L);
     callBack.call("foo-topic", "version/event/hour", "fil2.avro", 8,
-            12345L, 1234L, 12);
+            12345L, 1234L, 12, 12345L);
 
     // fails if two records are not present in kafka within 1s
     connect.kafka().consume(2, 1000L, callbackTopic);

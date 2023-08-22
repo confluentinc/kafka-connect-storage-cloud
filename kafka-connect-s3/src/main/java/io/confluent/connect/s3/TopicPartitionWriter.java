@@ -195,6 +195,7 @@ public class TopicPartitionWriter {
     // Initialize callback if enabled
     if (this.connectorConfig.getFileCallbackEnable()) {
       try {
+        log.info("File callback enabled");
         fileCallback = Optional.of((FileCallbackProvider)
                         this.connectorConfig
                 .getFileCallbackClass().getConstructor(String.class, boolean.class)
