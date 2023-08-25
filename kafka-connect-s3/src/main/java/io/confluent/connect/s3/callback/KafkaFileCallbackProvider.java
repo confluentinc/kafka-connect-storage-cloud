@@ -19,8 +19,6 @@ import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class KafkaFileCallbackProvider extends FileCallbackProvider {
   private final KafkaFileCallbackConfig kafkaConfig;
