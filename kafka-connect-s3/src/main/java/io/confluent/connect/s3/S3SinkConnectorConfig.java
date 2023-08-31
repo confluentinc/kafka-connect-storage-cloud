@@ -24,8 +24,8 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
-import io.confluent.connect.s3.callback.FileCallbackProvider;
-import io.confluent.connect.s3.callback.KafkaFileCallbackProvider;
+import io.confluent.connect.s3.file.FileEventProvider;
+import io.confluent.connect.s3.file.KafkaFileEventProvider;
 import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -197,17 +197,17 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String TOMBSTONE_ENCODED_PARTITION_DEFAULT = "tombstone";
 
   /**
-   * Callback configs
+   * File event configs
    */
-  public static final String FILE_CALLBACK_ENABLE = "s3.file.callback.enable";
-  public static final boolean FILE_CALLBACK_ENABLE_DEFAULT = false;
-  public static final String FILE_CALLBACK_SKIP_ERROR = "s3.file.callback.skip.error";
-  public static final boolean FILE_CALLBACK_SKIP_ERROR_DEFAULT = false;
-  public static final String FILE_CALLBACK_CLASS = "s3.file.callback.class";
-  public static final Class<? extends FileCallbackProvider> FILE_CALLBACK_CLASS_DEFAULT =
-          KafkaFileCallbackProvider.class;
-  public static final String FILE_CALLBACK_CONFIG_JSON = "s3.file.callback.config.json";
-  public static final String FILE_CALLBACK_CONFIG_JSON_DEFAULT = "{}";
+  public static final String FILE_EVENT_ENABLE = "s3.file.event.enable";
+  public static final boolean FILE_EVENT_ENABLE_DEFAULT = false;
+  public static final String FILE_EVENT_SKIP_ERROR = "s3.file.event.skip.error";
+  public static final boolean FILE_EVENT_SKIP_ERROR_DEFAULT = false;
+  public static final String FILE_EVENT_CLASS = "s3.file.event.class";
+  public static final Class<? extends FileEventProvider> FILE_EVENT_CLASS_DEFAULT =
+          KafkaFileEventProvider.class;
+  public static final String FILE_EVENT_CONFIG_JSON = "s3.file.event.config.json";
+  public static final String FILE_EVENT_CONFIG_JSON_DEFAULT = "{}";
 
   /**
    * Append schema name in s3-path
@@ -792,63 +792,63 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     }
 
     {
-      final String group = "File callback";
+      final String group = "File event";
       int orderInGroup = 0;
 
       configDef.define(
-              FILE_CALLBACK_ENABLE,
+              FILE_EVENT_ENABLE,
               Type.BOOLEAN,
-              FILE_CALLBACK_ENABLE_DEFAULT,
+              FILE_EVENT_ENABLE_DEFAULT,
               Importance.LOW,
-              "Enables the file callback to be specified and configured",
+              "Enables the file event to be specified and configured",
               group,
               ++orderInGroup,
               Width.LONG,
-              "Enable s3 file callback"
+              "Enable s3 file event"
       );
 
       configDef.define(
-              FILE_CALLBACK_SKIP_ERROR,
+              FILE_EVENT_SKIP_ERROR,
               Type.BOOLEAN,
-              FILE_CALLBACK_SKIP_ERROR_DEFAULT,
+              FILE_EVENT_SKIP_ERROR_DEFAULT,
               Importance.LOW,
-              "In case of callback, then raise an error or fail silently. Default raise an error.",
+              "In case of file event error, then raise or fail silently. Default raise an error.",
               group,
               ++orderInGroup,
               Width.LONG,
-              "Fail when s3 file callback error"
+              "Fail when s3 file event error"
       );
 
       configDef.define(
-              FILE_CALLBACK_CLASS,
+              FILE_EVENT_CLASS,
               Type.CLASS,
-              FILE_CALLBACK_CLASS_DEFAULT,
-              new FileCallbackProviderValidator(),
+              FILE_EVENT_CLASS_DEFAULT,
+              new FileEventProviderValidator(),
               Importance.LOW,
-              "File callback to push notification for each file written on s3. By default "
+              "File event to push notification for each file written on s3. By default "
                       + "the connector uses ``"
-                      + FILE_CALLBACK_CLASS_DEFAULT.getSimpleName()
+                      + FILE_EVENT_CLASS_DEFAULT.getSimpleName()
                       + "``.",
 
               group,
               ++orderInGroup,
               Width.LONG,
-              "File callback class"
+              "File event class"
       );
 
       configDef.define(
-              FILE_CALLBACK_CONFIG_JSON,
+              FILE_EVENT_CONFIG_JSON,
               Type.STRING,
-              FILE_CALLBACK_CONFIG_JSON_DEFAULT,
+              FILE_EVENT_CONFIG_JSON_DEFAULT,
               Importance.LOW,
-              "File callback configuration as json format. "
+              "File event configuration as json format. "
                       + "Mandatory Fields: bootstrap_servers, topic_name, schema_registry_url. "
                       + "Optional fields: sasl_mechanism, security_protocol, sasl_jaas_config. "
                       + "By default an empty json.",
               group,
               ++orderInGroup,
               Width.LONG,
-              "File callback config json"
+              "File event config json"
       );
     }
     return configDef;
@@ -1028,20 +1028,20 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getInt(ELASTIC_BUFFER_INIT_CAPACITY);
   }
 
-  public boolean getFileCallbackEnable() {
-    return getBoolean(FILE_CALLBACK_ENABLE);
+  public boolean getFileEventEnable() {
+    return getBoolean(FILE_EVENT_ENABLE);
   }
 
-  public boolean getFileCallbackSkipError() {
-    return getBoolean(FILE_CALLBACK_SKIP_ERROR);
+  public boolean getFileEventSkipError() {
+    return getBoolean(FILE_EVENT_SKIP_ERROR);
   }
 
-  public Class getFileCallbackClass() {
-    return getClass(FILE_CALLBACK_CLASS);
+  public Class getFileEventClass() {
+    return getClass(FILE_EVENT_CLASS);
   }
 
-  public String getFileCallbackConfigJson() {
-    return getString(FILE_CALLBACK_CONFIG_JSON);
+  public String getFileEventConfigJson() {
+    return getString(FILE_EVENT_CONFIG_JSON);
   }
 
   public boolean isTombstoneWriteEnabled() {
@@ -1287,23 +1287,23 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     }
   }
 
-  private static class FileCallbackProviderValidator implements ConfigDef.Validator {
+  private static class FileEventProviderValidator implements ConfigDef.Validator {
     @Override
     public void ensureValid(String name, Object provider) {
       if (provider != null && provider instanceof Class
-              && FileCallbackProvider.class.isAssignableFrom((Class<?>) provider)) {
+              && FileEventProvider.class.isAssignableFrom((Class<?>) provider)) {
         return;
       }
       throw new ConfigException(
               name,
               provider,
-              "Class must extend: " + FileCallbackProvider.class
+              "Class must extend: " + FileEventProvider.class
       );
     }
 
     @Override
     public String toString() {
-      return "Any class implementing: " + FileCallbackProvider.class;
+      return "Any class implementing: " + FileEventProvider.class;
     }
   }
 

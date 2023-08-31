@@ -1,8 +1,8 @@
 {
-  "namespace": "io.confluent.connect.s3.callback",
+  "namespace": "io.confluent.connect.s3.file",
   "type": "record",
-  "name": "Callback",
-  "doc": "This event represents a callback Message",
+  "name": "FileEvent",
+  "doc": "This event represents a fileEvent Message",
   "fields": [
     {
       "name": "topicName",
@@ -26,13 +26,13 @@
     },
     {
       "name": "baseRecordTimestamp",
-      "type": ["null", "long"],
-      "doc": "Time of the first record written in the file. Defined when partitioner is time based only."
+      "type": ["null", "string"],
+      "doc": "Time of the first record written in the file, in RFC 3339. Defined when partitioner is time based only."
     },
     {
       "name": "currentTimestamp",
-      "type": ["null", "long"],
-      "doc": "Time of the last record written in the file. Defined when partitioner is time based only."
+      "type": ["null", "string"],
+      "doc": "Time of the last record written in the file, in RFC 3339. Defined when partitioner is time based only."
     },
     {
       "name": "recordCount",
@@ -41,8 +41,8 @@
     },
     {
       "name": "event_datetime",
-      "type": "long",
-      "doc": "The time of the callback event"
+      "type": "string",
+      "doc": "The time of the file event, in RFC 3339"
     }
   ]
 }

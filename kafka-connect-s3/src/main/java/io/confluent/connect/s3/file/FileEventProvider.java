@@ -13,19 +13,27 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.connect.s3.callback;
+package io.confluent.connect.s3.file;
 
+import org.joda.time.DateTime;
+import org.joda.time.format.DateTimeFormatter;
+import org.joda.time.format.ISODateTimeFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public abstract class FileCallbackProvider {
-  private static final Logger log = LoggerFactory.getLogger(FileCallbackProvider.class);
+public abstract class FileEventProvider {
+  private static final Logger log = LoggerFactory.getLogger(FileEventProvider.class);
   protected final String configJson;
   protected final boolean skipError;
 
-  public FileCallbackProvider(String configJson, boolean skipError) {
+  public FileEventProvider(String configJson, boolean skipError) {
     this.configJson = configJson;
     this.skipError = skipError;
+  }
+
+  public String formatDateRFC3339(DateTime timestamp){
+    DateTimeFormatter fmt = ISODateTimeFormat.dateTime();
+    return fmt.print(timestamp);
   }
 
   public void call(
@@ -33,12 +41,12 @@ public abstract class FileCallbackProvider {
           String s3Partition,
           String filePath,
           int partition,
-          Long baseRecordTimestamp,
-          Long currentTimestamp,
+          DateTime baseRecordTimestamp,
+          DateTime currentTimestamp,
           int recordCount,
-          Long eventDatetime) {
+          DateTime eventDatetime) {
     try {
-      log.info("Running file callback : {}, {}", topicName, filePath);
+      log.info("Running file event : {}, {}", topicName, filePath);
       callImpl(topicName, s3Partition, filePath, partition, baseRecordTimestamp, currentTimestamp, recordCount, eventDatetime);
     } catch (Exception e) {
       if (skipError) {
@@ -53,7 +61,8 @@ public abstract class FileCallbackProvider {
       String s3Partition,
       String filePath,
       int partition,
-      Long baseRecordTimestamp,
-      Long currentTimestamp,
-      int recordCount, Long eventDatetime);
+      DateTime baseRecordTimestamp,
+      DateTime currentTimestamp,
+      int recordCount,
+      DateTime eventDatetime);
 }

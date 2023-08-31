@@ -13,7 +13,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.connect.s3.callback;
+package io.confluent.connect.s3.file;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -23,8 +23,8 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import java.io.IOException;
 import java.util.Properties;
 
-public abstract class AbstractFileCallbackConfig {
-  public static <T extends AbstractFileCallbackConfig> T fromJsonString(
+public abstract class AbstractFileEventConfig {
+  public static <T extends AbstractFileEventConfig> T fromJsonString(
       String jsonContent, Class<T> clazz) {
     try {
       if (jsonContent == null) {

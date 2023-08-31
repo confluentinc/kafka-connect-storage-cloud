@@ -25,8 +25,8 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_C
 import static org.junit.Assert.assertEquals;
 
 import io.confluent.connect.s3.S3SinkConnector;
-import io.confluent.connect.s3.callback.KafkaFileCallbackConfig;
-import io.confluent.connect.s3.callback.KafkaFileCallbackProvider;
+import io.confluent.connect.s3.file.KafkaFileEventConfig;
+import io.confluent.connect.s3.file.KafkaFileEventProvider;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.storage.S3Storage;
@@ -52,6 +52,8 @@ import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.test.IntegrationTest;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -61,9 +63,9 @@ import org.slf4j.LoggerFactory;
 
 @SuppressWarnings({"unchecked", "deprecation"})
 @Category(IntegrationTest.class)
-public class S3SinkCallbackIT extends BaseConnectorIT {
+public class S3SinkFileEventIT extends BaseConnectorIT {
 
-  private static final Logger log = LoggerFactory.getLogger(S3SinkCallbackIT.class);
+  private static final Logger log = LoggerFactory.getLogger(S3SinkFileEventIT.class);
   // connector and test configs
   private static final String CONNECTOR_NAME = "s3-sink";
   private static final String DEFAULT_TEST_TOPIC_NAME = "TestTopic";
@@ -89,8 +91,8 @@ public class S3SinkCallbackIT extends BaseConnectorIT {
     props.put(S3_PROXY_URL_CONFIG, minioContainer.getUrl());
     props.put(AWS_ACCESS_KEY_ID_CONFIG, MinioContainer.MINIO_USERNAME);
     props.put(AWS_SECRET_ACCESS_KEY_CONFIG, MinioContainer.MINIO_PASSWORD);
-    // callback
-    props.put(FILE_CALLBACK_ENABLE, "true");
+    // file event
+    props.put(FILE_EVENT_ENABLE, "true");
     // TimeBasedPartitioner
     props.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, "io.confluent.connect.storage.partitioner.TimeBasedPartitioner");
     props.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, "100");
@@ -113,58 +115,59 @@ public class S3SinkCallbackIT extends BaseConnectorIT {
 
 
   @Test
-  public void testBasicRecordsWrittenParquetAndRelatedCallbacks() throws Throwable {
+  public void testBasicRecordsWrittenParquetAndRelatedFileEvents() throws Throwable {
     // add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
-    String topicCallback = "TopicCallback";
+    String topicFileEvent = "TopicFileEvent";
     props.put(
-        FILE_CALLBACK_CONFIG_JSON,
-        new KafkaFileCallbackConfig(
-                topicCallback,
+            FILE_EVENT_CONFIG_JSON,
+        new KafkaFileEventConfig(
+                topicFileEvent,
                 connect.kafka().bootstrapServers(),
                 restApp.restServer.getURI().toString(),
                 null,
                 null,
                 null)
             .toJson());
-    connect.kafka().createTopic(topicCallback);
-    testBasicRecordsWrittenAndRelatedCallbacks(PARQUET_EXTENSION, topicCallback);
+    connect.kafka().createTopic(topicFileEvent);
+    testBasicRecordsWrittenAndRelatedFileEvents(PARQUET_EXTENSION, topicFileEvent);
   }
 
   @Test
-  public void testCallBackPartition() {
+  public void testFileEventPartition() {
     String bootstrapServers = connect.kafka().bootstrapServers();
-    String callbackTopic = "callback_topic";
-    connect.kafka().createTopic(callbackTopic);
-    KafkaFileCallbackConfig kafkaFileCallbackConfig =
-            new KafkaFileCallbackConfig(
-                    callbackTopic,
+    String fileEventTopic = "file_event_topic";
+    connect.kafka().createTopic(fileEventTopic);
+    KafkaFileEventConfig kafkaFileEventConfig =
+            new KafkaFileEventConfig(
+                    fileEventTopic,
                     bootstrapServers,
                     restApp.restServer.getURI().toString(),
                     null,
                     null,
                     null);
-    KafkaFileCallbackProvider callBack =
-            new KafkaFileCallbackProvider(kafkaFileCallbackConfig.toJson(), false);
-    callBack.call("baz-topic", "version/event/hour", "file1.avro", 12,
-            1234L, 123L, 34, 1234L);
-    callBack.call("foo-topic", "version/event/hour", "fil2.avro", 8,
-            12345L, 1234L, 12, 12345L);
+    KafkaFileEventProvider fileEvent =
+            new KafkaFileEventProvider(kafkaFileEventConfig.toJson(), false);
+    fileEvent.call("baz-topic", "version/event/hour", "file1.avro", 12,
+            new DateTime(1234L), new DateTime(123L),
+            34, new DateTime(1234L).withZone(DateTimeZone.UTC));
+    fileEvent.call("foo-topic", "version/event/hour", "fil2.avro", 8,
+            new DateTime(12345L), new DateTime(1234L), 12, new DateTime(12345L));
 
     // fails if two records are not present in kafka within 1s
-    connect.kafka().consume(2, 1000L, callbackTopic);
+    connect.kafka().consume(2, 1000L, fileEventTopic);
   }
   /**
    * Test that the expected records are written for a given file extension
    * Optionally, test that topics which have "*.{expectedFileExtension}*" in them are processed
    * and written.
    * @param expectedFileExtension The file extension to test against
-   * @param callbackTopic The callback topic name
+   * @param fileEventTopic The fileEvent topic name
    * @throws Throwable
    */
-  private void testBasicRecordsWrittenAndRelatedCallbacks(
+  private void testBasicRecordsWrittenAndRelatedFileEvents(
           String expectedFileExtension,
-          String callbackTopic
+          String fileEventTopic
   ) throws Throwable {
     // Add an extra topic with this extension inside of the name
     // Use a TreeSet for test determinism
@@ -203,8 +206,8 @@ public class S3SinkCallbackIT extends BaseConnectorIT {
     }
     // This check will catch any duplications
     assertEquals(expectedTopicFilenames.size(), expectedTotalFileCount);
-    // Check wether we get same number of records in callback
-    connect.kafka().consume(expectedTotalFileCount, 1000L, callbackTopic);
+    // Check whether we get same number of records in fileEvent
+    connect.kafka().consume(expectedTotalFileCount, 1000L, fileEventTopic);
   }
 
   private void produceRecordsNoHeaders(int recordCount, SinkRecord record)

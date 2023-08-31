@@ -13,20 +13,21 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.connect.s3.callback;
+package io.confluent.connect.s3.file;
 
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.joda.time.DateTime;
 
-public class KafkaFileCallbackProvider extends FileCallbackProvider {
-  private final KafkaFileCallbackConfig kafkaConfig;
+public class KafkaFileEventProvider extends FileEventProvider {
+  private final KafkaFileEventConfig kafkaConfig;
 
-  public KafkaFileCallbackProvider(String configJson, boolean skipError) {
+  public KafkaFileEventProvider(String configJson, boolean skipError) {
     super(configJson, skipError);
     this.kafkaConfig =
-        KafkaFileCallbackConfig.fromJsonString(configJson, KafkaFileCallbackConfig.class);
+        KafkaFileEventConfig.fromJsonString(configJson, KafkaFileEventConfig.class);
   }
 
   @Override
@@ -35,21 +36,21 @@ public class KafkaFileCallbackProvider extends FileCallbackProvider {
       String s3Partition,
       String filePath,
       int partition,
-      Long baseRecordTimestamp,
-      Long currentTimestamp,
+      DateTime baseRecordTimestamp,
+      DateTime currentTimestamp,
       int recordCount,
-      Long eventDatetime) {
+      DateTime eventDatetime) {
     String key = topicName;
-    Callback value =
-        new Callback(
+    FileEvent value =
+        new FileEvent(
             topicName,
             s3Partition,
             filePath,
             partition,
-            baseRecordTimestamp,
-            currentTimestamp,
+            formatDateRFC3339(baseRecordTimestamp),
+            formatDateRFC3339(currentTimestamp),
             recordCount,
-            eventDatetime);
+            formatDateRFC3339(eventDatetime));
     try (final Producer<String, SpecificRecord> producer =
         new KafkaProducer<>(kafkaConfig.toProps())) {
       producer.send(

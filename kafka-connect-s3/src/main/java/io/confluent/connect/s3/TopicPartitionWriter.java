@@ -16,7 +16,7 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.SdkClientException;
-import io.confluent.connect.s3.callback.FileCallbackProvider;
+import io.confluent.connect.s3.file.FileEventProvider;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileRotationTracker;
 import io.confluent.connect.s3.util.RetryUtil;
@@ -107,7 +107,7 @@ public class TopicPartitionWriter {
   private ErrantRecordReporter reporter;
 
   private final FileRotationTracker fileRotationTracker;
-  private Optional<FileCallbackProvider> fileCallback = Optional.empty();
+  private Optional<FileEventProvider> fileCallback = Optional.empty();
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
@@ -192,15 +192,15 @@ public class TopicPartitionWriter {
     // Initialize scheduled rotation timer if applicable
     setNextScheduledRotation();
 
-    // Initialize callback if enabled
-    if (this.connectorConfig.getFileCallbackEnable()) {
+    // Initialize fileEvent if enabled
+    if (this.connectorConfig.getFileEventEnable()) {
       try {
-        log.info("File callback enabled");
-        fileCallback = Optional.of((FileCallbackProvider)
+        log.info("File event enabled");
+        fileCallback = Optional.of((FileEventProvider)
                         this.connectorConfig
-                .getFileCallbackClass().getConstructor(String.class, boolean.class)
-                .newInstance(connectorConfig.getFileCallbackConfigJson(),
-                        connectorConfig.getFileCallbackSkipError()));
+                .getFileEventClass().getConstructor(String.class, boolean.class)
+                .newInstance(connectorConfig.getFileEventConfigJson(),
+                        connectorConfig.getFileEventSkipError()));
       } catch (InstantiationException | IllegalAccessException
                | InvocationTargetException | NoSuchMethodException e) {
         throw new RuntimeException(e);
@@ -693,8 +693,10 @@ public class TopicPartitionWriter {
 
   private void callbackFile(String encodedPartition) {
     fileCallback.ifPresent(fs -> fs.call(tp.topic(), encodedPartition,
-            commitFiles.get(encodedPartition), tp.partition(), baseRecordTimestamp,
-            currentTimestamp, recordCount, time.milliseconds()));
+            commitFiles.get(encodedPartition), tp.partition(),
+            new DateTime(baseRecordTimestamp).withZone(timeZone),
+            new DateTime(currentTimestamp).withZone(timeZone), recordCount,
+            new DateTime(time.milliseconds()).withZone(timeZone)));
   }
 
   private void tagFile(String encodedPartition, String s3ObjectPath) {

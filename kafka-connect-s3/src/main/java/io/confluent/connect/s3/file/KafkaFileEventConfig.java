@@ -13,11 +13,11 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.connect.s3.callback;
+package io.confluent.connect.s3.file;
 
 import java.util.Properties;
 
-public class KafkaFileCallbackConfig extends AbstractFileCallbackConfig {
+public class KafkaFileEventConfig extends AbstractFileEventConfig {
 
   private static final String KEY_SERIALIZER =
       "io.confluent.kafka.serializers.KafkaAvroSerializer";
@@ -32,10 +32,10 @@ public class KafkaFileCallbackConfig extends AbstractFileCallbackConfig {
   private String saslJaasConfig;
 
   /** empty constructor for jackson */
-  public KafkaFileCallbackConfig() {
+  public KafkaFileEventConfig() {
   }
 
-  public KafkaFileCallbackConfig(
+  public KafkaFileEventConfig(
       String topicName,
       String bootstrapServers,
       String schemaRegistryUrl,
