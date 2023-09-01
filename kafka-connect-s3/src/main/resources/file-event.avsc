@@ -5,17 +5,17 @@
   "doc": "This event represents a fileEvent Message",
   "fields": [
     {
-      "name": "topicName",
+      "name": "topic_name",
       "type": "string",
       "doc": "The topic name of the record being written"
     },
     {
-      "name": "s3Partition",
+      "name": "s3_partition",
       "type": "string",
       "doc": "The s3 partition produced by the partitioner"
     },
     {
-      "name": "filePath",
+      "name": "file_path",
       "type": "string",
       "doc": "Current file path, including partition and file name"
     },
@@ -25,17 +25,17 @@
       "doc": "The kafka partition being recorded"
     },
     {
-      "name": "baseRecordTimestamp",
+      "name": "base_record_timestamp",
       "type": ["null", "string"],
       "doc": "Time of the first record written in the file, in RFC 3339. Defined when partitioner is time based only."
     },
     {
-      "name": "currentTimestamp",
+      "name": "current_timestamp",
       "type": ["null", "string"],
       "doc": "Time of the last record written in the file, in RFC 3339. Defined when partitioner is time based only."
     },
     {
-      "name": "recordCount",
+      "name": "record_count",
       "type": "int",
       "doc": "Number of records within the written file"
     },
