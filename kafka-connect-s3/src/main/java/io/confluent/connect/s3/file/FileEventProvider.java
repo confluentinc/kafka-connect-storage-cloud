@@ -24,12 +24,10 @@ import org.slf4j.LoggerFactory;
 public abstract class FileEventProvider {
   private static final Logger log = LoggerFactory.getLogger(FileEventProvider.class);
   protected final String configJson;
-  protected final String securityJson;
   protected final boolean skipError;
 
-  public FileEventProvider(String configJson, String securityJson, boolean skipError) {
+  public FileEventProvider(String configJson, boolean skipError) {
     this.configJson = configJson;
-    this.securityJson = securityJson;
     this.skipError = skipError;
   }
 

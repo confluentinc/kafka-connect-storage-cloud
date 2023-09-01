@@ -198,9 +198,8 @@ public class TopicPartitionWriter {
         log.info("File event enabled");
         fileCallback = Optional.of((FileEventProvider)
                         this.connectorConfig
-                .getFileEventClass().getConstructor(String.class, String.class, boolean.class)
+                .getFileEventClass().getConstructor(String.class, boolean.class)
                 .newInstance(connectorConfig.getFileEventConfigJson(),
-                        connectorConfig.getFileEventSecurityJson(),
                         connectorConfig.getFileEventSkipError()));
       } catch (InstantiationException | IllegalAccessException
                | InvocationTargetException | NoSuchMethodException e) {

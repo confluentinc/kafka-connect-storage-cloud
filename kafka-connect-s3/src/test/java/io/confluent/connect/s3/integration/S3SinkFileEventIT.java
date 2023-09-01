@@ -124,7 +124,10 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
         new KafkaFileEventConfig(
                 topicFileEvent,
                 connect.kafka().bootstrapServers(),
-                restApp.restServer.getURI().toString())
+                restApp.restServer.getURI().toString(),
+                null,
+                null,
+                null)
             .toJson());
     connect.kafka().createTopic(topicFileEvent);
     testBasicRecordsWrittenAndRelatedFileEvents(PARQUET_EXTENSION, topicFileEvent);
@@ -139,9 +142,12 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
             new KafkaFileEventConfig(
                     fileEventTopic,
                     bootstrapServers,
-                    restApp.restServer.getURI().toString());
+                    restApp.restServer.getURI().toString(),
+                    null,
+                    null,
+                    null);
     KafkaFileEventProvider fileEvent =
-            new KafkaFileEventProvider(kafkaFileEventConfig.toJson(),"{}", false);
+            new KafkaFileEventProvider(kafkaFileEventConfig.toJson(), false);
     fileEvent.call("baz-topic", "version/event/hour", "file1.avro", 12,
             new DateTime(1234L), new DateTime(123L),
             34, new DateTime(1234L).withZone(DateTimeZone.UTC));

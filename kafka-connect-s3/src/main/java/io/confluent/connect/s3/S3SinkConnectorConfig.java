@@ -208,8 +208,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           KafkaFileEventProvider.class;
   public static final String FILE_EVENT_CONFIG_JSON = "s3.file.event.config.json";
   public static final String FILE_EVENT_CONFIG_JSON_DEFAULT = "{}";
-  public static final String FILE_EVENT_SECURITY_JSON = "s3.file.event.security.json";
-  public static final String FILE_EVENT_SECURITY_JSON_DEFAULT = "{}";
 
   /**
    * Append schema name in s3-path
@@ -844,27 +842,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
               FILE_EVENT_CONFIG_JSON_DEFAULT,
               Importance.LOW,
               "File event configuration as json format. "
-                      + "Content depends on the FileEvent implementation. "
+                      + "Mandatory Fields: bootstrap_servers, topic_name, schema_registry_url. "
+                      + "Optional fields: sasl_mechanism, security_protocol, sasl_jaas_config. "
                       + "By default an empty json.",
               group,
               ++orderInGroup,
               Width.LONG,
               "File event config json"
       );
-
-    configDef.define(
-            FILE_EVENT_SECURITY_JSON,
-            Type.STRING,
-            FILE_EVENT_SECURITY_JSON_DEFAULT,
-            Importance.LOW,
-            "File event configuration as json format. "
-                    + "content depends on the FileEvent implementation"
-                    + "By default an empty json.",
-            group,
-            ++orderInGroup,
-            Width.LONG,
-            "File event security json"
-    );
     }
     return configDef;
   }
@@ -1057,9 +1042,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public String getFileEventConfigJson() {
     return getString(FILE_EVENT_CONFIG_JSON);
-  }
-  public String getFileEventSecurityJson() {
-    return getString(FILE_EVENT_SECURITY_JSON);
   }
 
   public boolean isTombstoneWriteEnabled() {
