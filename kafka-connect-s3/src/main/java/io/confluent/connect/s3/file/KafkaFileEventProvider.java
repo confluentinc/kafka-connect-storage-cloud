@@ -21,13 +21,17 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.joda.time.DateTime;
 
+import java.util.Properties;
+
 public class KafkaFileEventProvider extends FileEventProvider {
   private final KafkaFileEventConfig kafkaConfig;
+  private final KafkaFileEventSecurity kafkaSecurity;
 
-  public KafkaFileEventProvider(String configJson, boolean skipError) {
-    super(configJson, skipError);
+  public KafkaFileEventProvider(String configJson, String securityJson, boolean skipError) {
+    super(configJson, securityJson, skipError);
     this.kafkaConfig =
-        KafkaFileEventConfig.fromJsonString(configJson, KafkaFileEventConfig.class);
+        AbstractFileEventConfig.fromJsonString(configJson, KafkaFileEventConfig.class);
+    this.kafkaSecurity = AbstractFileEventConfig.fromJsonString(securityJson, KafkaFileEventSecurity.class);
   }
 
   @Override
@@ -51,8 +55,11 @@ public class KafkaFileEventProvider extends FileEventProvider {
             formatDateRFC3339(currentTimestamp),
             recordCount,
             formatDateRFC3339(eventDatetime));
+    Properties combinedProperties = new Properties();
+    combinedProperties.putAll(kafkaConfig.toProps());
+    combinedProperties.putAll(kafkaSecurity.toProps());
     try (final Producer<String, SpecificRecord> producer =
-        new KafkaProducer<>(kafkaConfig.toProps())) {
+        new KafkaProducer<>(combinedProperties)) {
       producer.send(
           new ProducerRecord<>(kafkaConfig.getTopicName(), key, value),
           (event, ex) -> {
