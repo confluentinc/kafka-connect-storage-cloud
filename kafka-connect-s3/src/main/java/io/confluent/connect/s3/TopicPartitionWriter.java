@@ -16,6 +16,7 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.SdkClientException;
+import io.confluent.connect.s3.file.FileEventProvider;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileRotationTracker;
 import io.confluent.connect.s3.util.RetryUtil;
@@ -36,6 +37,7 @@ import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -105,6 +107,7 @@ public class TopicPartitionWriter {
   private ErrantRecordReporter reporter;
 
   private final FileRotationTracker fileRotationTracker;
+  private Optional<FileEventProvider> fileCallback = Optional.empty();
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
@@ -188,6 +191,21 @@ public class TopicPartitionWriter {
 
     // Initialize scheduled rotation timer if applicable
     setNextScheduledRotation();
+
+    // Initialize fileEvent if enabled
+    if (this.connectorConfig.getFileEventEnable()) {
+      try {
+        log.info("File event enabled");
+        fileCallback = Optional.of((FileEventProvider)
+                        this.connectorConfig
+                .getFileEventClass().getConstructor(String.class, boolean.class)
+                .newInstance(connectorConfig.getFileEventConfigJson(),
+                        connectorConfig.getFileEventSkipError()));
+      } catch (InstantiationException | IllegalAccessException
+               | InvocationTargetException | NoSuchMethodException e) {
+        throw new RuntimeException(e);
+      }
+    }
   }
 
   private enum State {
@@ -636,6 +654,7 @@ public class TopicPartitionWriter {
     for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
       String encodedPartition = entry.getKey();
       commitFile(encodedPartition);
+      callbackFile(encodedPartition);
       if (isTaggingEnabled) {
         RetryUtil.exponentialBackoffRetry(() -> tagFile(encodedPartition, entry.getValue()),
                 ConnectException.class,
@@ -670,6 +689,14 @@ public class TopicPartitionWriter {
       writers.remove(encodedPartition);
       log.debug("Removed writer for '{}'", encodedPartition);
     }
+  }
+
+  private void callbackFile(String encodedPartition) {
+    fileCallback.ifPresent(fs -> fs.call(tp.topic(), encodedPartition,
+            commitFiles.get(encodedPartition), tp.partition(),
+            new DateTime(baseRecordTimestamp).withZone(timeZone),
+            new DateTime(currentTimestamp).withZone(timeZone), recordCount,
+            new DateTime(time.milliseconds()).withZone(timeZone)));
   }
 
   private void tagFile(String encodedPartition, String s3ObjectPath) {
