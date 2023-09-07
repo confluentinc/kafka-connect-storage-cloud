@@ -28,7 +28,7 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
   private String bootstrapServers;
   private String securityProtocol;
   private String schemaRegistryUrl;
-  private String saslMecanism;
+  private String saslMechanism;
   private String saslJaasConfig;
 
   /** empty constructor for jackson */
@@ -40,13 +40,13 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
       String bootstrapServers,
       String schemaRegistryUrl,
       String securityProtocol,
-      String saslMecanism,
+      String saslMechanism,
       String saslJaasConfig) {
     this.topicName = topicName;
     this.bootstrapServers = bootstrapServers;
     this.schemaRegistryUrl = schemaRegistryUrl;
     this.securityProtocol = securityProtocol;
-    this.saslMecanism = saslMecanism;
+    this.saslMechanism = saslMechanism;
     this.saslJaasConfig = saslJaasConfig;
   }
 
@@ -67,8 +67,8 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
     if (securityProtocol != null) {
       sb.append(", \"security_protocol\": \"").append(securityProtocol).append('"');
     }
-    if (saslMecanism != null) {
-      sb.append(", \"sasl_mecanism\": \"").append(saslMecanism).append('"');
+    if (saslMechanism != null) {
+      sb.append(", \"sasl_mechanism\": \"").append(saslMechanism).append('"');
     }
     if (saslJaasConfig != null) {
       sb.append(", \"sasl_jaas_config\": \"").append(saslJaasConfig).append('"');
@@ -88,8 +88,8 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
     prop.setProperty("topic.name", topicName);
     prop.setProperty("schema.registry.url", schemaRegistryUrl);
     // optional
-    if (saslMecanism != null) {
-      prop.setProperty("sasl.mechanism", saslMecanism);
+    if (saslMechanism != null) {
+      prop.setProperty("sasl.mechanism", saslMechanism);
     }
     if (securityProtocol != null) {
       prop.setProperty("security.protocol", securityProtocol);
@@ -116,8 +116,8 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
     return securityProtocol;
   }
 
-  public String getSaslMecanism() {
-    return saslMecanism;
+  public String getSaslMechanism() {
+    return saslMechanism;
   }
 
   public String getSaslJaasConfig() {
