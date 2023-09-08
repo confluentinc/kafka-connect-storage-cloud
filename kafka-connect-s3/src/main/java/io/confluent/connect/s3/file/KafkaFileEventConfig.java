@@ -20,7 +20,7 @@ import java.util.Properties;
 public class KafkaFileEventConfig extends AbstractFileEventConfig {
 
   private static final String KEY_SERIALIZER =
-      "io.confluent.kafka.serializers.KafkaAvroSerializer";
+      "org.apache.kafka.common.serialization.StringSerializer";
   private static final String VALUE_SERIALIZER =
       "io.confluent.kafka.serializers.KafkaAvroSerializer";
 
