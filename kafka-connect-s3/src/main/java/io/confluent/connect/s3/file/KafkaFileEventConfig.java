@@ -82,7 +82,8 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
     Properties prop = new Properties();
     prop.setProperty("key.serializer", KEY_SERIALIZER);
     prop.setProperty("value.serializer", VALUE_SERIALIZER);
-    prop.setProperty("auto.create.topics.enable", "true");
+    prop.setProperty("use.latest.version", "true");
+    prop.setProperty("auto.register.schemas", "false");
     // mandatory
     prop.setProperty("bootstrap.servers", bootstrapServers);
     prop.setProperty("topic.name", topicName);
