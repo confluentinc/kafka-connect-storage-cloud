@@ -15,10 +15,12 @@
 
 package io.confluent.connect.s3.file;
 
+import java.util.Map;
 import java.util.Properties;
 
 public class KafkaFileEventConfig extends AbstractFileEventConfig {
 
+  Map<String, Object> custom;
   private static final String KEY_SERIALIZER =
       "org.apache.kafka.common.serialization.StringSerializer";
   private static final String VALUE_SERIALIZER =
@@ -26,28 +28,20 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
 
   private String topicName;
   private String bootstrapServers;
-  private String securityProtocol;
   private String schemaRegistryUrl;
-  private String saslMechanism;
-  private String saslJaasConfig;
 
   /** empty constructor for jackson */
-  public KafkaFileEventConfig() {
-  }
+  public KafkaFileEventConfig() {}
 
   public KafkaFileEventConfig(
       String topicName,
       String bootstrapServers,
       String schemaRegistryUrl,
-      String securityProtocol,
-      String saslMechanism,
-      String saslJaasConfig) {
+      Map<String, Object> custom) {
     this.topicName = topicName;
     this.bootstrapServers = bootstrapServers;
     this.schemaRegistryUrl = schemaRegistryUrl;
-    this.securityProtocol = securityProtocol;
-    this.saslMechanism = saslMechanism;
-    this.saslJaasConfig = saslJaasConfig;
+    this.custom = custom;
   }
 
   @Override
@@ -64,16 +58,15 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
     sb.append("\"topic_name\": \"").append(topicName).append('"');
     sb.append(", \"bootstrap_servers\": \"").append(bootstrapServers).append('"');
     sb.append(", \"schema_registry_url\": \"").append(schemaRegistryUrl).append('"');
-    if (securityProtocol != null) {
-      sb.append(", \"security_protocol\": \"").append(securityProtocol).append('"');
+    sb.append(", \"custom\": {");
+    String customIncrement = "";
+    for (Map.Entry<String, Object> custom : custom.entrySet()) {
+      sb.append(
+          String.format(
+              "%s \"%s\": \"%s\"", customIncrement, custom.getKey(), custom.getValue().toString()));
+      customIncrement = ",";
     }
-    if (saslMechanism != null) {
-      sb.append(", \"sasl_mechanism\": \"").append(saslMechanism).append('"');
-    }
-    if (saslJaasConfig != null) {
-      sb.append(", \"sasl_jaas_config\": \"").append(saslJaasConfig).append('"');
-    }
-    sb.append('}');
+    sb.append("}}");
     return sb.toString();
   }
 
@@ -82,21 +75,13 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
     Properties prop = new Properties();
     prop.setProperty("key.serializer", KEY_SERIALIZER);
     prop.setProperty("value.serializer", VALUE_SERIALIZER);
-    prop.setProperty("use.latest.version", "true");
-    prop.setProperty("auto.register.schemas", "false");
     // mandatory
     prop.setProperty("bootstrap.servers", bootstrapServers);
     prop.setProperty("topic.name", topicName);
     prop.setProperty("schema.registry.url", schemaRegistryUrl);
-    // optional
-    if (saslMechanism != null) {
-      prop.setProperty("sasl.mechanism", saslMechanism);
-    }
-    if (securityProtocol != null) {
-      prop.setProperty("security.protocol", securityProtocol);
-    }
-    if (saslJaasConfig != null) {
-      prop.setProperty("sasl.jaas.config", saslJaasConfig);
+    // custom
+    for (Map.Entry<String, Object> custom : custom.entrySet()) {
+      prop.setProperty(custom.getKey(), custom.getValue().toString());
     }
     return prop;
   }
@@ -113,15 +98,7 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
     return bootstrapServers;
   }
 
-  public String getSecurityProtocol() {
-    return securityProtocol;
-  }
-
-  public String getSaslMechanism() {
-    return saslMechanism;
-  }
-
-  public String getSaslJaasConfig() {
-    return saslJaasConfig;
+  public Map<String, Object> getCustom() {
+    return custom;
   }
 }
