@@ -178,6 +178,7 @@
             <artifactId>woodstox-core</artifactId>
             <version>${woodstox.version}</version>
         </dependency>
+
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-common</artifactId>
