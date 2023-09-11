@@ -66,14 +66,5 @@
                 <exclude>io.confluent:kafka-connect-storage-partitioner</exclude>
             </excludes>
         </dependencySet>
-        <dependencySet>
-        <outputDirectory>share/java/kafka-connect-s3</outputDirectory>
-        <useProjectArtifact>true</useProjectArtifact>
-            <includes>
-                <!-- Specifically included as excluding kafka-connect-storage-common with
-                useTransitiveFiltering filters the below dependency as well. -->
-                <include>io.confluent:kafka-connect-storage-common-hadoop-shaded-guava</include>
-            </includes>
-        </dependencySet>
     </dependencySets>
 </assembly>
