@@ -21,7 +21,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>11.2.1</version>
+        <version>11.2.3</version>
     </parent>
 
     <groupId>io.confluent</groupId>
@@ -148,6 +148,11 @@
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-partitioner</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-connect-storage-common-hadoop-shaded-guava</artifactId>
+            <version>${kafka.connect.storage.common.version}</version>
+        </dependency>
         <!-- <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-common-htrace-core4-shaded</artifactId>
@@ -179,6 +184,7 @@
             <artifactId>woodstox-core</artifactId>
             <version>${woodstox.version}</version>
         </dependency>
+
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-common</artifactId>
