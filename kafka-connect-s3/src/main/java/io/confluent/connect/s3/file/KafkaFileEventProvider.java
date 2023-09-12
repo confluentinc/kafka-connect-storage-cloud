@@ -21,13 +21,17 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.joda.time.DateTime;
 
+import java.io.Closeable;
+import java.io.IOException;
+
 public class KafkaFileEventProvider extends FileEventProvider {
   private final KafkaFileEventConfig kafkaConfig;
+  private Producer<String, SpecificRecord> producer;
 
   public KafkaFileEventProvider(String configJson, boolean skipError) {
     super(configJson, skipError);
-    this.kafkaConfig =
-        KafkaFileEventConfig.fromJsonString(configJson, KafkaFileEventConfig.class);
+    this.kafkaConfig = KafkaFileEventConfig.fromJsonString(configJson, KafkaFileEventConfig.class);
+    producer = new KafkaProducer<>(kafkaConfig.toProps());
   }
 
   @Override
@@ -51,15 +55,18 @@ public class KafkaFileEventProvider extends FileEventProvider {
             formatDateRFC3339(currentTimestamp),
             recordCount,
             formatDateRFC3339(eventDatetime));
-    try (final Producer<String, SpecificRecord> producer =
-        new KafkaProducer<>(kafkaConfig.toProps())) {
-      producer.send(
-          new ProducerRecord<>(kafkaConfig.getTopicName(), key, value),
-          (event, ex) -> {
-            if (ex != null) {
-              throw new RuntimeException(ex);
-            }
-          });
-    }
+    producer.send(
+        new ProducerRecord<>(kafkaConfig.getTopicName(), key, value),
+        (event, ex) -> {
+          if (ex != null) {
+            throw new RuntimeException(ex);
+          }
+        });
+  }
+
+  @Override
+  public void close() throws IOException {
+    this.producer.flush();
+    this.producer.close();
   }
 }
