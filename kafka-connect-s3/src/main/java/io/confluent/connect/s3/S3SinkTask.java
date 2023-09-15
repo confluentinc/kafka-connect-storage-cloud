@@ -351,15 +351,16 @@ public class S3SinkTask extends SinkTask {
         log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
       }
     }
-    topicPartitionWriters.clear();
     this.fileEventProvider.ifPresent(
         fc -> {
           try {
             fc.close();
+            this.fileEventProvider = null;
           } catch (IOException e) {
             throw new RuntimeException(e);
           }
         });
+    topicPartitionWriters.clear();
   }
 
   @Override
