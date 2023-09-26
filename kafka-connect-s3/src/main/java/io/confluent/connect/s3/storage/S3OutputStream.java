@@ -201,19 +201,10 @@ public class S3OutputStream extends PositionOutputStream {
     super.close();
   }
 
-  private ObjectMetadata newObjectMetadata() {
-    ObjectMetadata meta = new ObjectMetadata();
-    if (StringUtils.isNotBlank(ssea)) {
-      meta.setSSEAlgorithm(ssea);
-    }
-    return meta;
-  }
-
   private MultipartUpload newMultipartUpload() throws IOException {
     InitiateMultipartUploadRequest initRequest = new InitiateMultipartUploadRequest(
         bucket,
-        key,
-        newObjectMetadata()
+        key
     ).withCannedACL(cannedAcl);
 
     if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
