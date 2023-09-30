@@ -15,21 +15,16 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.auth.AWSCredentialsProvider;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.HEADERS_FORMAT_CLASS_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.SCHEMA_PARTITION_AFFIX_TYPE_CONFIG;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
-import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
-import io.confluent.connect.s3.format.parquet.ParquetFormat;
-
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.ConfigValue;
-import org.apache.kafka.connect.json.DecimalFormat;
-import org.apache.kafka.connect.sink.SinkRecord;
-import org.junit.After;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.junit.Before;
-import org.junit.Test;
-
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -37,9 +32,25 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.connect.json.DecimalFormat;
+import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+
+import com.amazonaws.ClientConfiguration;
+import com.amazonaws.auth.AWSCredentialsProvider;
+
+import io.confluent.connect.avro.AvroDataConfig;
+import io.confluent.connect.s3.S3SinkConnectorConfig.AffixType;
 import io.confluent.connect.s3.auth.AwsAssumeRoleCredentialsProvider;
 import io.confluent.connect.s3.format.avro.AvroFormat;
+import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
+import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.partitioner.DailyPartitioner;
@@ -49,20 +60,6 @@ import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
-import io.confluent.connect.avro.AvroDataConfig;
-
-import static io.confluent.connect.s3.S3SinkConnectorConfig.AffixType;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.DECIMAL_FORMAT_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.DECIMAL_FORMAT_DEFAULT;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.HEADERS_FORMAT_CLASS_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.SCHEMA_PARTITION_AFFIX_TYPE_CONFIG;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
 
 public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
 
@@ -337,6 +334,22 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     properties.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
     connectorConfig = new S3SinkConnectorConfig(properties);
     assertEquals(true, connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG));
+    assertEquals(new ArrayList<String>(), connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_KEY));
+    assertEquals(new ArrayList<String>(), connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_VALUE));
+
+    properties.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_KEY, "key1,key2");
+    properties.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_VALUE, "value1,value2");
+    List<String> expectedConfigKey = new ArrayList<String>() {{
+      add("key1");
+      add("key2");
+    }};
+    List<String> expectedConfigValue = new ArrayList<String>() {{
+      add("value1");
+      add("value2");
+    }};
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(expectedConfigKey, connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_KEY));
+    assertEquals(expectedConfigValue, connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_VALUE));
 
     properties.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "false");
     connectorConfig = new S3SinkConnectorConfig(properties);

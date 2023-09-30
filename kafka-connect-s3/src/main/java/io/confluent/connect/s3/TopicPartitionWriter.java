@@ -15,13 +15,17 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.SdkClientException;
-import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.s3.util.FileRotationTracker;
-import io.confluent.connect.s3.util.RetryUtil;
-import io.confluent.connect.s3.util.TombstoneTimestampExtractor;
-import io.confluent.connect.storage.errors.PartitionException;
-import io.confluent.connect.storage.schema.SchemaCompatibilityResult;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
+
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Queue;
+
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -36,29 +40,27 @@ import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Queue;
+import com.amazonaws.SdkClientException;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
+import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.s3.util.FileRotationTracker;
+import io.confluent.connect.s3.util.RetryUtil;
+import io.confluent.connect.s3.util.TombstoneTimestampExtractor;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
+import io.confluent.connect.storage.errors.PartitionException;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.connect.storage.partitioner.TimestampExtractor;
+import io.confluent.connect.storage.schema.SchemaCompatibilityResult;
 import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
 import io.confluent.connect.storage.util.DateTimeUtils;
-
-import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
 
 public class TopicPartitionWriter {
 
@@ -76,6 +78,9 @@ public class TopicPartitionWriter {
   private final Queue<SinkRecord> buffer;
   private final SinkTaskContext context;
   private final boolean isTaggingEnabled;
+  private final List<String> extraTagKey;
+  private final List<String> extraTagValue;
+  private HashMap<String, String> hashMapTag;
   private final boolean ignoreTaggingErrors;
   private int recordCount;
   private final int flushSize;
@@ -144,6 +149,20 @@ public class TopicPartitionWriter {
     }
 
     isTaggingEnabled = connectorConfig.getBoolean(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG);
+    extraTagKey = connectorConfig.getList(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_KEY);
+    extraTagValue = connectorConfig.getList(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_VALUE);
+    hashMapTag = new HashMap<>();
+    if (extraTagKey.size() != extraTagValue.size()) {
+      log.warn("s3.object.tagging.key and s3.object.tagging.value are different in length. This"
+      + "is ignored."
+      );
+    } else if (extraTagKey.size() != 0 || extraTagValue.size() != 0 ){
+        for (int i = 0; i < extraTagKey.size(); i++) {
+            String key = extraTagKey.get(i);
+            String value = extraTagValue.get(i);
+            hashMapTag.put(key, value);
+          }
+    }
     ignoreTaggingErrors = connectorConfig.getString(
             S3SinkConnectorConfig.S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG)
             .equalsIgnoreCase(S3SinkConnectorConfig.IgnoreOrFailBehavior.IGNORE.toString());
@@ -637,7 +656,7 @@ public class TopicPartitionWriter {
       String encodedPartition = entry.getKey();
       commitFile(encodedPartition);
       if (isTaggingEnabled) {
-        RetryUtil.exponentialBackoffRetry(() -> tagFile(encodedPartition, entry.getValue()),
+        RetryUtil.exponentialBackoffRetry(() -> tagFile(encodedPartition, entry.getValue(), hashMapTag),
                 ConnectException.class,
                 connectorConfig.getInt(S3_PART_RETRIES_CONFIG),
                 connectorConfig.getLong(S3_RETRY_BACKOFF_CONFIG)
@@ -672,7 +691,7 @@ public class TopicPartitionWriter {
     }
   }
 
-  private void tagFile(String encodedPartition, String s3ObjectPath) {
+  private void tagFile(String encodedPartition, String s3ObjectPath, Map<String,String> extraHashMapTag) {
     Long startOffset = startOffsets.get(encodedPartition);
     Long endOffset = endOffsets.get(encodedPartition);
     Long recordCount = recordCounts.get(encodedPartition);
@@ -695,7 +714,9 @@ public class TopicPartitionWriter {
     tags.put("startOffset", Long.toString(startOffset));
     tags.put("endOffset", Long.toString(endOffset));
     tags.put("recordCount", Long.toString(recordCount));
-
+    if (extraHashMapTag != null) {
+      tags.putAll(extraHashMapTag);
+    };
     try {
       storage.addTags(s3ObjectPath, tags);
       log.info("Tagged S3 object {} with starting offset {}, ending offset {}, record count {}",
