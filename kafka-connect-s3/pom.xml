@@ -84,11 +84,11 @@
             <version>${httpclient.version}</version>
         </dependency>
         <!--Pin snappy-java version to fix CVE-2023-34455 -->
-        <dependency>
-            <groupId>org.xerial.snappy</groupId>
-            <artifactId>snappy-java</artifactId>
-            <version>${snappy.java.version}</version>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.xerial.snappy</groupId>-->
+<!--            <artifactId>snappy-java</artifactId>-->
+<!--            <version>${snappy.java.version}</version>-->
+<!--        </dependency>-->
         <dependency>
             <groupId>io.findify</groupId>
             <artifactId>s3mock_2.12</artifactId>
@@ -141,6 +141,12 @@
             <version>${kafka.version}</version>
             <classifier>test</classifier>
             <type>test-jar</type>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.xerial.snappy</groupId>
+                    <artifactId>snappy-java</artifactId>
+                </exclusion>
+            </exclusions>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -165,7 +171,7 @@
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
             <version>${guava.version}</version>
-            <scope>test</scope>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>com.github.tomakehurst</groupId>
