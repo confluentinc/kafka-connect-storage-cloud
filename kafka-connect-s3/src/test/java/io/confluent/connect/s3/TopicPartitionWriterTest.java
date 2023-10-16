@@ -1157,8 +1157,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void testAddingAdditionalS3ObjectTags() throws Exception{
     // Setting size-based rollup to 10 but will produce fewer records. Commit should not happen.
     localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
-    localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_KEY, "key1,key2");
-    localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_VALUE, "value1,value2");
+    localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_EXTRA_KV, "key1:value1,key2:value2");
     setUp();
 
     // Define the partitioner

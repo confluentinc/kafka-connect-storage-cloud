@@ -338,22 +338,15 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     properties.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
     connectorConfig = new S3SinkConnectorConfig(properties);
     assertEquals(true, connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG));
-    assertEquals(new ArrayList<String>(), connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_KEY));
-    assertEquals(new ArrayList<String>(), connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_VALUE));
+    assertEquals(new ArrayList<String>(), connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_EXTRA_KV));
 
-    properties.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_KEY, "key1,key2");
-    properties.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_VALUE, "value1,value2");
-    List<String> expectedConfigKey = new ArrayList<String>() {{
-      add("key1");
-      add("key2");
-    }};
-    List<String> expectedConfigValue = new ArrayList<String>() {{
-      add("value1");
-      add("value2");
+    properties.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_EXTRA_KV, "key1:value1,key2:value2");
+    List<String> expectedConfigKeyValuePair = new ArrayList<String>() {{
+      add("key1:value1");
+      add("key2:value2");
     }};
     connectorConfig = new S3SinkConnectorConfig(properties);
-    assertEquals(expectedConfigKey, connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_KEY));
-    assertEquals(expectedConfigValue, connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_VALUE));
+    assertEquals(expectedConfigKeyValuePair, connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_EXTRA_KV));
 
     properties.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "false");
     connectorConfig = new S3SinkConnectorConfig(properties);

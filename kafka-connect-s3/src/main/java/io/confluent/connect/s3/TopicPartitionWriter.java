@@ -77,8 +77,7 @@ public class TopicPartitionWriter {
   private final Queue<SinkRecord> buffer;
   private final SinkTaskContext context;
   private final boolean isTaggingEnabled;
-  private final List<String> extraTagKey;
-  private final List<String> extraTagValue;
+  private final List<String> extraTagKeyValuePair;
   private HashMap<String, String> hashMapTag;
   private final boolean ignoreTaggingErrors;
   private int recordCount;
@@ -148,10 +147,7 @@ public class TopicPartitionWriter {
     }
 
     isTaggingEnabled = connectorConfig.getBoolean(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG);
-    extraTagKey = connectorConfig.getList(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_KEY);
-    extraTagValue = connectorConfig.getList(
-      S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG_EXTRA_VALUE
-    );
+    extraTagKeyValuePair = connectorConfig.getList(S3SinkConnectorConfig.S3_OBJECT_TAGGING_EXTRA_KV);
     getS3Tag();
     ignoreTaggingErrors = connectorConfig.getString(
             S3SinkConnectorConfig.S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG)
@@ -201,14 +197,10 @@ public class TopicPartitionWriter {
 
   private void getS3Tag() {
     hashMapTag = new HashMap<>();
-    if (extraTagKey.size() != extraTagValue.size()) {
-      log.warn("s3.object.tagging.key and s3.object.tagging.value are different in length. This"
-          + "is ignored.");
-    } else if (extraTagKey.size() != 0 || extraTagValue.size() != 0) {
-      for (int i = 0; i < extraTagKey.size(); i++) {
-        String key = extraTagKey.get(i);
-        String value = extraTagValue.get(i);
-        hashMapTag.put(key, value);
+    if (extraTagKeyValuePair.size() != 0) {
+      for (int i = 0; i < extraTagKeyValuePair.size(); i++) {
+        String[] singleKv = extraTagKeyValuePair.get(i).split(":");
+        hashMapTag.put(singleKv[0], singleKv[1]);
       }
     }
   }

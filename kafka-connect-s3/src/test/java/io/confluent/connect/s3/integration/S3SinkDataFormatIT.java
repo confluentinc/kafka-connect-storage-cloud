@@ -146,7 +146,7 @@ public class S3SinkDataFormatIT extends BaseConnectorIT {
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
     final String topicNameWithExt = "other." + AVRO_EXTENSION + ".topic." + AVRO_EXTENSION;
 
-    // Add an extra topic with this extension inside of the name
+    // Add an extra topic with this extension inside the name
     // Use a TreeSet for test determinism
     Set<String> topicNames = new TreeSet<>(Collections.singletonList(topicName));
 

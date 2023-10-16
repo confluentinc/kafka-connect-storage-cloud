@@ -84,10 +84,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String S3_OBJECT_TAGGING_CONFIG = "s3.object.tagging";
   public static final boolean S3_OBJECT_TAGGING_DEFAULT = false;
-  public static final String S3_OBJECT_TAGGING_CONFIG_EXTRA_KEY = "s3.object.tagging.key";
-  public static final String S3_OBJECT_TAGGING_EXTRA_KEY_DEFAULT = "";
-  public static final String S3_OBJECT_TAGGING_CONFIG_EXTRA_VALUE = "s3.object.tagging.value";
-  public static final String S3_OBJECT_TAGGING_EXTRA_VALUE_DEFAULT = "";
+  public static final String S3_OBJECT_TAGGING_EXTRA_KV = "s3.object.tagging.key.value.pairs";
+  public static final String S3_OBJECT_TAGGING_EXTRA_KV_DEFAULT = "";
 
   public static final String S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG =
           "s3.object.behavior.on.tagging.error";
@@ -323,27 +321,15 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       );
 
       configDef.define(
-          S3_OBJECT_TAGGING_CONFIG_EXTRA_KEY,
-          Type.LIST,
-          S3_OBJECT_TAGGING_EXTRA_KEY_DEFAULT,
-          Importance.LOW,
-          "Additional S3 tag keys",
-          group,
-          ++orderInGroup,
-          Width.LONG,
-          "S3 Object Tagging Extra Key"
-      );
-
-      configDef.define(
-          S3_OBJECT_TAGGING_CONFIG_EXTRA_VALUE,
-          Type.LIST,
-          S3_OBJECT_TAGGING_EXTRA_VALUE_DEFAULT,
-          Importance.LOW,
-          "Additional S3 tag values",
-          group,
-          ++orderInGroup,
-          Width.LONG,
-          "S3 Object Tagging Extra Value"
+              S3_OBJECT_TAGGING_EXTRA_KV,
+              Type.LIST,
+              S3_OBJECT_TAGGING_EXTRA_KV_DEFAULT,
+              Importance.LOW,
+              "Additional S3 tag key value pairs",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "S3 Object Tagging Extra Key Value pairs"
       );
 
       configDef.define(
