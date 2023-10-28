@@ -226,7 +226,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     );
     properties.put(
         configPrefix.concat(DummyAssertiveCredentialsProvider.CONFIGS_NUM_KEY_NAME),
-        "5"
+        "6"
     );
     connectorConfig = new S3SinkConnectorConfig(properties);
 
@@ -255,6 +255,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
         configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_EXTERNAL_ID_CONFIG),
         "my-external-id"
     );
+    properties.put(S3SinkConnectorConfig.REGION_CONFIG, "us-west-2");
     connectorConfig = new S3SinkConnectorConfig(properties);
 
     AwsAssumeRoleCredentialsProvider credentialsProvider =

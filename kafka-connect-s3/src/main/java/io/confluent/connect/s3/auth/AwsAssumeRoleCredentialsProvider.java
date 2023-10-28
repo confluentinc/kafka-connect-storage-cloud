@@ -31,6 +31,7 @@ import java.util.Map;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
 
 /**
  * AWS credentials provider that uses the AWS Security Token Service to assume a Role and create a
@@ -79,26 +80,25 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
     roleSessionName = config.getString(ROLE_SESSION_NAME_CONFIG);
     final String accessKeyId = (String) configs.get(AWS_ACCESS_KEY_ID_CONFIG);
     final String secretKey = (String) configs.get(AWS_SECRET_ACCESS_KEY_CONFIG);
+    final String region = (String) configs.get(REGION_CONFIG);
+
+    // default sts client will internally use default credentials chain provider
+    AWSSecurityTokenServiceClientBuilder stsClientBuilder = AWSSecurityTokenServiceClientBuilder
+        .standard()
+        .withRegion(region);
+
+    // Use explicit access key and secret if set
     if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
       basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
-      stsCredentialProvider = new STSAssumeRoleSessionCredentialsProvider
-          .Builder(roleArn, roleSessionName)
-          .withStsClient(AWSSecurityTokenServiceClientBuilder
-              .standard()
-              .withCredentials(new AWSStaticCredentialsProvider(basicCredentials)).build()
-          )
-          .withExternalId(roleExternalId)
-          .build();
-    } else {
-      basicCredentials = null;
-      stsCredentialProvider = new STSAssumeRoleSessionCredentialsProvider
-          .Builder(roleArn, roleSessionName)
-          // default sts client will internally use default credentials chain provider
-          // https://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/credentials.html#credentials-default
-          .withStsClient(AWSSecurityTokenServiceClientBuilder.defaultClient())
-          .withExternalId(roleExternalId)
-          .build();
+      stsClientBuilder = stsClientBuilder
+          .withCredentials(new AWSStaticCredentialsProvider(basicCredentials));
     }
+
+    stsCredentialProvider = new STSAssumeRoleSessionCredentialsProvider
+        .Builder(roleArn, roleSessionName)
+        .withStsClient(stsClientBuilder.build())
+        .withExternalId(roleExternalId)
+        .build();
   }
 
   @Override

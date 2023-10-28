@@ -896,6 +896,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
         configs.put(AWS_ACCESS_KEY_ID_CONFIG, awsAccessKeyId());
         configs.put(AWS_SECRET_ACCESS_KEY_CONFIG, awsSecretKeyId().value());
+        configs.put(REGION_CONFIG, getString(REGION_CONFIG));
 
         ((Configurable) provider).configure(configs);
       } else {
