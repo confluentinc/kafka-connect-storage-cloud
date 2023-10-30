@@ -24,6 +24,8 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
+import io.confluent.connect.s3.file.FileEventProvider;
+import io.confluent.connect.s3.file.KafkaFileEventProvider;
 import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -201,6 +203,19 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String TOMBSTONE_ENCODED_PARTITION = "tombstone.encoded.partition";
   public static final String TOMBSTONE_ENCODED_PARTITION_DEFAULT = "tombstone";
+
+  /**
+   * File event configs
+   */
+  public static final String FILE_EVENT_ENABLE = "s3.file.event.enable";
+  public static final boolean FILE_EVENT_ENABLE_DEFAULT = false;
+  public static final String FILE_EVENT_SKIP_ERROR = "s3.file.event.skip.error";
+  public static final boolean FILE_EVENT_SKIP_ERROR_DEFAULT = false;
+  public static final String FILE_EVENT_CLASS = "s3.file.event.class";
+  public static final Class<? extends FileEventProvider> FILE_EVENT_CLASS_DEFAULT =
+          KafkaFileEventProvider.class;
+  public static final String FILE_EVENT_CONFIG_JSON = "s3.file.event.config.json";
+  public static final String FILE_EVENT_CONFIG_JSON_DEFAULT = "{}";
 
   /**
    * Append schema name in s3-path
@@ -796,7 +811,67 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.LONG,
           "Elastic buffer initial capacity"
       );
+    }
 
+    {
+      final String group = "File event";
+      int orderInGroup = 0;
+
+      configDef.define(
+              FILE_EVENT_ENABLE,
+              Type.BOOLEAN,
+              FILE_EVENT_ENABLE_DEFAULT,
+              Importance.LOW,
+              "Enables the file event to be specified and configured",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "Enable s3 file event"
+      );
+
+      configDef.define(
+              FILE_EVENT_SKIP_ERROR,
+              Type.BOOLEAN,
+              FILE_EVENT_SKIP_ERROR_DEFAULT,
+              Importance.LOW,
+              "In case of file event error, then raise or fail silently. Default raise an error.",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "Fail when s3 file event error"
+      );
+
+      configDef.define(
+              FILE_EVENT_CLASS,
+              Type.CLASS,
+              FILE_EVENT_CLASS_DEFAULT,
+              new FileEventProviderValidator(),
+              Importance.LOW,
+              "File event to push notification for each file written on s3. By default "
+                      + "the connector uses ``"
+                      + FILE_EVENT_CLASS_DEFAULT.getSimpleName()
+                      + "``.",
+
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "File event class"
+      );
+
+      configDef.define(
+              FILE_EVENT_CONFIG_JSON,
+              Type.STRING,
+              FILE_EVENT_CONFIG_JSON_DEFAULT,
+              Importance.LOW,
+              "File event configuration as json format. "
+                      + "Mandatory Fields: bootstrap_servers, topic_name, schema_registry_url. "
+                      + "Custom fields can be added in the \"custom\" field as a map of attribute"
+                      + "By default an empty json.",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "File event config json"
+      );
     }
     return configDef;
   }
@@ -977,6 +1052,22 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public int getElasticBufferInitCap() {
     return getInt(ELASTIC_BUFFER_INIT_CAPACITY);
+  }
+
+  public boolean getFileEventEnable() {
+    return getBoolean(FILE_EVENT_ENABLE);
+  }
+
+  public boolean getFileEventSkipError() {
+    return getBoolean(FILE_EVENT_SKIP_ERROR);
+  }
+
+  public Class getFileEventClass() {
+    return getClass(FILE_EVENT_CLASS);
+  }
+
+  public String getFileEventConfigJson() {
+    return getString(FILE_EVENT_CONFIG_JSON);
   }
 
   public boolean isTombstoneWriteEnabled() {
@@ -1215,9 +1306,30 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       );
     }
 
+
     @Override
     public String toString() {
       return "Any class implementing: " + AWSCredentialsProvider.class;
+    }
+  }
+
+  private static class FileEventProviderValidator implements ConfigDef.Validator {
+    @Override
+    public void ensureValid(String name, Object provider) {
+      if (provider != null && provider instanceof Class
+              && FileEventProvider.class.isAssignableFrom((Class<?>) provider)) {
+        return;
+      }
+      throw new ConfigException(
+              name,
+              provider,
+              "Class must extend: " + FileEventProvider.class
+      );
+    }
+
+    @Override
+    public String toString() {
+      return "Any class implementing: " + FileEventProvider.class;
     }
   }
 

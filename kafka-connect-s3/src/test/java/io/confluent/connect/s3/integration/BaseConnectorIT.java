@@ -21,6 +21,7 @@ import static io.confluent.kafka.schemaregistry.ClusterTestHarness.KAFKASTORE_TO
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.GetObjectRequest;
@@ -129,9 +130,13 @@ public abstract class BaseConnectorIT {
   protected EmbeddedConnectCluster connect;
   protected Map<String, String> props;
 
+  protected static MinioContainer minioContainer;
+
   @BeforeClass
   public static void setupClient() {
     log.info("Starting ITs...");
+    minioContainer = new MinioContainer();
+    minioContainer.start();
     S3Client = getS3Client();
     if (S3Client.doesBucketExistV2(TEST_BUCKET_NAME)) {
       clearBucket(TEST_BUCKET_NAME);
@@ -141,9 +146,12 @@ public abstract class BaseConnectorIT {
   }
 
   @AfterClass
-  public static void deleteBucket() {
+  public static void cleanEnv() {
     S3Client.deleteBucket(TEST_BUCKET_NAME);
     log.info("Finished ITs, removed S3 bucket");
+    // Stopping manually to avoid potential race condition with other IT classes
+    minioContainer.stop();
+    log.info("Stopping Minio container");
   }
 
   @Before
@@ -377,19 +385,20 @@ public abstract class BaseConnectorIT {
    * @return an authenticated S3 client
    */
   protected static AmazonS3 getS3Client() {
-    Map<String, String> creds = getAWSCredentialFromPath();
-    // If AWS credentials found on AWS_CREDENTIALS_PATH, use them (Jenkins)
-    if (creds.size() == 2) {
-      BasicAWSCredentials awsCreds = new BasicAWSCredentials(
-          creds.get(AWS_ACCESS_KEY_ID_CONFIG),
-          creds.get(AWS_SECRET_ACCESS_KEY_CONFIG));
-      return AmazonS3ClientBuilder.standard()
-          .withCredentials(new AWSStaticCredentialsProvider(awsCreds))
-          .build();
-    }
-    // DefaultAWSCredentialsProviderChain,
-    // For local testing,  ~/.aws/credentials needs to be defined or other environment variables
-    return AmazonS3ClientBuilder.standard().withRegion(AWS_REGION).build();
+    return AmazonS3ClientBuilder
+      .standard()
+      .withCredentials(
+              new AWSStaticCredentialsProvider(
+                      new BasicAWSCredentials(MinioContainer.MINIO_USERNAME, MinioContainer.MINIO_PASSWORD))
+      )
+      .withEndpointConfiguration(
+              new AwsClientBuilder.EndpointConfiguration(
+                      minioContainer.getUrl(),
+                      AWS_REGION
+              )
+      )
+      .withPathStyleAccessEnabled(true)
+      .build();
   }
 
   /**
@@ -578,6 +587,7 @@ public abstract class BaseConnectorIT {
    * @param filePath the path of the downloaded parquet file
    * @return the rows of the file as JsonNodes
    */
+  @SuppressWarnings({"deprecation"})
   private static List<JsonNode> getContentsFromParquet(String filePath) {
     try (ParquetReader<SimpleRecord> reader = ParquetReader
         .builder(new SimpleReadSupport(), new Path(filePath)).build()){

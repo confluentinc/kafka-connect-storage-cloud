@@ -15,14 +15,7 @@
 
 package io.confluent.connect.s3.integration;
 
-import static io.confluent.connect.s3.S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.TOMBSTONE_ENCODED_PARTITION;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.*;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
@@ -109,6 +102,9 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
     props.put(STORAGE_CLASS_CONFIG, S3Storage.class.getName());
     props.put(S3_BUCKET_CONFIG, TEST_BUCKET_NAME);
+    props.put(S3_PROXY_URL_CONFIG, minioContainer.getUrl());
+    props.put(AWS_ACCESS_KEY_ID_CONFIG, MinioContainer.MINIO_USERNAME);
+    props.put(AWS_SECRET_ACCESS_KEY_CONFIG, MinioContainer.MINIO_PASSWORD);
     // create topics in Kafka
     KAFKA_TOPICS.forEach(topic -> connect.kafka().createTopic(topic, 1));
   }
