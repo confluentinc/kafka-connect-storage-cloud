@@ -32,6 +32,7 @@ import org.junit.runners.Parameterized;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -134,8 +135,10 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
 
     @BeforeClass
     public static void startConnect() {
+        Map<String, String> workerProps = new HashMap<>();
+        workerProps.put("plugin.discovery","hybrid_warn");
         connect = new EmbeddedConnectCluster.Builder()
-                .name("s3-connect-cluster")
+                .name("s3-connect-cluster").workerProps(workerProps)
                 .build();
         connect.start();
         kafkaAdmin = connect.kafka().createAdminClient();
