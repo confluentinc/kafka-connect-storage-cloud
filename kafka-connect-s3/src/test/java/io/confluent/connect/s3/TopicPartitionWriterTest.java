@@ -1154,6 +1154,44 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
+  public void testAddingAdditionalS3ObjectTags() throws Exception{
+    // Setting size-based rollup to 10 but will produce fewer records. Commit should not happen.
+    localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
+    localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_EXTRA_KV, "key1:value1,key2:value2");
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 3);
+
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    // Check expected s3 object tags
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
+    Map<String, List<Tag>> expectedTaggedFiles = new HashMap<>();
+    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT),
+            Arrays.asList(new Tag("startOffset", "0"), new Tag("endOffset", "2"), new Tag("recordCount", "3"), new Tag("key1", "value1"), new Tag("key2", "value2")));
+    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT),
+            Arrays.asList(new Tag("startOffset", "3"), new Tag("endOffset", "5"), new Tag("recordCount", "3"), new Tag("key1", "value1"), new Tag("key2", "value2")));
+    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT),
+            Arrays.asList(new Tag("startOffset", "6"), new Tag("endOffset", "8"), new Tag("recordCount", "3")));
+    verifyTags(expectedTaggedFiles);
+  }
+  @Test
   public void testIgnoreS3ObjectTaggingSdkClientException() throws Exception {
     // Tagging error occurred (SdkClientException) but getting ignored.
     testS3ObjectTaggingErrorHelper(true, true);
