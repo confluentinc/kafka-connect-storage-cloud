@@ -153,6 +153,9 @@ public class S3SinkTask extends SinkTask {
     for (TopicPartition tp : partitions) {
       topicPartitionWriters.put(tp, newTopicPartitionWriter(tp));
     }
+    log.info("Assigned topic partitions: {}",
+        topicPartitionWriters.keySet()
+    );
   }
 
   @SuppressWarnings("unchecked")
