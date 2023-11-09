@@ -14,4 +14,5 @@ common {
   downStreamValidate = false
   disableConcurrentBuilds = true
   sonarqubeScannerEnable = true
+  sonarqubeQualityCheck = true
 }
