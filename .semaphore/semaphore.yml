@@ -26,7 +26,7 @@ global_job_config:
       - checkout
       - . vault-setup
       - . vault-sem-get-secret connect_s3sink_it
-      - sem-version java unknown
+      - sem-version java 8
       - . cache-maven restore
 
 blocks:
@@ -39,7 +39,9 @@ blocks:
       jobs:
         - name: Test
           commands:
-            - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode --no-transfer-progress clean verify install dependency:analyze validate
+            - pip install confluent-release-tools -q
+            - . sem-pint
+            - mvn -Dcloud -Pjenkins -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode --no-transfer-progress clean verify install dependency:analyze validate
             - . cve-scan
             - . cache-maven store
       epilogue:
@@ -56,9 +58,7 @@ blocks:
       jobs:
         - name: Release
           commands:
-            - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
-            - git fetch --unshallow || true
-            - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode -DaltDeploymentRepository=confluent-codeartifact-internal::default::https://confluent-519856050701.d.codeartifact.us-west-2.amazonaws.com/maven/maven-snapshots/
+            - mvn -Dcloud -Pjenkins -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode -DaltDeploymentRepository=confluent-codeartifact-internal::default::https://confluent-519856050701.d.codeartifact.us-west-2.amazonaws.com/maven/maven-snapshots/
               -DrepositoryId=confluent-codeartifact-internal deploy -DskipTests
 
 
