@@ -148,6 +148,7 @@ public class BlockingKafkaPostCommitHook implements PostCommitHook {
     props.setProperty(ProducerConfig.CLIENT_ID_CONFIG, id);
     props.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, id);
     props.setProperty(ProducerConfig.LINGER_MS_CONFIG, "10");
+    props.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip");
 
     KafkaProducer<String, String> kafkaProducer = new KafkaProducer<>(props);
     try {
