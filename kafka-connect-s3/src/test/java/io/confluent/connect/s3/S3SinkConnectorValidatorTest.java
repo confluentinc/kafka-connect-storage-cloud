@@ -1,38 +1,66 @@
 package io.confluent.connect.s3;
 
+import com.amazonaws.services.s3.AmazonS3;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
+import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.storage.StorageFactory;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.format.SchemaFileReader;
+import io.findify.s3mock.S3Mock;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigValue;
+import org.easymock.Capture;
+import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.powermock.api.easymock.PowerMock;
+import org.powermock.api.mockito.PowerMockito;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.COMPRESSION_TYPE_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.HEADERS_FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorValidator.BUCKET_NOT_EXISTS_ERROR_MESSAGE;
 import static io.confluent.connect.s3.S3SinkConnectorValidator.FORMAT_CONFIG_ERROR_MESSAGE;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 import static org.junit.Assert.assertEquals;
 
+@RunWith(PowerMockRunner.class)
+@PrepareForTest({StorageFactory.class})
+@PowerMockIgnore({"io.findify.s3mock.*", "akka.*", "javax.*", "org.xml.*", "com.sun.org.apache.xerces.*"})
 public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
   protected Map<String, String> localProps = new HashMap<>();
   private S3SinkConnectorValidator s3SinkConnectorValidator;
+
+  private S3Storage storage;
+  private S3Mock s3mock;
+
+  @Rule
+  public TemporaryFolder s3mockRoot = new TemporaryFolder();
 
   private class CustomFormatClass implements Format<S3SinkConnectorConfig, String> {
 
@@ -59,6 +87,34 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
     super.setUp();
     s3SinkConnectorValidator = new S3SinkConnectorValidator(
         S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
+
+    setupMockS3();
+    AmazonS3 s3 = PowerMockito.spy(newS3Client(connectorConfig));
+    s3.createBucket(S3_TEST_BUCKET_NAME);
+
+    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+    setupStorageFactory();
+    PowerMock.replayAll();
+  }
+
+  private void setupMockS3() throws IOException {
+    File s3mockDir = s3mockRoot.newFolder("s3-tests-" + UUID.randomUUID().toString());
+    int port = 8181;
+    s3mock = S3Mock.create(port, s3mockDir.getCanonicalPath());
+    s3mock.start();
+  }
+
+  private void setupStorageFactory() {
+    Capture<Class<S3Storage>> capturedStorage = EasyMock.newCapture();
+    Capture<Class<S3SinkConnectorConfig>> capturedStorageConf = EasyMock.newCapture();
+    Capture<S3SinkConnectorConfig> capturedConf = EasyMock.newCapture();
+    Capture<String> capturedUrl = EasyMock.newCapture();
+
+    PowerMock.mockStatic(StorageFactory.class);
+    EasyMock.expect(StorageFactory.createStorage(EasyMock.capture(capturedStorage),
+        EasyMock.capture(capturedStorageConf),
+        EasyMock.capture(capturedConf),
+        EasyMock.capture(capturedUrl))).andReturn(storage).anyTimes();
   }
 
   @After
@@ -66,6 +122,9 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
   public void tearDown() throws Exception {
     super.tearDown();
     localProps.clear();
+    if (s3mock != null) {
+      s3mock.shutdown();
+    }
   }
 
   @Override
@@ -243,6 +302,15 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
       }
 
     }
+  }
+
+  @Test
+  public void testValidateWithInvalidBucket() {
+    s3SinkConnectorValidator = new S3SinkConnectorValidator(
+        S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
+    newS3Client(new S3SinkConnectorConfig(createProps())).deleteBucket(S3_TEST_BUCKET_NAME);
+    Config config = s3SinkConnectorValidator.validate();
+    assertContainError(BUCKET_NOT_EXISTS_ERROR_MESSAGE, S3_BUCKET_CONFIG, config.configValues());
   }
 
   private void assertContainError(String message, String field, List<ConfigValue> configValues) {

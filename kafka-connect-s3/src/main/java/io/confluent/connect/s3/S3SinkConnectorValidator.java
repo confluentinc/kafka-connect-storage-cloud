@@ -66,7 +66,7 @@ public class S3SinkConnectorValidator {
   public static final String FORMAT_CONFIG_ERROR_MESSAGE = "Compression Type %s "
       + "not valid for %s format class: ( %s ).";
 
-  private static final String BUCKET_NOT_EXISTS_ERROR_MESSAGE = "Failed to validate bucket exists. "
+  static final String BUCKET_NOT_EXISTS_ERROR_MESSAGE = "Failed to validate bucket exists. "
       + "Check whether the bucket exists and credentials required by "
       + "`s3.credentials.provider.class` is set with required access";
 
