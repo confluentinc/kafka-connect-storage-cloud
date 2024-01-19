@@ -18,6 +18,9 @@ package io.confluent.connect.s3;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.CompressionType;
+import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.storage.StorageFactory;
+import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.Format;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
@@ -40,6 +43,7 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VAL
 import static io.confluent.connect.s3.S3SinkConnectorConfig.COMPRESSION_TYPE_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.HEADERS_FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
@@ -61,6 +65,10 @@ public class S3SinkConnectorValidator {
 
   public static final String FORMAT_CONFIG_ERROR_MESSAGE = "Compression Type %s "
       + "not valid for %s format class: ( %s ).";
+
+  static final String BUCKET_NOT_EXISTS_ERROR_MESSAGE = "Failed to validate bucket exists. "
+      + "Check whether the bucket exists and credentials required by "
+      + "`s3.credentials.provider.class` is set with required access";
 
   private final Map<String, String> connectorConfigs;
   private final ConfigDef config;
@@ -86,6 +94,7 @@ public class S3SinkConnectorValidator {
       log.error("Configuration not ready for cross validation.", exception);
     }
     if (s3SinkConnectorConfig != null) {
+      validateBucketExists(s3SinkConnectorConfig);
       validateCompression(
           s3SinkConnectorConfig.getCompressionType(), s3SinkConnectorConfig.formatClass(),
           s3SinkConnectorConfig.storeKafkaKeys(), s3SinkConnectorConfig.keysFormatClass(),
@@ -96,6 +105,28 @@ public class S3SinkConnectorValidator {
     }
 
     return new Config(new ArrayList<>(this.valuesByKey.values()));
+  }
+
+  public void validateBucketExists(S3SinkConnectorConfig connectorConfig) {
+    Class<? extends S3Storage> storageClass =
+        (Class<? extends S3Storage>)
+            connectorConfig.getClass(StorageCommonConfig.STORAGE_CLASS_CONFIG);
+    String url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
+    S3Storage storage = StorageFactory.createStorage(
+        storageClass,
+        S3SinkConnectorConfig.class,
+        connectorConfig,
+        url
+    );
+    try {
+      if (!storage.bucketExists()) {
+        log.error("Failed to validate bucket exists");
+        recordError(BUCKET_NOT_EXISTS_ERROR_MESSAGE, S3_BUCKET_CONFIG);
+      }
+    } catch (Exception e) {
+      log.error("Failed to validate bucket exists", e);
+      recordError(BUCKET_NOT_EXISTS_ERROR_MESSAGE, S3_BUCKET_CONFIG);
+    }
   }
 
   public void validateCompression(CompressionType compressionType, Class formatClass,
