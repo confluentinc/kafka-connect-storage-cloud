@@ -13,4 +13,7 @@ common {
   secret_file_list = getVaultSecretsList()
   downStreamValidate = false
   disableConcurrentBuilds = true
+  mvnSkipDeploy = true
+  sonarqubeScannerEnable = true
+  sonarqubeQualityCheck = true
 }
