@@ -72,7 +72,6 @@ import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.s3.util.TimeUtils;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.Format;
@@ -94,12 +93,15 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.SCHEMA_PARTITION_AFFIX_TYPE_CONFIG;
+import static io.confluent.connect.s3.util.FileUtils.fileKeyToCommit;
 import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.storage.common.StorageCommonConfig.DIRECTORY_DELIM_CONFIG;
 import static io.confluent.connect.storage.partitioner.PartitionerConfig.PARTITION_FIELD_NAME_CONFIG;
+import static org.apache.kafka.common.record.TimestampType.CREATE_TIME;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
+import static org.apache.kafka.connect.data.Schema.STRING_SCHEMA;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.*;
@@ -229,9 +231,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
     List<String> expectedFiles = new ArrayList<>();
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, "%02d"));
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, "%02d"));
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, "%02d"));
+    expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, "%02d"));
+    expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, "%02d"));
+    expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, "%02d"));
     verify(expectedFiles, 3, schema, records);
   }
 
@@ -262,9 +264,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
     List<String> expectedFiles = new ArrayList<>();
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, "%02d"));
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, "%02d"));
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, "%02d"));
+    expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, "%02d"));
+    expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, "%02d"));
+    expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, "%02d"));
     verify(expectedFiles, 3, schema, records);
   }
 
@@ -313,9 +315,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     List<String> expectedFiles = new ArrayList<>();
     for(int i = 0; i < 18; i += 9) {
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix2, TOPIC_PARTITION, i + 1, extension, ZERO_PAD_FMT));
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix3, TOPIC_PARTITION, i + 2, extension, ZERO_PAD_FMT));
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefix2, TOPIC_PARTITION, i + 1, extension, ZERO_PAD_FMT));
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefix3, TOPIC_PARTITION, i + 2, extension, ZERO_PAD_FMT));
     }
 
     verify(expectedFiles, 3, schema, expectedRecords);
@@ -365,13 +367,13 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC, encodedPartitionFirst);
     List<String> expectedFiles = new ArrayList<>();
     for (int i : new int[]{0, 3, 6}) {
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
                                                   ZERO_PAD_FMT));
     }
 
     String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
     for (int i : new int[]{9, 12, 15}) {
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
                                                   ZERO_PAD_FMT));
     }
     verify(expectedFiles, 3, schema, records);
@@ -436,13 +438,13 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC, encodedPartitionFirst);
     List<String> expectedFiles = new ArrayList<>();
     for (int i : new int[]{0}) {
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
                                                   ZERO_PAD_FMT));
     }
 
     String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
     for (int i : new int[]{9}) {
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
                                                   ZERO_PAD_FMT));
     }
     verify(expectedFiles, 9, schema, records);
@@ -493,14 +495,14 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC, encodedPartitionFirst);
     List<String> expectedFiles = new ArrayList<>();
     for (int i : new int[]{0, 3, 6}) {
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
                                                   ZERO_PAD_FMT));
     }
 
     String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
     // Records 15,16,17 won't be flushed until a record with a higher timestamp arrives.
     for (int i : new int[]{9, 12}) {
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
                                                   ZERO_PAD_FMT));
     }
     verify(expectedFiles, 3, schema, records);
@@ -550,14 +552,14 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC, encodedPartitionFirst);
     List<String> expectedFiles = new ArrayList<>();
     for (int i : new int[]{0, 3, 6}) {
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
                                                   ZERO_PAD_FMT));
     }
 
     String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
     // Records 15,16,17 won't be flushed until a record with a higher timestamp arrives.
     for (int i : new int[]{9, 12}) {
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
                                                   ZERO_PAD_FMT));
     }
     verify(expectedFiles, 3, schema, records);
@@ -592,6 +594,122 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     }
 
     topicPartitionWriter.write();
+  }
+
+  @Test
+  public void testWriteRecordTimeBasedPartitionRecordTimestampHoursOutOfOrder() throws Exception {
+    // Do not roll on size, only based on time.
+    localProps.put(FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.MINUTES.toMillis(10))
+    );
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new HourlyPartitioner<>();
+    parsedConfig.put(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG, TimeUnit.MINUTES.toMillis(10));
+    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null
+    );
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 1, 5);
+
+    DateTime hour = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
+
+    Collection<SinkRecord> sinkRecords = new ArrayList<>();
+    sinkRecords.add(sinkRecord(key, schema, records.get(0), 0, hour.getMillis()));
+    sinkRecords.add(sinkRecord(key, schema, records.get(1), 1, hour.minusMinutes(2).getMillis()));
+    sinkRecords.add(sinkRecord(key, schema, records.get(2), 2, hour.plusMinutes(9).getMillis()));
+    sinkRecords.add(sinkRecord(key, schema, records.get(3), 3, hour.minusMinutes(5).getMillis()));
+
+    sinkRecords.add(sinkRecord(key, schema, records.get(4), 4, hour.plusMinutes(10).getMillis()));
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String dirPrefixFirst = partitioner.generatePartitionedPath(
+        TOPIC,
+        getTimebasedEncodedPartition(hour.minusMinutes(1).getMillis())
+    );
+    String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, getTimebasedEncodedPartition(hour.getMillis()));
+    List<String> expectedFiles = Arrays.asList(
+        fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT),
+        fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, 1, extension, ZERO_PAD_FMT)
+    );
+
+    verify(expectedFiles, 2, schema, records);
+  }
+
+  @Test
+  public void testWriteRecordTimeBasedPartitionRecordTimestampHoursDailyRotationInterval() throws Exception {
+    // Do not roll on size, only based on time.
+    localProps.put(FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.DAYS.toMillis(1))
+    );
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new HourlyPartitioner<>();
+    parsedConfig.put(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
+    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null
+    );
+
+    String key = "key";
+    Schema schema = createSchema();
+
+    List<Struct> records = createRecordBatches(schema, 1, 5);
+
+    DateTime firstDay = new DateTime(2017, 3, 1, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
+    DateTime nextDay = new DateTime(2017, 3, 2, 5, 0, DateTimeZone.forID("America/Los_Angeles"));
+
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    sinkRecords.add(sinkRecord(key, schema, records.get(0), 0, firstDay.getMillis()));
+    sinkRecords.add(sinkRecord(key, schema, records.get(1), 1, firstDay.minusHours(2).getMillis()));
+    sinkRecords.add(sinkRecord(key, schema, records.get(2), 2, nextDay.plusHours(2).getMillis()));
+    sinkRecords.add(sinkRecord(key, schema, records.get(3), 3, nextDay.getMillis()));
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+    verify(Collections.emptyList(), 0, schema, records);
+
+    topicPartitionWriter.buffer(
+        sinkRecord(key, schema, records.get(4), 4, nextDay.plusHours(5).getMillis())
+    );
+
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    List<String> expectedFiles = new ArrayList<>();
+
+    for (SinkRecord record : sinkRecords) {
+      String prefix = partitioner.generatePartitionedPath(TOPIC, getTimebasedEncodedPartition(record.timestamp()));
+      expectedFiles.add(fileKeyToCommit(topicsDir, prefix, TOPIC_PARTITION, record.kafkaOffset(), extension, ZERO_PAD_FMT));
+    }
+
+    verify(expectedFiles, 1, schema, records);
+  }
+
+  private SinkRecord sinkRecord(String key, Schema schema, Object value, long offset, long time) {
+    return new SinkRecord(TOPIC, PARTITION, STRING_SCHEMA, key, schema, value, offset, time, CREATE_TIME);
   }
 
   @Test
@@ -630,8 +748,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     List<String> expectedFiles = new ArrayList<>();
     String dirPrefix = partitioner.generatePartitionedPath(TOPIC, getTimebasedEncodedPartition(freezeTime));
-    expectedFiles.add(FileUtils.fileKeyToCommit(
-        topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
     verify(expectedFiles, 6, schema, records);
   }
   @DataPoints("affixType")
@@ -713,7 +830,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<String> expectedFiles = new ArrayList<>();
     for (int i : new int[]{0}) {
       expectedFiles
-          .add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
+          .add(fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
               ZERO_PAD_FMT));
     }
     verify(expectedFiles, 3, schema, records);
@@ -803,14 +920,14 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<String> expectedFiles = new ArrayList<>();
     for (int i : new int[]{0}) {
       expectedFiles
-          .add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
+          .add(fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
               ZERO_PAD_FMT));
     }
 
     String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
     for (int i : new int[]{3}) {
       expectedFiles
-          .add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
+          .add(fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
               ZERO_PAD_FMT));
     }
     verify(expectedFiles, 3, schema, records);
@@ -883,14 +1000,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC, encodedPartitionFirst);
     List<String> expectedFiles = new ArrayList<>();
     for (int i : new int[]{0}) {
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
-                                                  ZERO_PAD_FMT));
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
     }
 
     String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
     for (int i : new int[]{3}) {
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
-                                                  ZERO_PAD_FMT));
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
     }
     verify(expectedFiles, 3, schema, records);
   }
@@ -999,14 +1114,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC, encodedPartitionFirst);
     List<String> expectedFiles = new ArrayList<>();
     for (int i : new int[]{0, 3, 6}) {
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
-                                                  ZERO_PAD_FMT));
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
     }
 
     String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, encodedPartitionLater);
     for (int i : new int[]{9, 12, 15}) {
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
-                                                  ZERO_PAD_FMT));
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
     }
     verify(expectedFiles, 3, schema, records);
   }
@@ -1109,9 +1222,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
     List<String> expectedFiles = new ArrayList<>();
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
+    expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
+    expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
     verify(expectedFiles, 3, schema, records);
   }
 
@@ -1144,11 +1257,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Check expected s3 object tags
     String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
     Map<String, List<Tag>> expectedTaggedFiles = new HashMap<>();
-    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT),
+    expectedTaggedFiles.put(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT),
             Arrays.asList(new Tag("startOffset", "0"), new Tag("endOffset", "2"), new Tag("recordCount", "3")));
-    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT),
+    expectedTaggedFiles.put(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT),
             Arrays.asList(new Tag("startOffset", "3"), new Tag("endOffset", "5"), new Tag("recordCount", "3")));
-    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT),
+    expectedTaggedFiles.put(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT),
             Arrays.asList(new Tag("startOffset", "6"), new Tag("endOffset", "8"), new Tag("recordCount", "3")));
     verifyTags(expectedTaggedFiles);
   }
@@ -1183,11 +1296,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Check expected s3 object tags
     String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
     Map<String, List<Tag>> expectedTaggedFiles = new HashMap<>();
-    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT),
+    expectedTaggedFiles.put(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT),
             Arrays.asList(new Tag("startOffset", "0"), new Tag("endOffset", "2"), new Tag("recordCount", "3"), new Tag("key1", "value1"), new Tag("key2", "value2")));
-    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT),
+    expectedTaggedFiles.put(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT),
             Arrays.asList(new Tag("startOffset", "3"), new Tag("endOffset", "5"), new Tag("recordCount", "3"), new Tag("key1", "value1"), new Tag("key2", "value2")));
-    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT),
+    expectedTaggedFiles.put(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT),
             Arrays.asList(new Tag("startOffset", "6"), new Tag("endOffset", "8"), new Tag("recordCount", "3")));
     verifyTags(expectedTaggedFiles);
   }
@@ -1223,8 +1336,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void testExceptionOnNullKeysReported() throws Exception {
     String recordValue = "1";
     int kafkaOffset = 2;
-    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, null,
-        Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
+    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, STRING_SCHEMA, null,
+        STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
 
     String exceptionMessage = String.format("Key cannot be null for SinkRecord: %s", sinkRecordToLoggableString(faultyRecord));
     testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, false, false);
@@ -1237,8 +1350,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void testExceptionOnEmptyHeadersReported() throws Exception{
     String recordValue = "1";
     int kafkaOffset = 2;
-    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
-        Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, Collections.emptyList());
+    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, STRING_SCHEMA, "key",
+        STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, Collections.emptyList());
 
     String exceptionMessage = String.format("Headers cannot be null for SinkRecord: %s", sinkRecordToLoggableString(faultyRecord));
     testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, false, false);
@@ -1251,8 +1364,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void testExceptionOnNullHeadersReported() throws Exception {
     String recordValue = "1";
     int kafkaOffset = 1;
-    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
-        Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, null);
+    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, STRING_SCHEMA, "key",
+        STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, null);
 
     String exceptionMessage = String.format("Headers cannot be null for SinkRecord: %s", sinkRecordToLoggableString(faultyRecord));
     testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, false, false);
@@ -1265,7 +1378,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void testSchemaProjectionExceptionReported() throws Exception {
     String recordValue = "1";
     int kafkaOffset = 1;
-    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
+    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, STRING_SCHEMA, "key",
         null, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
 
     String exceptionMessage = "Switch between schema-based and schema-less data is not supported";
@@ -1287,12 +1400,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, mockContext, mockReporter);
 
-    Schema schema = SchemaBuilder.struct().field(field, Schema.STRING_SCHEMA);
+    Schema schema = SchemaBuilder.struct().field(field, STRING_SCHEMA);
     Struct struct = new Struct(schema).put(field, "a");
 
-    topicPartitionWriter.buffer(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key", schema, struct, 0));
+    topicPartitionWriter.buffer(new SinkRecord(TOPIC, PARTITION, STRING_SCHEMA, "key", schema, struct, 0));
     // non-struct record should throw exception and get reported
-    topicPartitionWriter.buffer(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key", schema, "not a struct", 1));
+    topicPartitionWriter.buffer(new SinkRecord(TOPIC, PARTITION, STRING_SCHEMA, "key", schema, "not a struct", 1));
 
     // Test actual write
     topicPartitionWriter.write();
@@ -1307,7 +1420,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @Test
   public void testDataExceptionReportedIncorrectSchema() throws Exception {
     int kafkaOffset = 1;
-    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
+    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, STRING_SCHEMA, "key",
         createSchema(), "1", kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
 
     String exceptionMessage = "Invalid type for STRUCT: class java.lang.String";
@@ -1320,7 +1433,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   // test DLQ for lower level exception coming from AvroData
   @Test
   public void testDataExceptionReportedNullValueForNonOptionalSchema() throws Exception {
-    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
+    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, STRING_SCHEMA, "key",
         createSchema(), null, 1, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
 
     String exceptionMessage = "Found null value for non-optional schema";
@@ -1354,21 +1467,21 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
 
     List<String> expectedValueFiles = new ArrayList<>();
-    expectedValueFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
-    expectedValueFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
-    expectedValueFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
+    expectedValueFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    expectedValueFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
+    expectedValueFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
     verifyRecordElement(expectedValueFiles, 3, sinkRecords, RecordElement.VALUES);
 
     List<String> expectedHeaderFiles = new ArrayList<>();
-    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, ".headers.avro", ZERO_PAD_FMT));
-    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, ".headers.avro", ZERO_PAD_FMT));
-    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, ".headers.avro", ZERO_PAD_FMT));
+    expectedHeaderFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, ".headers.avro", ZERO_PAD_FMT));
+    expectedHeaderFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, ".headers.avro", ZERO_PAD_FMT));
+    expectedHeaderFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, ".headers.avro", ZERO_PAD_FMT));
     verifyRecordElement(expectedHeaderFiles, 3, sinkRecords, RecordElement.HEADERS);
 
     List<String> expectedKeyFiles = new ArrayList<>();
-    expectedKeyFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, ".keys.avro", ZERO_PAD_FMT));
-    expectedKeyFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, ".keys.avro", ZERO_PAD_FMT));
-    expectedKeyFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, ".keys.avro", ZERO_PAD_FMT));
+    expectedKeyFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, ".keys.avro", ZERO_PAD_FMT));
+    expectedKeyFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, ".keys.avro", ZERO_PAD_FMT));
+    expectedKeyFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, ".keys.avro", ZERO_PAD_FMT));
     verifyRecordElement(expectedKeyFiles, 3, sinkRecords, RecordElement.KEYS);
   }
 
@@ -1397,17 +1510,17 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
 
     List<String> expectedValueFiles = new ArrayList<>();
-    expectedValueFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
-    expectedValueFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
-    expectedValueFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
+    expectedValueFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    expectedValueFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
+    expectedValueFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
     verifyRecordElement(expectedValueFiles, 3, sinkRecords, RecordElement.VALUES);
 
     List<String> expectedHeaderFiles = new ArrayList<>();
-    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0,
+    expectedHeaderFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0,
         HEADER_JSON_EXT, ZERO_PAD_FMT));
-    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3,
+    expectedHeaderFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3,
         HEADER_JSON_EXT, ZERO_PAD_FMT));
-    expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6,
+    expectedHeaderFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6,
         HEADER_JSON_EXT, ZERO_PAD_FMT));
     verifyRecordElement(expectedHeaderFiles, 3, sinkRecords, RecordElement.HEADERS);
   }
@@ -1473,21 +1586,21 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
 
       List<String> expectedFiles = new ArrayList<>();
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
-      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
+      expectedFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
       verifyRecordElement(expectedFiles, 3, sinkRecords, RecordElement.VALUES);
 
       List<String> expectedHeaderFiles = new ArrayList<>();
-      expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, ".headers.avro", ZERO_PAD_FMT));
-      expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, ".headers.avro", ZERO_PAD_FMT));
-      expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, ".headers.avro", ZERO_PAD_FMT));
+      expectedHeaderFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, ".headers.avro", ZERO_PAD_FMT));
+      expectedHeaderFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, ".headers.avro", ZERO_PAD_FMT));
+      expectedHeaderFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, ".headers.avro", ZERO_PAD_FMT));
       verifyRecordElement(expectedHeaderFiles, 3, sinkRecords, RecordElement.HEADERS);
 
       List<String> expectedKeyFiles = new ArrayList<>();
-      expectedKeyFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, ".keys.avro", ZERO_PAD_FMT));
-      expectedKeyFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, ".keys.avro", ZERO_PAD_FMT));
-      expectedKeyFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, ".keys.avro", ZERO_PAD_FMT));
+      expectedKeyFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, ".keys.avro", ZERO_PAD_FMT));
+      expectedKeyFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, ".keys.avro", ZERO_PAD_FMT));
+      expectedKeyFiles.add(fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, ".keys.avro", ZERO_PAD_FMT));
       verifyRecordElement(expectedKeyFiles, 3, sinkRecords, RecordElement.KEYS);
     }
   }
@@ -1612,17 +1725,17 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     int offset = 0;
     for (int i = 0; i < records1.size(); i++) {
       actualData.add(
-          new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1, records1.get(i),
+          new SinkRecord(TOPIC, PARTITION, STRING_SCHEMA, key, schema1, records1.get(i),
               offset++
           )
       );
       actualData.add(
-          new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2, records2.get(i),
+          new SinkRecord(TOPIC, PARTITION, STRING_SCHEMA, key, schema2, records2.get(i),
               offset++
           )
       );
       actualData.add(
-          new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema3, records3.get(i),
+          new SinkRecord(TOPIC, PARTITION, STRING_SCHEMA, key, schema3, records3.get(i),
               offset++
           )
       );
@@ -1637,7 +1750,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       for (int j = 0; j < 3; ++j) {
         expectedRecords.add(
             new SinkRecord(
-                TOPIC, PARTITION, Schema.STRING_SCHEMA,
+                TOPIC, PARTITION, STRING_SCHEMA,
                 key, schema1, createRecord(schema1, ibase + j, fbase + j),
                 offset++
             )
@@ -1648,7 +1761,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       for (int j = 0; j < 3; ++j) {
         expectedRecords.add(
             new SinkRecord(
-                TOPIC, PARTITION, Schema.STRING_SCHEMA,
+                TOPIC, PARTITION, STRING_SCHEMA,
                 key, schema2, createRecord(schema2, ibase + j, fbase + j),
                 offset++
             )
@@ -1659,7 +1772,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       for (int j = 0; j < 3; ++j) {
         expectedRecords.add(
             new SinkRecord(
-                TOPIC, PARTITION, Schema.STRING_SCHEMA,
+                TOPIC, PARTITION, STRING_SCHEMA,
                 key, schema3, createRecord(schema3, ibase + j, fbase + j),
                 offset++
             )
@@ -1678,13 +1791,13 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     );
     List<String> expectedFiles = new ArrayList<>();
     for (int i = 0; i < 54; i += 9) {
-      expectedFiles.add(FileUtils.fileKeyToCommit(
+      expectedFiles.add(fileKeyToCommit(
           topicsDir, dirPrefix1, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT
       ));
-      expectedFiles.add(FileUtils.fileKeyToCommit(
+      expectedFiles.add(fileKeyToCommit(
           topicsDir, dirPrefix2, TOPIC_PARTITION, i + 1, extension, ZERO_PAD_FMT
       ));
-      expectedFiles.add(FileUtils.fileKeyToCommit(
+      expectedFiles.add(fileKeyToCommit(
           topicsDir, dirPrefix3, TOPIC_PARTITION, i + 2, extension, ZERO_PAD_FMT
       ));
     }
@@ -1702,7 +1815,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     for (String record : records) {
       actualData.add(
           new SinkRecord(
-              TOPIC, PARTITION, Schema.STRING_SCHEMA, key, null, record, offset++
+              TOPIC, PARTITION, STRING_SCHEMA, key, null, record, offset++
           )
       );
     }
@@ -1713,7 +1826,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     );
     List<String> expectedFiles = new ArrayList<>();
     for (int i = 0; i < 18; i += 9) {
-      expectedFiles.add(FileUtils.fileKeyToCommit(
+      expectedFiles.add(fileKeyToCommit(
           topicsDir, dirPrefix, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT
       ));
     }
@@ -1806,7 +1919,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   private List<SinkRecord> createSinkRecords(List<Struct> records, String key, Schema schema, int startOffset) {
     ArrayList<SinkRecord> sinkRecords = new ArrayList<>();
     for (int i = 0; i < records.size(); ++i) {
-      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(i),
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, STRING_SCHEMA, key, schema, records.get(i),
                                      i + startOffset));
     }
     return sinkRecords;
@@ -1816,7 +1929,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   private List<SinkRecord> createSinkRecordsWithHeaders(List<Struct> records, String key, Schema schema, int startOffset) {
     ArrayList<SinkRecord> sinkRecords = new ArrayList<>();
     for (int i = 0; i < records.size(); ++i) {
-      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(i),
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, STRING_SCHEMA, key, schema, records.get(i),
           i + startOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders()));
     }
     return sinkRecords;
@@ -1834,8 +1947,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
                                                           int startOffset, long startTime, long timeStep) {
     ArrayList<SinkRecord> sinkRecords = new ArrayList<>();
     for (int i = 0, offset = startOffset; i < records.size(); ++i, ++offset) {
-      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(i), offset,
-                                     startTime + offset * timeStep, TimestampType.CREATE_TIME));
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, STRING_SCHEMA, key, schema, records.get(i), offset,
+                                     startTime + offset * timeStep, CREATE_TIME));
     }
     return sinkRecords;
   }
