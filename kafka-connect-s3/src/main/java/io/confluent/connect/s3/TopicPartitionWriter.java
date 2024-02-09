@@ -683,7 +683,7 @@ public class TopicPartitionWriter {
     fileCallback.ifPresent(fs -> fs.call(tp.topic(), encodedPartition,
             commitFiles.get(encodedPartition), tp.partition(),
             new DateTime(baseRecordTimestamp).withZone(timeZone),
-            new DateTime(currentTimestamp).withZone(timeZone), recordCount,
+            new DateTime(currentTimestamp).withZone(timeZone), (recordCounts.get(encodedPartition)).intValue(),
             new DateTime(time.milliseconds()).withZone(timeZone)));
   }
 
