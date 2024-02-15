@@ -13,7 +13,7 @@ import static com.github.tomakehurst.wiremock.stubbing.Scenario.STARTED;
 
 public class TestWithMockedFaultyS3 extends TestWithMockedS3 {
     // move S3 mock to another port
-    protected final static int MOCKED_S3_PORT = 8182;
+    protected final static int MOCKED_S3_PORT = 8101;
     protected final static String MOCKED_S3_URL = "http://localhost:" + MOCKED_S3_PORT;
 
     // replace original S3 mock port by a WireMock proxy
