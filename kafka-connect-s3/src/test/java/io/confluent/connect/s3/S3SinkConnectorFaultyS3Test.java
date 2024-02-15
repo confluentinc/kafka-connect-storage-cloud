@@ -25,7 +25,6 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -255,7 +254,6 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     }
 
     @Test
-    @Ignore
     public void testErrorIsRetriedByConnectFramework() throws Exception {
         // inject failure
         failure.inject();
