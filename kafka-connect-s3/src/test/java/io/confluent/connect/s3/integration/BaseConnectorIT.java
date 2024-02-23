@@ -189,7 +189,7 @@ public abstract class BaseConnectorIT {
    * <p>
    * Format: topics/s3_topic/partition=97/s3_topic+97+0000000001.avro
    *
-   * @param topic      the test kafileContentsMatchExpectedfka topic
+   * @param topic      the test kafka topic
    * @param partition  the expected partition for the tests
    * @param flushSize  the flush size connector config
    * @param numRecords the number of records produced in the test
@@ -210,6 +210,44 @@ public abstract class BaseConnectorIT {
           "topics/%s/partition=%d/%s+%d+%010d.%s",
           topic,
           partition,
+          topic,
+          partition,
+          offset,
+          extension
+      );
+      expectedFiles.add(filepath);
+    }
+    return expectedFiles;
+  }
+
+  /**
+   * Get a list of the expected filenames containing keys for the tombstone records for the bucket.
+   * <p>
+   * Format: topics/s3_topic/tombstone/s3_topic+97+0000000001.keys.avro
+   *
+   * @param topic      the test kafka topic
+   * @param partition  the expected partition for the tests
+   * @param flushSize  the flush size connector config
+   * @param numRecords the number of records produced in the test
+   * @param extension  the expected extensions of the files including compression (snappy.parquet)
+   * @param tombstonePartition  the expected directory for tombstone records
+   * @return the list of expected filenames
+   */
+  protected List<String> getExpectedTombstoneFilenames(
+      String topic,
+      int partition,
+      int flushSize,
+      long numRecords,
+      String extension,
+      String tombstonePartition
+  ) {
+    int expectedFileCount = (int) numRecords / flushSize;
+    List<String> expectedFiles = new ArrayList<>();
+    for (int offset = 0; offset < expectedFileCount * flushSize; offset += flushSize) {
+      String filepath = String.format(
+          "topics/%s/%s/%s+%d+%010d.keys.%s",
+          topic,
+          tombstonePartition,
           topic,
           partition,
           offset,
@@ -397,6 +435,46 @@ public abstract class BaseConnectorIT {
     return true;
   }
 
+  protected boolean keyfileContentsAsExpected(
+      String bucketName,
+      int expectedRowsPerFile,
+      String expectedKey
+  ) {
+    log.info("expectedKey: {}", expectedKey);
+    for (String fileName :
+        getS3KeyFileList(S3Client.listObjectsV2(bucketName).getObjectSummaries())) {
+      String destinationPath = TEST_DOWNLOAD_PATH + fileName;
+      File downloadedFile = new File(destinationPath);
+      log.info("Saving file to : {}", destinationPath);
+      S3Client.getObject(new GetObjectRequest(bucketName, fileName), downloadedFile);
+      List<String> keyContent = new ArrayList<>();
+      try (FileReader fileReader = new FileReader(destinationPath);
+          BufferedReader bufferedReader = new BufferedReader(fileReader)) {
+        String line;
+        while ((line = bufferedReader.readLine()) != null) {
+          keyContent.add(line);
+        }
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+      if (keyContent.size() != expectedRowsPerFile) {
+        log.error("Actual number of records in the key file {}, Expected number of records {}",
+            keyContent.size(), expectedRowsPerFile);
+        return false;
+      }
+      for (String actualKey: keyContent) {
+        if (!expectedKey.equals(actualKey)) {
+          log.error("Key {} did not match the contents in the key file {}", expectedKey, actualKey);
+          return false;
+        } else {
+          log.info("Key {} matched the contents in the key file {}", expectedKey, actualKey);
+        }
+      }
+      downloadedFile.delete();
+    }
+    return true;
+  }
+
   /**
    * Check if the contents of a downloaded file match the expected row.
    *
@@ -421,6 +499,14 @@ public abstract class BaseConnectorIT {
       }
     }
     return true;
+  }
+
+  private List<String> getS3KeyFileList(List<S3ObjectSummary> summaries) {
+    final String includeExtensions = ".keys.";
+    return summaries.stream()
+        .filter(summary -> summary.getKey().contains(includeExtensions))
+        .map(S3ObjectSummary::getKey)
+        .collect(Collectors.toList());
   }
 
   /**

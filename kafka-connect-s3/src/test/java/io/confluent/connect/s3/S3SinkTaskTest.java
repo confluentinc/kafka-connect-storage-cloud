@@ -118,7 +118,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     task.initialize(mockContext);
 
     properties.put(S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG,
-        S3SinkConnectorConfig.BehaviorOnNullValues.IGNORE.toString());
+        S3SinkConnectorConfig.IgnoreOrFailBehavior.IGNORE.toString());
     task.start(properties);
     verifyAll();
 

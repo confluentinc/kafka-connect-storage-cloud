@@ -17,16 +17,20 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
+import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
@@ -80,6 +84,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String S3_OBJECT_TAGGING_CONFIG = "s3.object.tagging";
   public static final boolean S3_OBJECT_TAGGING_DEFAULT = false;
+
+  public static final String S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG =
+          "s3.object.behavior.on.tagging.error";
+  public static final String S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_DEFAULT =
+          IgnoreOrFailBehavior.IGNORE.toString();
 
   public static final String SSEA_CONFIG = "s3.ssea.name";
   public static final String SSEA_DEFAULT = "";
@@ -153,7 +162,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       ClientConfiguration.DEFAULT_USE_EXPECT_CONTINUE;
 
   public static final String BEHAVIOR_ON_NULL_VALUES_CONFIG = "behavior.on.null.values";
-  public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = BehaviorOnNullValues.FAIL.toString();
+  public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = OutputWriteBehavior.FAIL.toString();
 
   /**
    * Maximum back-off time when retrying failed requests.
@@ -179,6 +188,33 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final Class<? extends Format> KEYS_FORMAT_CLASS_DEFAULT = AvroFormat.class;
   public static final String HEADERS_FORMAT_CLASS_CONFIG = "headers.format.class";
   public static final Class<? extends Format> HEADERS_FORMAT_CLASS_DEFAULT = AvroFormat.class;
+
+  /**
+   * Elastic buffer to save memory. {@link io.confluent.connect.s3.storage.S3OutputStream#buffer}
+   */
+
+  public static final String ELASTIC_BUFFER_ENABLE = "s3.elastic.buffer.enable";
+  public static final boolean ELASTIC_BUFFER_ENABLE_DEFAULT = false;
+
+  public static final String ELASTIC_BUFFER_INIT_CAPACITY = "s3.elastic.buffer.init.capacity";
+  public static final int ELASTIC_BUFFER_INIT_CAPACITY_DEFAULT = 128 * 1024;  // 128KB
+
+  public static final String TOMBSTONE_ENCODED_PARTITION = "tombstone.encoded.partition";
+  public static final String TOMBSTONE_ENCODED_PARTITION_DEFAULT = "tombstone";
+
+  /**
+   * Append schema name in s3-path
+   */
+
+  public static final String SCHEMA_PARTITION_AFFIX_TYPE_CONFIG =
+      "s3.schema.partition.affix.type";
+  public static final String SCHEMA_PARTITION_AFFIX_TYPE_DEFAULT = AffixType.NONE.name();
+  public static final String SCHEMA_PARTITION_AFFIX_TYPE_DOC = "Append the record schema name "
+      + "to prefix or suffix in the s3 path after the topic name."
+      + " None will not append the schema name in the s3 path.";
+
+  private static final GenericRecommender SCHEMA_PARTITION_AFFIX_TYPE_RECOMMENDER =
+      new GenericRecommender();
 
   private final String name;
 
@@ -231,6 +267,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
             FieldPartitioner.class
         )
     );
+
+    SCHEMA_PARTITION_AFFIX_TYPE_RECOMMENDER.addValidValues(
+        Arrays.stream(AffixType.names()).collect(Collectors.toList()));
   }
 
   public static ConfigDef newConfigDef() {
@@ -277,6 +316,19 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "S3 Object Tagging"
+      );
+
+      configDef.define(
+              S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG,
+              Type.STRING,
+              S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_DEFAULT,
+              IgnoreOrFailBehavior.VALIDATOR,
+              Importance.LOW,
+              "How to handle S3 object tagging error. Valid options are 'ignore' and 'fail'.",
+              group,
+              ++orderInGroup,
+              Width.SHORT,
+              "Behavior for S3 object tagging error"
       );
 
       configDef.define(
@@ -603,14 +655,50 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           BEHAVIOR_ON_NULL_VALUES_CONFIG,
           Type.STRING,
           BEHAVIOR_ON_NULL_VALUES_DEFAULT,
-          BehaviorOnNullValues.VALIDATOR,
+          OutputWriteBehavior.VALIDATOR,
           Importance.LOW,
           "How to handle records with a null value (i.e. Kafka tombstone records)."
-              + " Valid options are 'ignore' and 'fail'.",
+              + " Valid options are 'ignore', 'fail' and 'write'."
+              + " Ignore would skip the tombstone record and fail would cause the connector task to"
+              + " throw an exception."
+              + " In case of the write tombstone option, the connector redirects tombstone records"
+              + " to a separate directory mentioned in the config tombstone.encoded.partition."
+              + " The storage of Kafka record keys is mandatory when this option is selected and"
+              + " the file for values is not generated for tombstone records.",
           group,
           ++orderInGroup,
           Width.SHORT,
           "Behavior for null-valued records"
+      );
+
+      // This is done to avoid aggressive schema based rotations resulting out of interleaving
+      // of tombstones with regular records.
+      configDef.define(
+          TOMBSTONE_ENCODED_PARTITION,
+          Type.STRING,
+          TOMBSTONE_ENCODED_PARTITION_DEFAULT,
+          Importance.LOW,
+          "Output s3 folder to write the tombstone records to. The configured"
+              + " partitioner would map tombstone records to this output folder.",
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Tombstone Encoded Partition"
+      );
+
+
+      configDef.define(
+          SCHEMA_PARTITION_AFFIX_TYPE_CONFIG,
+          Type.STRING,
+          SCHEMA_PARTITION_AFFIX_TYPE_DEFAULT,
+          ConfigDef.ValidString.in(AffixType.names()),
+          Importance.LOW,
+          SCHEMA_PARTITION_AFFIX_TYPE_DOC,
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Schema Partition Affix Type",
+          SCHEMA_PARTITION_AFFIX_TYPE_RECOMMENDER
       );
     }
 
@@ -623,7 +711,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Type.BOOLEAN,
           false,
           Importance.LOW,
-          "Enable or disable writing keys to storage.",
+          "Enable or disable writing keys to storage. "
+              + "This config is mandatory when the writing of tombstone records is enabled.",
           group,
           ++orderInGroup,
           Width.SHORT,
@@ -682,6 +771,32 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.SHORT,
           "Enable Path Style Access to S3"
       );
+      configDef.define(
+          ELASTIC_BUFFER_ENABLE,
+          Type.BOOLEAN,
+          ELASTIC_BUFFER_ENABLE_DEFAULT,
+          Importance.LOW,
+          "Specifies whether or not to allocate elastic buffer for staging s3-part to save memory."
+              + " Note that this may cause decreased performance or increased CPU usage",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Enable elastic buffer to staging s3-part"
+      );
+
+      configDef.define(
+          ELASTIC_BUFFER_INIT_CAPACITY,
+          Type.INT,
+          ELASTIC_BUFFER_INIT_CAPACITY_DEFAULT,
+          atLeast(4096),
+          Importance.LOW,
+          "Elastic buffer initial capacity.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Elastic buffer initial capacity"
+      );
+
     }
     return configDef;
   }
@@ -755,6 +870,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return CannedAclValidator.ACLS_BY_HEADER_VALUE.get(getString(ACL_CANNED_CONFIG));
   }
 
+  public String awsAccessKeyId() {
+    return getString(AWS_ACCESS_KEY_ID_CONFIG);
+  }
+
+  public Password awsSecretKeyId() {
+    return getPassword(AWS_SECRET_ACCESS_KEY_CONFIG);
+  }
+
   public int getPartSize() {
     return getInt(PART_SIZE_CONFIG);
   }
@@ -770,7 +893,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         configs.remove(CREDENTIALS_PROVIDER_CLASS_CONFIG.substring(
             CREDENTIALS_PROVIDER_CONFIG_PREFIX.length()
         ));
+
+        configs.put(AWS_ACCESS_KEY_ID_CONFIG, awsAccessKeyId());
+        configs.put(AWS_SECRET_ACCESS_KEY_CONFIG, awsSecretKeyId().value());
+
         ((Configurable) provider).configure(configs);
+      } else {
+        final String accessKeyId = awsAccessKeyId();
+        final String secretKey = awsSecretKeyId().value();
+        if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
+          BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
+          provider = new AWSStaticCredentialsProvider(basicCredentials);
+        }
       }
 
       return provider;
@@ -837,6 +971,22 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT;
   }
 
+  public boolean getElasticBufferEnable() {
+    return getBoolean(ELASTIC_BUFFER_ENABLE);
+  }
+
+  public int getElasticBufferInitCap() {
+    return getInt(ELASTIC_BUFFER_INIT_CAPACITY);
+  }
+
+  public boolean isTombstoneWriteEnabled() {
+    return OutputWriteBehavior.WRITE.toString().equalsIgnoreCase(nullValueBehavior());
+  }
+
+  public String getTombstoneEncodedPartition() {
+    return getString(TOMBSTONE_ENCODED_PARTITION);
+  }
+
   protected static String parseName(Map<String, String> props) {
     String nameProp = props.get("name");
     return nameProp != null ? nameProp : "S3-sink";
@@ -861,6 +1011,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       map.putAll(config.values());
     }
     return map;
+  }
+
+  public AffixType getSchemaPartitionAffixType() {
+    return AffixType.valueOf(getString(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG));
   }
 
   private static class PartRange implements ConfigDef.Validator {
@@ -1122,31 +1276,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getString(BEHAVIOR_ON_NULL_VALUES_CONFIG);
   }
 
-  public enum BehaviorOnNullValues {
+  public enum IgnoreOrFailBehavior {
     IGNORE,
     FAIL;
 
-    public static final ConfigDef.Validator VALIDATOR = new ConfigDef.Validator() {
-      private final ConfigDef.ValidString validator = ConfigDef.ValidString.in(names());
-
-      @Override
-      public void ensureValid(String name, Object value) {
-        if (value instanceof String) {
-          value = ((String) value).toLowerCase(Locale.ROOT);
-        }
-        validator.ensureValid(name, value);
-      }
-
-      // Overridden here so that ConfigDef.toEnrichedRst shows possible values correctly
-      @Override
-      public String toString() {
-        return validator.toString();
-      }
-
-    };
+    public static final ConfigDef.Validator VALIDATOR = new EnumValidator(names());
 
     public static String[] names() {
-      BehaviorOnNullValues[] behaviors = values();
+      IgnoreOrFailBehavior[] behaviors = values();
       String[] result = new String[behaviors.length];
 
       for (int i = 0; i < behaviors.length; i++) {
@@ -1159,6 +1296,63 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     @Override
     public String toString() {
       return name().toLowerCase(Locale.ROOT);
+    }
+  }
+
+  public enum OutputWriteBehavior {
+    IGNORE,
+    FAIL,
+    WRITE;
+
+    public static final ConfigDef.Validator VALIDATOR = new EnumValidator(names());
+
+    public static String[] names() {
+      OutputWriteBehavior[] behaviors = values();
+      String[] result = new String[behaviors.length];
+
+      for (int i = 0; i < behaviors.length; i++) {
+        result[i] = behaviors[i].toString();
+      }
+
+      return result;
+    }
+
+    @Override
+    public String toString() {
+      return name().toLowerCase(Locale.ROOT);
+    }
+  }
+
+  private static class EnumValidator implements Validator {
+
+    private final ConfigDef.ValidString validator;
+
+    private EnumValidator(String[] validValues) {
+      this.validator = ConfigDef.ValidString.in(validValues);
+    }
+
+    @Override
+    public void ensureValid(String name, Object value) {
+      if (value instanceof String) {
+        value = ((String) value).toLowerCase(Locale.ROOT);
+      }
+      validator.ensureValid(name, value);
+    }
+
+    // Overridden here so that ConfigDef.toEnrichedRst shows possible values correctly
+    @Override
+    public String toString() {
+      return validator.toString();
+    }
+  }
+
+  public enum AffixType {
+    SUFFIX,
+    PREFIX,
+    NONE;
+
+    public static String[] names() {
+      return Arrays.stream(values()).map(AffixType::name).toArray(String[]::new);
     }
   }
 

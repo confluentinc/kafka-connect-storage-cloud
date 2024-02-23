@@ -20,11 +20,20 @@ for guidance on this process.
 
 You can build *kafka-connect-storage-cloud* with Maven using the standard lifecycle phases.
 
+# Running Integration Tests
+Integration tests are run as part of `mvn install`; however one needs to first configure the environment variable`AWS_CREDENTIALS_PATH` to point to a json file path with following structure:
+```
+{
+    "aws_access_key_id": "<key>",
+    "aws_secret_access_key": "<secret>"
+}
+```
 
 # Contribute
 
 - Source Code: https://github.com/confluentinc/kafka-connect-storage-cloud
 - Issue Tracker: https://github.com/confluentinc/kafka-connect-storage-cloud/issues
+- Learn how to work with the connector's source code by reading our [Development and Contribution guidelines](CONTRIBUTING.md).
 
 
 # License

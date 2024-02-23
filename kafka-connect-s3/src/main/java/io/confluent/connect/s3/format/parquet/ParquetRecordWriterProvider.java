@@ -151,7 +151,7 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
         return schemaHasArrayOfOptionalItems(schema.valueSchema(), seenSchemas);
       case ARRAY:
         return schema.valueSchema().isOptional()
-          || schemaHasArrayOfOptionalItems(schema.valueSchema(), seenSchemas);
+            || schemaHasArrayOfOptionalItems(schema.valueSchema(), seenSchemas);
       default:
         return false;
     }
