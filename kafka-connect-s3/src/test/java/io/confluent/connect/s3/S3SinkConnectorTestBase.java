@@ -74,6 +74,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     props.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
     props.put(S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG, "false");
     props.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, PartitionerConfig.PARTITIONER_CLASS_DEFAULT.getName());
+    props.put(S3SinkConnectorConfig.S3_FILENAME_CREATOR_CLASS, S3SinkConnectorConfig.S3_FILENAME_CREATOR_CLASS_DEFAULT.getName());
     props.put(PartitionerConfig.PARTITION_FIELD_NAME_CONFIG, "int");
     props.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH");
     props.put(PartitionerConfig.LOCALE_CONFIG, "en");

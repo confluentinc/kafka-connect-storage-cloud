@@ -28,6 +28,8 @@ import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.CompressionType;
+import io.confluent.connect.s3.storage.FilenameCreator;
+import io.confluent.connect.s3.storage.TopicPartitionFilenameCreator;
 import io.confluent.connect.s3.util.SchemaPartitioner;
 import io.confluent.connect.storage.errors.PartitionException;
 import io.confluent.kafka.serializers.NonRecordContainer;
@@ -210,8 +212,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Define the partitioner
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null, filenameCreator);
 
     String key = "key";
     Schema schema = createSchema();
@@ -243,8 +248,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Define the partitioner
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null, filenameCreator);
 
     String key = "key";
     Schema schema = createSchema();
@@ -276,9 +284,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Define the partitioner
     Partitioner<?> partitioner = new FieldPartitioner<>();
     partitioner.configure(parsedConfig);
-
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null, filenameCreator);
 
     String key = "key";
     Schema schema = createSchema();
@@ -334,8 +344,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd_'hour'=HH_'min'=mm_'sec'=ss");
     partitioner.configure(parsedConfig);
 
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
+
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null, filenameCreator);
 
     String key = "key";
     Schema schema = createSchema();
@@ -392,8 +406,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     parsedConfig.put(
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockedWallclockTimestampExtractor.class.getName());
     partitioner.configure(parsedConfig);
+
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null, filenameCreator);
 
     String key = "key";
     Schema schema = createSchema();
@@ -464,8 +482,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
     partitioner.configure(parsedConfig);
 
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
+
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null, filenameCreator);
 
     String key = "key";
     Schema schema = createSchema();
@@ -521,8 +543,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     parsedConfig.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'year'=YYYY_'month'=MM_'day'=dd");
     partitioner.configure(parsedConfig);
 
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
+
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null, filenameCreator);
 
     String key = "key";
     Schema schema = createSchema();
@@ -578,8 +604,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     parsedConfig.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, TimeUnit.DAYS.toMillis(1));
     partitioner.configure(parsedConfig);
 
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
+
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null, filenameCreator);
 
     String key = "key";
     Schema schema = createSchema();
@@ -609,8 +639,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     Time systemTime = EasyMock.createMock(SystemTime.class);
 
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
+
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, systemTime, null);
+        TOPIC_PARTITION, storage, filenameCreator, writerProvider, partitioner, connectorConfig, context, systemTime, null);
 
     // Freeze clock passed into topicPartitionWriter, so we know what time it will use for "now"
     long freezeTime = 3599000L;
@@ -682,8 +716,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Bring the clock to present.
     time.sleep(SYSTEM.milliseconds());
 
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
+
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time,
+        TOPIC_PARTITION, storage, filenameCreator, writerProvider, partitioner, connectorConfig, context, time,
         null);
 
     // sleep for 11 minutes after startup
@@ -746,8 +784,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Bring the clock to present.
     time.sleep(SYSTEM.milliseconds());
 
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
+
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time,
+        TOPIC_PARTITION, storage, filenameCreator, writerProvider, partitioner, connectorConfig, context, time,
         null);
 
     // sleep for 11 minutes after startup
@@ -837,12 +879,16 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockedWallclockTimestampExtractor.class.getName());
     partitioner.configure(parsedConfig);
 
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
+
     MockTime time = ((MockedWallclockTimestampExtractor) partitioner.getTimestampExtractor()).time;
 
     // Bring the clock to present.
     time.sleep(SYSTEM.milliseconds());
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time, null);
+        TOPIC_PARTITION, storage, filenameCreator, writerProvider, partitioner, connectorConfig, context, time, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -915,12 +961,16 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockedWallclockTimestampExtractor.class.getName());
     partitioner.configure(parsedConfig);
 
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
+
     MockTime time = ((MockedWallclockTimestampExtractor) partitioner.getTimestampExtractor()).time;
 
     // Bring the clock to present.
     time.sleep(SYSTEM.milliseconds());
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, time, null);
+        TOPIC_PARTITION, storage, filenameCreator, writerProvider, partitioner, connectorConfig, context, time, null);
 
     String key = "key";
     Schema schema = createSchema();
@@ -955,8 +1005,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "RecordField");
     partitioner.configure(parsedConfig);
 
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
+
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null, filenameCreator);
 
     String key = "key";
     Schema schema = createSchemaWithTimestampField();
@@ -1027,8 +1081,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Define the partitioner
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
+
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null, filenameCreator);
 
     String key = "key";
     Schema schema = createSchema();
@@ -1061,8 +1119,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Define the partitioner
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
+
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null, filenameCreator);
 
     String key = "key";
     Schema schema = createSchema();
@@ -1090,8 +1152,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Define the partitioner
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
+
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null, filenameCreator);
 
     String key = "key";
     Schema schema = createSchema();
@@ -1124,8 +1190,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Define the partitioner
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
+
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null, filenameCreator);
 
     String key = "key";
     Schema schema = createSchema();
@@ -1163,8 +1233,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Define the partitioner
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null, filenameCreator);
 
     String key = "key";
     Schema schema = createSchema();
@@ -1282,10 +1355,14 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     parsedConfig.put(PARTITION_FIELD_NAME_CONFIG, Arrays.asList(field));
     partitioner.configure(parsedConfig);
 
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
+
     SinkTaskContext mockContext = mock(SinkTaskContext.class);
     ErrantRecordReporter mockReporter = mock(ErrantRecordReporter.class);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, mockContext, mockReporter);
+        TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, mockContext, mockReporter, filenameCreator);
 
     Schema schema = SchemaBuilder.struct().field(field, Schema.STRING_SCHEMA);
     Struct struct = new Struct(schema).put(field, "a");
@@ -1336,8 +1413,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Define the partitioner
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
+
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(), partitioner,  connectorConfig, context, null);
+        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(), partitioner,  connectorConfig, context, null, filenameCreator);
 
     Schema schema = createSchema();
     List<Struct> records = createRecordBatches(schema, 3, 3);
@@ -1379,8 +1460,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
 
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
+
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, getKeyHeaderValueProviderJsonHeaders(), partitioner,  connectorConfig, context, null);
+        TOPIC_PARTITION, storage, getKeyHeaderValueProviderJsonHeaders(), partitioner,  connectorConfig, context, null, filenameCreator);
 
     Schema schema = createSchema();
     List<Struct> records = createRecordBatches(schema, 3, 3);
@@ -1425,11 +1510,15 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
 
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
+
     SinkTaskContext mockContext = mock(SinkTaskContext.class);
     ErrantRecordReporter mockReporter = mock(ErrantRecordReporter.class);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(), partitioner,  connectorConfig, mockContext, mockReporter);
+        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(), partitioner,  connectorConfig, mockContext, mockReporter, filenameCreator);
 
     // create sample records to write
     Schema schema = createSchema();
@@ -1539,9 +1628,13 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Partitioner<?> partitioner = new SchemaPartitioner<>(basePartitioner);
     partitioner.configure(parsedConfig);
 
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
+
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null
-    );
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null,
+        filenameCreator);
 
     List<Object> testData;
     if (testWithSchemaData) {
@@ -2045,8 +2138,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Define the partitioner
     Partitioner<?> partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
+
+    // Define the file name creator
+    FilenameCreator filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null, filenameCreator);
 
     String key = "key";
     Schema schema = createSchema();

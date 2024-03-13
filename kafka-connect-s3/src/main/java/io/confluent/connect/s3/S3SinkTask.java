@@ -17,6 +17,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
 import io.confluent.connect.s3.S3SinkConnectorConfig.OutputWriteBehavior;
+import io.confluent.connect.s3.storage.FilenameCreator;
 import io.confluent.connect.s3.util.TombstoneSupportedPartitioner;
 import io.confluent.connect.s3.util.SchemaPartitioner;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -60,6 +61,7 @@ public class S3SinkTask extends SinkTask {
   private S3Storage storage;
   private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
   private Partitioner<?> partitioner;
+  private FilenameCreator filenameCreator;
   private Format<S3SinkConnectorConfig, String> format;
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private final Time time;
@@ -77,7 +79,7 @@ public class S3SinkTask extends SinkTask {
   // visible for testing.
   S3SinkTask(S3SinkConnectorConfig connectorConfig, SinkTaskContext context, S3Storage storage,
              Partitioner<?> partitioner, Format<S3SinkConnectorConfig, String> format,
-             Time time) throws Exception {
+             Time time, FilenameCreator filenameCreator) throws Exception {
     this.topicPartitionWriters = new HashMap<>();
     this.connectorConfig = connectorConfig;
     this.context = context;
@@ -85,6 +87,7 @@ public class S3SinkTask extends SinkTask {
     this.partitioner = partitioner;
     this.format = format;
     this.time = time;
+    this.filenameCreator = filenameCreator;
 
     url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
     writerProvider = this.format.getRecordWriterProvider();
@@ -118,6 +121,7 @@ public class S3SinkTask extends SinkTask {
       writerProvider = newRecordWriterProvider(connectorConfig);
       log.info("Created S3 sink record writer provider.");
       partitioner = newPartitioner(connectorConfig);
+      filenameCreator = newFilenameCreator(connectorConfig);
       log.info("Created S3 sink partitioner.");
 
       open(context.assignment());
@@ -202,15 +206,7 @@ public class S3SinkTask extends SinkTask {
 
     Partitioner<?> partitioner = partitionerClass.newInstance();
 
-    Map<String, Object> plainValues = new HashMap<>(config.plainValues());
-    Map<String, ?> originals = config.originals();
-    for (String originalKey : originals.keySet()) {
-      if (!plainValues.containsKey(originalKey)) {
-        // pass any additional configs down to the partitioner so that custom partitioners can
-        // have their own configs
-        plainValues.put(originalKey, originals.get(originalKey));
-      }
-    }
+    Map<String, Object> plainValues = getPlainValues(config);
     if (config.getSchemaPartitionAffixType() != S3SinkConnectorConfig.AffixType.NONE) {
       partitioner = new SchemaPartitioner<>(partitioner);
     }
@@ -220,6 +216,32 @@ public class S3SinkTask extends SinkTask {
     }
     partitioner.configure(plainValues);
     return partitioner;
+  }
+
+  private FilenameCreator newFilenameCreator(S3SinkConnectorConfig config)
+      throws InstantiationException, IllegalAccessException {
+    @SuppressWarnings("unchecked")
+    Class<? extends FilenameCreator> filenameCreatorClass =
+        (Class<? extends FilenameCreator>) config
+            .getClass(S3SinkConnectorConfig.S3_FILENAME_CREATOR_CLASS);
+
+    FilenameCreator filenameCreator = filenameCreatorClass.newInstance();
+    Map<String, Object> plainValues = getPlainValues(config);
+    filenameCreator.configure(plainValues);
+    return filenameCreator;
+  }
+
+  private Map<String, Object> getPlainValues(S3SinkConnectorConfig config) {
+    Map<String, Object> plainValues = new HashMap<>(config.plainValues());
+    Map<String, ?> originals = config.originals();
+    for (String originalKey : originals.keySet()) {
+      if (!plainValues.containsKey(originalKey)) {
+        // pass any additional configs down to the partitioner so that custom partitioners can
+        // have their own configs
+        plainValues.put(originalKey, originals.get(originalKey));
+      }
+    }
+    return plainValues;
   }
 
   @Override
@@ -347,7 +369,7 @@ public class S3SinkTask extends SinkTask {
     return new TopicPartitionWriter(
         tp,
         storage,
-        writerProvider,
+        filenameCreator, writerProvider,
         partitioner,
         connectorConfig,
         context,
