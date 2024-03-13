@@ -21,7 +21,6 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.joda.time.DateTime;
 
-import java.io.Closeable;
 import java.io.IOException;
 
 public class KafkaFileEventProvider extends FileEventProvider {
@@ -54,7 +53,9 @@ public class KafkaFileEventProvider extends FileEventProvider {
             formatDateRFC3339(baseRecordTimestamp),
             formatDateRFC3339(currentTimestamp),
             recordCount,
-            formatDateRFC3339(eventDatetime));
+            formatDateRFC3339(eventDatetime),
+            kafkaConfig.getDatabaseName(),
+            kafkaConfig.getTableName());
     producer.send(
         new ProducerRecord<>(kafkaConfig.getTopicName(), key, value),
         (event, ex) -> {

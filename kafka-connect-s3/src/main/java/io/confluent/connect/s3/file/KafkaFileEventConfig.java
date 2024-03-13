@@ -27,6 +27,8 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
       "io.confluent.kafka.serializers.KafkaAvroSerializer";
 
   private String topicName;
+  private String databaseName;
+  private String tableName;
   private String bootstrapServers;
   private String schemaRegistryUrl;
 
@@ -35,10 +37,14 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
 
   public KafkaFileEventConfig(
       String topicName,
+      String databaseName,
+      String tableName,
       String bootstrapServers,
       String schemaRegistryUrl,
       Map<String, Object> custom) {
     this.topicName = topicName;
+    this.databaseName = databaseName;
+    this.tableName = tableName;
     this.bootstrapServers = bootstrapServers;
     this.schemaRegistryUrl = schemaRegistryUrl;
     this.custom = custom;
@@ -56,6 +62,10 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
   public String toJson() {
     final StringBuffer sb = new StringBuffer("{");
     sb.append("\"topic_name\": \"").append(topicName).append('"');
+    if(databaseName != null)
+    sb.append("\"database_name\": \"").append(databaseName).append('"');
+    if(tableName != null)
+    sb.append("\"table_name\": \"").append(tableName).append('"');
     sb.append(", \"bootstrap_servers\": \"").append(bootstrapServers).append('"');
     sb.append(", \"schema_registry_url\": \"").append(schemaRegistryUrl).append('"');
     sb.append(", \"custom\": {");
@@ -88,6 +98,14 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
 
   public String getTopicName() {
     return topicName;
+  }
+
+  public String getDatabaseName() {
+    return databaseName;
+  }
+
+  public String getTableName() {
+    return tableName;
   }
 
   public String getSchemaRegistryUrl() {

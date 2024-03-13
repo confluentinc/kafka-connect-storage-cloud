@@ -133,6 +133,8 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
         FILE_EVENT_CONFIG_JSON,
         new KafkaFileEventConfig(
                 topicFileEvent,
+                null,
+                null,
                 connect.kafka().bootstrapServers(),
                 restApp.restServer.getURI().toString(),
                 this.autoCreate)
@@ -149,6 +151,8 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
     KafkaFileEventConfig kafkaFileEventConfig =
         new KafkaFileEventConfig(
             fileEventTopic,
+            null,
+            null,
             bootstrapServers,
             restApp.restServer.getURI().toString(),
             this.autoCreate);

@@ -43,6 +43,18 @@
       "name": "event_datetime",
       "type": "string",
       "doc": "The time of the file event, in RFC 3339"
+    },
+    {
+      "name": "database_name",
+      "type": ["null", "string"],
+      "doc": "The database name of the record being written",
+      "default": null
+    },
+    {
+      "name": "table_name",
+      "type": ["null", "string"],
+      "doc": "The table name of the record being written",
+      "default": null
     }
   ]
 }
