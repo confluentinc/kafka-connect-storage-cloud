@@ -135,7 +135,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
   @Test
   public void testWriteRecords() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createRecords(7);
     // Perform write
@@ -153,7 +153,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     localProps.put(StorageSinkConnectorConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, "true");
     localProps.put(StorageSinkConnectorConfig.CONNECT_META_DATA_CONFIG, "true");
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
     List<SinkRecord> sinkRecords = createRecordsWithEnums(7, 0, Collections.singleton(new TopicPartition(TOPIC, PARTITION)));
 
     // Perform write
@@ -170,7 +170,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     localProps.put(StorageSinkConnectorConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, "true");
     localProps.put(StorageSinkConnectorConfig.CONNECT_META_DATA_CONFIG, "true");
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
     List<SinkRecord> sinkRecords = createRecordsWithUnion(7, 0, Collections.singleton(new TopicPartition (TOPIC, PARTITION)));
 
     // Perform write
@@ -187,7 +187,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     String avroCodec = "snappy";
     localProps.put(StorageSinkConnectorConfig.AVRO_CODEC_CONFIG, avroCodec);
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createRecords(7);
     // Perform write
@@ -223,7 +223,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     // Accumulate rest of the records.
     sinkRecords.addAll(createRecords(5, 2));
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
     // Perform write
     task.put(sinkRecords);
     task.close(context.assignment());
@@ -238,7 +238,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10000");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createRecords(11000);
 
@@ -254,7 +254,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
   @Test
   public void testWriteRecordsInMultiplePartitions() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createRecords(7, 0, context.assignment());
     // Perform write
@@ -269,7 +269,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
   @Test
   public void testWriteInterleavedRecordsInMultiplePartitions() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createRecordsInterleaved(7 * context.assignment().size(), 0, context.assignment());
     // Perform write
@@ -284,7 +284,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
   @Test
   public void testWriteInterleavedRecordsInMultiplePartitionsNonZeroInitialOffset() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createRecordsInterleaved(7 * context.assignment().size(), 9, context.assignment());
     // Perform write
@@ -300,7 +300,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
   public void testPreCommitOnSizeRotation() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "3");
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords1 = createRecordsInterleaved(3 * context.assignment().size(), 0, context.assignment());
 
@@ -346,7 +346,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "2");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
     List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(2, 0);
 
     // Perform write
@@ -393,7 +393,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
         time
     );
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, time);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, time, filenameCreator);
 
     // Perform write
     task.put(sinkRecords.subList(0, 3));
@@ -450,7 +450,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
         time
     );
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, time);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, time, filenameCreator);
 
     // Perform write
     task.put(sinkRecords);
@@ -508,7 +508,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
         time
     );
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, time);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, time, filenameCreator);
 
     // Perform write
     task.put(sinkRecords);
@@ -563,7 +563,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
   @Test
   public void testRebalance() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createRecordsInterleaved(7 * context.assignment().size(), 0, context.assignment());
     // Starts with TOPIC_PARTITION and TOPIC_PARTITION2
@@ -614,7 +614,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     localProps.put(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG, "BACKWARD");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
     List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(7, 0);
 
     // Perform write
@@ -631,7 +631,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "2");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
     List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(7, 0);
 
     // Perform write
@@ -649,7 +649,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     localProps.put(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG, "FORWARD");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
     // By excluding the first element we get a list starting with record having the new schema.
     List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(8, 0).subList(1, 8);
 
@@ -668,7 +668,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     localProps.put(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG, "BACKWARD");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
     List<SinkRecord> sinkRecords = createRecordsNoVersion(1, 0);
     sinkRecords.addAll(createRecordsWithAlteringSchemas(7, 0));
 

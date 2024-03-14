@@ -81,7 +81,7 @@ public class DataWriterJsonTest extends DataWriterTestBase<JsonFormat> {
   public void testWithSchema() throws Exception {
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createRecordsInterleaved(7 * context.assignment().size(), 0, context.assignment());
     task.put(sinkRecords);
@@ -96,7 +96,7 @@ public class DataWriterJsonTest extends DataWriterTestBase<JsonFormat> {
   public void testNoSchema() throws Exception {
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createJsonRecordsWithoutSchema(7 * context.assignment().size(), 0, context.assignment());
     task.put(sinkRecords);
@@ -113,7 +113,7 @@ public class DataWriterJsonTest extends DataWriterTestBase<JsonFormat> {
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
     localProps.put(S3SinkConnectorConfig.COMPRESSION_TYPE_CONFIG, compressionType.name);
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createRecordsInterleaved(7 * context.assignment().size(), 0, context.assignment());
     task.put(sinkRecords);
@@ -130,7 +130,7 @@ public class DataWriterJsonTest extends DataWriterTestBase<JsonFormat> {
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
     localProps.put(S3SinkConnectorConfig.COMPRESSION_TYPE_CONFIG, compressionType.name);
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createJsonRecordsWithoutSchema(7 * context.assignment().size(), 0, context.assignment());
     task.put(sinkRecords);
@@ -148,7 +148,7 @@ public class DataWriterJsonTest extends DataWriterTestBase<JsonFormat> {
     localProps.put(S3SinkConnectorConfig.COMPRESSION_TYPE_CONFIG, compressionType.name);
     localProps.put(S3SinkConnectorConfig.COMPRESSION_LEVEL_CONFIG, String.valueOf(Deflater.BEST_COMPRESSION));
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createJsonRecordsWithoutSchema(7 * context.assignment().size(), 0, context.assignment());
     task.put(sinkRecords);
