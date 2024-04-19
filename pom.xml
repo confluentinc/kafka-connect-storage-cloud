@@ -21,7 +21,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>11.2.6</version>
+        <version>11.2.11</version>
     </parent>
 
     <groupId>io.confluent</groupId>
@@ -58,7 +58,6 @@
     </modules>
 
     <properties>
-        <jackson.core.version>2.15.0</jackson.core.version>
         <snappy.java>1.1.10.4</snappy.java>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <maven.release.plugin.version>2.5.3</maven.release.plugin.version>
@@ -399,7 +398,7 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
-            <version>${jackson.core.version}</version>
+            <version>${jackson.version}</version>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>

@@ -33,7 +33,7 @@
     </description>
 
     <properties>
-        <aws.version>1.12.524</aws.version>
+        <aws.version>1.12.650</aws.version>
         <s3mock.version>0.2.5</s3mock.version>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <parquet.tools.version>1.11.1</parquet.tools.version>
