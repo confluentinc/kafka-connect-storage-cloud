@@ -24,7 +24,7 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
-import io.confluent.connect.s3.auth.iamAssume.AwsIAMAssumeRoleChaining;
+import io.confluent.connect.s3.auth.iamassume.AwsIamAssumeRoleChaining;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -282,6 +282,44 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         Arrays.stream(AffixType.names()).collect(Collectors.toList()));
   }
 
+  public static void addIamConfigDef(ConfigDef configDef, final String group, int orderInGroup) {
+    configDef.define(
+        CUSTOMER_ROLE_ARN_CONFIG,
+        Type.STRING,
+        CUSTOMER_ROLE_ARN_DEFAULT,
+        Importance.HIGH,
+        "Role ARN",
+        group,
+        ++orderInGroup,
+        Width.LONG,
+        "AWS Role ARN"
+    );
+
+    configDef.define(
+        CUSTOMER_ROLE_EXTERNAL_ID_CONFIG,
+        Type.PASSWORD,
+        CUSTOMER_ROLE_EXTERNAL_ID_DEFAULT,
+        Importance.HIGH,
+        "External ID",
+        group,
+        ++orderInGroup,
+        Width.LONG,
+        "AWS External ID"
+    );
+
+    configDef.define(
+        MIDDLEWARE_ROLE_ARN_CONFIG,
+        Type.STRING,
+        MIDDLEWARE_ROLE_ARN_DEFAULT,
+        Importance.HIGH,
+        "Role ARN",
+        group,
+        ++orderInGroup,
+        Width.LONG,
+        "AWS Role ARN"
+    );
+  }
+
   public static ConfigDef newConfigDef() {
     ConfigDef configDef = StorageSinkConnectorConfig.newConfigDef(
         FORMAT_CLASS_RECOMMENDER,
@@ -397,41 +435,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "Authentication method"
       );
 
-      configDef.define(
-          CUSTOMER_ROLE_ARN_CONFIG,
-          Type.STRING,
-          CUSTOMER_ROLE_ARN_DEFAULT,
-          Importance.HIGH,
-          "Role ARN",
-          group,
-          ++orderInGroup,
-          Width.LONG,
-          "AWS Role ARN"
-      );
-
-      configDef.define(
-          CUSTOMER_ROLE_EXTERNAL_ID_CONFIG,
-          Type.PASSWORD,
-          CUSTOMER_ROLE_EXTERNAL_ID_DEFAULT,
-          Importance.HIGH,
-          "External ID",
-          group,
-          ++orderInGroup,
-          Width.LONG,
-          "AWS External ID"
-      );
-
-      configDef.define(
-          MIDDLEWARE_ROLE_ARN_CONFIG,
-          Type.STRING,
-          MIDDLEWARE_ROLE_ARN_DEFAULT,
-          Importance.HIGH,
-          "Role ARN",
-          group,
-          ++orderInGroup,
-          Width.LONG,
-          "AWS Role ARN"
-      );
+      // Define IAM Role ARN ConfigDef
+      addIamConfigDef(configDef, group, orderInGroup);
 
       configDef.define(
           AWS_ACCESS_KEY_ID_CONFIG,
@@ -974,10 +979,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           configs.put(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG, awsExternalId());
           configs.put(MIDDLEWARE_ROLE_ARN_CONFIG, awsMiddlewareRoleARN());
 
-          provider = new AwsIAMAssumeRoleChaining();
-          ((AwsIAMAssumeRoleChaining) provider).configure(configs);
-        }
-        else {
+          provider = new AwsIamAssumeRoleChaining();
+          ((AwsIamAssumeRoleChaining) provider).configure(configs);
+        } else {
           configs.put(AWS_ACCESS_KEY_ID_CONFIG, awsAccessKeyId());
           configs.put(AWS_SECRET_ACCESS_KEY_CONFIG, awsSecretKeyId().value());
           ((Configurable) provider).configure(configs);
