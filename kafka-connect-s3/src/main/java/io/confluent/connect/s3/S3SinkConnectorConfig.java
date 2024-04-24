@@ -17,14 +17,13 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
-import io.confluent.connect.storage.common.util.StringUtils;
+import io.confluent.connect.s3.auth.iamAssume.AwsIAMAssumeRoleChaining;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -62,6 +61,7 @@ import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.storage.common.util.StringUtils;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.ComposableConfig;
 import io.confluent.connect.storage.common.GenericRecommender;
@@ -118,11 +118,20 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           CREDENTIALS_PROVIDER_CLASS_CONFIG.lastIndexOf(".") + 1
       );
 
+  public static final String AUTH_METHOD = "authentication.method";
+  public static final String AWS_AUTH_DEFAULT = "Access key and secret";
   public static final String AWS_ACCESS_KEY_ID_CONFIG = "aws.access.key.id";
   public static final String AWS_ACCESS_KEY_ID_DEFAULT = "";
 
   public static final String AWS_SECRET_ACCESS_KEY_CONFIG = "aws.secret.access.key";
   public static final Password AWS_SECRET_ACCESS_KEY_DEFAULT = new Password(null);
+
+  public static final String CUSTOMER_ROLE_ARN_CONFIG = "aws.iam.assume.role";
+  public static final String CUSTOMER_ROLE_ARN_DEFAULT = "";
+  public static final String CUSTOMER_ROLE_EXTERNAL_ID_CONFIG = "aws.iam.external.id";
+  public static final Password CUSTOMER_ROLE_EXTERNAL_ID_DEFAULT = new Password(null);
+  public static final String MIDDLEWARE_ROLE_ARN_CONFIG = "middleware.aws.iam.assume.role";
+  public static final String MIDDLEWARE_ROLE_ARN_DEFAULT = "";
 
   public static final String REGION_CONFIG = "s3.region";
   public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
@@ -373,6 +382,54 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "AWS Credentials Provider Class"
+      );
+
+      configDef.define(
+          AUTH_METHOD,
+          Type.STRING,
+          AWS_AUTH_DEFAULT,
+          Importance.HIGH,
+          "Authentication method used for S3 Sink connector",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Authentication method"
+      );
+
+      configDef.define(
+          CUSTOMER_ROLE_ARN_CONFIG,
+          Type.STRING,
+          CUSTOMER_ROLE_ARN_DEFAULT,
+          Importance.HIGH,
+          "Role ARN",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "AWS Role ARN"
+      );
+
+      configDef.define(
+          CUSTOMER_ROLE_EXTERNAL_ID_CONFIG,
+          Type.PASSWORD,
+          CUSTOMER_ROLE_EXTERNAL_ID_DEFAULT,
+          Importance.HIGH,
+          "External ID",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "AWS External ID"
+      );
+
+      configDef.define(
+          MIDDLEWARE_ROLE_ARN_CONFIG,
+          Type.STRING,
+          MIDDLEWARE_ROLE_ARN_DEFAULT,
+          Importance.HIGH,
+          "Role ARN",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "AWS Role ARN"
       );
 
       configDef.define(
@@ -878,26 +935,52 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getPassword(AWS_SECRET_ACCESS_KEY_CONFIG);
   }
 
+  public String awsCustomerRoleARN() {
+    return getString(CUSTOMER_ROLE_ARN_CONFIG);
+  }
+
+  public String awsMiddlewareRoleARN() {
+    return getString(MIDDLEWARE_ROLE_ARN_CONFIG);
+  }
+
+  public String awsExternalId() {
+    return getString(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG);
+  }
+
   public int getPartSize() {
     return getInt(PART_SIZE_CONFIG);
+  }
+
+  public String getAuthenticationMethod() {
+    return getString(AUTH_METHOD);
   }
 
   @SuppressWarnings("unchecked")
   public AWSCredentialsProvider getCredentialsProvider() {
     try {
       AWSCredentialsProvider provider = ((Class<? extends AWSCredentialsProvider>)
-          getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
+              getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
 
       if (provider instanceof Configurable) {
         Map<String, Object> configs = originalsWithPrefix(CREDENTIALS_PROVIDER_CONFIG_PREFIX);
         configs.remove(CREDENTIALS_PROVIDER_CLASS_CONFIG.substring(
-            CREDENTIALS_PROVIDER_CONFIG_PREFIX.length()
+                CREDENTIALS_PROVIDER_CONFIG_PREFIX.length()
         ));
 
-        configs.put(AWS_ACCESS_KEY_ID_CONFIG, awsAccessKeyId());
-        configs.put(AWS_SECRET_ACCESS_KEY_CONFIG, awsSecretKeyId().value());
+        String authMethod = getAuthenticationMethod();
+        if (authMethod == "IAM Assume Role") {
+          configs.put(CUSTOMER_ROLE_ARN_CONFIG, awsCustomerRoleARN());
+          configs.put(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG, awsExternalId());
+          configs.put(MIDDLEWARE_ROLE_ARN_CONFIG, awsMiddlewareRoleARN());
 
-        ((Configurable) provider).configure(configs);
+          provider = new AwsIAMAssumeRoleChaining();
+          ((AwsIAMAssumeRoleChaining) provider).configure(configs);
+        }
+        else {
+          configs.put(AWS_ACCESS_KEY_ID_CONFIG, awsAccessKeyId());
+          configs.put(AWS_SECRET_ACCESS_KEY_CONFIG, awsSecretKeyId().value());
+          ((Configurable) provider).configure(configs);
+        }
       } else {
         final String accessKeyId = awsAccessKeyId();
         final String secretKey = awsSecretKeyId().value();
@@ -910,8 +993,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       return provider;
     } catch (IllegalAccessException | InstantiationException e) {
       throw new ConnectException(
-          "Invalid class for: " + S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
-          e
+              "Invalid class for: " + S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
+              e
       );
     }
   }
