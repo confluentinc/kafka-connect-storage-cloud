@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import io.confluent.connect.s3.S3SinkConnectorConfig.AffixType;
 import io.confluent.connect.s3.auth.AwsAssumeRoleCredentialsProvider;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
@@ -234,6 +235,33 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
 
     assertEquals(ACCESS_KEY_VALUE, credentialsProvider.getCredentials().getAWSAccessKeyId());
     assertEquals(SECRET_KEY_VALUE, credentialsProvider.getCredentials().getAWSSecretKey());
+  }
+
+  @Test
+  public void testConfigurableRoleChainingCredentialProvider() {
+    final String CUSTOMER_ROLE_ARN = "givenARN";
+    final String CUSTOMER_EXTERNAL_ID = "WhoIsJohnGalt?";
+    //final String MIDDLEWARE_ROLE_ARN = "exampleARN";
+
+    properties.put(
+        S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
+        DummyAssertiveCredentialsProvider.class.getName()
+    );
+    String configPrefix = S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
+    properties.put(
+        configPrefix.concat(DummyAssertiveCredentialsProvider.ACCESS_KEY_NAME),
+        CUSTOMER_ROLE_ARN
+    );
+    properties.put(
+        configPrefix.concat(DummyAssertiveCredentialsProvider.SECRET_KEY_NAME),
+        CUSTOMER_EXTERNAL_ID
+    );
+    connectorConfig = new S3SinkConnectorConfig(properties);
+
+    AWSCredentialsProvider credentialsProvider = connectorConfig.getCredentialsProvider();
+
+    assertEquals(CUSTOMER_ROLE_ARN, credentialsProvider.getCredentials().getAWSAccessKeyId());
+    assertEquals(CUSTOMER_EXTERNAL_ID, credentialsProvider.getCredentials().getAWSSecretKey());
   }
 
   @Test
