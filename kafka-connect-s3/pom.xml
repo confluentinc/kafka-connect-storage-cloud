@@ -33,6 +33,7 @@
     </description>
 
     <properties>
+        <aws.sdk.version>2.20.133</aws.sdk.version>
         <aws.version>1.12.524</aws.version>
         <s3mock.version>0.2.5</s3mock.version>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
@@ -82,6 +83,11 @@
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>
             <version>${httpclient.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>sts</artifactId>
+            <version>${aws.sdk.version}</version>
         </dependency>
         <!--Pin snappy-java version to fix CVE-2023-34455 -->
         <dependency>
@@ -180,7 +186,6 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
     <build>
         <plugins>
             <plugin>
