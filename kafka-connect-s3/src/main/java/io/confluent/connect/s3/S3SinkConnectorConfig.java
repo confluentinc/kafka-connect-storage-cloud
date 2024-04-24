@@ -17,6 +17,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.RegionUtils;
@@ -959,12 +960,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public AWSCredentialsProvider getCredentialsProvider() {
     try {
       AWSCredentialsProvider provider = ((Class<? extends AWSCredentialsProvider>)
-              getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
+          getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
 
       if (provider instanceof Configurable) {
         Map<String, Object> configs = originalsWithPrefix(CREDENTIALS_PROVIDER_CONFIG_PREFIX);
         configs.remove(CREDENTIALS_PROVIDER_CLASS_CONFIG.substring(
-                CREDENTIALS_PROVIDER_CONFIG_PREFIX.length()
+            CREDENTIALS_PROVIDER_CONFIG_PREFIX.length()
         ));
 
         String authMethod = getAuthenticationMethod();
