@@ -75,11 +75,14 @@ import io.confluent.connect.storage.partitioner.FieldPartitioner;
 import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
+  private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorConfig.class);
   // S3 Group
   public static final String S3_BUCKET_CONFIG = "s3.bucket.name";
 
@@ -949,8 +952,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getString(MIDDLEWARE_ROLE_ARN_CONFIG);
   }
 
-  public String awsExternalId() {
-    return getString(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG);
+  public Password awsExternalId() {
+    return getPassword(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG);
   }
 
   public int getPartSize() {
@@ -966,6 +969,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     try {
       AWSCredentialsProvider provider = ((Class<? extends AWSCredentialsProvider>)
           getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
+      
+      String authMethod = getAuthenticationMethod();
+      log.info("Authentication method: {}", authMethod);
 
       if (provider instanceof Configurable) {
         Map<String, Object> configs = originalsWithPrefix(CREDENTIALS_PROVIDER_CONFIG_PREFIX);
@@ -973,25 +979,27 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
             CREDENTIALS_PROVIDER_CONFIG_PREFIX.length()
         ));
 
-        String authMethod = getAuthenticationMethod();
-        if (authMethod == "IAM Assume Role") {
+        configs.put(AWS_ACCESS_KEY_ID_CONFIG, awsAccessKeyId());
+        configs.put(AWS_SECRET_ACCESS_KEY_CONFIG, awsSecretKeyId().value());
+        ((Configurable) provider).configure(configs);
+      } else {
+        authMethod = getAuthenticationMethod();
+
+        if (authMethod.equals("IAM Assume Role")) {
+          Map<String, Object> configs = new HashMap<String, Object>();
           configs.put(CUSTOMER_ROLE_ARN_CONFIG, awsCustomerRoleARN());
-          configs.put(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG, awsExternalId());
+          configs.put(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG, awsExternalId().value());
           configs.put(MIDDLEWARE_ROLE_ARN_CONFIG, awsMiddlewareRoleARN());
 
           provider = new AwsIamAssumeRoleChaining();
           ((AwsIamAssumeRoleChaining) provider).configure(configs);
         } else {
-          configs.put(AWS_ACCESS_KEY_ID_CONFIG, awsAccessKeyId());
-          configs.put(AWS_SECRET_ACCESS_KEY_CONFIG, awsSecretKeyId().value());
-          ((Configurable) provider).configure(configs);
-        }
-      } else {
-        final String accessKeyId = awsAccessKeyId();
-        final String secretKey = awsSecretKeyId().value();
-        if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
-          BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
-          provider = new AWSStaticCredentialsProvider(basicCredentials);
+          final String accessKeyId = awsAccessKeyId();
+          final String secretKey = awsSecretKeyId().value();
+          if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
+            BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
+            provider = new AWSStaticCredentialsProvider(basicCredentials);
+          }
         }
       }
 

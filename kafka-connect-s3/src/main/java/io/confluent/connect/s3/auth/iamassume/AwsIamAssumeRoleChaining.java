@@ -21,8 +21,11 @@ import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
+
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.CUSTOMER_ROLE_ARN_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.CUSTOMER_ROLE_EXTERNAL_ID_CONFIG;
@@ -31,11 +34,12 @@ import java.util.Map;
 
 public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
 
+  private static final Logger log = LoggerFactory.getLogger(AwsIamAssumeRoleChaining.class);
   private static final ConfigDef STS_CONFIG_DEF = new ConfigDef()
       .define(
         CUSTOMER_ROLE_EXTERNAL_ID_CONFIG,
         ConfigDef.Type.STRING,
-        ConfigDef.Importance.MEDIUM,
+        ConfigDef.Importance.HIGH,
         "The role external ID used when retrieving session credentials under an assumed role."
       ).define(
         CUSTOMER_ROLE_ARN_CONFIG,
@@ -53,6 +57,7 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
   private String customerRoleExternalId;
   private String middlewareRoleArn;
   private STSAssumeRoleSessionCredentialsProvider stsCredentialProvider;
+  private STSAssumeRoleSessionCredentialsProvider initialProvider;
 
   // Method to initiate role chaining
   public void configure(Map<String, ?> configs) {
@@ -62,12 +67,13 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
     customerRoleExternalId = config.getString(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG);
     middlewareRoleArn = config.getString(MIDDLEWARE_ROLE_ARN_CONFIG);
 
-    STSAssumeRoleSessionCredentialsProvider initialProvider = buildProvider(
+    initialProvider = buildProvider(
         middlewareRoleArn, 
         "middlewareSession", 
         "", 
         null
     );
+    log.info("Got initial provider");
 
     // Use the credentials from the initial role to assume the subsequent role
     stsCredentialProvider = buildProvider(
@@ -76,6 +82,7 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
         customerRoleExternalId, 
         initialProvider
     );
+    log.info("Got final credentials");
   }
 
   // Updated buildProvider to optionally accept an existing AwsCredentialsProvider
@@ -99,10 +106,9 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
           .build();
     } else {
       credentialsProvider = new STSAssumeRoleSessionCredentialsProvider
-          .Builder(roleArn, roleSessionName)
-          .withStsClient(AWSSecurityTokenServiceClientBuilder.defaultClient())
-          .withExternalId(roleExternalId)
-          .build();
+        .Builder(roleArn, roleSessionName)
+        .withStsClient(AWSSecurityTokenServiceClientBuilder.defaultClient())
+        .build();
     }
     return credentialsProvider;
   }
@@ -114,6 +120,15 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
 
   @Override
   public void refresh() {
-    stsCredentialProvider.refresh();
+    if (initialProvider != null) {
+      initialProvider.refresh();
+      stsCredentialProvider = buildProvider(
+          customerRoleArn, 
+          "customerSession", 
+          customerRoleExternalId, 
+          initialProvider
+      );
+    }
+    //stsCredentialProvider.refresh();
   }
 }
