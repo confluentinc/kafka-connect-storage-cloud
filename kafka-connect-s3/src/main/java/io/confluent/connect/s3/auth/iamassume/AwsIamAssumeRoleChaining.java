@@ -18,12 +18,19 @@ package io.confluent.connect.s3.auth.iamassume;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigDef.Width;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.ASSUME_AWS_ACCESS_KEY_ID_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.ASSUME_AWS_SECRET_ACCESS_KEY_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.CUSTOMER_ROLE_ARN_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.CUSTOMER_ROLE_EXTERNAL_ID_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.MIDDLEWARE_ROLE_ARN_CONFIG;
@@ -35,7 +42,7 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
       .define(
         CUSTOMER_ROLE_EXTERNAL_ID_CONFIG,
         ConfigDef.Type.STRING,
-        ConfigDef.Importance.MEDIUM,
+        ConfigDef.Importance.HIGH,
         "The role external ID used when retrieving session credentials under an assumed role."
       ).define(
         CUSTOMER_ROLE_ARN_CONFIG,
@@ -47,12 +54,32 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
         ConfigDef.Type.STRING,
         ConfigDef.Importance.HIGH,
         "Role ARN to use when starting a session."
+      ).define(
+        ASSUME_AWS_ACCESS_KEY_ID_CONFIG,
+        ConfigDef.Type.STRING,
+        ConfigDef.Importance.HIGH,
+        "The secret access key used to authenticate personal AWS credentials such as IAM "
+            + "credentials. Use only if you do not wish to authenticate by using a credentials "
+            + "provider class via ``"
+            + CREDENTIALS_PROVIDER_CLASS_CONFIG
+            + "``"
+      ).define(
+        ASSUME_AWS_SECRET_ACCESS_KEY_CONFIG,
+        ConfigDef.Type.PASSWORD,
+        ConfigDef.Importance.HIGH,
+        "The secret access key used to authenticate personal AWS credentials such as IAM "
+            + "credentials. Use only if you do not wish to authenticate by using a credentials "
+            + "provider class via ``"
+            + CREDENTIALS_PROVIDER_CLASS_CONFIG
+            + "``"
       );
 
   private String customerRoleArn;
   private String customerRoleExternalId;
   private String middlewareRoleArn;
   private STSAssumeRoleSessionCredentialsProvider stsCredentialProvider;
+  private String accessSecret = "";
+  private String accessKeyId = "";
 
   // Method to initiate role chaining
   public void configure(Map<String, ?> configs) {
@@ -98,11 +125,23 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
           .withExternalId(roleExternalId)
           .build();
     } else {
-      credentialsProvider = new STSAssumeRoleSessionCredentialsProvider
+      if (accessKeyId == "" || accessSecret == "") {
+        credentialsProvider = new STSAssumeRoleSessionCredentialsProvider
           .Builder(roleArn, roleSessionName)
           .withStsClient(AWSSecurityTokenServiceClientBuilder.defaultClient())
           .withExternalId(roleExternalId)
           .build();
+      } else {
+        BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, accessSecret);
+        credentialsProvider = new STSAssumeRoleSessionCredentialsProvider
+          .Builder(roleArn, roleSessionName)
+          .withStsClient(AWSSecurityTokenServiceClientBuilder
+              .standard()
+              .withCredentials(new AWSStaticCredentialsProvider(basicCredentials)).build()
+          )
+          .withExternalId(roleExternalId)
+          .build();
+      }
     }
     return credentialsProvider;
   }

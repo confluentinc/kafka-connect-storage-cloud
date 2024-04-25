@@ -127,6 +127,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String AWS_SECRET_ACCESS_KEY_CONFIG = "aws.secret.access.key";
   public static final Password AWS_SECRET_ACCESS_KEY_DEFAULT = new Password(null);
 
+  public static final String ASSUME_AWS_ACCESS_KEY_ID_CONFIG = "assume.aws.access.key.id";
+  public static final String ASSUME_AWS_SECRET_ACCESS_KEY_CONFIG = "assume.aws.secret.access.key";
   public static final String CUSTOMER_ROLE_ARN_CONFIG = "aws.iam.assume.role";
   public static final String CUSTOMER_ROLE_ARN_DEFAULT = "";
   public static final String CUSTOMER_ROLE_EXTERNAL_ID_CONFIG = "aws.iam.external.id";
