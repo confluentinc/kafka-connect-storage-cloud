@@ -75,11 +75,14 @@ import io.confluent.connect.storage.partitioner.FieldPartitioner;
 import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
+  private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorConfig.class);
   // S3 Group
   public static final String S3_BUCKET_CONFIG = "s3.bucket.name";
 
@@ -977,6 +980,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
         String authMethod = getAuthenticationMethod();
         if (authMethod == "IAM Assume Role") {
+          log.info("Assume role authentication");
           configs.put(CUSTOMER_ROLE_ARN_CONFIG, awsCustomerRoleARN());
           configs.put(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG, awsExternalId());
           configs.put(MIDDLEWARE_ROLE_ARN_CONFIG, awsMiddlewareRoleARN());

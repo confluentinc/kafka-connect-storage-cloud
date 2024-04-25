@@ -22,8 +22,11 @@ import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
+
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.ASSUME_AWS_ACCESS_KEY_ID_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.ASSUME_AWS_SECRET_ACCESS_KEY_CONFIG;
@@ -35,6 +38,7 @@ import java.util.Map;
 
 public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
 
+  private static final Logger log = LoggerFactory.getLogger(AwsIamAssumeRoleChaining.class);
   private static final ConfigDef STS_CONFIG_DEF = new ConfigDef()
       .define(
         CUSTOMER_ROLE_EXTERNAL_ID_CONFIG,
@@ -92,6 +96,7 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
         "", 
         null
     );
+    log.info("Got initial provider");
 
     // Use the credentials from the initial role to assume the subsequent role
     stsCredentialProvider = buildProvider(
@@ -100,6 +105,7 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
         customerRoleExternalId, 
         initialProvider
     );
+    log.info("Got final credentials");
   }
 
   // Updated buildProvider to optionally accept an existing AwsCredentialsProvider
@@ -112,6 +118,7 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
     STSAssumeRoleSessionCredentialsProvider credentialsProvider;
     // If an existing credentials provider is provided, use it for creating the STS client
     if (existingProvider != null) {
+      log.info("Assuming customer's role");
       AWSCredentials basicCredentials = existingProvider.getCredentials();
       credentialsProvider = new STSAssumeRoleSessionCredentialsProvider
           .Builder(roleArn, roleSessionName)
@@ -121,13 +128,16 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
           )
           .withExternalId(roleExternalId)
           .build();
+      log.info("Assumed customer's role");
     } else {
       if (accessKeyId == "" || accessSecret == "") {
+        log.info("default sts client will internally use default credentials chain provider");
         credentialsProvider = new STSAssumeRoleSessionCredentialsProvider
           .Builder(roleArn, roleSessionName)
           .withStsClient(AWSSecurityTokenServiceClientBuilder.defaultClient())
           .build();
       } else {
+        log.info("Using credentials provided to assume role in middleware account");
         BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, accessSecret);
         credentialsProvider = new STSAssumeRoleSessionCredentialsProvider
           .Builder(roleArn, roleSessionName)
@@ -137,6 +147,7 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
           )
           .build();
       }
+      log.info("Assumed role in middleware account");
     }
     return credentialsProvider;
   }
