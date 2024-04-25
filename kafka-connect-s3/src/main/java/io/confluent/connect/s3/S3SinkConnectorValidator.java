@@ -79,8 +79,6 @@ public class S3SinkConnectorValidator {
 
   public Config validate() {
     log.info("Validating s3 Configs");
-    //return new Config(new ArrayList<>(this.valuesByKey.values()));
-
     S3SinkConnectorConfig s3SinkConnectorConfig = null;
     try {
       s3SinkConnectorConfig = new S3SinkConnectorConfig(config, connectorConfigs);

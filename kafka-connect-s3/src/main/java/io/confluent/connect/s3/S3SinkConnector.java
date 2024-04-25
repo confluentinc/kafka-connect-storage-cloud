@@ -89,8 +89,7 @@ public class S3SinkConnector extends SinkConnector {
   @Override
   public Config validate(Map<String, String> connectorConfigs) {
     Config configs = super.validate(connectorConfigs);
-    return configs;
-    //return new S3SinkConnectorValidator(
-    //    config(), connectorConfigs, configs.configValues()).validate();
+    return new S3SinkConnectorValidator(
+        config(), connectorConfigs, configs.configValues()).validate();
   }
 }
