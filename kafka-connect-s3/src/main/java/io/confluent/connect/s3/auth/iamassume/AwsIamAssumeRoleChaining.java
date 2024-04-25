@@ -126,7 +126,6 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
         credentialsProvider = new STSAssumeRoleSessionCredentialsProvider
           .Builder(roleArn, roleSessionName)
           .withStsClient(AWSSecurityTokenServiceClientBuilder.defaultClient())
-          .withExternalId(roleExternalId)
           .build();
       } else {
         BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, accessSecret);
@@ -136,7 +135,6 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
               .standard()
               .withCredentials(new AWSStaticCredentialsProvider(basicCredentials)).build()
           )
-          .withExternalId(roleExternalId)
           .build();
       }
     }
