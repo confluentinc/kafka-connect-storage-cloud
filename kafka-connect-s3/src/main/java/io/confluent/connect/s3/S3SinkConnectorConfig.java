@@ -971,6 +971,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     try {
       AWSCredentialsProvider provider = ((Class<? extends AWSCredentialsProvider>)
           getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
+      
+      String authMethod = getAuthenticationMethod();
+        log.info("Authentication method: ", authMethod);
 
       if (provider instanceof Configurable) {
         log.info("Instance of configurable");
@@ -979,7 +982,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
             CREDENTIALS_PROVIDER_CONFIG_PREFIX.length()
         ));
 
-        String authMethod = getAuthenticationMethod();
+        authMethod = getAuthenticationMethod();
         log.info("Authentication method: ", authMethod);
 
         if (authMethod.equals("IAM Assume Role")) {
@@ -996,6 +999,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ((Configurable) provider).configure(configs);
         }
       } else {
+        log.info("Using accessKeyID  and secret");
         final String accessKeyId = awsAccessKeyId();
         final String secretKey = awsSecretKeyId().value();
         if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
