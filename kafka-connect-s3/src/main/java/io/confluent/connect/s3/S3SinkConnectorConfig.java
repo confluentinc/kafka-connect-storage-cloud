@@ -973,13 +973,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
 
       if (provider instanceof Configurable) {
+        log.info("Instance of configurable");
         Map<String, Object> configs = originalsWithPrefix(CREDENTIALS_PROVIDER_CONFIG_PREFIX);
         configs.remove(CREDENTIALS_PROVIDER_CLASS_CONFIG.substring(
             CREDENTIALS_PROVIDER_CONFIG_PREFIX.length()
         ));
 
         String authMethod = getAuthenticationMethod();
-        if (authMethod == "IAM Assume Role") {
+        if (authMethod.equals("IAM Assume Role")) {
           log.info("Assume role authentication");
           configs.put(CUSTOMER_ROLE_ARN_CONFIG, awsCustomerRoleARN());
           configs.put(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG, awsExternalId());

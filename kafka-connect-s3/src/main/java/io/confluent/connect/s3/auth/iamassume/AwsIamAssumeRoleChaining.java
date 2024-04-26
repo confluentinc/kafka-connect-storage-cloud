@@ -130,7 +130,7 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
           .build();
       log.info("Assumed customer's role");
     } else {
-      if (accessKeyId == "" || accessSecret == "") {
+      if (accessKeyId.isEmpty() || accessSecret.isEmpty()) {
         log.info("default sts client will internally use default credentials chain provider");
         credentialsProvider = new STSAssumeRoleSessionCredentialsProvider
           .Builder(roleArn, roleSessionName)
