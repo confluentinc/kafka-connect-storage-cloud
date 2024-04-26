@@ -954,8 +954,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getString(MIDDLEWARE_ROLE_ARN_CONFIG);
   }
 
-  public String awsExternalId() {
-    return getString(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG);
+  public Password awsExternalId() {
+    return getPassword(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG);
   }
 
   public int getPartSize() {
@@ -1006,7 +1006,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         if (authMethod.equals("IAM Assume Role")) {
           log.info("Assume role authentication");
           configs.put(CUSTOMER_ROLE_ARN_CONFIG, awsCustomerRoleARN());
-          configs.put(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG, awsExternalId());
+          configs.put(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG, awsExternalId().value());
           configs.put(MIDDLEWARE_ROLE_ARN_CONFIG, awsMiddlewareRoleARN());
 
           provider = new AwsIamAssumeRoleChaining();
