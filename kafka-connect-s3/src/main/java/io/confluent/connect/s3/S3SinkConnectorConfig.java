@@ -323,6 +323,38 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         Width.LONG,
         "AWS Role ARN"
     );
+
+    configDef.define(
+        ASSUME_AWS_ACCESS_KEY_ID_CONFIG,
+        Type.STRING,
+        AWS_ACCESS_KEY_ID_DEFAULT,
+        Importance.HIGH,
+        "The AWS access key ID used to authenticate personal AWS credentials such as IAM "
+            + "credentials. Use only if you do not wish to authenticate by using a credentials "
+            + "provider class via ``"
+            + CREDENTIALS_PROVIDER_CLASS_CONFIG
+            + "``",
+        group,
+        ++orderInGroup,
+        Width.LONG,
+        "Assume - AWS Access Key ID"
+    );
+
+    configDef.define(
+        ASSUME_AWS_SECRET_ACCESS_KEY_CONFIG,
+        Type.PASSWORD,
+        AWS_SECRET_ACCESS_KEY_DEFAULT,
+        Importance.HIGH,
+        "The secret access key used to authenticate personal AWS credentials such as IAM "
+            + "credentials. Use only if you do not wish to authenticate by using a credentials "
+            + "provider class via ``"
+            + CREDENTIALS_PROVIDER_CLASS_CONFIG
+            + "``",
+        group,
+        ++orderInGroup,
+        Width.LONG,
+        "Assume - AWS Secret Access Key"
+    );
   }
 
   public static ConfigDef newConfigDef() {
