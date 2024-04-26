@@ -973,7 +973,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
       
       String authMethod = getAuthenticationMethod();
-        log.info("Authentication method: ", authMethod);
+      log.info("Authentication method: ", authMethod);
 
       if (provider instanceof Configurable) {
         log.info("Instance of configurable");
@@ -999,12 +999,26 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ((Configurable) provider).configure(configs);
         }
       } else {
-        log.info("Using accessKeyID  and secret");
-        final String accessKeyId = awsAccessKeyId();
-        final String secretKey = awsSecretKeyId().value();
-        if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
-          BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
-          provider = new AWSStaticCredentialsProvider(basicCredentials);
+        authMethod = getAuthenticationMethod();
+        log.info("Authentication method: ", authMethod);
+        Map<String, Object> configs = new HashMap<String, Object>();
+
+        if (authMethod.equals("IAM Assume Role")) {
+          log.info("Assume role authentication");
+          configs.put(CUSTOMER_ROLE_ARN_CONFIG, awsCustomerRoleARN());
+          configs.put(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG, awsExternalId());
+          configs.put(MIDDLEWARE_ROLE_ARN_CONFIG, awsMiddlewareRoleARN());
+
+          provider = new AwsIamAssumeRoleChaining();
+          ((AwsIamAssumeRoleChaining) provider).configure(configs);
+        } else {
+          log.info("Using accessKeyID  and secret");
+          final String accessKeyId = awsAccessKeyId();
+          final String secretKey = awsSecretKeyId().value();
+          if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
+            BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
+            provider = new AWSStaticCredentialsProvider(basicCredentials);
+          }
         }
       }
 
