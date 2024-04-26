@@ -89,6 +89,8 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
     customerRoleArn = config.getString(CUSTOMER_ROLE_ARN_CONFIG);
     customerRoleExternalId = config.getString(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG);
     middlewareRoleArn = config.getString(MIDDLEWARE_ROLE_ARN_CONFIG);
+    accessKeyId = config.getString(ASSUME_AWS_ACCESS_KEY_ID_CONFIG);
+    accessSecret = config.getString(ASSUME_AWS_SECRET_ACCESS_KEY_CONFIG);
 
     STSAssumeRoleSessionCredentialsProvider initialProvider = buildProvider(
         middlewareRoleArn, 

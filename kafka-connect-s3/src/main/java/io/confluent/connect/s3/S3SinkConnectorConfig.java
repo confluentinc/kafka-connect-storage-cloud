@@ -946,6 +946,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getPassword(AWS_SECRET_ACCESS_KEY_CONFIG);
   }
 
+  public String AssumeAwsAccessKeyId() {
+    return getString(ASSUME_AWS_ACCESS_KEY_ID_CONFIG);
+  }
+
+  public Password AssumeAwsSecretKeyId() {
+    return getPassword(ASSUME_AWS_SECRET_ACCESS_KEY_CONFIG);
+  }
+
   public String awsCustomerRoleARN() {
     return getString(CUSTOMER_ROLE_ARN_CONFIG);
   }
@@ -991,6 +999,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           configs.put(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG, awsExternalId());
           configs.put(MIDDLEWARE_ROLE_ARN_CONFIG, awsMiddlewareRoleARN());
 
+          configs.put(ASSUME_AWS_ACCESS_KEY_ID_CONFIG, AssumeAwsAccessKeyId());
+          configs.put(ASSUME_AWS_SECRET_ACCESS_KEY_CONFIG, AssumeAwsSecretKeyId().value());
+
           provider = new AwsIamAssumeRoleChaining();
           ((AwsIamAssumeRoleChaining) provider).configure(configs);
         } else {
@@ -1008,6 +1019,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           configs.put(CUSTOMER_ROLE_ARN_CONFIG, awsCustomerRoleARN());
           configs.put(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG, awsExternalId().value());
           configs.put(MIDDLEWARE_ROLE_ARN_CONFIG, awsMiddlewareRoleARN());
+
+          configs.put(ASSUME_AWS_ACCESS_KEY_ID_CONFIG, AssumeAwsAccessKeyId());
+          configs.put(ASSUME_AWS_SECRET_ACCESS_KEY_CONFIG, AssumeAwsSecretKeyId().value());
 
           provider = new AwsIamAssumeRoleChaining();
           ((AwsIamAssumeRoleChaining) provider).configure(configs);
