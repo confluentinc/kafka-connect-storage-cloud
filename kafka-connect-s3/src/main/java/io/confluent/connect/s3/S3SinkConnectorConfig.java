@@ -980,6 +980,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         ));
 
         String authMethod = getAuthenticationMethod();
+        log.info("Authentication method: ", authMethod);
+
         if (authMethod.equals("IAM Assume Role")) {
           log.info("Assume role authentication");
           configs.put(CUSTOMER_ROLE_ARN_CONFIG, awsCustomerRoleARN());
