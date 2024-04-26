@@ -66,7 +66,7 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
             + "``"
       ).define(
         ASSUME_AWS_SECRET_ACCESS_KEY_CONFIG,
-        ConfigDef.Type.PASSWORD,
+        ConfigDef.Type.STRING,
         ConfigDef.Importance.HIGH,
         "The secret access key used to authenticate personal AWS credentials such as IAM "
             + "credentials. Use only if you do not wish to authenticate by using a credentials "
