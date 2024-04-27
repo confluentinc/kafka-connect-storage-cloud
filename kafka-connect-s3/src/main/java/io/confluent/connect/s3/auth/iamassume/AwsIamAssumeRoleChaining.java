@@ -162,7 +162,7 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
 
   @Override
   public void refresh() {
-    if(initialProvider != null) {
+    if (initialProvider != null) {
       initialProvider.refresh();
       stsCredentialProvider = buildProvider(
           customerRoleArn, 
