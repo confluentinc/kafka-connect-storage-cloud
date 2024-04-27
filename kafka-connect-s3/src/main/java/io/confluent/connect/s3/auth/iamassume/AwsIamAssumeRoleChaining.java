@@ -79,6 +79,7 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
   private String customerRoleExternalId;
   private String middlewareRoleArn;
   private STSAssumeRoleSessionCredentialsProvider stsCredentialProvider;
+  private STSAssumeRoleSessionCredentialsProvider initialProvider;
   private String accessSecret = "";
   private String accessKeyId = "";
 
@@ -92,7 +93,7 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
     accessKeyId = config.getString(ASSUME_AWS_ACCESS_KEY_ID_CONFIG);
     accessSecret = config.getString(ASSUME_AWS_SECRET_ACCESS_KEY_CONFIG);
 
-    STSAssumeRoleSessionCredentialsProvider initialProvider = buildProvider(
+    initialProvider = buildProvider(
         middlewareRoleArn, 
         "middlewareSession", 
         "", 
@@ -161,6 +162,15 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
 
   @Override
   public void refresh() {
-    stsCredentialProvider.refresh();
+    if(initialProvider != null) {
+      initialProvider.refresh();
+      stsCredentialProvider = buildProvider(
+          customerRoleArn, 
+          "customerSession", 
+          customerRoleExternalId, 
+          initialProvider
+      );
+    }
+    //stsCredentialProvider.refresh();
   }
 }

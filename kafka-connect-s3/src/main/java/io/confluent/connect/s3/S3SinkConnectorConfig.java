@@ -1013,7 +1013,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
       
       String authMethod = getAuthenticationMethod();
-      log.info("Authentication method: ", authMethod);
+      log.info("Authentication method: {}", authMethod);
 
       if (provider instanceof Configurable) {
         log.info("Instance of configurable");
@@ -1023,7 +1023,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         ));
 
         authMethod = getAuthenticationMethod();
-        log.info("Authentication method: ", authMethod);
+        log.info("Authentication method: {}", authMethod);
 
         if (authMethod.equals("IAM Assume Role")) {
           log.info("Assume role authentication");
