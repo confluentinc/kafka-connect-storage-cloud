@@ -130,8 +130,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String AWS_SECRET_ACCESS_KEY_CONFIG = "aws.secret.access.key";
   public static final Password AWS_SECRET_ACCESS_KEY_DEFAULT = new Password(null);
 
-  public static final String ASSUME_AWS_ACCESS_KEY_ID_CONFIG = "assume.aws.access.key.id";
-  public static final String ASSUME_AWS_SECRET_ACCESS_KEY_CONFIG = "assume.aws.secret.access.key";
   public static final String CUSTOMER_ROLE_ARN_CONFIG = "aws.iam.assume.role";
   public static final String CUSTOMER_ROLE_ARN_DEFAULT = "";
   public static final String CUSTOMER_ROLE_EXTERNAL_ID_CONFIG = "aws.iam.external.id";
@@ -322,38 +320,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         ++orderInGroup,
         Width.LONG,
         "AWS Role ARN"
-    );
-
-    configDef.define(
-        ASSUME_AWS_ACCESS_KEY_ID_CONFIG,
-        Type.STRING,
-        AWS_ACCESS_KEY_ID_DEFAULT,
-        Importance.HIGH,
-        "The AWS access key ID used to authenticate personal AWS credentials such as IAM "
-            + "credentials. Use only if you do not wish to authenticate by using a credentials "
-            + "provider class via ``"
-            + CREDENTIALS_PROVIDER_CLASS_CONFIG
-            + "``",
-        group,
-        ++orderInGroup,
-        Width.LONG,
-        "Assume - AWS Access Key ID"
-    );
-
-    configDef.define(
-        ASSUME_AWS_SECRET_ACCESS_KEY_CONFIG,
-        Type.PASSWORD,
-        AWS_SECRET_ACCESS_KEY_DEFAULT,
-        Importance.HIGH,
-        "The secret access key used to authenticate personal AWS credentials such as IAM "
-            + "credentials. Use only if you do not wish to authenticate by using a credentials "
-            + "provider class via ``"
-            + CREDENTIALS_PROVIDER_CLASS_CONFIG
-            + "``",
-        group,
-        ++orderInGroup,
-        Width.LONG,
-        "Assume - AWS Secret Access Key"
     );
   }
 
@@ -978,14 +944,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getPassword(AWS_SECRET_ACCESS_KEY_CONFIG);
   }
 
-  public String assumeAwsAccessKeyId() {
-    return getString(ASSUME_AWS_ACCESS_KEY_ID_CONFIG);
-  }
-
-  public Password assumeAwsSecretKeyId() {
-    return getPassword(ASSUME_AWS_SECRET_ACCESS_KEY_CONFIG);
-  }
-
   public String awsCustomerRoleARN() {
     return getString(CUSTOMER_ROLE_ARN_CONFIG);
   }
@@ -1016,49 +974,26 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       log.info("Authentication method: {}", authMethod);
 
       if (provider instanceof Configurable) {
-        log.info("Instance of configurable");
         Map<String, Object> configs = originalsWithPrefix(CREDENTIALS_PROVIDER_CONFIG_PREFIX);
         configs.remove(CREDENTIALS_PROVIDER_CLASS_CONFIG.substring(
             CREDENTIALS_PROVIDER_CONFIG_PREFIX.length()
         ));
 
-        authMethod = getAuthenticationMethod();
-        log.info("Authentication method: {}", authMethod);
-
-        if (authMethod.equals("IAM Assume Role")) {
-          log.info("Assume role authentication");
-          configs.put(CUSTOMER_ROLE_ARN_CONFIG, awsCustomerRoleARN());
-          configs.put(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG, awsExternalId());
-          configs.put(MIDDLEWARE_ROLE_ARN_CONFIG, awsMiddlewareRoleARN());
-
-          configs.put(ASSUME_AWS_ACCESS_KEY_ID_CONFIG, assumeAwsAccessKeyId());
-          configs.put(ASSUME_AWS_SECRET_ACCESS_KEY_CONFIG, assumeAwsSecretKeyId().value());
-
-          provider = new AwsIamAssumeRoleChaining();
-          ((AwsIamAssumeRoleChaining) provider).configure(configs);
-        } else {
-          configs.put(AWS_ACCESS_KEY_ID_CONFIG, awsAccessKeyId());
-          configs.put(AWS_SECRET_ACCESS_KEY_CONFIG, awsSecretKeyId().value());
-          ((Configurable) provider).configure(configs);
-        }
+        configs.put(AWS_ACCESS_KEY_ID_CONFIG, awsAccessKeyId());
+        configs.put(AWS_SECRET_ACCESS_KEY_CONFIG, awsSecretKeyId().value());
+        ((Configurable) provider).configure(configs);
       } else {
         authMethod = getAuthenticationMethod();
-        log.info("Authentication method: ", authMethod);
-        Map<String, Object> configs = new HashMap<String, Object>();
 
         if (authMethod.equals("IAM Assume Role")) {
-          log.info("Assume role authentication");
+          Map<String, Object> configs = new HashMap<String, Object>();
           configs.put(CUSTOMER_ROLE_ARN_CONFIG, awsCustomerRoleARN());
           configs.put(CUSTOMER_ROLE_EXTERNAL_ID_CONFIG, awsExternalId().value());
           configs.put(MIDDLEWARE_ROLE_ARN_CONFIG, awsMiddlewareRoleARN());
 
-          configs.put(ASSUME_AWS_ACCESS_KEY_ID_CONFIG, assumeAwsAccessKeyId());
-          configs.put(ASSUME_AWS_SECRET_ACCESS_KEY_CONFIG, assumeAwsSecretKeyId().value());
-
           provider = new AwsIamAssumeRoleChaining();
           ((AwsIamAssumeRoleChaining) provider).configure(configs);
         } else {
-          log.info("Using accessKeyID  and secret");
           final String accessKeyId = awsAccessKeyId();
           final String secretKey = awsSecretKeyId().value();
           if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
