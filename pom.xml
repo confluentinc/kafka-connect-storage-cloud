@@ -425,6 +425,11 @@
             <version>${confluent.version.range}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>connect-utils</artifactId>
+            <version>0.6.3</version>
+        </dependency>
         <!-- Temporary addition until powermock updates its mockito version -->
         <dependency>
             <groupId>org.mockito</groupId>

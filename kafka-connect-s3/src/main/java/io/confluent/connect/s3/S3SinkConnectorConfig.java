@@ -48,6 +48,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.zip.Deflater;
@@ -58,6 +59,7 @@ import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.utils.recommenders.Recommenders;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.ComposableConfig;
 import io.confluent.connect.storage.common.GenericRecommender;
@@ -154,6 +156,16 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String BEHAVIOR_ON_NULL_VALUES_CONFIG = "behavior.on.null.values";
   public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = BehaviorOnNullValues.FAIL.toString();
+
+  public static final String REPORT_NULL_RECORDS_TO_DLQ = "report.null.values.to.dlq";
+  public static final boolean REPORT_NULL_RECORDS_TO_DLQ_DEFAULT = true;
+  public static final String REPORT_NULL_RECORDS_TO_DLQ_DOC =
+      "Flag to determine whether to log records with null values to dlq. "
+          + "`errors.tolerance` should be set to 'all' for successfully writing into dlq";
+  public static final String REPORT_NULL_RECORDS_TO_DLQ_DISPLAY = "Report null value to dlq";
+
+  private static final Predicate<Object> EQUALS_IGNORE =
+      v -> BehaviorOnNullValues.IGNORE.name().equalsIgnoreCase((String) v);
 
   /**
    * Maximum back-off time when retrying failed requests.
@@ -611,6 +623,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.SHORT,
           "Behavior for null-valued records"
+      );
+      configDef.define(
+          REPORT_NULL_RECORDS_TO_DLQ,
+          Type.BOOLEAN,
+          REPORT_NULL_RECORDS_TO_DLQ_DEFAULT,
+          Importance.LOW,
+          REPORT_NULL_RECORDS_TO_DLQ_DOC,
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          REPORT_NULL_RECORDS_TO_DLQ_DISPLAY,
+          Recommenders.visibleIf(BEHAVIOR_ON_NULL_VALUES_CONFIG, EQUALS_IGNORE)
       );
     }
 
@@ -1120,6 +1144,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public String nullValueBehavior() {
     return getString(BEHAVIOR_ON_NULL_VALUES_CONFIG);
+  }
+
+  public boolean reportNullRecordsToDlq() {
+    return getBoolean(REPORT_NULL_RECORDS_TO_DLQ);
   }
 
   public enum BehaviorOnNullValues {
