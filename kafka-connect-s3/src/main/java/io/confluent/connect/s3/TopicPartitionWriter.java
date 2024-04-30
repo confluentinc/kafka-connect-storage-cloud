@@ -34,6 +34,8 @@ import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.avro.SchemaParseException;
+import org.apache.parquet.schema.InvalidSchemaException;
 
 import java.util.Comparator;
 import java.util.HashMap;
@@ -583,7 +585,7 @@ public class TopicPartitionWriter {
         shouldRemoveWriter = true;
       }
       writer.write(record);
-    } catch (DataException e) {
+    } catch (DataException | SchemaParseException | InvalidSchemaException e) {
       if (reporter != null) {
         if (shouldRemoveStartOffset) {
           startOffsets.remove(encodedPartition);
