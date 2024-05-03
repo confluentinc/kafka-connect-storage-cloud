@@ -135,9 +135,12 @@ public class S3SinkConnectorValidator {
       }
     }
   }
-  private void validateWanModeAndPathStyleCompatibility(S3SinkConnectorConfig s3SinkConnectorConfig) {
+
+  private void validateWanModeAndPathStyleCompatibility(
+      S3SinkConnectorConfig s3SinkConnectorConfig) {
     boolean s3WanModeEnabled = s3SinkConnectorConfig.getBoolean(WAN_MODE_CONFIG);
-    boolean pathStyleAccessEnabled = s3SinkConnectorConfig.getBoolean(S3_PATH_STYLE_ACCESS_ENABLED_CONFIG);
+    boolean pathStyleAccessEnabled =
+        s3SinkConnectorConfig.getBoolean(S3_PATH_STYLE_ACCESS_ENABLED_CONFIG);
     if (s3WanModeEnabled && pathStyleAccessEnabled) {
       recordErrors(ACCESS_MODE_ERROR_MESSAGE, WAN_MODE_CONFIG, S3_PATH_STYLE_ACCESS_ENABLED_CONFIG);
     }
