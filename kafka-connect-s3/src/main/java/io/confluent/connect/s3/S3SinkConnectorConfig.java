@@ -75,14 +75,10 @@ import io.confluent.connect.storage.partitioner.FieldPartitioner;
 import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
-
-  private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorConfig.class);
   // S3 Group
   public static final String S3_BUCKET_CONFIG = "s3.bucket.name";
 
@@ -971,7 +967,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
       
       String authMethod = getAuthenticationMethod();
-      log.info("Authentication method: {}", authMethod);
 
       if (provider instanceof Configurable) {
         Map<String, Object> configs = originalsWithPrefix(CREDENTIALS_PROVIDER_CONFIG_PREFIX);

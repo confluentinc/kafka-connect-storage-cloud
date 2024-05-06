@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Confluent Inc.
+ * Copyright 2024 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,8 +24,6 @@ import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.CUSTOMER_ROLE_ARN_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.CUSTOMER_ROLE_EXTERNAL_ID_CONFIG;
@@ -33,8 +31,6 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.MIDDLEWARE_ROLE_ARN_
 import java.util.Map;
 
 public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
-
-  private static final Logger log = LoggerFactory.getLogger(AwsIamAssumeRoleChaining.class);
   private static final ConfigDef STS_CONFIG_DEF = new ConfigDef()
       .define(
         CUSTOMER_ROLE_EXTERNAL_ID_CONFIG,
@@ -73,7 +69,6 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
         "", 
         null
     );
-    log.info("Got initial provider");
 
     // Use the credentials from the initial role to assume the subsequent role
     stsCredentialProvider = buildProvider(
@@ -82,7 +77,6 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
         customerRoleExternalId, 
         initialProvider
     );
-    log.info("Got final credentials");
   }
 
   // Updated buildProvider to optionally accept an existing AwsCredentialsProvider
@@ -129,6 +123,10 @@ public class AwsIamAssumeRoleChaining implements AWSCredentialsProvider {
           initialProvider
       );
     }
-    //stsCredentialProvider.refresh();
+  }
+
+  // Visible for test
+  public STSAssumeRoleSessionCredentialsProvider getProvider() {
+    return stsCredentialProvider;
   }
 }
