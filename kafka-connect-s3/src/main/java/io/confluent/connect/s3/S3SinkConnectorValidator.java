@@ -36,12 +36,15 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.COMPRESSION_TYPE_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.HEADERS_FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 
@@ -88,7 +91,7 @@ public class S3SinkConnectorValidator {
     try {
       s3SinkConnectorConfig = new S3SinkConnectorConfig(config, connectorConfigs);
     } catch (ConfigException exception) {
-      log.trace("Configuration not ready for cross validation.");
+      log.error("Configuration not ready for cross validation.", exception);
     }
     if (s3SinkConnectorConfig != null) {
       validateCompression(
@@ -96,6 +99,8 @@ public class S3SinkConnectorValidator {
           s3SinkConnectorConfig.storeKafkaKeys(), s3SinkConnectorConfig.keysFormatClass(),
           s3SinkConnectorConfig.storeKafkaHeaders(), s3SinkConnectorConfig.headersFormatClass()
       );
+      validateTombstoneWriter(s3SinkConnectorConfig.isTombstoneWriteEnabled(),
+          s3SinkConnectorConfig.storeKafkaKeys());
 
       validateWanModeAndPathStyleCompatibility(s3SinkConnectorConfig);
     }
@@ -133,6 +138,15 @@ public class S3SinkConnectorValidator {
               STORE_KAFKA_HEADERS_CONFIG, HEADERS_FORMAT_CLASS_CONFIG, COMPRESSION_TYPE_CONFIG);
         }
       }
+    }
+  }
+
+  public void validateTombstoneWriter(boolean isTombstoneWriteEnabled, boolean isStoreKeysEnabled) {
+    if (isTombstoneWriteEnabled && !isStoreKeysEnabled) {
+      recordErrors(
+          "Writing Kafka record keys to storage is mandatory when tombstone writing is"
+              + " enabled.",
+          STORE_KAFKA_KEYS_CONFIG, BEHAVIOR_ON_NULL_VALUES_CONFIG);
     }
   }
 

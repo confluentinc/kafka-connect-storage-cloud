@@ -92,7 +92,7 @@ public class S3OutputStream extends PositionOutputStream {
     this.compressionType = conf.getCompressionType();
     this.compressionLevel = conf.getCompressionLevel();
     this.position = 0L;
-    log.debug("Create S3OutputStream for bucket '{}' key '{}'", bucket, key);
+    log.info("Create S3OutputStream for bucket '{}' key '{}'", bucket, key);
   }
 
   @Override
