@@ -40,8 +40,12 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VAL
 import static io.confluent.connect.s3.S3SinkConnectorConfig.COMPRESSION_TYPE_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.HEADERS_FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 
 public class S3SinkConnectorValidator {
@@ -61,6 +65,10 @@ public class S3SinkConnectorValidator {
 
   public static final String FORMAT_CONFIG_ERROR_MESSAGE = "Compression Type %s "
       + "not valid for %s format class: ( %s ).";
+
+  private static final String ACCESS_MODE_ERROR_MESSAGE = "Both accelerate mode and path style "
+      + "access are being enabled. These options are mutually exclusive and cannot be enabled "
+      + "together. Please disable one of them";
 
   private final Map<String, String> connectorConfigs;
   private final ConfigDef config;
@@ -93,6 +101,8 @@ public class S3SinkConnectorValidator {
       );
       validateTombstoneWriter(s3SinkConnectorConfig.isTombstoneWriteEnabled(),
           s3SinkConnectorConfig.storeKafkaKeys());
+
+      validateWanModeAndPathStyleCompatibility(s3SinkConnectorConfig);
     }
 
     return new Config(new ArrayList<>(this.valuesByKey.values()));
@@ -137,6 +147,16 @@ public class S3SinkConnectorValidator {
           "Writing Kafka record keys to storage is mandatory when tombstone writing is"
               + " enabled.",
           STORE_KAFKA_KEYS_CONFIG, BEHAVIOR_ON_NULL_VALUES_CONFIG);
+    }
+  }
+
+  private void validateWanModeAndPathStyleCompatibility(
+      S3SinkConnectorConfig s3SinkConnectorConfig) {
+    boolean s3WanModeEnabled = s3SinkConnectorConfig.getBoolean(WAN_MODE_CONFIG);
+    boolean pathStyleAccessEnabled =
+        s3SinkConnectorConfig.getBoolean(S3_PATH_STYLE_ACCESS_ENABLED_CONFIG);
+    if (s3WanModeEnabled && pathStyleAccessEnabled) {
+      recordErrors(ACCESS_MODE_ERROR_MESSAGE, WAN_MODE_CONFIG, S3_PATH_STYLE_ACCESS_ENABLED_CONFIG);
     }
   }
 
