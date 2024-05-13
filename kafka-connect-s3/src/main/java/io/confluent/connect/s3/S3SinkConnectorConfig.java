@@ -281,7 +281,39 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         Arrays.stream(AffixType.names()).collect(Collectors.toList()));
   }
 
-  public static void addIamConfigDef(ConfigDef configDef, final String group, int orderInGroup) {
+  public static void addAuthenticationConfigDef(ConfigDef configDef, final String group, int orderInGroup) {
+    configDef.define(
+        AWS_ACCESS_KEY_ID_CONFIG,
+        Type.STRING,
+        AWS_ACCESS_KEY_ID_DEFAULT,
+        Importance.HIGH,
+            "The AWS access key ID used to authenticate personal AWS credentials such as IAM "
+            + "credentials. Use only if you do not wish to authenticate by using a credentials "
+            + "provider class via ``"
+            + CREDENTIALS_PROVIDER_CLASS_CONFIG
+            + "``",
+        group,
+        ++orderInGroup,
+        Width.LONG,
+        "AWS Access Key ID"
+    );
+
+    configDef.define(
+        AWS_SECRET_ACCESS_KEY_CONFIG,
+        Type.PASSWORD,
+        AWS_SECRET_ACCESS_KEY_DEFAULT,
+        Importance.HIGH,
+            "The secret access key used to authenticate personal AWS credentials such as IAM "
+            + "credentials. Use only if you do not wish to authenticate by using a credentials "
+            + "provider class via ``"
+            + CREDENTIALS_PROVIDER_CLASS_CONFIG
+            + "``",
+        group,
+        ++orderInGroup,
+        Width.LONG,
+        "AWS Secret Access Key"
+    );
+    
     configDef.define(
         CUSTOMER_ROLE_ARN_CONFIG,
         Type.STRING,
@@ -434,8 +466,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "Authentication method"
       );
 
-      // Define IAM Role ARN ConfigDef
-      addIamConfigDef(configDef, group, orderInGroup);
+      // Define Config use for Authentication
+      addAuthenticationConfigDef(configDef, group, orderInGroup);
 
       configDef.define(
           AWS_ACCESS_KEY_ID_CONFIG,
