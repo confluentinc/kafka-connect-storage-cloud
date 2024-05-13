@@ -281,7 +281,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         Arrays.stream(AffixType.names()).collect(Collectors.toList()));
   }
 
-  public static void addAuthenticationConfigDef(ConfigDef configDef, final String group, int orderInGroup) {
+  public static void addAuthenticationConfigDef(
+      ConfigDef configDef, 
+      final String group, 
+      int orderInGroup) {
     configDef.define(
         AWS_ACCESS_KEY_ID_CONFIG,
         Type.STRING,
