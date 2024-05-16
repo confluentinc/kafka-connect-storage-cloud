@@ -16,11 +16,11 @@
 package io.confluent.connect.s3.format.json;
 
 import org.apache.kafka.connect.json.JsonConverter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.storage.S3Storage;
@@ -46,6 +46,11 @@ public class JsonFormat implements Format<S3SinkConnectorConfig, String> {
         "decimal.format",
         String.valueOf(storage.conf().getJsonDecimalFormat())
     );
+    converterConfig.put(
+        "replace.null.with.default",
+        storage.conf().getBoolean(S3SinkConnectorConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG)
+    );
+
     this.converter.configure(converterConfig, false);
   }
 
