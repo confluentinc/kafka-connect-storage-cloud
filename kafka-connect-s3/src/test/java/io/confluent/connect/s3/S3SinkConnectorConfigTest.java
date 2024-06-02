@@ -25,9 +25,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -49,17 +47,11 @@ import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.connect.avro.AvroDataConfig;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.*;
 
 public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
 
   protected Map<String, String> localProps = new HashMap<>();
-
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   @Before
   @Override
@@ -168,7 +160,8 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
 
     Partitioner<?> klass = new Partitioner<Object>() {
       @Override
-      public void configure(Map<String, Object> config) {}
+      public void configure(Map<String, Object> config) {
+      }
 
       @Override
       public String encodePartition(SinkRecord sinkRecord) {
@@ -270,10 +263,6 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
 
   @Test
   public void testConfigurableCredentialProviderMissingConfigs() {
-
-    thrown.expect(ConfigException.class);
-    thrown.expectMessage("are mandatory configuration properties");
-
     String configPrefix = S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
     properties.put(
         S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
@@ -283,15 +272,14 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
         configPrefix.concat(DummyAssertiveCredentialsProvider.CONFIGS_NUM_KEY_NAME),
         "2"
     );
-
-    connectorConfig = new S3SinkConnectorConfig(properties);
-    connectorConfig.getCredentialsProvider();
+    assertThrows("are mandatory configuration properties", ConfigException.class, () -> {
+      connectorConfig = new S3SinkConnectorConfig(properties);
+      connectorConfig.getCredentialsProvider();
+    });
   }
 
   @Test
   public void testConfigurableAwsAssumeRoleCredentialsProviderMissingConfigs() {
-    thrown.expect(ConfigException.class);
-    thrown.expectMessage("Missing required configuration");
 
     properties.put(
         S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
@@ -310,12 +298,15 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
         configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_EXTERNAL_ID_CONFIG),
         "my-external-id"
     );
-    connectorConfig = new S3SinkConnectorConfig(properties);
 
-    AwsAssumeRoleCredentialsProvider credentialsProvider =
-        (AwsAssumeRoleCredentialsProvider) connectorConfig.getCredentialsProvider();
+    assertThrows("Missing required configuration", ConfigException.class, () -> {
+      connectorConfig = new S3SinkConnectorConfig(properties);
 
-    credentialsProvider.configure(properties);
+      AwsAssumeRoleCredentialsProvider credentialsProvider =
+          (AwsAssumeRoleCredentialsProvider) connectorConfig.getCredentialsProvider();
+
+      credentialsProvider.configure(properties);
+    });
   }
 
   private void assertDefaultPartitionerVisibility(List<ConfigValue> values) {
@@ -452,7 +443,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   }
 
   @Test
-  public void testValidTimezoneWithScheduleIntervalAccepted (){
+  public void testValidTimezoneWithScheduleIntervalAccepted() {
     properties.put(PartitionerConfig.TIMEZONE_CONFIG, "CET");
     properties.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "30");
     new S3SinkConnectorConfig(properties);
@@ -469,7 +460,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   public void testEmptyTimezoneExceptionMessage() {
     properties.put(PartitionerConfig.TIMEZONE_CONFIG, PartitionerConfig.TIMEZONE_DEFAULT);
     properties.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "30");
-    String expectedError =  String.format(
+    String expectedError = String.format(
         "%s configuration must be set when using %s",
         PartitionerConfig.TIMEZONE_CONFIG,
         S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG

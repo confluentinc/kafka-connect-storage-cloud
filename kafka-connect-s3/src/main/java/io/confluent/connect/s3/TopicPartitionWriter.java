@@ -83,6 +83,7 @@ public class TopicPartitionWriter {
   private final String zeroPadOffsetFormat;
   private final String dirDelim;
   private final String fileDelim;
+  private boolean isLowercaseForced;
   private final Time time;
   private DateTimeZone timeZone;
   private final S3SinkConnectorConfig connectorConfig;
@@ -120,8 +121,8 @@ public class TopicPartitionWriter {
     this.writerProvider = writerProvider;
     this.partitioner = partitioner;
     this.timestampExtractor = partitioner instanceof TimeBasedPartitioner
-                                  ? ((TimeBasedPartitioner) partitioner).getTimestampExtractor()
-                                  : null;
+        ? ((TimeBasedPartitioner) partitioner).getTimestampExtractor()
+        : null;
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
@@ -157,6 +158,8 @@ public class TopicPartitionWriter {
     zeroPadOffsetFormat = "%0"
         + connectorConfig.getInt(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG)
         + "d";
+    isLowercaseForced =
+        connectorConfig.getBoolean(S3SinkConnectorConfig.S3_PATH_FORCE_LOWERCASE_CONFIG);
 
     // Initialize scheduled rotation timer if applicable
     setNextScheduledRotation();
@@ -210,6 +213,10 @@ public class TopicPartitionWriter {
         }
         Schema valueSchema = record.valueSchema();
         String encodedPartition = partitioner.encodePartition(record, now);
+        if (isLowercaseForced) {
+          encodedPartition = encodedPartition.toLowerCase();
+        }
+
         Schema currentValueSchema = currentSchemas.get(encodedPartition);
         if (currentValueSchema == null) {
           currentSchemas.put(encodedPartition, valueSchema);
@@ -240,6 +247,7 @@ public class TopicPartitionWriter {
 
   /**
    * Check if we should rotate the file (schema change, time-based).
+   *
    * @returns true if rotation is being performed, false otherwise
    */
   private boolean checkRotationOrAppend(
@@ -254,7 +262,7 @@ public class TopicPartitionWriter {
       // This branch is never true for the first record read by this TopicPartitionWriter
       log.trace(
           "Incompatible change of schema detected for record '{}' with encoded partition "
-          + "'{}' and current offset: '{}'",
+              + "'{}' and current offset: '{}'",
           record,
           encodedPartition,
           currentOffset
@@ -295,7 +303,7 @@ public class TopicPartitionWriter {
       if (recordCount > 0 && rotateOnTime(currentEncodedPartition, currentTimestamp, now)) {
         log.info(
             "Committing files after waiting for rotateIntervalMs time but less than flush.size "
-            + "records available."
+                + "records available."
         );
         setNextScheduledRotation();
 
@@ -464,17 +472,17 @@ public class TopicPartitionWriter {
   private String fileKey(String topicsPrefix, String keyPrefix, String name) {
     String suffix = keyPrefix + dirDelim + name;
     return StringUtils.isNotBlank(topicsPrefix)
-           ? topicsPrefix + dirDelim + suffix
-           : suffix;
+        ? topicsPrefix + dirDelim + suffix
+        : suffix;
   }
 
   private String fileKeyToCommit(String dirPrefix, long startOffset) {
     String name = tp.topic()
-                      + fileDelim
-                      + tp.partition()
-                      + fileDelim
-                      + String.format(zeroPadOffsetFormat, startOffset)
-                      + extension;
+        + fileDelim
+        + tp.partition()
+        + fileDelim
+        + String.format(zeroPadOffsetFormat, startOffset)
+        + extension;
     return fileKey(topicsDir, dirPrefix, name);
   }
 
