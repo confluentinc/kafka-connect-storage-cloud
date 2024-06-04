@@ -18,6 +18,7 @@ package io.confluent.connect.s3.integration;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.SEND_DIGEST_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
@@ -141,6 +142,30 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   public void testBasicRecordsWrittenJson() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+    testBasicRecordsWritten(JSON_EXTENSION, false);
+  }
+
+  @Test
+  public void testBasicRecordsWrittenWithDigestAvro() throws Throwable {
+    //add test specific props
+    props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
+    props.put(SEND_DIGEST_CONFIG, "true");
+    testBasicRecordsWritten(AVRO_EXTENSION, false);
+  }
+
+  @Test
+  public void testBasicRecordsWrittenWithDigestParquet() throws Throwable {
+    //add test specific props
+    props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
+    props.put(SEND_DIGEST_CONFIG, "true");
+    testBasicRecordsWritten(PARQUET_EXTENSION, false);
+  }
+
+  @Test
+  public void testBasicRecordsWrittenWithDigestJson() throws Throwable {
+    //add test specific props
+    props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+    props.put(SEND_DIGEST_CONFIG, "true");
     testBasicRecordsWritten(JSON_EXTENSION, false);
   }
 
