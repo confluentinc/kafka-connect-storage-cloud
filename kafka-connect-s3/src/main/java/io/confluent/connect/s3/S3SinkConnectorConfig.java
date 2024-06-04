@@ -25,6 +25,7 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
 import io.confluent.connect.s3.auth.IamAssumeRoleChainedCredentialsProvider;
+import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -1054,6 +1055,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     try {
       AWSCredentialsProvider provider = ((Class<? extends AWSCredentialsProvider>)
           getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
+      String authMethod = getAuthenticationMethod();
 
       if (provider instanceof Configurable) {
         Map<String, Object> configs = originalsWithPrefix(CREDENTIALS_PROVIDER_CONFIG_PREFIX);
@@ -1065,24 +1067,25 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         configs.put(AWS_SECRET_ACCESS_KEY_CONFIG, awsSecretKeyId().value());
 
         ((Configurable) provider).configure(configs);
-        return provider;
-      }
-
-      String authMethod = getAuthenticationMethod();
-      if (authMethod.equalsIgnoreCase(AUTH_METHOD_IAM_ROLE)) {
+      } else if  (authMethod.equalsIgnoreCase(AUTH_METHOD_IAM_ROLE)) {
         final String awsRoleArn = getAwsRoleArn();
         final String confluentAwsRoleArn = getConfluentAwsRoleArn();
         final String externalId = getExternalID().value();
-        return new IamAssumeRoleChainedCredentialsProvider.Builder(awsRoleArn, confluentAwsRoleArn)
+        provider =
+            new IamAssumeRoleChainedCredentialsProvider.Builder(awsRoleArn, confluentAwsRoleArn)
                 .withExternalId(externalId)
                 .withSessionName("s3-sink")
                 .build();
       } else {
         final String accessKeyId = awsAccessKeyId();
         final String secretKey = awsSecretKeyId().value();
-        BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
-        return new AWSStaticCredentialsProvider(basicCredentials);
+        if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
+          BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
+          provider = new AWSStaticCredentialsProvider(basicCredentials);
+        }
       }
+
+      return provider;
     } catch (IllegalAccessException | InstantiationException e) {
       throw new ConnectException(
           "Invalid class for: " + S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
