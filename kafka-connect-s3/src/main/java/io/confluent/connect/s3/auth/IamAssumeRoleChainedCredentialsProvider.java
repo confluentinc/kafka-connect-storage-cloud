@@ -84,7 +84,7 @@ public class IamAssumeRoleChainedCredentialsProvider implements AWSCredentialsPr
         AWSCredentialsProvider middlewareCredentialsProvider = getAwsCredentialsProvider(
             this.internalStsClient,
             this.middlewareRoleArn,
-            "middleware:" + this.sessionName,
+            "middleware-" + this.sessionName,
             this.middlewareExternalId);
 
         // Step 2: Chain assume role in customer's aws account using the middleware credentials
