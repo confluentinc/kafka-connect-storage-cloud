@@ -16,12 +16,12 @@
 
 package io.confluent.connect.s3.auth;
 
-import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
+import com.amazonaws.services.securitytoken.model.AWSSecurityTokenServiceException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,11 +74,13 @@ public class IamAssumeRoleChainedCredentialsProvider implements AWSCredentialsPr
   }
 
   private void buildCredentialsProvider() {
+    log.info("starting to build credential provider");
     int retryCount = 0;
     boolean success = false;
     long expRetryDelayInMillis = this.retryDelayInMillis;
 
     while (retryCount <= this.maxRetries && !success) {
+      log.info("retry count {}", retryCount);
       try {
         // Step 1: Assume role in confluent middleware aws account
         AWSCredentialsProvider middlewareCredentialsProvider = getAwsCredentialsProvider(
@@ -97,16 +99,17 @@ public class IamAssumeRoleChainedCredentialsProvider implements AWSCredentialsPr
             this.externalId);
 
         success = true;  // chain assume role is successful
-      } catch (AmazonServiceException e) {
+      } catch (AWSSecurityTokenServiceException e) {
+        log.error("exception in sts", e);
         if (retryCount == 0) {
-          log.warn("Failed to build aws credential provider, starting to retry.", e);
+          log.info("Failed to build aws credential provider, starting to retry.", e);
         } else {
-          log.warn("Failed retry Attempt {} of {} to build aws credential provider.",
+          log.info("Failed retry Attempt {} of {} to build aws credential provider.",
               retryCount,
               this.maxRetries,
               e);
         }
-        log.warn("Awaiting {} milliseconds before retrying to build aws credential provider.",
+        log.info("Awaiting {} milliseconds before retrying to build aws credential provider.",
             expRetryDelayInMillis);
         try {
           TimeUnit.MILLISECONDS.sleep(expRetryDelayInMillis);

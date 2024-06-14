@@ -215,6 +215,17 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       ConfigDef.Importance.HIGH;
   public static final String CONFLUENT_AWS_IAM_ROLE_ARN_DISPLAY_NAME = "Confluent AWS IAM Role ARN";
 
+  public static final String AWS_ASSUME_IAM_ROLE_SESSION_NAME_CONFIG =
+      "aws.iam.assume.role.session.name";
+  public static final ConfigDef.Type AWS_ASSUME_IAM_ROLE_SESSION_NAME_TYPE = Type.STRING;
+  public static final String AWS_ASSUME_IAM_ROLE_SESSION_NAME_DEFAULT = "";
+  public static final String AWS_ASSUME_IAM_ROLE_SESSION_NAME_DOC =
+      "Specify the name for the assumed role session.";
+  public static final ConfigDef.Importance AWS_ASSUME_IAM_ROLE_SESSION_NAME_IMPORTANCE =
+      ConfigDef.Importance.HIGH;
+  public static final String AWS_ASSUME_IAM_ROLE_SESSION_NAME_DISPLAY_NAME =
+      "AWS IAM Assume Role Session Name";
+
   public static final String REGION_CONFIG = "s3.region";
   public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
 
@@ -936,6 +947,17 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
             orderInGroup,
             Width.LONG,
             CONFLUENT_AWS_IAM_ROLE_ARN_DISPLAY_NAME
+        )
+        .define(
+            AWS_ASSUME_IAM_ROLE_SESSION_NAME_CONFIG,
+            AWS_ASSUME_IAM_ROLE_SESSION_NAME_TYPE,
+            AWS_ASSUME_IAM_ROLE_SESSION_NAME_DEFAULT,
+            AWS_ASSUME_IAM_ROLE_SESSION_NAME_IMPORTANCE,
+            AWS_ASSUME_IAM_ROLE_SESSION_NAME_DOC,
+            AWS_CREDENTIALS_GROUP,
+            orderInGroup,
+            Width.LONG,
+            AWS_ASSUME_IAM_ROLE_SESSION_NAME_DISPLAY_NAME
         );
   }
 
@@ -1032,6 +1054,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getPassword(CONFLUENT_AWS_IAM_EXTERNAL_ID_CONFIG);
   }
 
+  public String getAwsAssumeIamRoleSessionName() {
+    return getString(AWS_ASSUME_IAM_ROLE_SESSION_NAME_CONFIG);
+  }
+
   public int getPartSize() {
     return getInt(PART_SIZE_CONFIG);
   }
@@ -1057,10 +1083,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         final String awsRoleArn = getAwsRoleArn();
         final String confluentAwsRoleArn = getConfluentAwsRoleArn();
         final String externalId = getExternalID().value();
+        final String sessionName = getAwsAssumeIamRoleSessionName();
         provider =
             new IamAssumeRoleChainedCredentialsProvider.Builder(awsRoleArn, confluentAwsRoleArn)
                 .withExternalId(externalId)
-                .withSessionName("s3-sink")
+                .withSessionName(sessionName)
                 .build();
       } else {
         final String accessKeyId = awsAccessKeyId();
