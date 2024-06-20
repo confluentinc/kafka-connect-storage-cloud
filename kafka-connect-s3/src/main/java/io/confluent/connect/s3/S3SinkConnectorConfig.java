@@ -24,6 +24,7 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
+import io.confluent.connect.s3.auth.IamAssumeRoleChainedCredentialsProvider;
 import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -120,11 +121,112 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           CREDENTIALS_PROVIDER_CLASS_CONFIG.lastIndexOf(".") + 1
       );
 
+  /**
+   * Authentication related configs
+   */
+  public static final String AUTH_METHOD_CONFIG = "authentication.method";
+  public static final ConfigDef.Type AUTH_METHOD_TYPE = ConfigDef.Type.STRING;
+  public static final String AUTH_METHOD_ACCESS_KEYS = "Access Keys";
+  public static final String AUTH_METHOD_IAM_ROLE = "IAM Roles";
+  public static final String AUTH_METHOD_DEFAULT = AUTH_METHOD_ACCESS_KEYS;
+  public static final ConfigDef.Validator AUTH_METHOD_VALIDATOR =
+          ConfigDef.ValidString.in(AUTH_METHOD_ACCESS_KEYS, AUTH_METHOD_IAM_ROLE);
+  public static final ConfigDef.Recommender AUTH_METHOD_RECOMMENDER = new ConfigDef.Recommender() {
+    @Override
+    public List<Object> validValues(String s, Map<String, Object> map) {
+      return Arrays.asList(AUTH_METHOD_ACCESS_KEYS, AUTH_METHOD_IAM_ROLE);
+    }
+
+    @Override
+    public boolean visible(String s, Map<String, Object> map) {
+      return true;
+    }
+  };
+  public static final ConfigDef.Importance AUTH_METHOD_IMPORTANCE = ConfigDef.Importance.HIGH;
+  public static final String AUTH_METHOD_DOC = "Select how you want to authenticate with AWS.";
+  public static final String AUTH_METHOD_DISPLAY_NAME = "Authentication method";
+  public static final String AWS_CREDENTIALS_GROUP = "AWS credentials";
+
+  /**
+   * Configs for Authentication Method : Access Keys
+   */
   public static final String AWS_ACCESS_KEY_ID_CONFIG = "aws.access.key.id";
+  public static final ConfigDef.Type AWS_ACCESS_KEY_ID_TYPE = Type.STRING;
   public static final String AWS_ACCESS_KEY_ID_DEFAULT = "";
+  public static final ConfigDef.Importance AWS_ACCESS_KEY_ID_IMPORTANCE = ConfigDef.Importance.HIGH;
+  public static final String AWS_ACCESS_KEY_ID_DOC =
+          "The AWS access key ID used to authenticate personal AWS credentials such as IAM "
+          + "credentials. Use only if you do not wish to authenticate by using a credentials "
+          + "provider class via ``"
+          + CREDENTIALS_PROVIDER_CLASS_CONFIG
+          + "``";
+  public static final String AWS_ACCESS_KEY_ID_DISPLAY_NAME = "AWS Access Key ID";
 
   public static final String AWS_SECRET_ACCESS_KEY_CONFIG = "aws.secret.access.key";
+  public static final ConfigDef.Type AWS_SECRET_ACCESS_KEY_TYPE = Type.PASSWORD;
   public static final Password AWS_SECRET_ACCESS_KEY_DEFAULT = new Password(null);
+  public static final ConfigDef.Importance AWS_SECRET_ACCESS_KEY_IMPORTANCE =
+      ConfigDef.Importance.HIGH;
+  public static final String AWS_SECRET_ACCESS_KEY_DOC =
+          "The secret access key used to authenticate personal AWS credentials such as IAM "
+          + "credentials. Use only if you do not wish to authenticate by using a credentials "
+          + "provider class via ``"
+          + CREDENTIALS_PROVIDER_CLASS_CONFIG
+          + "``";
+  public static final String AWS_SECRET_ACCESS_KEY_DISPLAY_NAME = "AWS Secret Access Key";
+
+  /**
+   * Configs for Authentication Method : IAM Roles
+   */
+  public static final String PROVIDER_INTEGRATION_ID_CONFIG = "provider.integration.id";
+  public static final ConfigDef.Type PROVIDER_INTEGRATION_ID_TYPE = Type.STRING;
+  public static final String PROVIDER_INTEGRATION_ID_DEFAULT = "";
+  public static final ConfigDef.Importance PROVIDER_INTEGRATION_ID_IMPORTANCE =
+      ConfigDef.Importance.HIGH;
+  public static final String PROVIDER_INTEGRATION_ID_DOC =
+          "Select an existing integration that has access to your resource. "
+          + "In case you need to integrate a new IAM role, use provider integration.";
+  public static final String PROVIDER_INTEGRATION_ID_DISPLAY_NAME = "Provider Integration";
+
+  public static final String AWS_IAM_ROLE_ARN_CONFIG = "aws.iam.role.arn";
+  public static final ConfigDef.Type AWS_IAM_ROLE_ARN_TYPE = Type.STRING;
+  public static final String AWS_IAM_ROLE_ARN_DEFAULT = "";
+  public static final String AWS_IAM_ROLE_ARN_DOC =
+          "The Amazon Resource Name (ARN) that identifies the AWS IAM role that Confluent "
+          + "Cloud assumes to access the resources in customer's AWS account.";
+  public static final ConfigDef.Importance AWS_IAM_ROLE_ARN_IMPORTANCE = ConfigDef.Importance.HIGH;
+  public static final String AWS_IAM_ROLE_ARN_DISPLAY_NAME = "IAM Role ARN";
+
+  public static final String CONFLUENT_AWS_IAM_EXTERNAL_ID_CONFIG = "confluent.aws.iam.external.id";
+  public static final ConfigDef.Type CONFLUENT_AWS_IAM_EXTERNAL_ID_TYPE = Type.PASSWORD;
+  public static final Password CONFLUENT_AWS_IAM_EXTERNAL_ID_DEFAULT = new Password(null);
+  public static final String CONFLUENT_AWS_IAM_EXTERNAL_ID_DOC =
+          "The external ID that Confluent Cloud uses when it assumes the IAM "
+          + "role in customer's Amazon Web Services (AWS) account.";
+  public static final ConfigDef.Importance CONFLUENT_AWS_IAM_EXTERNAL_ID_IMPORTANCE =
+      ConfigDef.Importance.HIGH;
+  public static final String CONFLUENT_AWS_IAM_EXTERNAL_ID_DISPLAY_NAME = "External ID";
+
+  public static final String CONFLUENT_AWS_IAM_ROLE_ARN_CONFIG = "confluent.aws.iam.role.arn";
+  public static final ConfigDef.Type CONFLUENT_AWS_IAM_ROLE_ARN_TYPE = Type.STRING;
+  public static final String CONFLUENT_AWS_IAM_ROLE_ARN_DEFAULT = "";
+  public static final String CONFLUENT_AWS_IAM_ROLE_ARN_DOC =
+          "The Amazon Resource Name (ARN) that specifies the AWS IAM role that Confluent "
+          + "Cloud uses to assume the IAM role within the customer's AWS account.";
+  public static final ConfigDef.Importance CONFLUENT_AWS_IAM_ROLE_ARN_IMPORTANCE =
+      ConfigDef.Importance.HIGH;
+  public static final String CONFLUENT_AWS_IAM_ROLE_ARN_DISPLAY_NAME = "Confluent AWS IAM Role ARN";
+
+  public static final String AWS_ASSUME_IAM_ROLE_SESSION_NAME_CONFIG =
+      "aws.iam.assume.role.session.name";
+  public static final ConfigDef.Type AWS_ASSUME_IAM_ROLE_SESSION_NAME_TYPE = Type.STRING;
+  public static final String AWS_ASSUME_IAM_ROLE_SESSION_NAME_DEFAULT = "";
+  public static final String AWS_ASSUME_IAM_ROLE_SESSION_NAME_DOC =
+      "Specify the name for the assumed role session.";
+  public static final ConfigDef.Importance AWS_ASSUME_IAM_ROLE_SESSION_NAME_IMPORTANCE =
+      ConfigDef.Importance.HIGH;
+  public static final String AWS_ASSUME_IAM_ROLE_SESSION_NAME_DISPLAY_NAME =
+      "AWS IAM Assume Role Session Name";
 
   public static final String REGION_CONFIG = "s3.region";
   public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
@@ -389,37 +491,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "AWS Credentials Provider Class"
       );
 
-      configDef.define(
-          AWS_ACCESS_KEY_ID_CONFIG,
-          Type.STRING,
-          AWS_ACCESS_KEY_ID_DEFAULT,
-          Importance.HIGH,
-          "The AWS access key ID used to authenticate personal AWS credentials such as IAM "
-              + "credentials. Use only if you do not wish to authenticate by using a credentials "
-              + "provider class via ``"
-              + CREDENTIALS_PROVIDER_CLASS_CONFIG
-              + "``",
-          group,
-          ++orderInGroup,
-          Width.LONG,
-          "AWS Access Key ID"
-      );
-
-      configDef.define(
-          AWS_SECRET_ACCESS_KEY_CONFIG,
-          Type.PASSWORD,
-          AWS_SECRET_ACCESS_KEY_DEFAULT,
-          Importance.HIGH,
-          "The secret access key used to authenticate personal AWS credentials such as IAM "
-              + "credentials. Use only if you do not wish to authenticate by using a credentials "
-              + "provider class via ``"
-              + CREDENTIALS_PROVIDER_CLASS_CONFIG
-              + "``",
-          group,
-          ++orderInGroup,
-          Width.LONG,
-          "AWS Secret Access Key"
-      );
+      addAuthenticationConfigs(configDef);
 
       List<String> validSsea = new ArrayList<>(SSEAlgorithm.values().length + 1);
       validSsea.add("");
@@ -815,6 +887,94 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return configDef;
   }
 
+  private static void addAuthenticationConfigs(ConfigDef configDef) {
+    int orderInGroup = 1;
+    configDef.define(
+            AUTH_METHOD_CONFIG,
+            AUTH_METHOD_TYPE,
+            AUTH_METHOD_DEFAULT,
+            AUTH_METHOD_VALIDATOR,
+            AUTH_METHOD_IMPORTANCE,
+            AUTH_METHOD_DOC,
+            AWS_CREDENTIALS_GROUP,
+            orderInGroup++,
+            Width.LONG,
+            AUTH_METHOD_DISPLAY_NAME,
+            AUTH_METHOD_RECOMMENDER)
+        .define(
+            AWS_ACCESS_KEY_ID_CONFIG,
+            AWS_ACCESS_KEY_ID_TYPE,
+            AWS_ACCESS_KEY_ID_DEFAULT,
+            AWS_ACCESS_KEY_ID_IMPORTANCE,
+            AWS_ACCESS_KEY_ID_DOC,
+            AWS_CREDENTIALS_GROUP,
+            orderInGroup++,
+            Width.LONG,
+            AWS_ACCESS_KEY_ID_DISPLAY_NAME)
+        .define(
+            AWS_SECRET_ACCESS_KEY_CONFIG,
+            AWS_SECRET_ACCESS_KEY_TYPE,
+            AWS_SECRET_ACCESS_KEY_DEFAULT,
+            AWS_SECRET_ACCESS_KEY_IMPORTANCE,
+            AWS_SECRET_ACCESS_KEY_DOC,
+            AWS_CREDENTIALS_GROUP,
+            orderInGroup++,
+            Width.LONG,
+            AWS_SECRET_ACCESS_KEY_DISPLAY_NAME)
+        .define(
+            PROVIDER_INTEGRATION_ID_CONFIG,
+            PROVIDER_INTEGRATION_ID_TYPE,
+            PROVIDER_INTEGRATION_ID_DEFAULT,
+            PROVIDER_INTEGRATION_ID_IMPORTANCE,
+            PROVIDER_INTEGRATION_ID_DOC,
+            AWS_CREDENTIALS_GROUP,
+            orderInGroup++,
+            Width.LONG,
+            PROVIDER_INTEGRATION_ID_DISPLAY_NAME)
+        .define(
+            AWS_IAM_ROLE_ARN_CONFIG,
+            AWS_IAM_ROLE_ARN_TYPE,
+            AWS_IAM_ROLE_ARN_DEFAULT,
+            AWS_IAM_ROLE_ARN_IMPORTANCE,
+            AWS_IAM_ROLE_ARN_DOC,
+            AWS_CREDENTIALS_GROUP,
+            orderInGroup++,
+            Width.LONG,
+            AWS_IAM_ROLE_ARN_DISPLAY_NAME)
+        .define(
+            CONFLUENT_AWS_IAM_EXTERNAL_ID_CONFIG,
+            CONFLUENT_AWS_IAM_EXTERNAL_ID_TYPE,
+            CONFLUENT_AWS_IAM_EXTERNAL_ID_DEFAULT,
+            CONFLUENT_AWS_IAM_EXTERNAL_ID_IMPORTANCE,
+            CONFLUENT_AWS_IAM_EXTERNAL_ID_DOC,
+            AWS_CREDENTIALS_GROUP,
+            orderInGroup++,
+            Width.LONG,
+            CONFLUENT_AWS_IAM_EXTERNAL_ID_DISPLAY_NAME)
+        .define(
+            CONFLUENT_AWS_IAM_ROLE_ARN_CONFIG,
+            CONFLUENT_AWS_IAM_ROLE_ARN_TYPE,
+            CONFLUENT_AWS_IAM_ROLE_ARN_DEFAULT,
+            CONFLUENT_AWS_IAM_ROLE_ARN_IMPORTANCE,
+            CONFLUENT_AWS_IAM_ROLE_ARN_DOC,
+            AWS_CREDENTIALS_GROUP,
+            orderInGroup,
+            Width.LONG,
+            CONFLUENT_AWS_IAM_ROLE_ARN_DISPLAY_NAME
+        )
+        .define(
+            AWS_ASSUME_IAM_ROLE_SESSION_NAME_CONFIG,
+            AWS_ASSUME_IAM_ROLE_SESSION_NAME_TYPE,
+            AWS_ASSUME_IAM_ROLE_SESSION_NAME_DEFAULT,
+            AWS_ASSUME_IAM_ROLE_SESSION_NAME_IMPORTANCE,
+            AWS_ASSUME_IAM_ROLE_SESSION_NAME_DOC,
+            AWS_CREDENTIALS_GROUP,
+            orderInGroup,
+            Width.LONG,
+            AWS_ASSUME_IAM_ROLE_SESSION_NAME_DISPLAY_NAME
+        );
+  }
+
   public S3SinkConnectorConfig(Map<String, String> props) {
     this(newConfigDef(), props);
   }
@@ -892,6 +1052,26 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getPassword(AWS_SECRET_ACCESS_KEY_CONFIG);
   }
 
+  public String getAuthenticationMethod() {
+    return getString(AUTH_METHOD_CONFIG);
+  }
+
+  public String getAwsRoleArn() {
+    return getString(AWS_IAM_ROLE_ARN_CONFIG);
+  }
+
+  public String getConfluentAwsRoleArn() {
+    return getString(CONFLUENT_AWS_IAM_ROLE_ARN_CONFIG);
+  }
+
+  public Password getExternalID() {
+    return getPassword(CONFLUENT_AWS_IAM_EXTERNAL_ID_CONFIG);
+  }
+
+  public String getAwsAssumeIamRoleSessionName() {
+    return getString(AWS_ASSUME_IAM_ROLE_SESSION_NAME_CONFIG);
+  }
+
   public int getPartSize() {
     return getInt(PART_SIZE_CONFIG);
   }
@@ -901,6 +1081,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     try {
       AWSCredentialsProvider provider = ((Class<? extends AWSCredentialsProvider>)
           getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
+      String authMethod = getAuthenticationMethod();
 
       if (provider instanceof Configurable) {
         Map<String, Object> configs = originalsWithPrefix(CREDENTIALS_PROVIDER_CONFIG_PREFIX);
@@ -912,6 +1093,16 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         configs.put(AWS_SECRET_ACCESS_KEY_CONFIG, awsSecretKeyId().value());
 
         ((Configurable) provider).configure(configs);
+      } else if  (authMethod.equalsIgnoreCase(AUTH_METHOD_IAM_ROLE)) {
+        final String awsRoleArn = getAwsRoleArn();
+        final String confluentAwsRoleArn = getConfluentAwsRoleArn();
+        final String externalId = getExternalID().value();
+        final String sessionName = getAwsAssumeIamRoleSessionName();
+        provider =
+            new IamAssumeRoleChainedCredentialsProvider.Builder(awsRoleArn, confluentAwsRoleArn)
+                .withExternalId(externalId)
+                .withSessionName(sessionName)
+                .build();
       } else {
         final String accessKeyId = awsAccessKeyId();
         final String secretKey = awsSecretKeyId().value();
