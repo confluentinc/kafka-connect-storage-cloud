@@ -15,10 +15,6 @@
 
 package io.confluent.connect.s3.integration;
 
-import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
-import static io.confluent.kafka.schemaregistry.ClusterTestHarness.KAFKASTORE_TOPIC;
-
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.services.s3.AmazonS3;
@@ -29,27 +25,8 @@ import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.google.common.collect.ImmutableMap;
-import io.confluent.common.utils.IntegrationTest;
-import io.confluent.kafka.schemaregistry.CompatibilityLevel;
-import io.confluent.kafka.schemaregistry.RestApp;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
-import java.net.ServerSocket;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.concurrent.TimeUnit;
-
-import io.confluent.connect.s3.util.S3Utils;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
@@ -79,6 +56,30 @@ import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.net.ServerSocket;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Properties;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import io.confluent.common.utils.IntegrationTest;
+import io.confluent.connect.s3.util.S3Utils;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.RestApp;
+
+import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
+import static io.confluent.kafka.schemaregistry.ClusterTestHarness.KAFKASTORE_TOPIC;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @Category(IntegrationTest.class)
@@ -332,15 +333,15 @@ public abstract class BaseConnectorIT {
         .field("myFloat32", Schema.FLOAT32_SCHEMA)
         .field("myFloat64", Schema.FLOAT64_SCHEMA)
         .field("myString", Schema.STRING_SCHEMA)
+        .field("withDefault", SchemaBuilder.bool().optional().defaultValue(true).build())
         .build();
   }
 
   protected Struct getSampleStructVal(Schema structSchema) {
-    Date sampleDate = new Date(1111111);
-    sampleDate.setTime(0);
     return new Struct(structSchema)
         .put("ID", (long) 1)
         .put("myBool", true)
+        .put("withDefault", null)
         .put("myInt32", 32)
         .put("myFloat32", 3.2f)
         .put("myFloat64", 64.64)
@@ -409,12 +410,15 @@ public abstract class BaseConnectorIT {
    * @param bucketName          the name of the s3 test bucket
    * @param expectedRowsPerFile the number of rows a file should have
    * @param expectedRow         the expected row data in each file
+   * @param useDefaultValues
+   *
    * @return whether every row of the files read equals the expected row
    */
   protected boolean fileContentsAsExpected(
       String bucketName,
       int expectedRowsPerFile,
-      Struct expectedRow
+      Struct expectedRow,
+      boolean useDefaultValues
   ) {
     log.info("expectedRow: {}", expectedRow);
     for (String fileName :
@@ -427,7 +431,7 @@ public abstract class BaseConnectorIT {
       String fileExtension = getExtensionFromKey(fileName);
       List<JsonNode> downloadedFileContents = contentGetters.get(fileExtension)
           .apply(destinationPath);
-      if (!fileContentsMatchExpected(downloadedFileContents, expectedRowsPerFile, expectedRow)) {
+      if (!fileContentsMatchExpected(downloadedFileContents, expectedRowsPerFile, expectedRow, useDefaultValues)) {
         return false;
       }
       downloadedFile.delete();
@@ -481,12 +485,15 @@ public abstract class BaseConnectorIT {
    * @param fileContents        the file contents as a list of JsonNodes
    * @param expectedRowsPerFile the number of rows expected in the file
    * @param expectedRow         the expected values of each row
+   * @param useDefaultValues    use default values from struct
+   *
    * @return whether the file contents match the expected row
    */
   protected boolean fileContentsMatchExpected(
       List<JsonNode> fileContents,
       int expectedRowsPerFile,
-      Struct expectedRow
+      Struct expectedRow,
+      boolean useDefaultValues
   ) {
     if (fileContents.size() != expectedRowsPerFile) {
       log.error("Number of rows in file do not match the expected count, actual: {}, expected: {}",
@@ -494,7 +501,7 @@ public abstract class BaseConnectorIT {
       return false;
     }
     for (JsonNode row : fileContents) {
-      if (!fileRowMatchesExpectedRow(row, expectedRow)) {
+      if (!fileRowMatchesExpectedRow(row, expectedRow, useDefaultValues)) {
         return false;
       }
     }
@@ -512,18 +519,34 @@ public abstract class BaseConnectorIT {
   /**
    * Compare the row in the file and its values to the expected row's values.
    *
-   * @param fileRow     the row read from the file as a JsonNode
-   * @param expectedRow the expected contents of the row
+   * @param fileRow          the row read from the file as a JsonNode
+   * @param expectedRow      the expected contents of the row
+   * @param useDefaultValues
+   *
    * @return whether the file row matches the expected row
    */
-  private boolean fileRowMatchesExpectedRow(JsonNode fileRow, Struct expectedRow) {
-    log.debug("Comparing rows: file: {}, expected: {}", fileRow, expectedRow);
+  private boolean fileRowMatchesExpectedRow(JsonNode fileRow, Struct expectedRow, boolean useDefaultValues) {
+    log.info("Comparing rows: file: {}, expected: {}", fileRow, expectedRow);
     // compare the field values
     for (Field key : expectedRow.schema().fields()) {
-      String expectedValue = expectedRow.get(key).toString();
-      String rowValue = fileRow.get(key.name()).toString().replaceAll("^\"|\"$", "");
-      log.debug("Comparing values: {}, {}", expectedValue, rowValue);
-      if (!rowValue.equals(expectedValue)) {
+      String expectedValue = null;
+      if (useDefaultValues) {
+        expectedValue = expectedRow.get(key).toString();
+      } else {
+        Object withoutDefault = expectedRow.getWithoutDefault(key.name());
+        if (withoutDefault != null) {
+          expectedValue = withoutDefault.toString();
+        }
+      }
+
+      JsonNode jsonValue = fileRow.get(key.name());
+      String rowValue = null;
+      if (!(jsonValue instanceof NullNode)) {
+        rowValue = jsonValue.toString().replaceAll("^\"|\"$", "");
+      }
+
+      log.info("Comparing values: {}, {}, {}, {}", key.name(), expectedValue, rowValue, Objects.equals(rowValue, expectedValue));
+      if (!Objects.equals(rowValue, expectedValue)) {
         return false;
       }
     }

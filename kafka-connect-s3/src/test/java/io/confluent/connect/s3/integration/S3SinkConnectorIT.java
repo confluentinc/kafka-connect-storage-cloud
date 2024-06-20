@@ -17,11 +17,10 @@ package io.confluent.connect.s3.integration;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.TOMBSTONE_ENCODED_PARTITION;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
@@ -32,7 +31,6 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_C
 import static org.hamcrest.core.StringStartsWith.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-
 import io.confluent.connect.s3.S3SinkConnector;
 import io.confluent.connect.s3.S3SinkConnectorConfig.IgnoreOrFailBehavior;
 import io.confluent.connect.s3.S3SinkConnectorConfig.OutputWriteBehavior;
@@ -40,6 +38,7 @@ import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.s3.util.EmbeddedConnectUtils;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -51,8 +50,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-
-import io.confluent.connect.s3.util.EmbeddedConnectUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -60,10 +57,10 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.common.header.Header;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -99,7 +96,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   @Before
   public void before() throws InterruptedException {
-    initializeJsonConverter();
+    initializeJsonConverter(true);
     initializeCustomProducer();
     setupProperties();
     waitForSchemaRegistryToStart();
@@ -127,21 +124,33 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   public void testBasicRecordsWrittenAvro() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
-    testBasicRecordsWritten(AVRO_EXTENSION, false);
+    testBasicRecordsWritten(AVRO_EXTENSION, false, true);
   }
 
   @Test
   public void testBasicRecordsWrittenParquet() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
-    testBasicRecordsWritten(PARQUET_EXTENSION, false);
+    testBasicRecordsWritten(PARQUET_EXTENSION, false, true);
   }
 
   @Test
   public void testBasicRecordsWrittenJson() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
-    testBasicRecordsWritten(JSON_EXTENSION, false);
+    testBasicRecordsWritten(JSON_EXTENSION, false, true);
+  }
+
+  @Test
+  public void testBasicRecordsWrittenJsonWithoutDefaults() throws Throwable {
+    initializeJsonConverter(false);
+
+    //add test specific props
+    props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+    props.put(REPLACE_NULL_WITH_DEFAULT_CONFIG, "false");
+    props.put("value.converter.replace.null.with.default", "false");
+    props.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
+    testBasicRecordsWritten(JSON_EXTENSION, false, false);
   }
 
   @Test
@@ -155,38 +164,42 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     testTombstoneRecordsWritten(JSON_EXTENSION, false);
   }
 
-
+  @Test
   public void testFilesWrittenToBucketAvroWithExtInTopic() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
-    testBasicRecordsWritten(AVRO_EXTENSION, true);
+    testBasicRecordsWritten(AVRO_EXTENSION, true, true);
   }
 
   @Test
   public void testFilesWrittenToBucketParquetWithExtInTopic() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
-    testBasicRecordsWritten(PARQUET_EXTENSION, true);
+    testBasicRecordsWritten(PARQUET_EXTENSION, true, true);
   }
 
   @Test
   public void testFilesWrittenToBucketJsonWithExtInTopic() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
-    testBasicRecordsWritten(JSON_EXTENSION, true);
+    testBasicRecordsWritten(JSON_EXTENSION, true, true);
   }
 
   /**
    * Test that the expected records are written for a given file extension
    * Optionally, test that topics which have "*.{expectedFileExtension}*" in them are processed
    * and written.
+   *
    * @param expectedFileExtension The file extension to test against
-   * @param addExtensionInTopic Add a topic to to the test which contains the extension
+   * @param addExtensionInTopic   Add a topic to the test which contains the extension
+   * @param useDefaultValues      Should default values be used or null values
+   *
    * @throws Throwable
    */
   private void testBasicRecordsWritten(
           String expectedFileExtension,
-          boolean addExtensionInTopic
+          boolean addExtensionInTopic,
+          boolean useDefaultValues
   ) throws Throwable {
     final String topicNameWithExt = "other." + expectedFileExtension + ".topic." + expectedFileExtension;
 
@@ -241,7 +254,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     assertFileNamesValid(TEST_BUCKET_NAME, new ArrayList<>(expectedTopicFilenames));
     // Now check that all files created by the sink have the contents that were sent
     // to the producer (they're all the same content)
-    assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
+    assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct, useDefaultValues));
   }
 
   private void testTombstoneRecordsWritten(
@@ -350,7 +363,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
     assertEquals(expectedDLQRecordCount, dlqRecords.count());
     assertDLQRecordMessages(expectedErrors, dlqRecords);
-    assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
+    assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct, true));
   }
 
   /**
@@ -424,10 +437,14 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     }
   }
 
-  private void initializeJsonConverter() {
+  private void initializeJsonConverter(boolean replaceNullWithDefaults) {
     Map<String, Object> jsonConverterProps = new HashMap<>();
     jsonConverterProps.put("schemas.enable", "true");
     jsonConverterProps.put("converter.type", "value");
+    if (!replaceNullWithDefaults) {
+      jsonConverterProps.put("replace.null.with.default", "false");
+    }
+
     jsonConverter = new JsonConverter();
     jsonConverter.configure(jsonConverterProps);
   }
