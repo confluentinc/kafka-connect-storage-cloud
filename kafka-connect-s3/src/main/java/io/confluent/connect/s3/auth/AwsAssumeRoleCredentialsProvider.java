@@ -114,4 +114,8 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
     }
   }
 
+  // Visible for test
+  public STSAssumeRoleSessionCredentialsProvider getProvider() {
+    return stsCredentialProvider;
+  }
 }
