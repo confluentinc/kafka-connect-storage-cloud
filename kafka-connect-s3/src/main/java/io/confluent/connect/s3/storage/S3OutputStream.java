@@ -30,6 +30,8 @@ import com.amazonaws.services.s3.model.SSECustomerKey;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
+
+import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.parquet.io.PositionOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +40,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -64,6 +67,7 @@ public class S3OutputStream extends PositionOutputStream {
   private final int compressionLevel;
   private volatile OutputStream compressionFilter;
   private Long position;
+  private final boolean enableDigest;
 
   public S3OutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
     this.s3 = s3;
@@ -78,6 +82,7 @@ public class S3OutputStream extends PositionOutputStream {
     this.partSize = conf.getPartSize();
     this.cannedAcl = conf.getCannedAcl();
     this.closed = false;
+    this.enableDigest = conf.isSendDigestEnabled();
 
     final boolean elasticBufEnable = conf.getElasticBufferEnable();
     if (elasticBufEnable) {
@@ -264,6 +269,15 @@ public class S3OutputStream extends PositionOutputStream {
                                             .withPartNumber(currentPartNumber)
                                             .withPartSize(partSize)
                                             .withGeneralProgressListener(progressListener);
+
+      if (enableDigest) {
+        byte[] streamBytes = new byte[partSize];
+        inputStream.read(streamBytes, 0, partSize);
+        String digest = Base64.getEncoder().encodeToString(DigestUtils.md5(streamBytes));
+        inputStream.reset();
+        request = request.withMD5Digest(digest);
+      }
+
       log.debug("Uploading part {} for id '{}'", currentPartNumber, uploadId);
       partETags.add(s3.uploadPart(request).getPartETag());
     }

@@ -59,6 +59,7 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.HEADERS_FORMAT_CLASS
 import static io.confluent.connect.s3.S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.SCHEMA_PARTITION_AFFIX_TYPE_CONFIG;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.SEND_DIGEST_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -637,6 +638,30 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   @Test(expected = ConfigException.class)
   public void testSchemaPartitionerAffixTypeExceptionOnWrongValue() {
     properties.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, "Random");
+    new S3SinkConnectorConfig(properties);
+  }
+
+  @Test
+  public void testSendDigestConfigDefault() {
+    properties.remove(SEND_DIGEST_CONFIG);
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(false, connectorConfig.isSendDigestEnabled());
+  }
+
+  @Test
+  public void testSendDigestConfig() {
+    properties.put(SEND_DIGEST_CONFIG, "true");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(true, connectorConfig.isSendDigestEnabled());
+
+    properties.put(SEND_DIGEST_CONFIG, "false");
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(false, connectorConfig.isSendDigestEnabled());
+  }
+
+  @Test(expected = ConfigException.class)
+  public void testSendDigestConfigOnWrongValue() {
+    properties.put(SEND_DIGEST_CONFIG, "Random");
     new S3SinkConnectorConfig(properties);
   }
 }
