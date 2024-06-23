@@ -21,7 +21,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>11.2.15</version>
+        <version>11.2.3</version>
     </parent>
 
     <groupId>io.confluent</groupId>
@@ -71,6 +71,7 @@
         <guava.version>32.1.2-jre</guava.version>
         <avro.version>1.11.3</avro.version>
         <zookeeper.version>3.8.4</zookeeper.version>
+        <provider.integration.version>0.7.0</provider.integration.version>
     </properties>
 
     <repositories>
@@ -153,6 +154,11 @@
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-common-hadoop-shaded-guava</artifactId>
             <version>${kafka.connect.storage.common.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>provider-integration</artifactId>
+            <version>${provider.integration.version}</version>
         </dependency>
         <!-- <dependency>
             <groupId>io.confluent</groupId>
