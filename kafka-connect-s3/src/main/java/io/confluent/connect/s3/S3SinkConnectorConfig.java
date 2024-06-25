@@ -1096,6 +1096,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
             .build();
         provider =
             new ChainedAssumeRoleCredentialsProvider.Builder(middlewareConfig, customerConfig)
+                .withMaxRetries(5)
                 .build();
       } else {
         final String accessKeyId = awsAccessKeyId();
