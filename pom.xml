@@ -154,6 +154,36 @@
             <artifactId>kafka-connect-storage-common-hadoop-shaded-guava</artifactId>
             <version>${kafka.connect.storage.common.version}</version>
         </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry-client-encryption-aws</artifactId>
+            <version>7.6.1</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry-client-encryption-azure</artifactId>
+            <version>7.6.1</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry-client-encryption-gcp</artifactId>
+            <version>7.6.1</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry-client-encryption-hcvault</artifactId>
+            <version>7.6.1</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry-client-encryption-tink</artifactId>
+            <version>7.6.1</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-rules</artifactId>
+            <version>7.6.1</version>
+        </dependency>
         <!-- <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-common-htrace-core4-shaded</artifactId>
