@@ -187,7 +187,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           + "In case you need to integrate a new IAM role, use provider integration.";
   public static final String PROVIDER_INTEGRATION_ID_DISPLAY_NAME = "Provider Integration";
 
-  public static final String AWS_IAM_ROLE_ARN_CONFIG = "aws.iam.role.arn";
+  public static final String AWS_IAM_ROLE_ARN_CONFIG = "customer.aws.iam.role.arn";
   public static final ConfigDef.Type AWS_IAM_ROLE_ARN_TYPE = Type.STRING;
   public static final String AWS_IAM_ROLE_ARN_DEFAULT = "";
   public static final String AWS_IAM_ROLE_ARN_DOC =
