@@ -196,15 +196,15 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final ConfigDef.Importance AWS_IAM_ROLE_ARN_IMPORTANCE = ConfigDef.Importance.HIGH;
   public static final String AWS_IAM_ROLE_ARN_DISPLAY_NAME = "IAM Role ARN";
 
-  public static final String CONFLUENT_AWS_IAM_EXTERNAL_ID_CONFIG = "confluent.aws.iam.external.id";
-  public static final ConfigDef.Type CONFLUENT_AWS_IAM_EXTERNAL_ID_TYPE = Type.PASSWORD;
-  public static final Password CONFLUENT_AWS_IAM_EXTERNAL_ID_DEFAULT = new Password(null);
-  public static final String CONFLUENT_AWS_IAM_EXTERNAL_ID_DOC =
+  public static final String EXTERNAL_ID_CONFIG = "external.id";
+  public static final ConfigDef.Type EXTERNAL_ID_TYPE = Type.PASSWORD;
+  public static final Password EXTERNAL_ID_DEFAULT = new Password(null);
+  public static final String EXTERNAL_ID_DOC =
       "The external ID that Confluent Cloud uses when it assumes the IAM "
           + "role in customer's Amazon Web Services (AWS) account.";
-  public static final ConfigDef.Importance CONFLUENT_AWS_IAM_EXTERNAL_ID_IMPORTANCE =
+  public static final ConfigDef.Importance EXTERNAL_ID_IMPORTANCE =
       ConfigDef.Importance.HIGH;
-  public static final String CONFLUENT_AWS_IAM_EXTERNAL_ID_DISPLAY_NAME = "External ID";
+  public static final String EXTERNAL_ID_DISPLAY_NAME = "External ID";
 
   public static final String CONFLUENT_AWS_IAM_ROLE_ARN_CONFIG = "confluent.aws.iam.role.arn";
   public static final ConfigDef.Type CONFLUENT_AWS_IAM_ROLE_ARN_TYPE = Type.STRING;
@@ -215,6 +215,28 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final ConfigDef.Importance CONFLUENT_AWS_IAM_ROLE_ARN_IMPORTANCE =
       ConfigDef.Importance.HIGH;
   public static final String CONFLUENT_AWS_IAM_ROLE_ARN_DISPLAY_NAME = "Confluent AWS IAM Role ARN";
+
+  public static final String CONFLUENT_MIDDLEWARE_EXTERNAL_ID_CONFIG = "middleware.external.id";
+  public static final ConfigDef.Type CONFLUENT_MIDDLEWARE_EXTERNAL_ID_TYPE = Type.PASSWORD;
+  public static final Password CONFLUENT_MIDDLEWARE_EXTERNAL_ID_DEFAULT = new Password(null);
+  public static final String CONFLUENT_MIDDLEWARE_EXTERNAL_ID_DOC =
+      "The external ID that Confluent Cloud uses when it assumes "
+          + "the IAM role in confluent middleware account.";
+  public static final ConfigDef.Importance CONFLUENT_MIDDLEWARE_EXTERNAL_ID_IMPORTANCE =
+      ConfigDef.Importance.HIGH;
+  public static final String CONFLUENT_MIDDLEWARE_EXTERNAL_ID_DISPLAY_NAME =
+      "Middleware External ID";
+
+  public static final String PROVIDER_INTEGRATION_MAX_RETRIES_CONFIG =
+      "provider.integration.max.retries";
+  public static final ConfigDef.Type PROVIDER_INTEGRATION_MAX_RETRIES_TYPE = Type.INT;
+  public static final int PROVIDER_INTEGRATION_MAX_RETRIES_DEFAULT = 4;
+  public static final String PROVIDER_INTEGRATION_MAX_RETRIES_DOC =
+      "The max retries for provider integration to establish connection";
+  public static final ConfigDef.Importance PROVIDER_INTEGRATION_MAX_RETRIES_IMPORTANCE =
+      ConfigDef.Importance.LOW;
+  public static final String PROVIDER_INTEGRATION_MAX_RETRIES_DISPLAY_NAME =
+      "MProvider Integration Max retries";
 
   public static final String AWS_ASSUME_IAM_ROLE_SESSION_NAME_CONFIG =
       "aws.iam.assume.role.session.name";
@@ -929,15 +951,15 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
             Width.LONG,
             AWS_IAM_ROLE_ARN_DISPLAY_NAME)
         .define(
-            CONFLUENT_AWS_IAM_EXTERNAL_ID_CONFIG,
-            CONFLUENT_AWS_IAM_EXTERNAL_ID_TYPE,
-            CONFLUENT_AWS_IAM_EXTERNAL_ID_DEFAULT,
-            CONFLUENT_AWS_IAM_EXTERNAL_ID_IMPORTANCE,
-            CONFLUENT_AWS_IAM_EXTERNAL_ID_DOC,
+            EXTERNAL_ID_CONFIG,
+            EXTERNAL_ID_TYPE,
+            EXTERNAL_ID_DEFAULT,
+            EXTERNAL_ID_IMPORTANCE,
+            EXTERNAL_ID_DOC,
             AWS_CREDENTIALS_GROUP,
             orderInGroup++,
             Width.LONG,
-            CONFLUENT_AWS_IAM_EXTERNAL_ID_DISPLAY_NAME)
+            EXTERNAL_ID_DISPLAY_NAME)
         .define(
             CONFLUENT_AWS_IAM_ROLE_ARN_CONFIG,
             CONFLUENT_AWS_IAM_ROLE_ARN_TYPE,
@@ -959,6 +981,28 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
             orderInGroup,
             Width.LONG,
             AWS_ASSUME_IAM_ROLE_SESSION_NAME_DISPLAY_NAME
+        )
+        .define(
+            CONFLUENT_MIDDLEWARE_EXTERNAL_ID_CONFIG,
+            CONFLUENT_MIDDLEWARE_EXTERNAL_ID_TYPE,
+            CONFLUENT_MIDDLEWARE_EXTERNAL_ID_DEFAULT,
+            CONFLUENT_MIDDLEWARE_EXTERNAL_ID_IMPORTANCE,
+            CONFLUENT_MIDDLEWARE_EXTERNAL_ID_DOC,
+            AWS_CREDENTIALS_GROUP,
+            orderInGroup,
+            Width.LONG,
+            CONFLUENT_MIDDLEWARE_EXTERNAL_ID_DISPLAY_NAME
+        )
+        .define(
+            PROVIDER_INTEGRATION_MAX_RETRIES_CONFIG,
+            PROVIDER_INTEGRATION_MAX_RETRIES_TYPE,
+            PROVIDER_INTEGRATION_MAX_RETRIES_DEFAULT,
+            PROVIDER_INTEGRATION_MAX_RETRIES_IMPORTANCE,
+            PROVIDER_INTEGRATION_MAX_RETRIES_DOC,
+            AWS_CREDENTIALS_GROUP,
+            orderInGroup,
+            Width.LONG,
+            PROVIDER_INTEGRATION_MAX_RETRIES_DISPLAY_NAME
         );
   }
 
@@ -1052,11 +1096,19 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   public Password getExternalID() {
-    return getPassword(CONFLUENT_AWS_IAM_EXTERNAL_ID_CONFIG);
+    return getPassword(EXTERNAL_ID_CONFIG);
   }
 
   public String getAwsAssumeIamRoleSessionName() {
     return getString(AWS_ASSUME_IAM_ROLE_SESSION_NAME_CONFIG);
+  }
+
+  public Password getMiddlewareExternalID() {
+    return getPassword(CONFLUENT_MIDDLEWARE_EXTERNAL_ID_CONFIG);
+  }
+
+  public int getProviderIntegrationMaxRetries() {
+    return getInt(PROVIDER_INTEGRATION_MAX_RETRIES_CONFIG);
   }
 
   public int getPartSize() {
@@ -1082,22 +1134,36 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
         ((Configurable) provider).configure(configs);
       } else if (authMethod != null && authMethod.equalsIgnoreCase(AUTH_METHOD_IAM_ROLE)) {
-        final String awsRoleArn = getAwsRoleArn();
-        final String confluentAwsRoleArn = getConfluentAwsRoleArn();
-        final String externalId = getExternalID().value();
         final String sessionName = getAwsAssumeIamRoleSessionName();
-        final AssumeRoleConfig middlewareConfig = new AssumeRoleConfig.Builder(confluentAwsRoleArn)
-            .withSessionName("middleware-" + sessionName)
-            .build();
+        final int maxRetries = getProviderIntegrationMaxRetries();
+        // middleware AssumeRole config
+        final String confluentAwsRoleArn = getConfluentAwsRoleArn();
+        final String middlewareExternalId = getMiddlewareExternalID().value();
+        AssumeRoleConfig.Builder confluentMiddlewareConfigBuilder =
+            new AssumeRoleConfig.Builder(confluentAwsRoleArn)
+                .withSessionName("middleware-" + sessionName);
+        if (!StringUtils.isBlank(middlewareExternalId)) {
+          confluentMiddlewareConfigBuilder =
+              confluentMiddlewareConfigBuilder.withExternalId(middlewareExternalId);
+        }
+        final AssumeRoleConfig confluentMiddlewareConfig = confluentMiddlewareConfigBuilder.build();
 
-        final AssumeRoleConfig customerConfig = new AssumeRoleConfig.Builder(awsRoleArn)
-            .withSessionName(sessionName)
-            .withExternalId(externalId)
+        // customer AssumeRole config
+        final String awsRoleArn = getAwsRoleArn();
+        final String externalId = getExternalID().value();
+        AssumeRoleConfig.Builder customerConfigBuilder =
+            new AssumeRoleConfig.Builder(awsRoleArn)
+                .withSessionName(sessionName);
+        if (!StringUtils.isBlank(externalId)) {
+          customerConfigBuilder = customerConfigBuilder.withExternalId(externalId);
+        }
+        final AssumeRoleConfig customerConfig = customerConfigBuilder.build();
+
+        // build the credential provider
+        provider = new ChainedAssumeRoleCredentialsProvider
+            .Builder(confluentMiddlewareConfig, customerConfig)
+            .withMaxRetries(maxRetries)
             .build();
-        provider =
-            new ChainedAssumeRoleCredentialsProvider.Builder(middlewareConfig, customerConfig)
-                .withMaxRetries(5)
-                .build();
       } else {
         final String accessKeyId = awsAccessKeyId();
         final String secretKey = awsSecretKeyId().value();
