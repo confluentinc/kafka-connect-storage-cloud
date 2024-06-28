@@ -24,6 +24,7 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
   private static final String VALUE_SERIALIZER =
       "io.confluent.kafka.serializers.KafkaAvroSerializer";
 
+  private String clusterName;
   private String topicName;
   private String bootstrapServers;
   private String securityProtocol;
@@ -36,12 +37,14 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
   }
 
   public KafkaFileEventConfig(
+      String clusterName,
       String topicName,
       String bootstrapServers,
       String schemaRegistryUrl,
       String securityProtocol,
       String saslMecanism,
       String saslJaasConfig) {
+    this.clusterName = clusterName;
     this.topicName = topicName;
     this.bootstrapServers = bootstrapServers;
     this.schemaRegistryUrl = schemaRegistryUrl;
@@ -61,7 +64,8 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
   @Override
   public String toJson() {
     final StringBuffer sb = new StringBuffer("{");
-    sb.append("\"topic_name\": \"").append(topicName).append('"');
+    sb.append("\"cluster_name\": \"").append(clusterName).append('"');
+    sb.append(", \"topic_name\": \"").append(topicName).append('"');
     sb.append(", \"bootstrap_servers\": \"").append(bootstrapServers).append('"');
     sb.append(", \"schema_registry_url\": \"").append(schemaRegistryUrl).append('"');
     if (securityProtocol != null) {
@@ -85,6 +89,7 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
     prop.setProperty("auto.create.topics.enable", "true");
     // mandatory
     prop.setProperty("bootstrap.servers", bootstrapServers);
+    prop.setProperty("cluster.name", clusterName);
     prop.setProperty("topic.name", topicName);
     prop.setProperty("schema.registry.url", schemaRegistryUrl);
     // optional
@@ -103,7 +108,9 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
   public String getTopicName() {
     return topicName;
   }
-
+  public String getClusterName() {
+        return clusterName;
+    }
   public String getSchemaRegistryUrl() {
     return schemaRegistryUrl;
   }

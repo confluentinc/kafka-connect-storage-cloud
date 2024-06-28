@@ -31,12 +31,13 @@ public abstract class FileEventProvider {
     this.skipError = skipError;
   }
 
-  public String formatDateRFC3339(DateTime timestamp){
+  public String formatDateRFC3339(DateTime timestamp) {
     DateTimeFormatter fmt = ISODateTimeFormat.dateTime();
     return fmt.print(timestamp);
   }
 
   public void call(
+          String clusterName,
           String topicName,
           String s3Partition,
           String filePath,
@@ -47,7 +48,7 @@ public abstract class FileEventProvider {
           DateTime eventDatetime) {
     try {
       log.info("Running file event : {}, {}", topicName, filePath);
-      callImpl(topicName, s3Partition, filePath, partition, baseRecordTimestamp, currentTimestamp, recordCount, eventDatetime);
+      callImpl(clusterName,topicName, s3Partition, filePath, partition, baseRecordTimestamp, currentTimestamp, recordCount, eventDatetime);
     } catch (Exception e) {
       if (skipError) {
         log.error(e.getMessage(), e);
@@ -56,7 +57,9 @@ public abstract class FileEventProvider {
       }
     }
   }
+
   public abstract void callImpl(
+      String clusterName,
       String topicName,
       String s3Partition,
       String filePath,

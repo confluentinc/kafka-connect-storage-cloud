@@ -5,6 +5,11 @@
   "doc": "This event represents a fileEvent Message",
   "fields": [
     {
+      "name": "cluster_name",
+      "type": "string",
+      "doc": "The cluster name of the record being written"
+    },
+    {
       "name": "topic_name",
       "type": "string",
       "doc": "The topic name of the record being written"

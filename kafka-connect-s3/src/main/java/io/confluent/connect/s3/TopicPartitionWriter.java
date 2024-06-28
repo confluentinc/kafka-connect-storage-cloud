@@ -692,7 +692,7 @@ public class TopicPartitionWriter {
   }
 
   private void callbackFile(String encodedPartition) {
-    fileCallback.ifPresent(fs -> fs.call(tp.topic(), encodedPartition,
+    fileCallback.ifPresent(fs -> fs.call(connectorConfig.getClusterName(),tp.topic(), encodedPartition,
             commitFiles.get(encodedPartition), tp.partition(),
             new DateTime(baseRecordTimestamp).withZone(timeZone),
             new DateTime(currentTimestamp).withZone(timeZone), recordCount,

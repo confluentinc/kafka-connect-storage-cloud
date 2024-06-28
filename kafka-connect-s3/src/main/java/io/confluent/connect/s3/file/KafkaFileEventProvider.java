@@ -22,44 +22,46 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.joda.time.DateTime;
 
 public class KafkaFileEventProvider extends FileEventProvider {
-  private final KafkaFileEventConfig kafkaConfig;
+    private final KafkaFileEventConfig kafkaConfig;
 
-  public KafkaFileEventProvider(String configJson, boolean skipError) {
-    super(configJson, skipError);
-    this.kafkaConfig =
-        KafkaFileEventConfig.fromJsonString(configJson, KafkaFileEventConfig.class);
-  }
-
-  @Override
-  public void callImpl(
-      String topicName,
-      String s3Partition,
-      String filePath,
-      int partition,
-      DateTime baseRecordTimestamp,
-      DateTime currentTimestamp,
-      int recordCount,
-      DateTime eventDatetime) {
-    String key = topicName;
-    FileEvent value =
-        new FileEvent(
-            topicName,
-            s3Partition,
-            filePath,
-            partition,
-            formatDateRFC3339(baseRecordTimestamp),
-            formatDateRFC3339(currentTimestamp),
-            recordCount,
-            formatDateRFC3339(eventDatetime));
-    try (final Producer<String, SpecificRecord> producer =
-        new KafkaProducer<>(kafkaConfig.toProps())) {
-      producer.send(
-          new ProducerRecord<>(kafkaConfig.getTopicName(), key, value),
-          (event, ex) -> {
-            if (ex != null) {
-              throw new RuntimeException(ex);
-            }
-          });
+    public KafkaFileEventProvider(String configJson, boolean skipError) {
+        super(configJson, skipError);
+        this.kafkaConfig =
+                KafkaFileEventConfig.fromJsonString(configJson, KafkaFileEventConfig.class);
     }
-  }
+
+    @Override
+    public void callImpl(
+            String clusterName,
+            String topicName,
+            String s3Partition,
+            String filePath,
+            int partition,
+            DateTime baseRecordTimestamp,
+            DateTime currentTimestamp,
+            int recordCount,
+            DateTime eventDatetime) {
+        String key = topicName;
+        FileEvent value =
+                new FileEvent(
+                        clusterName,
+                        topicName,
+                        s3Partition,
+                        filePath,
+                        partition,
+                        formatDateRFC3339(baseRecordTimestamp),
+                        formatDateRFC3339(currentTimestamp),
+                        recordCount,
+                        formatDateRFC3339(eventDatetime));
+        try (final Producer<String, SpecificRecord> producer =
+                     new KafkaProducer<>(kafkaConfig.toProps())) {
+            producer.send(
+                    new ProducerRecord<>(kafkaConfig.getTopicName(), key, value),
+                    (event, ex) -> {
+                        if (ex != null) {
+                            throw new RuntimeException(ex);
+                        }
+                    });
+        }
+    }
 }

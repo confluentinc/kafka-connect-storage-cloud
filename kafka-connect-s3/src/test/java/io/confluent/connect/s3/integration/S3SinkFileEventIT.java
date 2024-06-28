@@ -118,10 +118,12 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
   public void testBasicRecordsWrittenParquetAndRelatedFileEvents() throws Throwable {
     // add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
+    String clusterName = "cluster1";
     String topicFileEvent = "TopicFileEvent";
     props.put(
             FILE_EVENT_CONFIG_JSON,
         new KafkaFileEventConfig(
+                clusterName,
                 topicFileEvent,
                 connect.kafka().bootstrapServers(),
                 restApp.restServer.getURI().toString(),
@@ -137,9 +139,11 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
   public void testFileEventPartition() {
     String bootstrapServers = connect.kafka().bootstrapServers();
     String fileEventTopic = "file_event_topic";
+    String clusterName = "cluster1";
     connect.kafka().createTopic(fileEventTopic);
     KafkaFileEventConfig kafkaFileEventConfig =
             new KafkaFileEventConfig(
+                    clusterName,
                     fileEventTopic,
                     bootstrapServers,
                     restApp.restServer.getURI().toString(),
@@ -148,10 +152,10 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
                     null);
     KafkaFileEventProvider fileEvent =
             new KafkaFileEventProvider(kafkaFileEventConfig.toJson(), false);
-    fileEvent.call("baz-topic", "version/event/hour", "file1.avro", 12,
+    fileEvent.call(clusterName,"baz-topic", "version/event/hour", "file1.avro", 12,
             new DateTime(1234L), new DateTime(123L),
             34, new DateTime(1234L).withZone(DateTimeZone.UTC));
-    fileEvent.call("foo-topic", "version/event/hour", "fil2.avro", 8,
+    fileEvent.call(clusterName,"foo-topic", "version/event/hour", "fil2.avro", 8,
             new DateTime(12345L), new DateTime(1234L), 12, new DateTime(12345L));
 
     // fails if two records are not present in kafka within 1s

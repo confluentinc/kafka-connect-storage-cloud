@@ -79,6 +79,7 @@ import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
+  public static final String CLUSTER_NAME = "cluster.name";
 
   // S3 Group
   public static final String S3_BUCKET_CONFIG = "s3.bucket.name";
@@ -297,6 +298,21 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         connectorGroup,
         latestOrderInGroup
     );
+
+    {
+      final String group = "kafka";
+      int orderInGroup = 0;
+      configDef.define(
+              CLUSTER_NAME,
+              Type.STRING,
+              Importance.HIGH,
+              "The source cluster name.",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "Cluster Name"
+      );
+    }
 
     {
       final String group = "S3";
@@ -897,6 +913,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     for (String key : parsedProps.keySet()) {
       propertyToConfig.put(key, config);
     }
+  }
+
+  public String getClusterName() {
+    return getString(CLUSTER_NAME);
   }
 
   public String getBucketName() {
