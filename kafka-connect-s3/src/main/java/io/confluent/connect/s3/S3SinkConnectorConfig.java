@@ -230,7 +230,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String PROVIDER_INTEGRATION_MAX_RETRIES_CONFIG =
       "provider.integration.max.retries";
   public static final ConfigDef.Type PROVIDER_INTEGRATION_MAX_RETRIES_TYPE = Type.INT;
-  public static final int PROVIDER_INTEGRATION_MAX_RETRIES_DEFAULT = 4;
+  public static final int PROVIDER_INTEGRATION_MAX_RETRIES_DEFAULT = 10;
   public static final String PROVIDER_INTEGRATION_MAX_RETRIES_DOC =
       "The max retries for provider integration to establish connection";
   public static final ConfigDef.Importance PROVIDER_INTEGRATION_MAX_RETRIES_IMPORTANCE =
@@ -1120,7 +1120,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     try {
       AWSCredentialsProvider provider = ((Class<? extends AWSCredentialsProvider>)
           getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
-
       String authMethod = getAuthenticationMethod();
 
       if (provider instanceof Configurable) {
@@ -1133,15 +1132,17 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         configs.put(AWS_SECRET_ACCESS_KEY_CONFIG, awsSecretKeyId().value());
 
         ((Configurable) provider).configure(configs);
-      } else if (authMethod != null && authMethod.equalsIgnoreCase(AUTH_METHOD_IAM_ROLE)) {
+      } else if (AUTH_METHOD_IAM_ROLE.equalsIgnoreCase(authMethod)) {
         final String sessionName = getAwsAssumeIamRoleSessionName();
+        final String middlewareSessionName = "middleware-" + sessionName;
         final int maxRetries = getProviderIntegrationMaxRetries();
+
         // middleware AssumeRole config
         final String confluentAwsRoleArn = getConfluentAwsRoleArn();
         final String middlewareExternalId = getMiddlewareExternalID().value();
         AssumeRoleConfig.Builder confluentMiddlewareConfigBuilder =
             new AssumeRoleConfig.Builder(confluentAwsRoleArn)
-                .withSessionName("middleware-" + sessionName);
+                .withSessionName(middlewareSessionName);
         if (!StringUtils.isBlank(middlewareExternalId)) {
           confluentMiddlewareConfigBuilder =
               confluentMiddlewareConfigBuilder.withExternalId(middlewareExternalId);
