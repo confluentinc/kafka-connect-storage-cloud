@@ -15,8 +15,6 @@
 
 package io.confluent.connect.s3.file;
 
-import org.apache.kafka.common.protocol.types.Field;
-
 import java.util.Properties;
 
 public class KafkaFileEventConfig extends AbstractFileEventConfig {
