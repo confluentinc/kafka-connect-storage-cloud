@@ -118,10 +118,12 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
   public void testBasicRecordsWrittenParquetAndRelatedFileEvents() throws Throwable {
     // add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
+    String clusterName = "cluster1";
     String topicFileEvent = "TopicFileEvent";
     props.put(
             FILE_EVENT_CONFIG_JSON,
         new KafkaFileEventConfig(
+                clusterName,
                 topicFileEvent,
                 connect.kafka().bootstrapServers(),
                 restApp.restServer.getURI().toString(),
@@ -136,10 +138,12 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
   @Test
   public void testFileEventPartition() {
     String bootstrapServers = connect.kafka().bootstrapServers();
+    String clusterName = "cluster1";
     String fileEventTopic = "file_event_topic";
     connect.kafka().createTopic(fileEventTopic);
     KafkaFileEventConfig kafkaFileEventConfig =
             new KafkaFileEventConfig(
+                    clusterName,
                     fileEventTopic,
                     bootstrapServers,
                     restApp.restServer.getURI().toString(),

@@ -43,6 +43,7 @@ public class KafkaFileEventProvider extends FileEventProvider {
     String key = topicName;
     FileEvent value =
         new FileEvent(
+            kafkaConfig.getClusterName(),
             topicName,
             s3Partition,
             filePath,
