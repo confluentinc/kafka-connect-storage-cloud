@@ -21,7 +21,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>11.2.0</version>
+        <version>11.2.1</version>
     </parent>
 
     <groupId>io.confluent</groupId>
@@ -58,17 +58,18 @@
     </modules>
 
     <properties>
+        <jackson.core.version>2.15.0</jackson.core.version>
+        <snappy.java>1.1.10.1</snappy.java>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <maven.release.plugin.version>2.5.3</maven.release.plugin.version>
         <!-- temporary fix by pinning the version until we upgrade to a version of common that contains this or newer version.
             See https://github.com/confluentinc/common/pull/332 for details -->
         <dependency.check.version>6.1.6</dependency.check.version>
-        <hadoop.version>3.2.4</hadoop.version>
+        <hadoop.version>3.3.6</hadoop.version>
         <jettison.version>1.5.4</jettison.version>
-        <json-smart.version>2.4.10</json-smart.version>
-        <jetty.version>9.4.48.v20220622</jetty.version>
         <snakeyaml.version>2.0</snakeyaml.version>
         <woodstox.version>5.4.0</woodstox.version>
+        <snappy.java.version>1.1.10.3</snappy.java.version>
     </properties>
 
     <repositories>
@@ -86,6 +87,17 @@
                 <groupId>org.yaml</groupId>
                 <artifactId>snakeyaml</artifactId>
                 <version>${snakeyaml.version}</version>
+            </dependency>
+            <!-- band aid until the connector catches up with updated pom parent -->
+            <dependency>
+                <groupId>org.xerial.snappy</groupId>
+                <artifactId>snappy-java</artifactId>
+                <version>${snappy.java.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bitbucket.b_c</groupId>
+                <artifactId>jose4j</artifactId>
+                <version>0.9.3</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -136,11 +148,11 @@
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-partitioner</artifactId>
         </dependency>
-        <dependency>
+        <!-- <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-storage-common-htrace-core4-shaded</artifactId>
             <version>${kafka.connect.storage.common.version}</version>
-        </dependency>
+        </dependency> -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
@@ -149,7 +161,12 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
-            <version>${jackson.version}</version>
+            <version>${jackson.core.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.xerial.snappy</groupId>
+            <artifactId>snappy-java</artifactId>
+            <version>${snappy.java}</version>
         </dependency>
         <dependency>
             <groupId>org.codehaus.jettison</groupId>
@@ -243,6 +260,14 @@
                 <exclusion>
                     <groupId>commons-net</groupId>
                     <artifactId>commons-net</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.hadoop.thirdparty </groupId>
+                    <artifactId>hadoop-shaded-protobuf_3_7</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.hadoop.thirdparty </groupId>
+                    <artifactId>hadoop-shaded-guava</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -356,6 +381,16 @@
             <artifactId>powermock-api-mockito2</artifactId>
             <version>${powermock.version}</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.xerial.snappy</groupId>
+            <artifactId>snappy-java</artifactId>
+            <version>${snappy.java}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>${jackson.core.version}</version>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>

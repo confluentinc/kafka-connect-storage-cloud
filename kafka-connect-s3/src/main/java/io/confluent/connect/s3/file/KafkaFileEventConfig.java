@@ -63,9 +63,9 @@ public class KafkaFileEventConfig extends AbstractFileEventConfig {
     final StringBuffer sb = new StringBuffer("{");
     sb.append("\"topic_name\": \"").append(topicName).append('"');
     if(databaseName != null)
-    sb.append("\"database_name\": \"").append(databaseName).append('"');
+      sb.append("\"database_name\": \"").append(databaseName).append('"');
     if(tableName != null)
-    sb.append("\"table_name\": \"").append(tableName).append('"');
+      sb.append("\"table_name\": \"").append(tableName).append('"');
     sb.append(", \"bootstrap_servers\": \"").append(bootstrapServers).append('"');
     sb.append(", \"schema_registry_url\": \"").append(schemaRegistryUrl).append('"');
     sb.append(", \"custom\": {");
