@@ -33,7 +33,7 @@ public abstract class AbstractFileEventConfig {
       ObjectMapper instanceMapper = new ObjectMapper();
       instanceMapper.setPropertyNamingStrategy(
           PropertyNamingStrategy.CAMEL_CASE_TO_LOWER_CASE_WITH_UNDERSCORES);
-      instanceMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
+      instanceMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
       instanceMapper.configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true);
       instanceMapper.enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS);
       T value = instanceMapper.readValue(jsonContent, clazz);

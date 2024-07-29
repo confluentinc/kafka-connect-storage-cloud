@@ -70,11 +70,20 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
   private static final String CONNECTOR_NAME = "s3-sink";
   private static final String DEFAULT_TEST_TOPIC_NAME = "TestTopic";
 
-  private static final List<String> KAFKA_TOPICS = Collections.singletonList(DEFAULT_TEST_TOPIC_NAME);
+  private static final List<String> KAFKA_TOPICS =
+      Collections.singletonList(DEFAULT_TEST_TOPIC_NAME);
 
   private JsonConverter jsonConverter;
   // custom producer to enable sending records with headers
   private Producer<byte[], byte[]> producer;
+  private Map<String, Object> autoCreate =
+      new HashMap<String, Object>() {
+        {
+          put("auto.register.schemas", "true");
+          put("auto.create.topics.enable", "true");
+        }
+      };
+  ;
 
   @Before
   public void before() throws InterruptedException {
@@ -82,7 +91,7 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
     initializeCustomProducer();
     setupProperties();
     waitForSchemaRegistryToStart();
-    //add class specific props
+    // add class specific props
     props.put(SinkConnectorConfig.TOPICS_CONFIG, String.join(",", KAFKA_TOPICS));
     props.put(FLUSH_SIZE_CONFIG, Integer.toString(FLUSH_SIZE_STANDARD));
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
@@ -94,7 +103,9 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
     // file event
     props.put(FILE_EVENT_ENABLE, "true");
     // TimeBasedPartitioner
-    props.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, "io.confluent.connect.storage.partitioner.TimeBasedPartitioner");
+    props.put(
+        PartitionerConfig.PARTITIONER_CLASS_CONFIG,
+        "io.confluent.connect.storage.partitioner.TimeBasedPartitioner");
     props.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, "100");
     props.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'event_date'=YYYY-MM-dd/'event_hour'=HH");
     props.put(PartitionerConfig.LOCALE_CONFIG, "FR_fr");
@@ -113,21 +124,20 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
     waitForFilesInBucket(TEST_BUCKET_NAME, 0);
   }
 
-
   @Test
   public void testBasicRecordsWrittenParquetAndRelatedFileEvents() throws Throwable {
     // add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
     String topicFileEvent = "TopicFileEvent";
     props.put(
-            FILE_EVENT_CONFIG_JSON,
+        FILE_EVENT_CONFIG_JSON,
         new KafkaFileEventConfig(
                 topicFileEvent,
+                null,
+                null,
                 connect.kafka().bootstrapServers(),
                 restApp.restServer.getURI().toString(),
-                null,
-                null,
-                null)
+                this.autoCreate)
             .toJson());
     connect.kafka().createTopic(topicFileEvent);
     testBasicRecordsWrittenAndRelatedFileEvents(PARQUET_EXTENSION, topicFileEvent);
@@ -139,36 +149,47 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
     String fileEventTopic = "file_event_topic";
     connect.kafka().createTopic(fileEventTopic);
     KafkaFileEventConfig kafkaFileEventConfig =
-            new KafkaFileEventConfig(
-                    fileEventTopic,
-                    bootstrapServers,
-                    restApp.restServer.getURI().toString(),
-                    null,
-                    null,
-                    null);
+        new KafkaFileEventConfig(
+            fileEventTopic,
+            null,
+            null,
+            bootstrapServers,
+            restApp.restServer.getURI().toString(),
+            this.autoCreate);
     KafkaFileEventProvider fileEvent =
-            new KafkaFileEventProvider(kafkaFileEventConfig.toJson(), false);
-    fileEvent.call("baz-topic", "version/event/hour", "file1.avro", 12,
-            new DateTime(1234L), new DateTime(123L),
-            34, new DateTime(1234L).withZone(DateTimeZone.UTC));
-    fileEvent.call("foo-topic", "version/event/hour", "fil2.avro", 8,
-            new DateTime(12345L), new DateTime(1234L), 12, new DateTime(12345L));
+        new KafkaFileEventProvider(kafkaFileEventConfig.toJson(), false);
+    fileEvent.call(
+        "baz-topic",
+        "version/event/hour",
+        "file1.avro",
+        12,
+        new DateTime(1234L),
+        new DateTime(123L),
+        34,
+        new DateTime(1234L).withZone(DateTimeZone.UTC));
+    fileEvent.call(
+        "foo-topic",
+        "version/event/hour",
+        "fil2.avro",
+        8,
+        new DateTime(12345L),
+        new DateTime(1234L),
+        12,
+        new DateTime(12345L));
 
     // fails if two records are not present in kafka within 1s
     connect.kafka().consume(2, 1000L, fileEventTopic);
   }
   /**
-   * Test that the expected records are written for a given file extension
-   * Optionally, test that topics which have "*.{expectedFileExtension}*" in them are processed
-   * and written.
+   * Test that the expected records are written for a given file extension Optionally, test that
+   * topics which have "*.{expectedFileExtension}*" in them are processed and written.
+   *
    * @param expectedFileExtension The file extension to test against
    * @param fileEventTopic The fileEvent topic name
    * @throws Throwable
    */
   private void testBasicRecordsWrittenAndRelatedFileEvents(
-          String expectedFileExtension,
-          String fileEventTopic
-  ) throws Throwable {
+      String expectedFileExtension, String fileEventTopic) throws Throwable {
     // Add an extra topic with this extension inside of the name
     // Use a TreeSet for test determinism
     Set<String> topicNames = new TreeSet<>(KAFKA_TOPICS);
@@ -176,14 +197,16 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
     // start sink connector
     connect.configureConnector(CONNECTOR_NAME, props);
     // wait for tasks to spin up
-    EmbeddedConnectUtils.waitForConnectorToStart(connect, CONNECTOR_NAME, Math.min(topicNames.size(), MAX_TASKS));
+    EmbeddedConnectUtils.waitForConnectorToStart(
+        connect, CONNECTOR_NAME, Math.min(topicNames.size(), MAX_TASKS));
 
     Schema recordValueSchema = getSampleStructSchema();
     Struct recordValueStruct = getSampleStructVal(recordValueSchema);
 
     for (String thisTopicName : topicNames) {
       // Create and send records to Kafka using the topic name in the current 'thisTopicName'
-      SinkRecord sampleRecord = getSampleTopicRecord(thisTopicName, recordValueSchema, recordValueStruct);
+      SinkRecord sampleRecord =
+          getSampleTopicRecord(thisTopicName, recordValueSchema, recordValueStruct);
       produceRecordsNoHeaders(NUM_RECORDS_INSERT, sampleRecord);
     }
 
@@ -194,13 +217,13 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
 
     Set<String> expectedTopicFilenames = new TreeSet<>();
     for (String thisTopicName : topicNames) {
-      List<String> theseFiles = getExpectedFilenames(
+      List<String> theseFiles =
+          getExpectedFilenames(
               thisTopicName,
               TOPIC_PARTITION,
               FLUSH_SIZE_STANDARD,
               NUM_RECORDS_INSERT,
-              expectedFileExtension
-      );
+              expectedFileExtension);
       assertEquals(theseFiles.size(), countPerTopic);
       expectedTopicFilenames.addAll(theseFiles);
     }
@@ -221,8 +244,8 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
       SinkRecord record,
       boolean withKey,
       boolean withValue,
-      boolean withHeaders
-  ) throws ExecutionException, InterruptedException {
+      boolean withHeaders)
+      throws ExecutionException, InterruptedException {
     byte[] kafkaKey = null;
     byte[] kafkaValue = null;
     Iterable<Header> headers = Collections.emptyList();
@@ -230,12 +253,13 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
       kafkaKey = jsonConverter.fromConnectData(topic, Schema.STRING_SCHEMA, record.key());
     }
     if (withValue) {
-     kafkaValue = jsonConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
+      kafkaValue =
+          jsonConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
     }
     if (withHeaders) {
       headers = sampleHeaders();
     }
-    ProducerRecord<byte[],byte[]> producerRecord =
+    ProducerRecord<byte[], byte[]> producerRecord =
         new ProducerRecord<>(topic, TOPIC_PARTITION, kafkaKey, kafkaValue, headers);
     for (long i = 0; i < recordCount; i++) {
       producer.send(producerRecord).get();
@@ -253,9 +277,11 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
   private void initializeCustomProducer() {
     Map<String, Object> producerProps = new HashMap<>();
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, connect.kafka().bootstrapServers());
-    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+    producerProps.put(
+        ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
         org.apache.kafka.common.serialization.ByteArraySerializer.class.getName());
-    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+    producerProps.put(
+        ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
         org.apache.kafka.common.serialization.ByteArraySerializer.class.getName());
     producer = new KafkaProducer<>(producerProps);
   }
@@ -270,5 +296,4 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
     // aws credential if exists
     props.putAll(getAWSCredentialFromPath());
   }
-
 }

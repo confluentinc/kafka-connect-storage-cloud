@@ -843,7 +843,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
               Importance.LOW,
               "File event configuration as json format. "
                       + "Mandatory Fields: bootstrap_servers, topic_name, schema_registry_url. "
-                      + "Optional fields: sasl_mechanism, security_protocol, sasl_jaas_config. "
+                      + "Custom fields can be added in the \"custom\" field as a map of attribute"
                       + "By default an empty json.",
               group,
               ++orderInGroup,

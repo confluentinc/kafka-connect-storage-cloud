@@ -37,7 +37,6 @@ import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.InvocationTargetException;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -191,21 +190,11 @@ public class TopicPartitionWriter {
 
     // Initialize scheduled rotation timer if applicable
     setNextScheduledRotation();
+  }
 
-    // Initialize fileEvent if enabled
-    if (this.connectorConfig.getFileEventEnable()) {
-      try {
-        log.info("File event enabled");
-        fileCallback = Optional.of((FileEventProvider)
-                        this.connectorConfig
-                .getFileEventClass().getConstructor(String.class, boolean.class)
-                .newInstance(connectorConfig.getFileEventConfigJson(),
-                        connectorConfig.getFileEventSkipError()));
-      } catch (InstantiationException | IllegalAccessException
-               | InvocationTargetException | NoSuchMethodException e) {
-        throw new RuntimeException(e);
-      }
-    }
+  public TopicPartitionWriter withFileEventProvider(Optional<FileEventProvider> fileEventProvider){
+    this.fileCallback = fileEventProvider;
+    return this;
   }
 
   private enum State {
@@ -695,7 +684,7 @@ public class TopicPartitionWriter {
     fileCallback.ifPresent(fs -> fs.call(tp.topic(), encodedPartition,
             commitFiles.get(encodedPartition), tp.partition(),
             new DateTime(baseRecordTimestamp).withZone(timeZone),
-            new DateTime(currentTimestamp).withZone(timeZone), recordCount,
+            new DateTime(currentTimestamp).withZone(timeZone), (recordCounts.get(encodedPartition)).intValue(),
             new DateTime(time.milliseconds()).withZone(timeZone)));
   }
 

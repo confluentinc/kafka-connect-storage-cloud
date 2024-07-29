@@ -17,6 +17,7 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
 import io.confluent.connect.s3.S3SinkConnectorConfig.OutputWriteBehavior;
+import io.confluent.connect.s3.file.FileEventProvider;
 import io.confluent.connect.s3.util.TombstoneSupportedPartitioner;
 import io.confluent.connect.s3.util.SchemaPartitioner;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -31,10 +32,12 @@ import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
@@ -64,6 +67,7 @@ public class S3SinkTask extends SinkTask {
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
   private final Time time;
   private ErrantRecordReporter reporter;
+  private Optional<FileEventProvider> fileEventProvider;
 
   /**
    * No-arg constructor. Used by Connect framework.
@@ -150,8 +154,34 @@ public class S3SinkTask extends SinkTask {
 
   @Override
   public void open(Collection<TopicPartition> partitions) {
+    initFileEventProvider();
     for (TopicPartition tp : partitions) {
       topicPartitionWriters.put(tp, newTopicPartitionWriter(tp));
+    }
+  }
+  private void initFileEventProvider() {
+    // Initialize fileEvent if enabled
+    if (this.connectorConfig.getFileEventEnable()) {
+      try {
+        log.info("File event enabled");
+        if (this.fileEventProvider == null) // only if not yet instanciated
+          this.fileEventProvider =
+                  Optional.of(
+                          (FileEventProvider)
+                                  this.connectorConfig
+                                          .getFileEventClass()
+                                          .getConstructor(String.class, boolean.class)
+                                          .newInstance(
+                                                  connectorConfig.getFileEventConfigJson(),
+                                                  connectorConfig.getFileEventSkipError()));
+      } catch (InstantiationException
+               | IllegalAccessException
+               | InvocationTargetException
+               | NoSuchMethodException e) {
+        throw new RuntimeException(e);
+      }
+    } else {
+      this.fileEventProvider = Optional.empty();
     }
   }
 
@@ -321,6 +351,15 @@ public class S3SinkTask extends SinkTask {
         log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
       }
     }
+    this.fileEventProvider.ifPresent(
+        fc -> {
+          try {
+            fc.close();
+            this.fileEventProvider = null;
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+        });
     topicPartitionWriters.clear();
   }
 
@@ -350,6 +389,6 @@ public class S3SinkTask extends SinkTask {
         context,
         time,
         reporter
-    );
+    ).withFileEventProvider(fileEventProvider);
   }
 }

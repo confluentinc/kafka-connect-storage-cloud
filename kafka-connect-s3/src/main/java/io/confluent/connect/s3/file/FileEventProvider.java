@@ -21,7 +21,9 @@ import org.joda.time.format.ISODateTimeFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public abstract class FileEventProvider {
+import java.io.Closeable;
+
+public abstract class FileEventProvider implements Closeable {
   private static final Logger log = LoggerFactory.getLogger(FileEventProvider.class);
   protected final String configJson;
   protected final boolean skipError;
