@@ -24,6 +24,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.hamcrest.core.StringStartsWith.startsWith;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import io.confluent.connect.s3.S3SinkConnector;
@@ -162,6 +163,16 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     testTombstoneRecordsOnlyWritten(JSON_EXTENSION, false);
   }
 
+  @Test
+  public void testSkipNullKeyValue() throws Throwable {
+    //add test specific props
+    props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+    props.put(BEHAVIOR_ON_NULL_VALUES_CONFIG, OutputWriteBehavior.WRITE.toString());
+    props.put(STORE_KAFKA_KEYS_CONFIG, "TRUE");
+    props.put(KEYS_FORMAT_CLASS_CONFIG, "io.confluent.connect.s3.format.json.JsonFormat");
+    props.put(TOMBSTONE_ENCODED_PARTITION, TOMBSTONE_PARTITION);
+    testSkipNullKeyJson(JSON_EXTENSION, false);
+  }
 
 
   public void testFilesWrittenToBucketAvroWithExtInTopic() throws Throwable {
@@ -382,6 +393,53 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     assertFileNamesValid(TEST_BUCKET_NAME, new ArrayList<>(expectedTopicFilenames));
     assertTrue(keyfileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, "\"key\""));
   }
+
+
+  private void testSkipNullKeyJson(
+      String expectedFileExtension,
+      boolean addExtensionInTopic
+  ) throws Throwable {
+    final String topicNameWithExt = "other." + expectedFileExtension + ".topic." + expectedFileExtension;
+
+    // Add an extra topic with this extension inside of the name
+    // Use a TreeSet for test determinism
+    Set<String> topicNames = new TreeSet<>(KAFKA_TOPICS);
+
+    if (addExtensionInTopic) {
+      topicNames.add(topicNameWithExt);
+      connect.kafka().createTopic(topicNameWithExt, 1);
+      props.replace(
+          "topics",
+          props.get("topics") + "," + topicNameWithExt
+      );
+    }
+
+    // start sink connector
+    connect.configureConnector(CONNECTOR_NAME, props);
+    // wait for tasks to spin up
+    EmbeddedConnectUtils.waitForConnectorToStart(connect, CONNECTOR_NAME, Math.min(topicNames.size(), MAX_TASKS));
+
+    // Send some events with null keys
+    for (String thisTopicName : topicNames) {
+      SinkRecord sampleRecord = getSampleTopicRecord(thisTopicName, null, null);
+      produceRecordsWithHeadersNoKey(thisTopicName, NUM_RECORDS_INSERT, sampleRecord);
+    }
+
+    log.info("Waiting for files in S3...");
+
+    // TODO find a way to wait for the connector to finish processing
+    // Send also tombstone events ?
+
+    // Check that the connector task hasn't failed
+    assertFalse(connect.connectorStatus(CONNECTOR_NAME).tasks().stream().anyMatch(
+        task -> task.state().equals("FAILED")
+    ));
+
+    int expectedTotalFileCount = 0;
+    waitForFilesInBucket(TEST_BUCKET_NAME, expectedTotalFileCount);
+
+  }
+
 
   @Test
   public void testFaultyRecordsReportedToDLQ() throws Throwable {

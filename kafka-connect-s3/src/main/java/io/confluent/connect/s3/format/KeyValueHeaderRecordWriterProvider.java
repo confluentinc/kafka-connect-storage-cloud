@@ -91,6 +91,9 @@ public class KeyValueHeaderRecordWriterProvider
             .map(headerProvider -> headerProvider.getRecordWriter(conf, strippedFilename));
 
     return new RecordWriter() {
+
+      private boolean isNullKeyEvent = false;
+
       @Override
       public void write(SinkRecord sinkRecord) {
         if (sinkRecord.value() == null &&
@@ -105,10 +108,8 @@ public class KeyValueHeaderRecordWriterProvider
 
         // keyWriter != null means writing keys is turned on
         if (keyWriter.isPresent() && sinkRecord.key() == null) {
-          throw new DataException(
-              String.format("Key cannot be null for SinkRecord: %s",
-                  sinkRecordToLoggableString(sinkRecord))
-          );
+          log.trace("Skipping null key writing: {}", sinkRecordToLoggableString(sinkRecord));
+          isNullKeyEvent = true;
         }
 
         // headerWriter != null means writing headers is turned on
@@ -133,21 +134,25 @@ public class KeyValueHeaderRecordWriterProvider
             );
           }
         }
-        keyWriter.ifPresent(writer -> writer.write(sinkRecord));
+        if (!isNullKeyEvent)
+          keyWriter.ifPresent(writer -> writer.write(sinkRecord));
+
         headerWriter.ifPresent(writer -> writer.write(sinkRecord));
       }
 
       @Override
       public void close() {
         valueWriter.ifPresent(RecordWriter::close);
-        keyWriter.ifPresent(RecordWriter::close);
+        if (!isNullKeyEvent)
+          keyWriter.ifPresent(RecordWriter::close);
         headerWriter.ifPresent(RecordWriter::close);
       }
 
       @Override
       public void commit() {
         valueWriter.ifPresent(RecordWriter::commit);
-        keyWriter.ifPresent(RecordWriter::commit);
+        if (!isNullKeyEvent)
+          keyWriter.ifPresent(RecordWriter::commit);
         headerWriter.ifPresent(RecordWriter::commit);
       }
     };

@@ -1182,20 +1182,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
-  public void testExceptionOnNullKeysReported() throws Exception {
-    String recordValue = "1";
-    int kafkaOffset = 2;
-    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, null,
-        Schema.STRING_SCHEMA, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
-
-    String exceptionMessage = String.format("Key cannot be null for SinkRecord: %s", sinkRecordToLoggableString(faultyRecord));
-    testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, false, false);
-    tearDown(); // clear mock S3 port for follow up test
-    // test with faulty being first in batch
-    testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, true, false);
-  }
-
-  @Test
   public void testExceptionOnEmptyHeadersReported() throws Exception{
     String recordValue = "1";
     int kafkaOffset = 2;
