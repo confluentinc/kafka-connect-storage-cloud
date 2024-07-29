@@ -505,14 +505,14 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   @Test
   public void testKeyStorageDefaultFalse() {
     connectorConfig = new S3SinkConnectorConfig(properties);
-    assertFalse(connectorConfig.getBoolean(S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG));
+    assertTrue(connectorConfig.getString(S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG).equalsIgnoreCase("false"));
   }
 
   @Test
   public void testKeyStorageSupported() {
     properties.put(S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG, "true");
     connectorConfig = new S3SinkConnectorConfig(properties);
-    assertTrue(connectorConfig.getBoolean(S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG));
+    assertTrue(connectorConfig.getString(S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG).equalsIgnoreCase("true"));
   }
 
   @Test

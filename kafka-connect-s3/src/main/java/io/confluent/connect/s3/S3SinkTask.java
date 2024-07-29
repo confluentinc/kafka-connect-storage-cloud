@@ -203,7 +203,8 @@ public class S3SinkTask extends SinkTask {
         newFormat(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG).getRecordWriterProvider();
 
     RecordWriterProvider<S3SinkConnectorConfig> keyWriterProvider = null;
-    if (config.getBoolean(S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG)) {
+    if (config.getString(S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG).equalsIgnoreCase(S3SinkConnectorConfig.StoreKafkaKeys.TRUE.toString()) ||
+        config.getString(S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG).equalsIgnoreCase(S3SinkConnectorConfig.StoreKafkaKeys.TOMBSTONE_ONLY.toString())) {
       keyWriterProvider = newFormat(S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG)
           .getRecordWriterProvider();
       ((RecordViewSetter) keyWriterProvider).setRecordView(new KeyRecordView());

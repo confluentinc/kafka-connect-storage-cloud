@@ -223,7 +223,8 @@ public class S3SinkFileEventIT extends BaseConnectorIT {
               TOPIC_PARTITION,
               FLUSH_SIZE_STANDARD,
               NUM_RECORDS_INSERT,
-              expectedFileExtension);
+              expectedFileExtension,
+              0);
       assertEquals(theseFiles.size(), countPerTopic);
       expectedTopicFilenames.addAll(theseFiles);
     }

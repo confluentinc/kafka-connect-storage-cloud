@@ -189,7 +189,8 @@ public class S3SinkDataFormatIT extends BaseConnectorIT {
           TOPIC_PARTITION,
           FLUSH_SIZE_STANDARD,
           NUM_RECORDS_INSERT,
-          AVRO_EXTENSION
+          AVRO_EXTENSION,
+          0
       );
       assertEquals(theseFiles.size(), countPerTopic);
       expectedTopicFilenames.addAll(theseFiles);

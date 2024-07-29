@@ -19,7 +19,9 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategy;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+
 import java.io.IOException;
 import java.util.Properties;
 
@@ -30,12 +32,12 @@ public abstract class AbstractFileEventConfig {
       if (jsonContent == null) {
         return clazz.newInstance();
       }
-      ObjectMapper instanceMapper = new ObjectMapper();
-      instanceMapper.setPropertyNamingStrategy(
-          PropertyNamingStrategy.CAMEL_CASE_TO_LOWER_CASE_WITH_UNDERSCORES);
-      instanceMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-      instanceMapper.configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true);
-      instanceMapper.enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS);
+      ObjectMapper instanceMapper = JsonMapper.builder()
+          .enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS)
+          .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
+          .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+          .configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true)
+          .build();
       T value = instanceMapper.readValue(jsonContent, clazz);
       value.validateFields();
       return  value;

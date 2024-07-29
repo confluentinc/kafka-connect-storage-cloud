@@ -88,11 +88,13 @@ public class S3SinkConnectorValidator {
     if (s3SinkConnectorConfig != null) {
       validateCompression(
           s3SinkConnectorConfig.getCompressionType(), s3SinkConnectorConfig.formatClass(),
-          s3SinkConnectorConfig.storeKafkaKeys(), s3SinkConnectorConfig.keysFormatClass(),
+          S3SinkConnectorConfig.StoreKafkaKeys.TRUE.toString().equalsIgnoreCase(s3SinkConnectorConfig.storeKafkaKeys()) ||
+              S3SinkConnectorConfig.StoreKafkaKeys.TOMBSTONE_ONLY.toString().equalsIgnoreCase(s3SinkConnectorConfig.storeKafkaKeys()), s3SinkConnectorConfig.keysFormatClass(),
           s3SinkConnectorConfig.storeKafkaHeaders(), s3SinkConnectorConfig.headersFormatClass()
       );
       validateTombstoneWriter(s3SinkConnectorConfig.isTombstoneWriteEnabled(),
-          s3SinkConnectorConfig.storeKafkaKeys());
+          S3SinkConnectorConfig.StoreKafkaKeys.TRUE.toString().equalsIgnoreCase(s3SinkConnectorConfig.storeKafkaKeys()) ||
+              S3SinkConnectorConfig.StoreKafkaKeys.TOMBSTONE_ONLY.toString().equalsIgnoreCase(s3SinkConnectorConfig.storeKafkaKeys()));
     }
 
     return new Config(new ArrayList<>(this.valuesByKey.values()));

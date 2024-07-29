@@ -701,10 +701,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
       configDef.define(
           STORE_KAFKA_KEYS_CONFIG,
-          Type.BOOLEAN,
-          false,
+          Type.STRING,
+          StoreKafkaKeys.FALSE.toString(),
+          StoreKafkaKeys.VALIDATOR,
           Importance.LOW,
-          "Enable or disable writing keys to storage. "
+          "Enable or disable writing keys to storage." +
+                "Can also write only tombstone keys, skipping event keys."
               + "This config is mandatory when the writing of tombstone records is enabled.",
           group,
           ++orderInGroup,
@@ -983,8 +985,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
            : CompressionCodecName.fromConf(getString(PARQUET_CODEC_CONFIG));
   }
 
-  public boolean storeKafkaKeys() {
-    return getBoolean(STORE_KAFKA_KEYS_CONFIG);
+  public String storeKafkaKeys() {
+    return getString(STORE_KAFKA_KEYS_CONFIG);
   }
 
   public boolean storeKafkaHeaders() {
@@ -1394,6 +1396,30 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
     public static String[] names() {
       OutputWriteBehavior[] behaviors = values();
+      String[] result = new String[behaviors.length];
+
+      for (int i = 0; i < behaviors.length; i++) {
+        result[i] = behaviors[i].toString();
+      }
+
+      return result;
+    }
+
+    @Override
+    public String toString() {
+      return name().toLowerCase(Locale.ROOT);
+    }
+  }
+
+  public enum StoreKafkaKeys {
+    FALSE,
+    TOMBSTONE_ONLY,
+    TRUE;
+
+    public static final ConfigDef.Validator VALIDATOR = new EnumValidator(names());
+
+    public static String[] names() {
+      StoreKafkaKeys[] behaviors = values();
       String[] result = new String[behaviors.length];
 
       for (int i = 0; i < behaviors.length; i++) {

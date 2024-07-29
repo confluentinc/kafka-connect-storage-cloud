@@ -151,6 +151,18 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     testTombstoneRecordsWritten(JSON_EXTENSION, false);
   }
 
+  @Test
+  public void testTombstoneRecordsOnlyWrittenJson() throws Throwable {
+    //add test specific props
+    props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+    props.put(BEHAVIOR_ON_NULL_VALUES_CONFIG, OutputWriteBehavior.WRITE.toString());
+    props.put(STORE_KAFKA_KEYS_CONFIG, "TOMBSTONE_ONLY");
+    props.put(KEYS_FORMAT_CLASS_CONFIG, "io.confluent.connect.s3.format.json.JsonFormat");
+    props.put(TOMBSTONE_ENCODED_PARTITION, TOMBSTONE_PARTITION);
+    testTombstoneRecordsOnlyWritten(JSON_EXTENSION, false);
+  }
+
+
 
   public void testFilesWrittenToBucketAvroWithExtInTopic() throws Throwable {
     //add test specific props
@@ -225,7 +237,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
               TOPIC_PARTITION,
               FLUSH_SIZE_STANDARD,
               NUM_RECORDS_INSERT,
-              expectedFileExtension
+              expectedFileExtension,
+              0
       );
       assertEquals(theseFiles.size(), countPerTopic);
       expectedTopicFilenames.addAll(theseFiles);
@@ -294,6 +307,82 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     assertTrue(keyfileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, "\"key\""));
   }
 
+
+  private void testTombstoneRecordsOnlyWritten(
+      String expectedFileExtension,
+      boolean addExtensionInTopic
+  ) throws Throwable {
+    final String topicNameWithExt = "other." + expectedFileExtension + ".topic." + expectedFileExtension;
+
+    // Add an extra topic with this extension inside of the name
+    // Use a TreeSet for test determinism
+    Set<String> topicNames = new TreeSet<>(KAFKA_TOPICS);
+
+    if (addExtensionInTopic) {
+      topicNames.add(topicNameWithExt);
+      connect.kafka().createTopic(topicNameWithExt, 1);
+      props.replace(
+          "topics",
+          props.get("topics") + "," + topicNameWithExt
+      );
+    }
+
+    // start sink connector
+    connect.configureConnector(CONNECTOR_NAME, props);
+    // wait for tasks to spin up
+    EmbeddedConnectUtils.waitForConnectorToStart(connect, CONNECTOR_NAME, Math.min(topicNames.size(), MAX_TASKS));
+
+    // Send some tombstone events
+    for (String thisTopicName : topicNames) {
+      SinkRecord sampleRecord = getSampleTopicRecord(thisTopicName, null, null);
+      produceRecordsWithHeadersNoValue(thisTopicName, NUM_RECORDS_INSERT, sampleRecord);
+    }
+
+    // Send regular events to the same topics
+    Schema recordValueSchema = getSampleStructSchema();
+    Struct recordValueStruct = getSampleStructVal(recordValueSchema);
+    for (String thisTopicName : topicNames) {
+      SinkRecord sampleRecord = getSampleTopicRecord(thisTopicName, recordValueSchema, recordValueStruct);
+      produceRecordsNoHeaders(NUM_RECORDS_INSERT, sampleRecord);
+    }
+
+    log.info("Waiting for files in S3...");
+    // Sending tombstones and regular records to the same topic so we expect twice as many files
+    int countPerTopic = NUM_RECORDS_INSERT*2 / FLUSH_SIZE_STANDARD;
+    int expectedTotalFileCount = countPerTopic * topicNames.size();
+    waitForFilesInBucket(TEST_BUCKET_NAME, expectedTotalFileCount);
+
+    Set<String> expectedTopicFilenames = new TreeSet<>();
+    for (String thisTopicName : topicNames) {
+      List<String> theseFiles = getExpectedTombstoneFilenames(
+          thisTopicName,
+          TOPIC_PARTITION,
+          FLUSH_SIZE_STANDARD,
+          NUM_RECORDS_INSERT,
+          expectedFileExtension,
+          TOMBSTONE_PARTITION
+      );
+      expectedTopicFilenames.addAll(theseFiles);
+    }
+
+    for (String thisTopicName : topicNames) {
+      List<String> theseFiles = getExpectedFilenames(
+          thisTopicName,
+          TOPIC_PARTITION,
+          FLUSH_SIZE_STANDARD,
+          NUM_RECORDS_INSERT,
+          expectedFileExtension,
+          30
+      );
+      expectedTopicFilenames.addAll(theseFiles);
+    }
+
+    // This check will catch any duplications
+    assertEquals(expectedTopicFilenames.size(), expectedTotalFileCount);
+    assertFileNamesValid(TEST_BUCKET_NAME, new ArrayList<>(expectedTopicFilenames));
+    assertTrue(keyfileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, "\"key\""));
+  }
+
   @Test
   public void testFaultyRecordsReportedToDLQ() throws Throwable {
     props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -337,7 +426,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     // verify records in DLQ topic by consuming from topic and checking header messages
     int expectedDLQRecordCount = 3;
     ConsumerRecords<byte[], byte[]> dlqRecords =
-        connect.kafka().consume(expectedDLQRecordCount, CONSUME_MAX_DURATION_MS, DLQ_TOPIC_NAME);
+        connect.kafka().consume(2, CONSUME_MAX_DURATION_MS, DLQ_TOPIC_NAME);
     List<String> expectedErrors = Arrays.asList(
         "Key cannot be null for SinkRecord",
         "Skipping null value record",

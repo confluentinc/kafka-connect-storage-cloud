@@ -77,15 +77,25 @@ public class KeyValueHeaderRecordWriterProvider
 
     Optional<RecordWriter> valueWriter = filename.contains(conf.getTombstoneEncodedPartition())
         ? Optional.empty() : Optional.of(valueProvider.getRecordWriter(conf, strippedFilename));
-    Optional<RecordWriter> keyWriter = Optional.ofNullable(keyProvider)
-            .map(keyProvider -> keyProvider.getRecordWriter(conf, strippedFilename));
+
+    Optional<RecordWriter> keyWriter;
+    // If valueWriter is present and we want only tombstone keys, then keyWriter must be set to empty.
+    if (valueWriter.isPresent() && conf.storeKafkaKeys().equalsIgnoreCase(S3SinkConnectorConfig.StoreKafkaKeys.TOMBSTONE_ONLY.name())) {
+      keyWriter = Optional.empty();
+    } else {
+      keyWriter = Optional.ofNullable(keyProvider)
+          .map(keyProvider -> keyProvider.getRecordWriter(conf, strippedFilename));
+    }
+
     Optional<RecordWriter> headerWriter = Optional.ofNullable(headerProvider)
             .map(headerProvider -> headerProvider.getRecordWriter(conf, strippedFilename));
 
     return new RecordWriter() {
       @Override
       public void write(SinkRecord sinkRecord) {
-        if (conf.isTombstoneWriteEnabled() && !keyWriter.isPresent()) {
+        if (sinkRecord.value() == null &&
+            conf.isTombstoneWriteEnabled() &&
+            !keyWriter.isPresent()) {
           throw new ConnectException(
               "Key Writer must be configured when writing tombstone records is enabled.");
         }

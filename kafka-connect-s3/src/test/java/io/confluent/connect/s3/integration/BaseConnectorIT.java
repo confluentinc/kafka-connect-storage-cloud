@@ -195,11 +195,12 @@ public abstract class BaseConnectorIT {
    * <p>
    * Format: topics/s3_topic/partition=97/s3_topic+97+0000000001.avro
    *
-   * @param topic      the test kafka topic
-   * @param partition  the expected partition for the tests
-   * @param flushSize  the flush size connector config
-   * @param numRecords the number of records produced in the test
-   * @param extension  the expected extensions of the files including compression (snappy.parquet)
+   * @param topic       the test kafka topic
+   * @param partition   the expected partition for the tests
+   * @param flushSize   the flush size connector config
+   * @param numRecords  the number of records produced in the test
+   * @param extension   the expected extensions of the files including compression (snappy.parquet)
+   * @param startOffset the offset of the first record
    * @return the list of expected filenames
    */
   protected List<String> getExpectedFilenames(
@@ -207,11 +208,12 @@ public abstract class BaseConnectorIT {
       int partition,
       int flushSize,
       long numRecords,
-      String extension
+      String extension,
+      int startOffset
   ) {
     int expectedFileCount = (int) numRecords / flushSize;
     List<String> expectedFiles = new ArrayList<>();
-    for (int offset = 0; offset < expectedFileCount * flushSize; offset += flushSize) {
+    for (int offset = startOffset; offset < startOffset + expectedFileCount * flushSize; offset += flushSize) {
       String filepath = String.format(
           "topics/%s/partition=%d/%s+%d+%010d.%s",
           topic,
