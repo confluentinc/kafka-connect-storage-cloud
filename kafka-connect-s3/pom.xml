@@ -33,7 +33,7 @@
     </description>
 
     <properties>
-        <aws.version>1.12.524</aws.version>
+        <aws.version>1.12.268</aws.version>
         <s3mock.version>0.2.5</s3mock.version>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <parquet.tools.version>1.11.1</parquet.tools.version>
@@ -44,7 +44,7 @@
         <maven.avro.plugin.version>1.9.2</maven.avro.plugin.version>
         <skipIntegrationTests>false</skipIntegrationTests>
         <surefire-junit47.version>2.22.1</surefire-junit47.version>
-        <guava.version>32.1.2-jre</guava.version>
+        <guava.version>30.1.1-jre</guava.version>
         <wiremock.version>2.31.0</wiremock.version>
     </properties>
 
@@ -65,7 +65,7 @@
             <dependency>
                 <groupId>net.minidev</groupId>
                 <artifactId>json-smart</artifactId>
-                <version>${json.smart.version}</version>
+                <version>${json-smart.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -74,6 +74,21 @@
         <dependency>
             <groupId>com.amazonaws</groupId>
             <artifactId>aws-java-sdk-s3</artifactId>
+            <exclusions>
+            <exclusion>
+                <!-- This is not used by the connector and is removed to address CVE-2020-28491
+                    Once the jackson version gets upgraded consider lifting this exclusion -->
+                <groupId>com.fasterxml.jackson.dataformat</groupId>
+                <artifactId>jackson-dataformat-cbor</artifactId>
+            </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- Pinning the version of this dependency to address CVE in alignment with
+            https://github.com/confluentinc/common/pull/342
+            Once the jackson version gets upgraded consider lifting this explicit listing -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-cbor</artifactId>
         </dependency>
         <dependency>
             <groupId>com.amazonaws</groupId>
@@ -83,12 +98,6 @@
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>
             <version>${httpclient.version}</version>
-        </dependency>
-        <!--Pin snappy-java version to fix CVE-2023-34455 -->
-        <dependency>
-            <groupId>org.xerial.snappy</groupId>
-            <artifactId>snappy-java</artifactId>
-            <version>${snappy.java.version}</version>
         </dependency>
         <dependency>
             <groupId>io.findify</groupId>
