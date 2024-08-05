@@ -71,6 +71,7 @@
         <guava.version>32.1.2-jre</guava.version>
         <avro.version>1.11.3</avro.version>
         <zookeeper.version>3.8.4</zookeeper.version>
+        <dnsjava.version>3.6.1</dnsjava.version>
     </properties>
 
     <repositories>
@@ -448,6 +449,11 @@
             <groupId>org.apache.avro</groupId>
             <artifactId>avro</artifactId>
             <version>${avro.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dnsjava</groupId>
+            <artifactId>dnsjava</artifactId>
+            <version>${dnsjava.version}</version>
         </dependency>
     </dependencies>
 
