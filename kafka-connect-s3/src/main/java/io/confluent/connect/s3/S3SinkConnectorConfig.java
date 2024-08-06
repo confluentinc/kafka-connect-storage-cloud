@@ -24,7 +24,6 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
-import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -67,6 +66,7 @@ import io.confluent.connect.storage.common.ComposableConfig;
 import io.confluent.connect.storage.common.GenericRecommender;
 import io.confluent.connect.storage.common.ParentValueRecommender;
 import io.confluent.connect.storage.common.StorageCommonConfig;
+import io.confluent.connect.storage.common.util.StringUtils;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.partitioner.DailyPartitioner;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
@@ -184,6 +184,13 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       + " This value is case insensitive and can be either 'BASE64' (default) or 'NUMERIC'";
   private static final String DECIMAL_FORMAT_DISPLAY = "Decimal Format";
 
+  public static final String REPLACE_NULL_WITH_DEFAULT_CONFIG = "json.replace.null.with.default";
+  public static final boolean REPLACE_NULL_WITH_DEFAULT_DEFAULT = true;
+  private static final String REPLACE_NULL_WITH_DEFAULT_DOC = "Whether to replace fields that"
+      + " have a default value and that are null to the default value."
+      + " When set to true, the default value is used, otherwise null is used.";
+  private static final String REPLACE_NULL_WITH_DEFAULT_DISPLAY = "Replace null with default";
+
   public static final String STORE_KAFKA_KEYS_CONFIG = "store.kafka.keys";
   public static final String STORE_KAFKA_HEADERS_CONFIG = "store.kafka.headers";
   public static final String KEYS_FORMAT_CLASS_CONFIG = "keys.format.class";
@@ -300,11 +307,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       configDef.define(
           S3_BUCKET_CONFIG,
           Type.STRING,
-          Importance.HIGH,
+          ConfigDef.Importance.HIGH,
           "The S3 Bucket.",
           group,
           ++orderInGroup,
-          Width.LONG,
+          ConfigDef.Width.LONG,
           "S3 Bucket"
       );
 
@@ -535,6 +542,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.MEDIUM,
           DECIMAL_FORMAT_DISPLAY
+      );
+
+      configDef.define(
+          REPLACE_NULL_WITH_DEFAULT_CONFIG,
+          Type.BOOLEAN,
+          REPLACE_NULL_WITH_DEFAULT_DEFAULT,
+          Importance.LOW,
+          REPLACE_NULL_WITH_DEFAULT_DOC,
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          REPLACE_NULL_WITH_DEFAULT_DISPLAY
       );
 
       configDef.define(
