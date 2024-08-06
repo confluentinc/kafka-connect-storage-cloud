@@ -135,6 +135,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String COMPRESSION_TYPE_CONFIG = "s3.compression.type";
   public static final String COMPRESSION_TYPE_DEFAULT = "none";
 
+  public static final String SEND_DIGEST_CONFIG = "s3.send.digest";
+  public static final boolean SEND_DIGEST_DEFAULT = false;
+
   public static final String COMPRESSION_LEVEL_CONFIG = "s3.compression.level";
   public static final int COMPRESSION_LEVEL_DEFAULT = Deflater.DEFAULT_COMPRESSION;
   private static final CompressionLevelValidator COMPRESSION_LEVEL_VALIDATOR =
@@ -714,6 +717,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "Schema Partition Affix Type",
           SCHEMA_PARTITION_AFFIX_TYPE_RECOMMENDER
       );
+
+      configDef.define(
+          SEND_DIGEST_CONFIG,
+          Type.BOOLEAN,
+          SEND_DIGEST_DEFAULT,
+          Importance.LOW,
+          "Enable or disable sending MD5 digest with S3 multipart upload request.",
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "S3 Send Upload Message Digest"
+      );
     }
 
     {
@@ -936,6 +951,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public int getCompressionLevel() {
     return getInt(COMPRESSION_LEVEL_CONFIG);
+  }
+
+  public boolean isSendDigestEnabled() {
+    return getBoolean(SEND_DIGEST_CONFIG);
   }
 
   public String getJsonDecimalFormat() {

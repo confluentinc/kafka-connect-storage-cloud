@@ -221,6 +221,28 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     task.start(properties);
   }
 
+  @Test
+  public void testWriteRecordsWithDigestMultipleParts() throws Exception {
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10000");
+    localProps.put(S3SinkConnectorConfig.SEND_DIGEST_CONFIG, "true");
+    setUp();
+
+    List<SinkRecord> sinkRecords = createRecords(11000);
+    replayAll();
+
+    task = new S3SinkTask();
+    task.initialize(context);
+    task.start(properties);
+    verifyAll();
+
+    task.put(sinkRecords);
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 10000};
+    verify(sinkRecords, validOffsets);
+  }
+
   public static class CustomPartitioner<T> extends DefaultPartitioner<T> {
     @Override
     public void configure(Map<String, Object> map) {
