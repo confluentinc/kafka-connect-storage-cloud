@@ -180,7 +180,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     testTombstoneRecordsWritten(JSON_EXTENSION, false);
   }
 
-
+  @Test
   public void testFilesWrittenToBucketAvroWithExtInTopic() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
@@ -268,7 +268,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     // to the producer (they're all the same content)
     assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
   }
-
   private void testTombstoneRecordsWritten(
       String expectedFileExtension,
       boolean addExtensionInTopic

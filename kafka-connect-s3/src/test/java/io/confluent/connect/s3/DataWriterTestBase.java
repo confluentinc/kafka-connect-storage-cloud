@@ -19,7 +19,9 @@ package io.confluent.connect.s3;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
+import io.confluent.connect.s3.storage.FilenameCreator;
 import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.s3.storage.TopicPartitionFilenameCreator;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.Format;
@@ -54,6 +56,7 @@ public abstract class DataWriterTestBase<
   protected S3Storage storage;
   protected AmazonS3 s3;
   protected Partitioner<?> partitioner;
+  protected FilenameCreator filenameCreator;
   protected S3SinkTask task;
   protected Map<String, String> localProps = new HashMap<>();
 
@@ -127,6 +130,8 @@ public abstract class DataWriterTestBase<
 
     partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
+    filenameCreator = new TopicPartitionFilenameCreator();
+    filenameCreator.configure(parsedConfig);
     format = clazz.getDeclaredConstructor(S3Storage.class).newInstance(storage);
     assertEquals(format.getClass().getName(), clazz.getName());
 
@@ -187,7 +192,7 @@ public abstract class DataWriterTestBase<
     localProps.put(StorageCommonConfig.TOPICS_DIR_CONFIG, topicDir);
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     RecordWriterProvider<S3SinkConnectorConfig> keyValueRecordWriterProvider =
         task.newRecordWriterProvider(connectorConfig);
