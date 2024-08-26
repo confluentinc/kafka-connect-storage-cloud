@@ -302,6 +302,19 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       );
 
       configDef.define(
+              S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG,
+              Type.STRING,
+              S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_DEFAULT,
+              IgnoreOrFailBehavior.VALIDATOR,
+              Importance.LOW,
+              "How to handle S3 object tagging error. Valid options are 'ignore' and 'fail'.",
+              group,
+              ++orderInGroup,
+              Width.SHORT,
+              "Behavior for S3 object tagging error"
+      );
+
+      configDef.define(
           REGION_CONFIG,
           Type.STRING,
           REGION_DEFAULT,
