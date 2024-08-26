@@ -81,6 +81,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String S3_OBJECT_TAGGING_CONFIG = "s3.object.tagging";
   public static final boolean S3_OBJECT_TAGGING_DEFAULT = false;
 
+  public static final String S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG =
+          "s3.object.behavior.on.tagging.error";
+  public static final String S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_DEFAULT =
+          IgnoreOrFailBehavior.IGNORE.toString();
+
   public static final String SSEA_CONFIG = "s3.ssea.name";
   public static final String SSEA_DEFAULT = "";
 
@@ -153,7 +158,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       ClientConfiguration.DEFAULT_USE_EXPECT_CONTINUE;
 
   public static final String BEHAVIOR_ON_NULL_VALUES_CONFIG = "behavior.on.null.values";
-  public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = BehaviorOnNullValues.FAIL.toString();
+  public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = IgnoreOrFailBehavior.FAIL.toString();
 
   public static final String REPORT_NULL_RECORDS_TO_DLQ = "report.null.values.to.dlq";
   public static final boolean REPORT_NULL_RECORDS_TO_DLQ_DEFAULT = true;
@@ -620,7 +625,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           BEHAVIOR_ON_NULL_VALUES_CONFIG,
           Type.STRING,
           BEHAVIOR_ON_NULL_VALUES_DEFAULT,
-          BehaviorOnNullValues.VALIDATOR,
+          IgnoreOrFailBehavior.VALIDATOR,
           Importance.LOW,
           "How to handle records with a null value (i.e. Kafka tombstone records)."
               + " Valid options are 'ignore' and 'fail'.",
@@ -1189,7 +1194,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getBoolean(REPORT_NULL_RECORDS_TO_DLQ);
   }
 
-  public enum BehaviorOnNullValues {
+  public enum IgnoreOrFailBehavior {
     IGNORE,
     FAIL;
 
@@ -1213,7 +1218,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     };
 
     public static String[] names() {
-      BehaviorOnNullValues[] behaviors = values();
+      IgnoreOrFailBehavior[] behaviors = values();
       String[] result = new String[behaviors.length];
 
       for (int i = 0; i < behaviors.length; i++) {

@@ -18,6 +18,7 @@ package io.confluent.connect.s3;
 import com.amazonaws.SdkClientException;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileRotationTracker;
+import io.confluent.connect.s3.util.RetryUtil;
 import io.confluent.connect.storage.errors.PartitionException;
 import io.confluent.connect.storage.schema.SchemaCompatibilityResult;
 import org.apache.kafka.common.TopicPartition;
@@ -57,6 +58,9 @@ import io.confluent.connect.storage.partitioner.TimestampExtractor;
 import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
 import io.confluent.connect.storage.util.DateTimeUtils;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
+
 public class TopicPartitionWriter {
 
   private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriter.class);
@@ -73,6 +77,7 @@ public class TopicPartitionWriter {
   private final Queue<SinkRecord> buffer;
   private final SinkTaskContext context;
   private final boolean isTaggingEnabled;
+  private final boolean ignoreTaggingErrors;
   private int recordCount;
   private final int flushSize;
   private final long rotateIntervalMs;
@@ -134,6 +139,9 @@ public class TopicPartitionWriter {
                                   ? ((TimeBasedPartitioner) partitioner).getTimestampExtractor()
                                   : null;
     isTaggingEnabled = connectorConfig.getBoolean(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG);
+    ignoreTaggingErrors = connectorConfig.getString(
+            S3SinkConnectorConfig.S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG)
+            .equalsIgnoreCase(S3SinkConnectorConfig.IgnoreOrFailBehavior.IGNORE.toString());
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
@@ -624,7 +632,11 @@ public class TopicPartitionWriter {
       String encodedPartition = entry.getKey();
       commitFile(encodedPartition);
       if (isTaggingEnabled) {
-        tagFile(encodedPartition, entry.getValue());
+        RetryUtil.exponentialBackoffRetry(() -> tagFile(encodedPartition, entry.getValue()),
+                ConnectException.class,
+                connectorConfig.getInt(S3_PART_RETRIES_CONFIG),
+                connectorConfig.getLong(S3_RETRY_BACKOFF_CONFIG)
+        );
       }
       startOffsets.remove(encodedPartition);
       endOffsets.remove(encodedPartition);
@@ -684,10 +696,18 @@ public class TopicPartitionWriter {
       log.info("Tagged S3 object {} with starting offset {}, ending offset {}, record count {}",
           s3ObjectPath, startOffset, endOffset, recordCount);
     } catch (SdkClientException e) {
-      log.warn("Unable to tag S3 object {}. Ignoring.", s3ObjectPath, e);
+      if (ignoreTaggingErrors) {
+        log.warn("Unable to tag S3 object {}. Ignoring.", s3ObjectPath, e);
+      } else {
+        throw new ConnectException(String.format("Unable to tag S3 object %s", s3ObjectPath), e);
+      }
     } catch (Exception e) {
-      log.warn("Unrecoverable exception while attempting to tag S3 object {}. Ignoring.",
-          s3ObjectPath, e);
+      if (ignoreTaggingErrors) {
+        log.warn("Unrecoverable exception while attempting to tag S3 object {}. Ignoring.",
+                s3ObjectPath, e);
+      } else {
+        throw new ConnectException(String.format("Unable to tag S3 object %s", s3ObjectPath), e);
+      }
     }
   }
 }
