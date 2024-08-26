@@ -217,7 +217,7 @@ public class S3SinkTask extends SinkTask {
       TopicPartition tp = new TopicPartition(topic, partition);
 
       if (maybeSkipOnNullValue(record)) {
-        if (reporter != null) {
+        if (reporter != null && connectorConfig.reportNullRecordsToDlq()) {
           reporter.report(record, new DataException("Skipping null value record."));
         }
         continue;
