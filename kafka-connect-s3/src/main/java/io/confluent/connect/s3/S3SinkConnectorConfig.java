@@ -1295,6 +1295,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getString(BEHAVIOR_ON_NULL_VALUES_CONFIG);
   }
 
+  public boolean reportNullRecordsToDlq() {
+    return getBoolean(REPORT_NULL_RECORDS_TO_DLQ);
+  }
+
   public enum IgnoreOrFailBehavior {
     IGNORE,
     FAIL;
