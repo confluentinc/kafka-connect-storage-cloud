@@ -279,8 +279,8 @@ public class S3OutputStream extends PositionOutputStream {
     }
 
     /**
-     * Consumes {@code partSize} bytes from the provided {@code inputStream} and computes the MD5 digest
-     *
+     * Consumes {@code partSize} bytes from the provided {@code inputStream} and computes the MD5
+     * digest.
      * Resets the {@code inputStream} before returning digest.
      *
      * @param inputStream {@link ByteArrayInputStream} for upload part request payload
