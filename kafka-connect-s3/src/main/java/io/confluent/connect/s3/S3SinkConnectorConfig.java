@@ -284,6 +284,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         Arrays.stream(AffixType.names()).collect(Collectors.toList()));
   }
 
+  @SuppressWarnings({"checkstyle:JavaNCSS"})
   public static ConfigDef newConfigDef() {
     ConfigDef configDef = StorageSinkConnectorConfig.newConfigDef(
         FORMAT_CLASS_RECOMMENDER,
