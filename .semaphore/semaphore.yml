@@ -9,6 +9,7 @@ agent:
   machine:
     type: s1-prod-ubuntu20-04-amd64-2
 
+
 fail_fast:
   cancel:
     when: "true"
