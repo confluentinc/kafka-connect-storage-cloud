@@ -21,7 +21,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>11.2.15</version>
+        <version>11.2.18</version>
     </parent>
 
     <groupId>io.confluent</groupId>
@@ -72,7 +72,6 @@
         <avro.version>1.11.3</avro.version>
         <zookeeper.version>3.8.4</zookeeper.version>
         <dnsjava.version>3.6.1</dnsjava.version>
-        <protobuf.java>3.25.5</protobuf.java>
     </properties>
 
     <repositories>
@@ -459,11 +458,6 @@
             <groupId>dnsjava</groupId>
             <artifactId>dnsjava</artifactId>
             <version>${dnsjava.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.google.protobuf</groupId>
-            <artifactId>protobuf-java</artifactId>
-            <version>${protobuf.java}</version>
         </dependency>
     </dependencies>
 
