@@ -127,7 +127,7 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     // Accumulate rest of the records.
     sinkRecords.addAll(createRecords(5, 2));
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
     // Perform write
     task.put(sinkRecords);
     task.close(context.assignment());
@@ -142,7 +142,7 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "10000");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createRecords(11000);
 
@@ -158,7 +158,7 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
   @Test
   public void testWriteRecordsInMultiplePartitions() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createRecords(7, 0, context.assignment());
     // Perform write
@@ -173,7 +173,7 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
   @Test
   public void testWriteInterleavedRecordsInMultiplePartitions() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createRecordsInterleaved(7, 0, context.assignment());
     // Perform write
@@ -193,7 +193,7 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
   @Test
   public void testWriteRecordsInMultiplePartitionsWithArrayOfOptionalString() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createRecordsWithArrayOfOptionalString(
         7,
@@ -212,7 +212,7 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
   @Test
   public void testWriteInterleavedRecordsInMultiplePartitionsNonZeroInitialOffset() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createRecordsInterleaved(7, 9, context.assignment());
     // Perform write
@@ -228,7 +228,7 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
   public void testPreCommitOnSizeRotation() throws Exception {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "3");
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords1 = createRecordsInterleaved(3, 0, context.assignment());
 
@@ -272,7 +272,7 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "2");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
     List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(2, 0);
 
     // Perform write
@@ -319,7 +319,7 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
             time
     );
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, time);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, time, filenameCreator);
 
     // Perform write
     task.put(sinkRecords.subList(0, 3));
@@ -361,7 +361,7 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
 
     List<SinkRecord> sinkRecords = createRecords(3, 0);
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, time);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, time, filenameCreator);
 
     // Perform write
     task.put(sinkRecords);
@@ -391,7 +391,7 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
   @Test
   public void testRebalance() throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createRecordsInterleaved(7, 0, context.assignment());
     // Starts with TOPIC_PARTITION and TOPIC_PARTITION2
@@ -442,7 +442,7 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     localProps.put(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG, "BACKWARD");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
     List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(7, 0);
 
     // Perform write
@@ -459,7 +459,7 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "2");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
     List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(7, 0);
 
     // Perform write
@@ -477,7 +477,7 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     localProps.put(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG, "FORWARD");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
     // By excluding the first element we get a list starting with record having the new schema.
     List<SinkRecord> sinkRecords = createRecordsWithAlteringSchemas(8, 0).subList(1, 8);
 
@@ -496,7 +496,7 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     localProps.put(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG, "BACKWARD");
     setUp();
 
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
     List<SinkRecord> sinkRecords = createRecordsNoVersion(1, 0);
     sinkRecords.addAll(createRecordsWithAlteringSchemas(7, 0));
 
@@ -977,7 +977,7 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
 
   protected void writeRecordsWithExtensionAndVerifyResult(String extension) throws Exception {
     setUp();
-    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME, filenameCreator);
 
     List<SinkRecord> sinkRecords = createRecords(7);
     // Perform write

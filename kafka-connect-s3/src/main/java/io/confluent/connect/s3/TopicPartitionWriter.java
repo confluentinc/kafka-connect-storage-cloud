@@ -16,6 +16,7 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.SdkClientException;
+import io.confluent.connect.s3.storage.FilenameCreator;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileRotationTracker;
 import io.confluent.connect.s3.util.RetryUtil;
@@ -50,7 +51,6 @@ import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.StorageCommonConfig;
-import io.confluent.connect.storage.common.util.StringUtils;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.partitioner.Partitioner;
@@ -73,6 +73,8 @@ public class TopicPartitionWriter {
   private final TopicPartition tp;
   private final S3Storage storage;
   private final Partitioner<?> partitioner;
+
+  private final FilenameCreator filenameCreator;
   private TimestampExtractor timestampExtractor;
   private String topicsDir;
   private State state;
@@ -100,9 +102,7 @@ public class TopicPartitionWriter {
   private long failureTime;
   private final StorageSchemaCompatibility compatibility;
   private final String extension;
-  private final String zeroPadOffsetFormat;
-  private final String dirDelim;
-  private final String fileDelim;
+
   private final Time time;
   private DateTimeZone timeZone;
   private final S3SinkConnectorConfig connectorConfig;
@@ -117,13 +117,21 @@ public class TopicPartitionWriter {
                               Partitioner<?> partitioner,
                               S3SinkConnectorConfig connectorConfig,
                               SinkTaskContext context,
-                              ErrantRecordReporter reporter) {
-    this(tp, storage, writerProvider, partitioner, connectorConfig, context, SYSTEM_TIME, reporter);
+                              ErrantRecordReporter reporter, FilenameCreator filenameCreator) {
+    this(tp, storage,
+        filenameCreator,
+        writerProvider,
+        partitioner,
+        connectorConfig,
+        context,
+        SYSTEM_TIME,
+        reporter);
   }
 
   // Visible for testing
   TopicPartitionWriter(TopicPartition tp,
                        S3Storage storage,
+                       FilenameCreator filenameCreator,
                        RecordWriterProvider<S3SinkConnectorConfig> writerProvider,
                        Partitioner<?> partitioner,
                        S3SinkConnectorConfig connectorConfig,
@@ -131,6 +139,7 @@ public class TopicPartitionWriter {
                        Time time,
                        ErrantRecordReporter reporter
   ) {
+    this.filenameCreator = filenameCreator;
     this.connectorConfig = connectorConfig;
     this.time = time;
     this.tp = tp;
@@ -142,7 +151,7 @@ public class TopicPartitionWriter {
     this.timestampExtractor = null;
 
     if (partitioner instanceof TimeBasedPartitioner) {
-      this.timestampExtractor = ((TimeBasedPartitioner) partitioner).getTimestampExtractor();
+      this.timestampExtractor = ((TimeBasedPartitioner<?>) partitioner).getTimestampExtractor();
       if (connectorConfig.isTombstoneWriteEnabled()) {
         this.timestampExtractor = new TombstoneTimestampExtractor(timestampExtractor);
       }
@@ -186,12 +195,7 @@ public class TopicPartitionWriter {
     state = State.WRITE_STARTED;
     failureTime = -1L;
     currentOffset = -1L;
-    dirDelim = connectorConfig.getString(StorageCommonConfig.DIRECTORY_DELIM_CONFIG);
-    fileDelim = connectorConfig.getString(StorageCommonConfig.FILE_DELIM_CONFIG);
     extension = writerProvider.getExtension();
-    zeroPadOffsetFormat = "%0"
-        + connectorConfig.getInt(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG)
-        + "d";
     fileRotationTracker = new FileRotationTracker();
 
     // Initialize scheduled rotation timer if applicable
@@ -542,7 +546,7 @@ public class TopicPartitionWriter {
 
   private RecordWriter newWriter(SinkRecord record, String encodedPartition)
       throws ConnectException {
-    String commitFilename = getCommitFilename(encodedPartition);
+    String commitFilename = getCommitFilename(record, encodedPartition);
     log.debug(
         "Creating new writer encodedPartition='{}' filename='{}'",
         encodedPartition,
@@ -553,34 +557,17 @@ public class TopicPartitionWriter {
     return writer;
   }
 
-  private String getCommitFilename(String encodedPartition) {
+  private String getCommitFilename(SinkRecord sinkRecord, String encodedPartition) {
     String commitFile;
     if (commitFiles.containsKey(encodedPartition)) {
       commitFile = commitFiles.get(encodedPartition);
     } else {
       long startOffset = startOffsets.get(encodedPartition);
       String prefix = getDirectoryPrefix(encodedPartition);
-      commitFile = fileKeyToCommit(prefix, startOffset);
+      commitFile = filenameCreator.createName(sinkRecord, prefix, startOffset, extension);
       commitFiles.put(encodedPartition, commitFile);
     }
     return commitFile;
-  }
-
-  private String fileKey(String topicsPrefix, String keyPrefix, String name) {
-    String suffix = keyPrefix + dirDelim + name;
-    return StringUtils.isNotBlank(topicsPrefix)
-           ? topicsPrefix + dirDelim + suffix
-           : suffix;
-  }
-
-  private String fileKeyToCommit(String dirPrefix, long startOffset) {
-    String name = tp.topic()
-                      + fileDelim
-                      + tp.partition()
-                      + fileDelim
-                      + String.format(zeroPadOffsetFormat, startOffset)
-                      + extension;
-    return fileKey(topicsDir, dirPrefix, name);
   }
 
   private boolean writeRecord(SinkRecord record, String encodedPartition) {
