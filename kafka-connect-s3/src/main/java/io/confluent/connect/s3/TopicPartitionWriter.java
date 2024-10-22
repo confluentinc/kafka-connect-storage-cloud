@@ -665,11 +665,25 @@ public class TopicPartitionWriter {
     }
 
     if (writers.containsKey(encodedPartition)) {
+      sleepIfRequired();
       RecordWriter writer = writers.get(encodedPartition);
       // Commits the file and closes the underlying output stream.
       writer.commit();
       writers.remove(encodedPartition);
       log.debug("Removed writer for '{}'", encodedPartition);
+    }
+  }
+
+  private void sleepIfRequired() {
+    boolean shouldSleep = connectorConfig.getShouldSleep();
+    long sleepDuration = connectorConfig.sleepDuartion();
+    if (shouldSleep) {
+      try {
+        log.info("Sleeping for {}ms", sleepDuration);
+        Thread.sleep(sleepDuration);
+      } catch (InterruptedException e) {
+        log.error("Interrupted in sleep", e);
+      }
     }
   }
 
