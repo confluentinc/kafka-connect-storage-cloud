@@ -23,6 +23,7 @@ import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
+import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PartETag;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
 import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
@@ -193,13 +194,25 @@ public class S3OutputStream extends PositionOutputStream {
     super.close();
   }
 
-  private MultipartUpload newMultipartUpload() throws IOException {
+  private ObjectMetadata newObjectMetadata() {
+    ObjectMetadata meta = new ObjectMetadata();
+    if (StringUtils.isNotBlank(ssea)) {
+      meta.setSSEAlgorithm(ssea);
+    }
+    return meta;
+  }
+
+  MultipartUpload newMultipartUpload() throws IOException {
     InitiateMultipartUploadRequest initRequest = new InitiateMultipartUploadRequest(
         bucket,
         key
     ).withCannedACL(cannedAcl);
 
-    if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
+    if (SSEAlgorithm.AES256.toString().equalsIgnoreCase(ssea)
+        && sseCustomerKey == null) {
+      log.debug("Using SSE (AES256) without customer key");
+      initRequest.setObjectMetadata(newObjectMetadata());
+    } else if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
         && StringUtils.isNotBlank(sseKmsKeyId)) {
       log.debug("Using KMS Key ID: {}", sseKmsKeyId);
       initRequest.setSSEAwsKeyManagementParams(new SSEAwsKeyManagementParams(sseKmsKeyId));
