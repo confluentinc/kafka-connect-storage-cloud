@@ -227,6 +227,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   private static final String SHOULD_SLEEP_ON_COMMIT = "sleep.on.commit";
   private static final String SLEEP_INTERVAL = "sleep.interval";
+  private static final String SLEEP_PROBABILITY = "sleep.probability";
 
   private static final GenericRecommender SCHEMA_PARTITION_AFFIX_TYPE_RECOMMENDER =
       new GenericRecommender();
@@ -902,6 +903,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         Width.LONG,
         "Should sleep on commit"
     );
+
+    config.define(
+        SLEEP_PROBABILITY,
+        Type.INT,
+        2,
+        Importance.HIGH,
+        "Probability index",
+        group,
+        ++orderInGroup,
+        Width.LONG,
+        "Probability index"
+    );
   }
 
   private void addToGlobal(AbstractConfig config) {
@@ -1049,8 +1062,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   private Random random = new Random();
+
   public boolean getShouldSleep() {
-    return getBoolean(SHOULD_SLEEP_ON_COMMIT) && random.nextInt() % 2 == 0;
+    return getBoolean(SHOULD_SLEEP_ON_COMMIT) && random.nextInt() % getInt(SLEEP_PROBABILITY) == 0;
   }
 
   public long sleepDuartion() {
