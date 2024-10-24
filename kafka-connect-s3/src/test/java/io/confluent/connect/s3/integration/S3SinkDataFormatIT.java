@@ -180,7 +180,6 @@ public class S3SinkDataFormatIT extends BaseConnectorIT {
     Set<String> expectedTopicFilenames = new TreeSet<>();
     for (String thisTopicName : topicNames) {
       List<String> theseFiles = getExpectedFilenames(
-          "topics/%s/partition=%d/%s+%d+%010d.%s",
           thisTopicName,
           TOPIC_PARTITION,
           FLUSH_SIZE_STANDARD,
