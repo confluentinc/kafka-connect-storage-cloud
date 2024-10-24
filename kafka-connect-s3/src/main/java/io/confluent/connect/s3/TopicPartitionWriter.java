@@ -15,7 +15,6 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.SdkClientException;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileRotationTracker;
 import io.confluent.connect.s3.util.RetryUtil;
@@ -35,6 +34,7 @@ import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import org.apache.avro.SchemaParseException;
 import org.apache.parquet.schema.InvalidSchemaException;
 

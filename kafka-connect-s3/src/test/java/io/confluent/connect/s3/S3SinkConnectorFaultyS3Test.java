@@ -1,6 +1,7 @@
 package io.confluent.connect.s3;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 
-import com.amazonaws.services.s3.AmazonS3;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -61,7 +62,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     protected static Admin kafkaAdmin;
     protected String connectorName;
     protected String topicName;
-    protected AmazonS3 s3;
+    protected S3Client s3;
 
     // test parameters
     private final Failure failure;
@@ -118,7 +119,8 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         super.setUp();
 
         s3 = newS3Client(connectorConfig);
-        s3.createBucket(S3_TEST_BUCKET_NAME);
+      s3.createBucket(CreateBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME)
+          .build());
 
         connectorName = CONNECTOR_NAME + UUID.randomUUID();
         connect.configureConnector(connectorName, properties);

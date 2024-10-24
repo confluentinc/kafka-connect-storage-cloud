@@ -15,13 +15,15 @@
 
 package io.confluent.connect.s3.util;
 
-import com.amazonaws.Protocol;
+import org.apache.http.client.utils.URIBuilder;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Locale;
 
@@ -35,11 +37,12 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_USER_CONFIG
 public class S3ProxyConfig {
   private static final Logger log = LoggerFactory.getLogger(S3ProxyConfig.class);
 
-  private final Protocol protocol;
+  private final String protocol;
   private final String host;
   private final int port;
   private final String user;
   private final String pass;
+  private final URI uri;
 
   public S3ProxyConfig(S3SinkConnectorConfig config) {
     try {
@@ -55,8 +58,9 @@ public class S3ProxyConfig {
       pass = StringUtils.isNotBlank(password.value())
              ? password.value()
              : extractPass(url.getUserInfo());
+      uri = extractURI();
       log.debug("Using proxy config {}", this);
-    } catch (MalformedURLException e) {
+    } catch (MalformedURLException | URISyntaxException e) {
       throw new ConfigException(
           S3_PROXY_URL_CONFIG,
           config.getString(S3_PROXY_URL_CONFIG),
@@ -65,11 +69,23 @@ public class S3ProxyConfig {
     }
   }
 
-  public static Protocol extractProtocol(String protocol) {
+  private URI extractURI() throws URISyntaxException {
+    URIBuilder builder = new URIBuilder();
+    builder.setScheme(protocol);
+    builder.setHost(host);
+    builder.setPort(port);
+    return builder.build();
+  }
+
+  public URI getURI() {
+    return uri;
+  }
+
+  public static String extractProtocol(String protocol) {
     if (StringUtils.isBlank(protocol)) {
-      return Protocol.HTTPS;
+      return "https";
     }
-    return "http".equals(protocol.trim().toLowerCase(Locale.ROOT)) ? Protocol.HTTP : Protocol.HTTPS;
+    return "http".equals(protocol.trim().toLowerCase(Locale.ROOT)) ? "http" : "https";
   }
 
   public static String extractUser(String userInfo) {
@@ -85,7 +101,7 @@ public class S3ProxyConfig {
     return parts.length == 2 ? parts[1] : null;
   }
 
-  public Protocol protocol() {
+  public String protocol() {
     return protocol;
   }
 

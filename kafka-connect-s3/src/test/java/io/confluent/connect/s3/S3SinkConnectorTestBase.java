@@ -15,10 +15,12 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.client.builder.AwsClientBuilder;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3ClientBuilder;
+
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.avro.AvroFormat;
@@ -37,6 +39,7 @@ import org.powermock.api.mockito.PowerMockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -98,15 +101,16 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
     super.tearDown();
   }
 
-  public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
-    AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
-               .withAccelerateModeEnabled(config.getBoolean(S3SinkConnectorConfig.WAN_MODE_CONFIG))
-               .withPathStyleAccessEnabled(config.getBoolean(S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG))
-               .withCredentials(new DefaultAWSCredentialsProviderChain());
+  public S3Client newS3Client(S3SinkConnectorConfig config) {
+    S3ClientBuilder builder = S3Client.builder()
+        .accelerate(config.getBoolean(S3SinkConnectorConfig.WAN_MODE_CONFIG))
+        .forcePathStyle(config.getBoolean(S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG))
+        .credentialsProvider(DefaultCredentialsProvider.builder()
+            .build());
 
     builder = url == null ?
-                  builder.withRegion(config.getString(S3SinkConnectorConfig.REGION_CONFIG)) :
-                  builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(url, ""));
+        builder.region(Region.of(config.getString(S3SinkConnectorConfig.REGION_CONFIG))) :
+        builder.endpointOverride(URI.create(url));
 
     return builder.build();
   }

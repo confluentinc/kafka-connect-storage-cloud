@@ -16,7 +16,11 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.internal.SkipMd5CheckStrategy;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import org.apache.avro.file.DataFileStream;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.DatumReader;
@@ -61,6 +65,7 @@ import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.kafka.serializers.NonRecordContainer;
+import software.amazon.awssdk.services.s3.model.S3Object;
 
 import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
@@ -195,9 +200,10 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     task.close(context.assignment());
     task.stop();
 
-    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, "/", s3);
-    for(S3ObjectSummary summary: summaries){
-      InputStream in = s3.getObject(summary.getBucketName(), summary.getKey()).getObjectContent();
+    List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, "/", s3);
+    for(S3Object summary: summaries){
+
+      ResponseInputStream<GetObjectResponse> in = s3.getObject(GetObjectRequest.builder().bucket(S3_TEST_BUCKET_NAME).key(summary.key()).build());
       DatumReader<Object> reader = new GenericDatumReader<>();
       DataFileStream<Object> streamReader = new DataFileStream<>(in, reader);
       // make sure that produced Avro file has proper codec set
@@ -218,7 +224,8 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     List<SinkRecord> sinkRecords = createRecords(2);
     byte[] partialData = AvroUtils.putRecords(sinkRecords, format.getAvroData());
     String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, EXTENSION, ZERO_PAD_FMT);
-    s3.putObject(S3_TEST_BUCKET_NAME, fileKey, new ByteArrayInputStream(partialData), null);
+    s3.putObject(PutObjectRequest.builder().bucket(S3_TEST_BUCKET_NAME).key(fileKey).build(), RequestBody.fromInputStream(
+    new ByteArrayInputStream(partialData), partialData.length));
 
     // Accumulate rest of the records.
     sinkRecords.addAll(createRecords(5, 2));

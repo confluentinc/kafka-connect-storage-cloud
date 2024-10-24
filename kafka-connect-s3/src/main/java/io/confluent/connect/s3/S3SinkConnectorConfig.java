@@ -15,15 +15,12 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import com.amazonaws.regions.RegionUtils;
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.s3.model.CannedAccessControlList;
-import com.amazonaws.services.s3.model.SSEAlgorithm;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
 import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -39,6 +36,9 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.DecimalFormat;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -50,7 +50,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -74,6 +73,7 @@ import io.confluent.connect.storage.partitioner.FieldPartitioner;
 import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
+import software.amazon.awssdk.services.s3.model.ServerSideEncryption;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
@@ -108,8 +108,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private static final boolean WAN_MODE_DEFAULT = false;
 
   public static final String CREDENTIALS_PROVIDER_CLASS_CONFIG = "s3.credentials.provider.class";
-  public static final Class<? extends AWSCredentialsProvider> CREDENTIALS_PROVIDER_CLASS_DEFAULT =
-      DefaultAWSCredentialsProviderChain.class;
+  public static final Class<? extends AwsCredentialsProvider> CREDENTIALS_PROVIDER_CLASS_DEFAULT =
+      DefaultCredentialsProvider.class;
   /**
    * The properties that begin with this prefix will be used to configure a class, specified by
    * {@code s3.credentials.provider.class} if it implements {@link Configurable}.
@@ -127,7 +127,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final Password AWS_SECRET_ACCESS_KEY_DEFAULT = new Password(null);
 
   public static final String REGION_CONFIG = "s3.region";
-  public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
+  public static final String REGION_DEFAULT =  Region.US_WEST_2.id();
 
   public static final String ACL_CANNED_CONFIG = "s3.acl.canned";
   public static final String ACL_CANNED_DEFAULT = null;
@@ -164,7 +164,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String HEADERS_USE_EXPECT_CONTINUE_CONFIG =
       "s3.http.send.expect.continue";
   public static final boolean HEADERS_USE_EXPECT_CONTINUE_DEFAULT =
-      ClientConfiguration.DEFAULT_USE_EXPECT_CONTINUE;
+      true;
 
   public static final String BEHAVIOR_ON_NULL_VALUES_CONFIG = "behavior.on.null.values";
   public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = OutputWriteBehavior.FAIL.toString();
@@ -179,7 +179,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   /**
    * Maximum back-off time when retrying failed requests.
    */
-  public static final int S3_RETRY_MAX_BACKOFF_TIME_MS = (int) TimeUnit.HOURS.toMillis(24);
+  public static final Duration S3_RETRY_MAX_BACKOFF_TIME_MS = Duration.ofDays(1);
 
   public static final String S3_RETRY_BACKOFF_CONFIG = "s3.retry.backoff.ms";
   public static final int S3_RETRY_BACKOFF_DEFAULT = 200;
@@ -391,7 +391,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Importance.LOW,
           "Credentials provider or provider chain to use for authentication to AWS. By default "
               + "the connector uses ``"
-              + DefaultAWSCredentialsProviderChain.class.getSimpleName()
+              + DefaultCredentialsProvider.class.getSimpleName()
               + "``.",
 
           group,
@@ -432,9 +432,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "AWS Secret Access Key"
       );
 
-      List<String> validSsea = new ArrayList<>(SSEAlgorithm.values().length + 1);
+      List<String> validSsea = new ArrayList<>(ServerSideEncryption.values().length + 1);
       validSsea.add("");
-      for (SSEAlgorithm algo : SSEAlgorithm.values()) {
+      for (ServerSideEncryption algo : ServerSideEncryption.values()) {
         validSsea.add(algo.toString());
       }
       configDef.define(
@@ -470,7 +470,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Importance.LOW,
           "The name of the AWS Key Management Service (AWS-KMS) key to be used for server side "
               + "encryption of the S3 objects. No encryption is used when no key is provided, but"
-              + " it is enabled when ``" + SSEAlgorithm.KMS + "`` is specified as encryption "
+              + " it is enabled when ``" + ServerSideEncryption.AWS_KMS + "`` is specified as encryption "
               + "algorithm with a valid key name.",
           group,
           ++orderInGroup,
@@ -915,7 +915,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getBoolean(HEADERS_USE_EXPECT_CONTINUE_CONFIG);
   }
 
-  public CannedAccessControlList getCannedAcl() {
+  public ObjectCannedACL getCannedAcl() {
     return CannedAclValidator.ACLS_BY_HEADER_VALUE.get(getString(ACL_CANNED_CONFIG));
   }
 
@@ -932,10 +932,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   @SuppressWarnings("unchecked")
-  public AWSCredentialsProvider getCredentialsProvider() {
+  public AwsCredentialsProvider getCredentialsProvider() {
     try {
-      AWSCredentialsProvider provider = ((Class<? extends AWSCredentialsProvider>)
-          getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG)).newInstance();
+      Class<AwsCredentialsProvider> providerClass = (Class<AwsCredentialsProvider>) getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG);
+      Method method = providerClass.getMethod("create");
+
+      AwsCredentialsProvider provider = (AwsCredentialsProvider) method.invoke(null);
 
       if (provider instanceof Configurable) {
         Map<String, Object> configs = originalsWithPrefix(CREDENTIALS_PROVIDER_CONFIG_PREFIX);
@@ -951,13 +953,13 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         final String accessKeyId = awsAccessKeyId();
         final String secretKey = awsSecretKeyId().value();
         if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
-          BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
-          provider = new AWSStaticCredentialsProvider(basicCredentials);
+          AwsBasicCredentials basicCredentials = AwsBasicCredentials.create(accessKeyId, secretKey);
+          provider = StaticCredentialsProvider.create(basicCredentials);
         }
       }
 
       return provider;
-    } catch (IllegalAccessException | InstantiationException e) {
+    } catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
       throw new ConnectException(
           "Invalid class for: " + S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
           e
@@ -1106,7 +1108,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private static class RegionRecommender implements ConfigDef.Recommender {
     @Override
     public List<Object> validValues(String name, Map<String, Object> connectorConfigs) {
-      return new ArrayList<>(RegionUtils.getRegions());
+      return new ArrayList<>(Region.regions());
     }
 
     @Override
@@ -1119,18 +1121,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     @Override
     public void ensureValid(String name, Object region) {
       String regionStr = ((String) region).toLowerCase().trim();
-      if (RegionUtils.getRegion(regionStr) == null) {
+      if (Region.of(regionStr) == null) {
         throw new ConfigException(
             name,
             region,
-            "Value must be one of: " + Utils.join(RegionUtils.getRegions(), ", ")
+            "Value must be one of: " + Utils.join(Region.regions(), ", ")
         );
       }
     }
 
     @Override
     public String toString() {
-      return "[" + Utils.join(RegionUtils.getRegions(), ", ") + "]";
+      return "[" + Utils.join(Region.regions(), ", ") + "]";
     }
   }
 
@@ -1225,12 +1227,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   private static class CannedAclValidator implements ConfigDef.Validator {
-    public static final Map<String, CannedAccessControlList> ACLS_BY_HEADER_VALUE = new HashMap<>();
+    public static final Map<String, ObjectCannedACL> ACLS_BY_HEADER_VALUE = new HashMap<>();
     public static final String ALLOWED_VALUES;
 
     static {
       List<String> aclHeaderValues = new ArrayList<>();
-      for (CannedAccessControlList acl : CannedAccessControlList.values()) {
+      for (ObjectCannedACL acl : ObjectCannedACL.values()) {
         ACLS_BY_HEADER_VALUE.put(acl.toString(), acl);
         aclHeaderValues.add(acl.toString());
       }
@@ -1257,27 +1259,27 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private static class CredentialsProviderValidator implements ConfigDef.Validator {
     @Override
     public void ensureValid(String name, Object provider) {
-      if (provider != null && provider instanceof Class
-              && AWSCredentialsProvider.class.isAssignableFrom((Class<?>) provider)) {
+      if (provider instanceof Class
+          && AwsCredentialsProvider.class.isAssignableFrom((Class<?>) provider)) {
         return;
       }
       throw new ConfigException(
           name,
           provider,
-          "Class must extend: " + AWSCredentialsProvider.class
+          "Class must extend: " + AwsCredentialsProvider.class
       );
     }
 
     @Override
     public String toString() {
-      return "Any class implementing: " + AWSCredentialsProvider.class;
+      return "Any class implementing: " + AwsCredentialsProvider.class;
     }
   }
 
   private static class SseAlgorithmRecommender implements ConfigDef.Recommender {
     @Override
     public List<Object> validValues(String name, Map<String, Object> connectorConfigs) {
-      List<SSEAlgorithm> list = Arrays.asList(SSEAlgorithm.values());
+      List<ServerSideEncryption> list = Arrays.asList(ServerSideEncryption.values());
       return new ArrayList<Object>(list);
     }
 
@@ -1298,7 +1300,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
     @Override
     public boolean visible(String name, Map<String, Object> connectorConfigs) {
-      return SSEAlgorithm.KMS.toString()
+      return ServerSideEncryption.AWS_KMS.toString()
           .equalsIgnoreCase((String) connectorConfigs.get(SSEA_CONFIG));
     }
   }
