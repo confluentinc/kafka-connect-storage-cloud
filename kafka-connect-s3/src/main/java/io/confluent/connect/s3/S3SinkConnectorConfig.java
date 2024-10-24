@@ -470,8 +470,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Importance.LOW,
           "The name of the AWS Key Management Service (AWS-KMS) key to be used for server side "
               + "encryption of the S3 objects. No encryption is used when no key is provided, but"
-              + " it is enabled when ``" + ServerSideEncryption.AWS_KMS + "`` is specified as encryption "
-              + "algorithm with a valid key name.",
+              + " it is enabled when ``" + ServerSideEncryption.AWS_KMS + "`` is specified as "
+              + "encryption algorithm with a valid key name.",
           group,
           ++orderInGroup,
           Width.LONG,
@@ -934,7 +934,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   @SuppressWarnings("unchecked")
   public AwsCredentialsProvider getCredentialsProvider() {
     try {
-      Class<AwsCredentialsProvider> providerClass = (Class<AwsCredentialsProvider>) getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG);
+      Class<AwsCredentialsProvider> providerClass =
+          (Class<AwsCredentialsProvider>) getClass(
+              S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG);
       Method method = providerClass.getMethod("create");
 
       AwsCredentialsProvider provider = (AwsCredentialsProvider) method.invoke(null);

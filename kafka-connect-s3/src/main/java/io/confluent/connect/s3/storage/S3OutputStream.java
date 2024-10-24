@@ -276,7 +276,10 @@ public class S3OutputStream extends PositionOutputStream {
       log.debug("Uploading part {} for id '{}'", currentPartNumber, uploadId);
       UploadPartResponse uploadPartResponse = s3.uploadPart(requestBuilder.build(), requestBody);
       //partETags.add(uploadPartResponse.eTag());
-      completedParts.add(CompletedPart.builder().eTag(uploadPartResponse.eTag()).partNumber(currentPartNumber).build());
+      completedParts.add(CompletedPart.builder()
+          .eTag(uploadPartResponse.eTag())
+          .partNumber(currentPartNumber)
+          .build());
     }
 
     /**

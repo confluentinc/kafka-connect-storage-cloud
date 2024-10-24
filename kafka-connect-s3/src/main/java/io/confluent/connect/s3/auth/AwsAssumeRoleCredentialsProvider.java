@@ -82,7 +82,8 @@ public class AwsAssumeRoleCredentialsProvider implements AwsCredentialsProvider,
     final String secretKey = (String) configs.get(AWS_SECRET_ACCESS_KEY_CONFIG);
     if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
       basicCredentials = AwsBasicCredentials.create(accessKeyId, secretKey);
-      //TODO: Set defaults if any to StsClient.builder() equiaveltn to AWSSecurityTokenServiceClientBuilder.standard()
+      //TODO: Set defaults if any to StsClient.builder() equiaveltn to
+      // AWSSecurityTokenServiceClientBuilder.standard()
       stsCredentialProvider = StsAssumeRoleCredentialsProvider.builder()
           .stsClient(StsClient.builder()
               .credentialsProvider(StaticCredentialsProvider.create(basicCredentials)).build())
