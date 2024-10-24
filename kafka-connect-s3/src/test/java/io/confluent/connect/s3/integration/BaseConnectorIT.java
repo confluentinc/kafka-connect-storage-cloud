@@ -220,6 +220,36 @@ public abstract class BaseConnectorIT {
    * @return the list of expected filenames
    */
   protected static List<String> getExpectedFilenames(
+      String topic,
+      int partition,
+      int flushSize,
+      int startOffset,
+      long numRecords,
+      String extension
+  ) {
+    return getExpectedFilenames(
+        "topics/%s/partition=%d/%s+%d+%010d.%s",
+        topic,
+        partition,
+        flushSize,
+        startOffset,
+        numRecords,
+        extension
+    );
+  }
+
+  /**
+   * Get a list of the expected filenames for the bucket using the given format
+   *
+   * @param format     the format of the file path, e.g. "topics/%s/partition=%d/%s+%d+%010d.%s"
+   * @param topic      the test kafka topic
+   * @param partition  the expected partition for the tests
+   * @param flushSize  the flush size connector config
+   * @param numRecords the number of records produced in the test
+   * @param extension  the expected extensions of the files including compression (snappy.parquet)
+   * @return the list of expected filenames
+   */
+  protected static List<String> getExpectedFilenames(
       String format,
       String topic,
       int partition,

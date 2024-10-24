@@ -255,7 +255,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     Set<String> expectedTopicFilenames = new TreeSet<>();
     for (String topic : KAFKA_TOPICS) {
       List<String> expectedFilenames = getExpectedFilenames(
-          "topics/%s/partition=%d/%s+%d+%010d.%s",
           topic,
           TOPIC_PARTITION,
           FLUSH_SIZE_STANDARD,
@@ -325,7 +324,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     Set<String> expectedTopicFilenames = new TreeSet<>();
     for (String thisTopicName : topicNames) {
       List<String> theseFiles = getExpectedFilenames(
-          "topics/%s/partition=%d/%s+%d+%010d.%s",
               thisTopicName,
               TOPIC_PARTITION,
               FLUSH_SIZE_STANDARD,
