@@ -16,6 +16,7 @@ import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.io.DelegatingSeekableInputStream;
 import org.apache.parquet.io.InputFile;
+import org.apache.parquet.io.OutputFile;
 import org.apache.parquet.io.SeekableInputStream;
 
 import java.io.ByteArrayOutputStream;
@@ -55,6 +56,7 @@ public class ParquetUtils {
     }
     return records;
   }
+
 
   public static byte[] putRecords(Collection<SinkRecord> records, AvroData avroData) throws IOException {
     ParquetWriter<GenericRecord> writer = null;

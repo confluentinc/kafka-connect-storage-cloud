@@ -24,6 +24,8 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
+import io.confluent.connect.s3.storage.FilenameCreator;
+import io.confluent.connect.s3.storage.TopicPartitionFilenameCreator;
 import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -227,6 +229,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   private static final GenericRecommender SCHEMA_PARTITION_AFFIX_TYPE_RECOMMENDER =
       new GenericRecommender();
+  public static final String S3_FILENAME_CREATOR_CLASS = "s3.filename.creator.class";
+  public static final Class<? extends FilenameCreator> S3_FILENAME_CREATOR_CLASS_DEFAULT =
+      TopicPartitionFilenameCreator.class;
 
   private final String name;
 
@@ -845,6 +850,17 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.LONG,
           "Elastic buffer initial capacity"
       );
+
+      configDef.define(
+          S3_FILENAME_CREATOR_CLASS,
+          Type.CLASS,
+          S3_FILENAME_CREATOR_CLASS_DEFAULT,
+          Importance.LOW,
+          "Which class to use when generating file name",
+          group,
+          ++orderInGroup,
+          Width.NONE,
+          "Which class to use when generating file name");
 
     }
     return configDef;
