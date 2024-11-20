@@ -552,7 +552,8 @@ public class TopicPartitionWriter {
     return fileKey(topicsDir, dirPrefix, name);
   }
 
-  private boolean writeRecord(SinkRecord record, SinkRecord projectedRecord, String encodedPartition) {
+  private boolean writeRecord(SinkRecord record, SinkRecord projectedRecord,
+                              String encodedPartition) {
     RecordWriter writer = writers.get(encodedPartition);
     long currentOffsetIfSuccessful = projectedRecord.kafkaOffset();
     boolean shouldRemoveWriter = false;
