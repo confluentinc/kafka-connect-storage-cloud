@@ -31,6 +31,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
+import org.joda.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.avro.SchemaParseException;
@@ -42,6 +43,8 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
@@ -106,6 +109,8 @@ public class TopicPartitionWriter {
   boolean isPaused = false;
 
   private final FileRotationTracker fileRotationTracker;
+
+  private Random random = new Random();
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
@@ -208,6 +213,8 @@ public class TopicPartitionWriter {
 
     resetExpiredScheduledRotationIfNoPendingRecords(now);
 
+    sleepIfRequired();
+
     while (!buffer.isEmpty() && !isWriteDeadlineExceeded()) {
       try {
         executeState(now);
@@ -227,6 +234,19 @@ public class TopicPartitionWriter {
     }
     pauseOrResumeOnBuffer();
 
+  }
+
+  private void sleepIfRequired() {
+    boolean shouldSleep = random.nextInt() % 2 == 0;
+    long sleepDuration = TimeUnit.MINUTES.toMillis(10);
+    if (shouldSleep) {
+      try {
+        log.info("Sleeping for {}ms", sleepDuration);
+        Thread.sleep(sleepDuration);
+      } catch (InterruptedException e) {
+        log.error("Interrupted in sleep", e);
+      }
+    }
   }
 
   private void pauseOrResumeOnBuffer() {
