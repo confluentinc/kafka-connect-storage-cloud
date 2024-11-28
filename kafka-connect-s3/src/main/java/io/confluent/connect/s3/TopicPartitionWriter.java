@@ -311,7 +311,7 @@ public class TopicPartitionWriter {
     }
 
     SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
-    boolean validRecord = writeRecord(record, projectedRecord, encodedPartition);
+    boolean validRecord = writeRecord(projectedRecord, encodedPartition, record);
     buffer.poll();
     if (!validRecord) {
       // skip the faulty record and don't rotate
@@ -552,10 +552,10 @@ public class TopicPartitionWriter {
     return fileKey(topicsDir, dirPrefix, name);
   }
 
-  private boolean writeRecord(SinkRecord record, SinkRecord projectedRecord,
-                              String encodedPartition) {
+  private boolean writeRecord(SinkRecord record, String encodedPartition,
+                              SinkRecord originalRecord) {
     RecordWriter writer = writers.get(encodedPartition);
-    long currentOffsetIfSuccessful = projectedRecord.kafkaOffset();
+    long currentOffsetIfSuccessful = record.kafkaOffset();
     boolean shouldRemoveWriter = false;
     boolean shouldRemoveStartOffset = false;
     boolean shouldRemoveCommitFilename = false;
@@ -573,10 +573,10 @@ public class TopicPartitionWriter {
         if (!commitFiles.containsKey(encodedPartition)) {
           shouldRemoveCommitFilename = true;
         }
-        writer = newWriter(projectedRecord, encodedPartition);
+        writer = newWriter(record, encodedPartition);
         shouldRemoveWriter = true;
       }
-      writer.write(projectedRecord);
+      writer.write(record);
     } catch (DataException | SchemaParseException | InvalidSchemaException e) {
       if (reporter != null) {
         if (shouldRemoveStartOffset) {
@@ -588,7 +588,7 @@ public class TopicPartitionWriter {
         if (shouldRemoveCommitFilename) {
           commitFiles.remove(encodedPartition);
         }
-        reporter.report(record, e);
+        reporter.report(originalRecord, e);
         log.warn("Errant record written to DLQ due to: {}", e.getMessage());
         return false;
       } else {
@@ -597,7 +597,7 @@ public class TopicPartitionWriter {
     }
 
     currentEncodedPartition = encodedPartition;
-    currentOffset = projectedRecord.kafkaOffset();
+    currentOffset = record.kafkaOffset();
     if (shouldRemoveStartOffset) {
       log.trace(
           "Setting writer's start offset for '{}' to {}",
