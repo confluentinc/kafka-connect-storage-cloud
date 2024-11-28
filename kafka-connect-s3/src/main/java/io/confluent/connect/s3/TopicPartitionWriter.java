@@ -100,6 +100,11 @@ public class TopicPartitionWriter {
   private static final Time SYSTEM_TIME = new SystemTime();
   private ErrantRecordReporter reporter;
 
+  private final long maxWriteDurationMs;
+  private long writeDeadline;
+
+  boolean isPaused = false;
+
   private final FileRotationTracker fileRotationTracker;
 
   public TopicPartitionWriter(TopicPartition tp,
@@ -173,6 +178,9 @@ public class TopicPartitionWriter {
         + "d";
     fileRotationTracker = new FileRotationTracker();
 
+    maxWriteDurationMs = connectorConfig.getLong(S3SinkConnectorConfig.MAX_WRITE_DURATION);
+    writeDeadline = Long.MAX_VALUE;
+
     // Initialize scheduled rotation timer if applicable
     setNextScheduledRotation();
   }
@@ -200,7 +208,7 @@ public class TopicPartitionWriter {
 
     resetExpiredScheduledRotationIfNoPendingRecords(now);
 
-    while (!buffer.isEmpty()) {
+    while (!buffer.isEmpty() && !isWriteDeadlineExceeded()) {
       try {
         executeState(now);
       } catch (IllegalWorkerStateException e) {
@@ -214,7 +222,35 @@ public class TopicPartitionWriter {
         }
       }
     }
-    commitOnTimeIfNoData(now);
+    if (!isWriteDeadlineExceeded()) {
+      commitOnTimeIfNoData(now);
+    }
+    pauseOrResumeOnBuffer();
+
+  }
+
+  private void pauseOrResumeOnBuffer() {
+    // if the deadline exceeds before all the records in buffer are processed, pause the writer
+    // if the buffered records are greater than flush size, this is to ensure that we don't keep
+    // getting messages from the consumer while we are still processing the buffer which can lead
+    // to memory issues
+    if (buffer.size() >= Math.max(flushSize, 1)) {
+      pause();
+    } else if (isPaused) {
+      resume();
+    }
+  }
+
+  public void setWriteDeadline(long currentTimeMs) {
+    writeDeadline = currentTimeMs + maxWriteDurationMs;
+    //prevent overflow
+    if (writeDeadline < 0) {
+      writeDeadline = Long.MAX_VALUE;
+    }
+  }
+
+  protected boolean isWriteDeadlineExceeded() {
+    return time.milliseconds() > writeDeadline;
   }
 
   @SuppressWarnings("fallthrough")
@@ -262,6 +298,11 @@ public class TopicPartitionWriter {
         }
         // fallthrough
       case SHOULD_ROTATE:
+        if (isWriteDeadlineExceeded()) {
+          // note: this is a best-effort attempt to rotate the file before the deadline
+          // this check can pass and the deadline gets exceeded before the rotation is complete
+          break;
+        }
         commitFiles();
         nextState();
         // fallthrough
@@ -502,11 +543,13 @@ public class TopicPartitionWriter {
   private void pause() {
     log.trace("Pausing writer for topic-partition '{}'", tp);
     context.pause(tp);
+    isPaused = true;
   }
 
   private void resume() {
     log.trace("Resuming writer for topic-partition '{}'", tp);
     context.resume(tp);
+    isPaused = true;
   }
 
   private RecordWriter newWriter(SinkRecord record, String encodedPartition)
