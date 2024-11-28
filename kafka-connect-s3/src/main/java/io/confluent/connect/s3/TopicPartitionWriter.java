@@ -311,7 +311,7 @@ public class TopicPartitionWriter {
     }
 
     SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
-    boolean validRecord = writeRecord(projectedRecord, encodedPartition);
+    boolean validRecord = writeRecord(projectedRecord, encodedPartition, record);
     buffer.poll();
     if (!validRecord) {
       // skip the faulty record and don't rotate
@@ -552,7 +552,8 @@ public class TopicPartitionWriter {
     return fileKey(topicsDir, dirPrefix, name);
   }
 
-  private boolean writeRecord(SinkRecord record, String encodedPartition) {
+  private boolean writeRecord(SinkRecord record, String encodedPartition,
+                              SinkRecord originalRecord) {
     RecordWriter writer = writers.get(encodedPartition);
     long currentOffsetIfSuccessful = record.kafkaOffset();
     boolean shouldRemoveWriter = false;
@@ -587,7 +588,7 @@ public class TopicPartitionWriter {
         if (shouldRemoveCommitFilename) {
           commitFiles.remove(encodedPartition);
         }
-        reporter.report(record, e);
+        reporter.report(originalRecord, e);
         log.warn("Errant record written to DLQ due to: {}", e.getMessage());
         return false;
       } else {
