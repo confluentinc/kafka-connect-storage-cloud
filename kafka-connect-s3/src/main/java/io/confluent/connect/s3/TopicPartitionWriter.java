@@ -311,7 +311,7 @@ public class TopicPartitionWriter {
     }
 
     SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
-    boolean validRecord = writeRecord(projectedRecord, encodedPartition);
+    boolean validRecord = writeRecord(projectedRecord, encodedPartition, record);
     buffer.poll();
     if (!validRecord) {
       // skip the faulty record and don't rotate
@@ -552,9 +552,10 @@ public class TopicPartitionWriter {
     return fileKey(topicsDir, dirPrefix, name);
   }
 
-  private boolean writeRecord(SinkRecord record, String encodedPartition) {
+  private boolean writeRecord(SinkRecord projectedRecord, String encodedPartition,
+                              SinkRecord originalRecord) {
     RecordWriter writer = writers.get(encodedPartition);
-    long currentOffsetIfSuccessful = record.kafkaOffset();
+    long currentOffsetIfSuccessful = projectedRecord.kafkaOffset();
     boolean shouldRemoveWriter = false;
     boolean shouldRemoveStartOffset = false;
     boolean shouldRemoveCommitFilename = false;
@@ -572,10 +573,10 @@ public class TopicPartitionWriter {
         if (!commitFiles.containsKey(encodedPartition)) {
           shouldRemoveCommitFilename = true;
         }
-        writer = newWriter(record, encodedPartition);
+        writer = newWriter(projectedRecord, encodedPartition);
         shouldRemoveWriter = true;
       }
-      writer.write(record);
+      writer.write(projectedRecord);
     } catch (DataException | SchemaParseException | InvalidSchemaException e) {
       if (reporter != null) {
         if (shouldRemoveStartOffset) {
@@ -587,7 +588,7 @@ public class TopicPartitionWriter {
         if (shouldRemoveCommitFilename) {
           commitFiles.remove(encodedPartition);
         }
-        reporter.report(record, e);
+        reporter.report(originalRecord, e);
         log.warn("Errant record written to DLQ due to: {}", e.getMessage());
         return false;
       } else {
@@ -596,7 +597,7 @@ public class TopicPartitionWriter {
     }
 
     currentEncodedPartition = encodedPartition;
-    currentOffset = record.kafkaOffset();
+    currentOffset = projectedRecord.kafkaOffset();
     if (shouldRemoveStartOffset) {
       log.trace(
           "Setting writer's start offset for '{}' to {}",
