@@ -250,7 +250,11 @@ public class TopicPartitionWriter {
   }
 
   protected boolean isWriteDeadlineExceeded() {
-    return time.milliseconds() > writeDeadline;
+    boolean isWriteDeadlineExceeded = time.milliseconds() > writeDeadline;
+    if (isWriteDeadlineExceeded) {
+      log.info("Deadline exceeded");
+    }
+    return isWriteDeadlineExceeded;
   }
 
   @SuppressWarnings("fallthrough")
