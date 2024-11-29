@@ -554,7 +554,7 @@ public class TopicPartitionWriter {
   private void resume() {
     log.trace("Resuming writer for topic-partition '{}'", tp);
     context.resume(tp);
-    isPaused = true;
+    isPaused = false;
   }
 
   private RecordWriter newWriter(SinkRecord record, String encodedPartition)
