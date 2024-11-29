@@ -45,6 +45,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -194,6 +195,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final Class<? extends Format> KEYS_FORMAT_CLASS_DEFAULT = AvroFormat.class;
   public static final String HEADERS_FORMAT_CLASS_CONFIG = "headers.format.class";
   public static final Class<? extends Format> HEADERS_FORMAT_CLASS_DEFAULT = AvroFormat.class;
+
+  private static final String SHOULD_SLEEP_ON_COMMIT = "sleep.on.commit";
+  private static final String SLEEP_INTERVAL = "sleep.interval";
+  private static final String SLEEP_PROBABILITY = "sleep.probability";
 
   private final String name;
 
@@ -722,7 +727,62 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "Enable Path Style Access to S3"
       );
     }
+
+    addZombieConfigs(configDef);
+
     return configDef;
+  }
+
+  Random random = new Random();
+  {
+    random.setSeed(System.currentTimeMillis());
+  }
+  public boolean getShouldSleep() {
+    return getBoolean(SHOULD_SLEEP_ON_COMMIT) && random.nextInt() % getInt(SLEEP_PROBABILITY) == 0;
+  }
+
+  public long sleepDuartion() {
+    return getLong(SLEEP_INTERVAL);
+  }
+
+  private static void addZombieConfigs(ConfigDef config) {
+    String group = "zombie";
+    int orderInGroup = 0;
+    config.define(
+        SLEEP_INTERVAL,
+        Type.LONG,
+        -1,
+        Importance.HIGH,
+        "Sleep interval millis",
+        group,
+        ++orderInGroup,
+        Width.LONG,
+        "Sleep interval millis"
+    );
+
+    config.define(
+        SHOULD_SLEEP_ON_COMMIT,
+        Type.BOOLEAN,
+        false,
+        Importance.HIGH,
+        "Should sleep on commit",
+        group,
+        ++orderInGroup,
+        Width.LONG,
+        "Should sleep on commit"
+    );
+
+    config.define(
+        SLEEP_PROBABILITY,
+        Type.INT,
+        2,
+        Importance.HIGH,
+        "Probability index",
+        group,
+        ++orderInGroup,
+        Width.LONG,
+        "Probability index"
+    );
   }
 
   public S3SinkConnectorConfig(Map<String, String> props) {

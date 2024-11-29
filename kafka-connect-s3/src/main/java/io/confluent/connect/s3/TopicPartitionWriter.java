@@ -110,6 +110,9 @@ public class TopicPartitionWriter {
   private final FileRotationTracker fileRotationTracker;
 
   private Random random = new Random();
+  {
+    random.setSeed(System.currentTimeMillis());
+  }
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
@@ -236,8 +239,13 @@ public class TopicPartitionWriter {
   }
 
   private void sleepIfRequired() {
-    boolean shouldSleep = random.nextInt() % 2 == 0;
-    long sleepDuration = TimeUnit.MINUTES.toMillis(10);
+
+    boolean shouldSleep = connectorConfig.getShouldSleep();
+    long sleepDuration = connectorConfig.sleepDuartion();
+
+
+    //boolean shouldSleep = random.nextInt() % 3 == 0;
+    //long sleepDuration = TimeUnit.MINUTES.toMillis(3);
     if (shouldSleep) {
       try {
         log.info("Sleeping for {}ms", sleepDuration);
@@ -564,13 +572,13 @@ public class TopicPartitionWriter {
   }
 
   private void pause() {
-    log.trace("Pausing writer for topic-partition '{}'", tp);
+    log.info("Pausing writer for topic-partition '{}'", tp);
     context.pause(tp);
     isPaused = true;
   }
 
   private void resume() {
-    log.trace("Resuming writer for topic-partition '{}'", tp);
+    log.info("Resuming writer for topic-partition '{}'", tp);
     context.resume(tp);
     isPaused = false;
   }

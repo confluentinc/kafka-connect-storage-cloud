@@ -216,6 +216,7 @@ public class S3SinkTask extends SinkTask {
   public void put(Collection<SinkRecord> records) throws ConnectException {
     long putStartTime = time.milliseconds();
 
+    log.info("Processing {} records", records.size());
     for (SinkRecord record : records) {
       String topic = record.topic();
       int partition = record.kafkaPartition();
