@@ -28,10 +28,10 @@ import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.CompressionType;
+import io.confluent.connect.s3.util.SchemaPartitioner;
 import io.confluent.connect.storage.errors.PartitionException;
 import io.confluent.kafka.serializers.NonRecordContainer;
-import java.util.HashSet;
-import java.util.Set;
+
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -55,13 +55,15 @@ import org.junit.After;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -83,11 +85,19 @@ import io.confluent.connect.storage.partitioner.Partitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.connect.storage.partitioner.TimestampExtractor;
+import org.junit.experimental.theories.DataPoints;
+import org.junit.experimental.theories.FromDataPoints;
+import org.junit.experimental.theories.Theories;
+import org.junit.experimental.theories.Theory;
+import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.SCHEMA_PARTITION_AFFIX_TYPE_CONFIG;
 import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
+import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
+import static io.confluent.connect.storage.common.StorageCommonConfig.DIRECTORY_DELIM_CONFIG;
 import static io.confluent.connect.storage.partitioner.PartitionerConfig.PARTITION_FIELD_NAME_CONFIG;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
@@ -97,6 +107,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 
+@RunWith(Theories.class)
 public class TopicPartitionWriterTest extends TestWithMockedS3 {
   // The default
   private static final String ZERO_PAD_FMT = "%010d";
@@ -742,6 +753,26 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
     verify(expectedFiles, 6, schema, records);
   }
+  @DataPoints("affixType")
+  public static S3SinkConnectorConfig.AffixType[] affixTypeValues(){
+    return new S3SinkConnectorConfig.AffixType[]{
+        S3SinkConnectorConfig.AffixType.PREFIX, S3SinkConnectorConfig.AffixType.SUFFIX
+    };
+  }
+
+  @DataPoints("testWithSchemaData")
+  public static boolean[] testWithSchemaDataValues(){
+    return new boolean[]{true, false};
+  }
+
+  @Theory
+  public void testWriteSchemaPartitionerWithAffix(
+      @FromDataPoints("affixType")S3SinkConnectorConfig.AffixType affixType,
+      @FromDataPoints("testWithSchemaData") boolean testWithSchemaData
+  ) throws Exception {
+    testWriteSchemaPartitionerWithAffix(testWithSchemaData, affixType);
+  }
+
 
   @Test
   public void testWriteRecordsAfterScheduleRotationExpiryButNoResetShouldGoToSameFile()
@@ -1572,6 +1603,246 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     );
   }
 
+  public void testWriteSchemaPartitionerWithAffix(
+      boolean testWithSchemaData, S3SinkConnectorConfig.AffixType affixType
+  ) throws Exception {
+    localProps.put(FLUSH_SIZE_CONFIG, "9");
+    localProps.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+    setUp();
+
+    Format<S3SinkConnectorConfig, String> myFormat = new JsonFormat(storage);
+    writerProvider = myFormat.getRecordWriterProvider();
+    extension = writerProvider.getExtension();
+
+    parsedConfig.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, affixType.name());
+    // Define the partitioner
+    Partitioner<?> basePartitioner = new DefaultPartitioner<>();
+    Partitioner<?> partitioner = new SchemaPartitioner<>(basePartitioner);
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null
+    );
+
+    List<Object> testData;
+    if (testWithSchemaData) {
+      testData = generateTestDataWithSchema(partitioner, affixType);
+    } else {
+      testData = generateTestDataWithoutSchema(partitioner, affixType);
+    }
+
+    String key = (String) testData.get(0);
+    List<SinkRecord> actualRecords = (List<SinkRecord>) testData.get(1);
+    List<SinkRecord> expectedRecords = (List<SinkRecord>) testData.get(2);
+    List<String> expectedFiles = (List<String>) testData.get(3);
+
+
+    for (SinkRecord actualRecord : actualRecords) {
+      topicPartitionWriter.buffer(actualRecord);
+    }
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    verifyWithJsonOutput(
+        expectedFiles, expectedRecords.size() / expectedFiles.size(), expectedRecords, CompressionType.NONE
+    );
+  }
+
+  private List<Object> generateTestDataWithSchema(
+      Partitioner<?> partitioner, S3SinkConnectorConfig.AffixType affixType
+  ) {
+    String key = "key";
+
+    Schema schema1 = SchemaBuilder.struct()
+        .name(null)
+        .version(null)
+        .field("boolean", Schema.BOOLEAN_SCHEMA)
+        .field("int", Schema.INT32_SCHEMA)
+        .field("long", Schema.INT64_SCHEMA)
+        .field("float", Schema.FLOAT32_SCHEMA)
+        .field("double", Schema.FLOAT64_SCHEMA)
+        .build();
+    List<Struct> records1 = createRecordBatches(schema1, 3, 6);
+
+    Schema schema2 = SchemaBuilder.struct()
+        .name("record1")
+        .version(1)
+        .field("boolean", Schema.BOOLEAN_SCHEMA)
+        .field("int", Schema.INT32_SCHEMA)
+        .field("long", Schema.INT64_SCHEMA)
+        .field("float", Schema.FLOAT32_SCHEMA)
+        .field("double", Schema.FLOAT64_SCHEMA)
+        .build();
+
+    List<Struct> records2 = createRecordBatches(schema2, 3, 6);
+
+    Schema schema3 = SchemaBuilder.struct()
+        .name("record2")
+        .version(1)
+        .field("boolean", Schema.BOOLEAN_SCHEMA)
+        .field("int", Schema.INT32_SCHEMA)
+        .field("long", Schema.INT64_SCHEMA)
+        .field("float", Schema.FLOAT32_SCHEMA)
+        .field("double", Schema.FLOAT64_SCHEMA)
+        .build();
+
+    List<Struct> records3 = createRecordBatches(schema3, 3, 6);
+
+    ArrayList<SinkRecord> actualData = new ArrayList<>();
+    int offset = 0;
+    for (int i = 0; i < records1.size(); i++) {
+      actualData.add(
+          new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1, records1.get(i),
+              offset++
+          )
+      );
+      actualData.add(
+          new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2, records2.get(i),
+              offset++
+          )
+      );
+      actualData.add(
+          new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema3, records3.get(i),
+              offset++
+          )
+      );
+    }
+    List<SinkRecord> expectedRecords = new ArrayList<>();
+    int ibase = 16;
+    float fbase = 12.2f;
+    offset = 0;
+    // The expected sequence of records is constructed taking into account that sorting of files occurs in verify
+
+    for (int i = 0; i < 6; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        expectedRecords.add(
+            new SinkRecord(
+                TOPIC, PARTITION, Schema.STRING_SCHEMA,
+                key, schema1, createRecord(schema1, ibase + j, fbase + j),
+                offset++
+            )
+        );
+      }
+    }
+    for (int i = 0; i < 6; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        expectedRecords.add(
+            new SinkRecord(
+                TOPIC, PARTITION, Schema.STRING_SCHEMA,
+                key, schema2, createRecord(schema2, ibase + j, fbase + j),
+                offset++
+            )
+        );
+      }
+    }
+    for (int i = 0; i < 6; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        expectedRecords.add(
+            new SinkRecord(
+                TOPIC, PARTITION, Schema.STRING_SCHEMA,
+                key, schema3, createRecord(schema3, ibase + j, fbase + j),
+                offset++
+            )
+        );
+      }
+    }
+
+    String dirPrefix1 = generateS3DirectoryPathWithDefaultPartitioner(
+        partitioner, affixType, PARTITION, TOPIC, "null"
+    );
+    String dirPrefix2 = generateS3DirectoryPathWithDefaultPartitioner(
+        partitioner, affixType, PARTITION, TOPIC, "record1"
+    );
+    String dirPrefix3 = generateS3DirectoryPathWithDefaultPartitioner(
+        partitioner, affixType, PARTITION, TOPIC, "record2"
+    );
+    List<String> expectedFiles = new ArrayList<>();
+    for (int i = 0; i < 54; i += 9) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(
+          topicsDir, dirPrefix1, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT
+      ));
+      expectedFiles.add(FileUtils.fileKeyToCommit(
+          topicsDir, dirPrefix2, TOPIC_PARTITION, i + 1, extension, ZERO_PAD_FMT
+      ));
+      expectedFiles.add(FileUtils.fileKeyToCommit(
+          topicsDir, dirPrefix3, TOPIC_PARTITION, i + 2, extension, ZERO_PAD_FMT
+      ));
+    }
+    return Arrays.asList(key, actualData, expectedRecords, expectedFiles);
+  }
+
+  private List<Object> generateTestDataWithoutSchema(
+      Partitioner<?> partitioner, S3SinkConnectorConfig.AffixType affixType
+  ) {
+    String key = "key";
+    List<String> records = createJsonRecordsWithoutSchema(18);
+
+    ArrayList<SinkRecord> actualData = new ArrayList<>();
+    int offset = 0;
+    for (String record : records) {
+      actualData.add(
+          new SinkRecord(
+              TOPIC, PARTITION, Schema.STRING_SCHEMA, key, null, record, offset++
+          )
+      );
+    }
+    List<SinkRecord> expectedRecords = new ArrayList<>(actualData);
+
+    String dirPrefix = generateS3DirectoryPathWithDefaultPartitioner(
+        partitioner, affixType, PARTITION, TOPIC, "null"
+    );
+    List<String> expectedFiles = new ArrayList<>();
+    for (int i = 0; i < 18; i += 9) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(
+          topicsDir, dirPrefix, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT
+      ));
+    }
+    return Arrays.asList(key, actualData, expectedRecords, expectedFiles);
+  }
+
+  private String generateS3DirectoryPathWithDefaultPartitioner(
+      Partitioner<?> basePartitioner,
+      S3SinkConnectorConfig.AffixType affixType, int partition,
+      String topic, String schema_name
+  ) {
+    if (affixType == S3SinkConnectorConfig.AffixType.SUFFIX) {
+      return basePartitioner.generatePartitionedPath(topic,
+          "partition=" + partition + parsedConfig.get(DIRECTORY_DELIM_CONFIG)
+              + "schema_name" + "=" + schema_name);
+    } else if (affixType == S3SinkConnectorConfig.AffixType.PREFIX) {
+      return basePartitioner.generatePartitionedPath(topic,
+          "schema_name" + "=" + schema_name
+              + parsedConfig.get(DIRECTORY_DELIM_CONFIG) + "partition=" + partition);
+    } else {
+      return basePartitioner.generatePartitionedPath(topic,
+          "partition=" + partition);
+    }
+  }
+
+  protected List<String> createJsonRecordsWithoutSchema(int size) {
+    ArrayList<String> records = new ArrayList<>();
+    int ibase = 16;
+    float fbase = 12.2f;
+    for (int i = 0; i < size; ++i) {
+      String record = "{\"schema\":{\"type\":\"struct\",\"fields\":[ " +
+          "{\"type\":\"boolean\",\"optional\":true,\"field\":\"booleanField\"}," +
+          "{\"type\":\"int\",\"optional\":true,\"field\":\"intField\"}," +
+          "{\"type\":\"long\",\"optional\":true,\"field\":\"longField\"}," +
+          "{\"type\":\"float\",\"optional\":true,\"field\":\"floatField\"}," +
+          "{\"type\":\"double\",\"optional\":true,\"field\":\"doubleField\"}]," +
+          "\"payload\":" +
+          "{\"booleanField\":\"true\"," +
+          "\"intField\":" + String.valueOf(ibase + i) + "," +
+          "\"longField\":" + String.valueOf((long) ibase + i) + "," +
+          "\"floatField\":" + String.valueOf(fbase + i) + "," +
+          "\"doubleField\":" + String.valueOf((double) (fbase + i)) +
+          "}}";
+      records.add(record);
+    }
+    return records;
+  }
+
   private Struct createRecord(Schema schema, int ibase, float fbase) {
     return new Struct(schema)
                .put("boolean", true)
@@ -1668,8 +1939,45 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       Collection<Object> actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3);
       assertEquals(expectedSize, actualRecords.size());
       for (Object avroRecord : actualRecords) {
-        Object expectedRecord = format.getAvroData().fromConnectData(schema, records.get(index++));
+        Object expectedRecord = format.getAvroData().fromConnectData(records.get(index).schema(), records.get(index++));
         assertEquals(expectedRecord, avroRecord);
+      }
+    }
+  }
+
+  private void verifyWithJsonOutput(
+      List<String> expectedFileKeys, int expectedSize,
+      List<SinkRecord> expectedRecords, CompressionType compressionType
+  ) throws IOException {
+    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<String> actualFiles = new ArrayList<>();
+    for (S3ObjectSummary summary : summaries) {
+      String fileKey = summary.getKey();
+      actualFiles.add(fileKey);
+    }
+
+    Collections.sort(actualFiles);
+    Collections.sort(expectedFileKeys);
+    assertThat(actualFiles, is(expectedFileKeys));
+
+    int index = 0;
+    for (String fileKey : actualFiles) {
+      Collection<Object> actualRecords = readRecordsJson(
+          S3_TEST_BUCKET_NAME, fileKey,
+          s3, compressionType
+      );
+      assertEquals(expectedSize, actualRecords.size());
+      for (Object currentRecord : actualRecords) {
+        SinkRecord expectedRecord = expectedRecords.get(index++);
+        Object expectedValue = expectedRecord.value();
+        JsonConverter converter = new JsonConverter();
+        converter.configure(Collections.singletonMap("schemas.enable", "false"), false);
+        ObjectMapper mapper = new ObjectMapper();
+        if (expectedValue instanceof Struct) {
+          byte[] expectedBytes = converter.fromConnectData(TOPIC, expectedRecord.valueSchema(), expectedRecord.value());
+          expectedValue = mapper.readValue(expectedBytes, Object.class);
+        }
+        assertEquals(expectedValue, currentRecord);
       }
     }
   }

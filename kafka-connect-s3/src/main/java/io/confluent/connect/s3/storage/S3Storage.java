@@ -86,6 +86,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
    * @return S3 client
    */
   public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
+    log.info("Creating S3 client.");
     ClientConfiguration clientConfiguration = newClientConfiguration(config);
     AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
         .withAccelerateModeEnabled(config.getBoolean(WAN_MODE_CONFIG))
@@ -103,7 +104,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
           new AwsClientBuilder.EndpointConfiguration(url, region)
       );
     }
-
+    log.info("S3 client created");
     return builder.build();
   }
 
@@ -166,6 +167,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
         conf.getS3PartRetries(),
         false
     );
+    log.info("Created a retry policy for the connector");
     return retryPolicy;
   }
 
@@ -195,17 +197,22 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   }
 
   public S3OutputStream create(String path, boolean overwrite, Class<?> formatClass) {
+    log.info("Creating S3 output stream.");
     if (!overwrite) {
+      log.debug("Creating a file without overwriting is not currently supported in S3 Connector");
       throw new UnsupportedOperationException(
           "Creating a file without overwriting is not currently supported in S3 Connector"
       );
     }
 
     if (StringUtils.isBlank(path)) {
+      log.debug("Path can not be empty!");
       throw new IllegalArgumentException("Path can not be empty!");
     }
 
     if (ParquetFormat.class.isAssignableFrom(formatClass)) {
+      log.info("Create S3ParquetOutputStream for bucket '{}' key '{}'",
+              this.conf.getBucketName(), path);
       return new S3ParquetOutputStream(path, this.conf, s3);
     } else {
       // currently ignore what is passed as method argument.
@@ -256,6 +263,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
   @Override
   public SeekableInput open(String path, S3SinkConnectorConfig conf) {
+    log.debug("File reading is not currently supported in S3 Connector");
     throw new UnsupportedOperationException(
         "File reading is not currently supported in S3 Connector"
     );
