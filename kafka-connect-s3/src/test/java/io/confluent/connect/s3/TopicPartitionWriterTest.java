@@ -720,6 +720,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Freeze clock passed into topicPartitionWriter, so we know what time it will use for "now"
     long freezeTime = 3599000L;
     EasyMock.expect(systemTime.milliseconds()).andReturn(freezeTime);
+
+    // Mock system time for deadline checks
+    EasyMock.expect(systemTime.milliseconds()).andReturn(System.currentTimeMillis()).anyTimes();
     EasyMock.replay(systemTime);
 
     String key = "key";
