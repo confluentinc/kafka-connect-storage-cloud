@@ -176,6 +176,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           + "`errors.tolerance` should be set to 'all' for successfully writing into dlq";
   public static final String REPORT_NULL_RECORDS_TO_DLQ_DISPLAY = "Report null value to dlq";
 
+  public static final String MAX_WRITE_DURATION = "max.write.duration.ms";
+  public static final long MAX_WRITE_DURATION_DEFAULT = Long.MAX_VALUE;
+  public static final String MAX_WRITE_DURATION_DOC = "The maximum duration that a task will "
+      + "spend in batching and writing to S3. If the write operation takes longer than this "
+      + "the task will voluntarily return from the put method. This prevents the consumer from "
+      + "being revoked from the group. It also mitigates (but does not eliminate) the risk of "
+      + "a zombie task to continue writing to S3 after it has been revoked.";
+
   /**
    * Maximum back-off time when retrying failed requests.
    */
@@ -706,6 +714,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.SHORT,
           REPORT_NULL_RECORDS_TO_DLQ_DISPLAY
+      );
+
+      configDef.define(
+          MAX_WRITE_DURATION,
+          Type.LONG,
+          MAX_WRITE_DURATION_DEFAULT,
+          Importance.LOW,
+          MAX_WRITE_DURATION_DOC,
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Maximum write duration"
       );
 
       // This is done to avoid aggressive schema based rotations resulting out of interleaving
