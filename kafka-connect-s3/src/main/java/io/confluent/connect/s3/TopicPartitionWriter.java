@@ -215,7 +215,6 @@ public class TopicPartitionWriter {
 
     resetExpiredScheduledRotationIfNoPendingRecords(now);
 
-    sleepIfRequired();
 
     while (!buffer.isEmpty() && !isWriteDeadlineExceeded()) {
       try {
@@ -329,6 +328,7 @@ public class TopicPartitionWriter {
         }
         // fallthrough
       case SHOULD_ROTATE:
+        sleepIfRequired();
         if (isWriteDeadlineExceeded()) {
           // note: this is a best-effort attempt to rotate the file before the deadline
           // this check can pass and the deadline gets exceeded before the rotation is complete
