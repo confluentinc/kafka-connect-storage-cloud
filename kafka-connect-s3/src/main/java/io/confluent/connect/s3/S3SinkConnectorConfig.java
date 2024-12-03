@@ -734,9 +734,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   Random random = new Random();
+
   {
     random.setSeed(System.currentTimeMillis());
   }
+
   public boolean getShouldSleep() {
     return getBoolean(SHOULD_SLEEP_ON_COMMIT) && random.nextInt() % getInt(SLEEP_PROBABILITY) == 0;
   }

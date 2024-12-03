@@ -43,7 +43,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Random;
-import java.util.concurrent.TimeUnit;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
@@ -110,6 +109,7 @@ public class TopicPartitionWriter {
   private final FileRotationTracker fileRotationTracker;
 
   private Random random = new Random();
+
   {
     random.setSeed(System.currentTimeMillis());
   }
