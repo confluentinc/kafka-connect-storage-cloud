@@ -299,6 +299,7 @@ public class S3SinkTask extends SinkTask {
         offsetsToCommit.put(tp, new OffsetAndMetadata(offset));
       }
     }
+    log.info("Committing offsets {}", offsetsToCommit)
     return offsetsToCommit;
   }
 
