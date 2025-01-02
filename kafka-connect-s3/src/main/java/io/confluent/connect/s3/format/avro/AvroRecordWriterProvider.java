@@ -46,6 +46,7 @@ public class AvroRecordWriterProvider extends RecordViewSetter
   private static final String EXTENSION = ".avro";
   private final S3Storage storage;
   private final AvroData avroData;
+  private boolean isFileOpen;
 
   AvroRecordWriterProvider(S3Storage storage, AvroData avroData) {
     this.storage = storage;
@@ -55,6 +56,18 @@ public class AvroRecordWriterProvider extends RecordViewSetter
   @Override
   public String getExtension() {
     return EXTENSION;
+  }
+
+  private void openFile() {
+    this.isFileOpen = true;
+  }
+
+  private void closeFile() {
+    this.isFileOpen = false;
+  }
+
+  private boolean isFileOpen() {
+    return this.isFileOpen;
   }
 
   @Override
@@ -69,13 +82,14 @@ public class AvroRecordWriterProvider extends RecordViewSetter
 
           @Override
           public void write(SinkRecord record) throws IOException {
-            if (schema == null) {
+            if (!isFileOpen()) {
               schema = recordView.getViewSchema(record, false);
               log.info("Opening record writer for: {}", adjustedFilename);
               s3out = storage.create(adjustedFilename, true, AvroFormat.class);
               org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
               writer.setCodec(CodecFactory.fromString(conf.getAvroCodec()));
               writer.create(avroSchema, s3out);
+              openFile();
             }
             log.trace("Sink record with view {}: {}", recordView,
                 sinkRecordToLoggableString(record));
@@ -95,11 +109,13 @@ public class AvroRecordWriterProvider extends RecordViewSetter
             writer.flush();
             s3out.commit();
             writer.close();
+            closeFile();
           }
 
           @Override
           public void close() throws IOException {
             writer.close();
+            closeFile();
           }
         }
     );
