@@ -46,23 +46,10 @@ public class AvroRecordWriterProvider extends RecordViewSetter
   private static final String EXTENSION = ".avro";
   private final S3Storage storage;
   private final AvroData avroData;
-  private boolean isWriterOpen;
 
   AvroRecordWriterProvider(S3Storage storage, AvroData avroData) {
     this.storage = storage;
     this.avroData = avroData;
-  }
-
-  private void openWriter() {
-    this.isWriterOpen = true;
-  }
-
-  private void closeWriter() {
-    this.isWriterOpen = false;
-  }
-
-  private boolean isWriterOpen() {
-    return this.isWriterOpen;
   }
 
   @Override
@@ -79,6 +66,19 @@ public class AvroRecordWriterProvider extends RecordViewSetter
           final DataFileWriter<Object> writer = new DataFileWriter<>(new GenericDatumWriter<>());
           Schema schema = null;
           S3OutputStream s3out;
+          private boolean isWriterOpen;
+
+          private void openWriter() {
+            this.isWriterOpen = true;
+          }
+
+          private void closeWriter() {
+            this.isWriterOpen = false;
+          }
+
+          private boolean isWriterOpen() {
+            return this.isWriterOpen;
+          }
 
           @Override
           public void write(SinkRecord record) throws IOException {
