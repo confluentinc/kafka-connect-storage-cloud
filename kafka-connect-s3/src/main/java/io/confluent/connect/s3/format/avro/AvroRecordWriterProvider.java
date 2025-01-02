@@ -82,16 +82,14 @@ public class AvroRecordWriterProvider extends RecordViewSetter
 
           @Override
           public void write(SinkRecord record) throws IOException {
-            if (schema == null) {
+            if (!isWriterOpen()) {
               schema = recordView.getViewSchema(record, false);
+              log.info("Opening record writer for: {}", adjustedFilename);
               s3out = storage.create(adjustedFilename, true, AvroFormat.class);
               org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
-              if (!isWriterOpen()) {
-                log.info("Opening record writer for: {}", adjustedFilename);
-                writer.setCodec(CodecFactory.fromString(conf.getAvroCodec()));
-                writer.create(avroSchema, s3out);
-                openWriter();
-              }
+              writer.setCodec(CodecFactory.fromString(conf.getAvroCodec()));
+              writer.create(avroSchema, s3out);
+              openWriter();
             }
             log.trace("Sink record with view {}: {}", recordView,
                 sinkRecordToLoggableString(record));
