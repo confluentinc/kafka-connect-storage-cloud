@@ -72,7 +72,8 @@ public class AvroRecordWriterProvider extends RecordViewSetter
             this.isWriterOpen = true;
           }
 
-          private void closeWriter() {
+          private void closeWriter() throws IOException {
+            writer.close();
             this.isWriterOpen = false;
           }
 
@@ -84,6 +85,9 @@ public class AvroRecordWriterProvider extends RecordViewSetter
           public void write(SinkRecord record) throws IOException {
             if (schema == null) {
               schema = recordView.getViewSchema(record, false);
+              if (schema != null && isWriterOpen()) {
+                commit();
+              }
               s3out = storage.create(adjustedFilename, true, AvroFormat.class);
               org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
               if (!isWriterOpen()) {
@@ -110,13 +114,11 @@ public class AvroRecordWriterProvider extends RecordViewSetter
             // output stream before committing any data to S3.
             writer.flush();
             s3out.commit();
-            writer.close();
             closeWriter();
           }
 
           @Override
           public void close() throws IOException {
-            writer.close();
             closeWriter();
           }
         }
