@@ -287,7 +287,14 @@ public class TopicPartitionWriter {
           }
         }
         Schema currentValueSchema = currentSchemas.get(encodedPartition);
+        boolean shouldRotateForNullSchema = false;
         if (currentValueSchema == null) {
+          // If the new schema is not null and encodedPartition was
+          // originally set with null schema, we should do rotation
+          if (currentSchemas.containsKey(encodedPartition)
+                  && valueSchema != null) {
+            shouldRotateForNullSchema = true;
+          }
           currentSchemas.put(encodedPartition, valueSchema);
           currentValueSchema = valueSchema;
         }
@@ -297,7 +304,7 @@ public class TopicPartitionWriter {
             currentValueSchema,
             valueSchema,
             encodedPartition,
-            now
+            now, shouldRotateForNullSchema
         )) {
           break;
         }
@@ -328,8 +335,15 @@ public class TopicPartitionWriter {
       Schema currentValueSchema,
       Schema valueSchema,
       String encodedPartition,
-      long now
+      long now,
+      boolean shouldRotateForNullSchema
   ) {
+
+    if (shouldRotateForNullSchema) {
+      nextState();
+      return true;
+    }
+
     // rotateOnTime is safe to go before writeRecord, because it is acceptable
     // even for a faulty record to trigger time-based rotation if it applies
     if (rotateOnTime(encodedPartition, currentTimestamp, now)) {
