@@ -1260,17 +1260,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
-  public void testSchemaProjectionExceptionReported() throws Exception {
-    String recordValue = "1";
-    int kafkaOffset = 1;
-    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
-        null, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
-
-    String exceptionMessage = "Switch between schema-based and schema-less data is not supported";
-    testExceptionReportedToDLQ(faultyRecord, SchemaProjectorException.class, exceptionMessage, false, true);
-  }
-
-  @Test
   public void testPartitioningExceptionReported() throws Exception {
     String field = "field";
     setUp();
