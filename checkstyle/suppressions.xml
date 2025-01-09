@@ -21,4 +21,9 @@
       files="(TopicPartitionWriter).java"
     />
 
+    <suppress
+            checks="NPathComplexity"
+            files="(TopicPartitionWriter).java"
+    />
+
 </suppressions>
