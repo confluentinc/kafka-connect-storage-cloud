@@ -40,7 +40,6 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
-import org.apache.kafka.connect.errors.SchemaProjectorException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.json.JsonConverter;
@@ -61,6 +60,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -84,6 +84,8 @@ import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.connect.storage.partitioner.TimestampExtractor;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
@@ -103,6 +105,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   private static final String HEADER_JSON_EXT = ".headers.json";
   private static final String HEADER_AVRO_EXT = ".headers.avro";
   private static final String KEYS_AVRO_EXT = ".keys.avro";
+  private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriterTest.class);
 
   private enum RecordElement {
     KEYS,
@@ -1180,6 +1183,140 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
+  public void testWriteRecordWithTombstoneFollowedByNonTombstone() throws Exception {
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+
+    String key = "key";
+
+    // Non Tombstone records
+    Schema schema = createSchema();
+    List<Struct> records = new LinkedList<>(createRecordBatches(schema, 3, 3));
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema, 1);
+
+    // Tombstone record
+    String recordValue = "1";
+    int kafkaOffset = 0;
+    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
+            null, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
+    // since, first record is a tombstone record, adding null at 0th index
+    records.add(0,null);
+
+    // Adding Tombstone and Non Tombstone records to topicPartitionWriter
+    topicPartitionWriter.buffer(faultyRecord);
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
+    List<String> expectedFiles = new ArrayList<>();
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 1, extension, ZERO_PAD_FMT));
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 4, extension, ZERO_PAD_FMT));
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 7, extension, ZERO_PAD_FMT));
+    // First file should have a single record (the tombstone) followed by non tombstone records.
+    List<Integer> expectedSizes = new LinkedList<>(Arrays.asList(1, 3, 3, 3));
+    verify(expectedFiles, expectedSizes, schema, records);
+  }
+
+  @Test
+  public void testWriteRecordWithTombstoneFollowedByTombstone() throws Exception {
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+
+    Schema schema = createSchema();
+    List<Struct> records = new LinkedList<>();
+
+    // Tombstone records
+    String recordValue = "1";
+    int kafkaOffset = 0;
+    List<SinkRecord> sinkRecords = new LinkedList<>();
+    int numRecords = 3;
+    for(int i = 0; i < numRecords; i++) {
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
+              null, recordValue + i, kafkaOffset + i, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders()));
+      records.add(null);
+    }
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
+    List<String> expectedFiles = new ArrayList<>();
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    List<Integer> expectedSizes = new LinkedList<>();
+    // All tombstone records in a single file
+    expectedSizes.add(3);
+    verify(expectedFiles, expectedSizes, schema, records);
+  }
+
+  @Test
+  public void testWriteRecordWithNonTombstoneFollowedByTombstone() throws Exception {
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+
+    String key = "key";
+
+    // Non Tombstone Records
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 3);
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema, 0);
+
+    // Tombstone record
+    String recordValue = "1";
+    int kafkaOffset = sinkRecords.size();
+    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
+            null, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
+    sinkRecords.add(faultyRecord);
+    records.add(null);
+
+    // One non Tombstone record to explicitly flush tombstone record file
+    List<Struct> recordAfterTombstone = createRecordBatches(schema, 1, 1);
+    records.addAll(recordAfterTombstone);
+    sinkRecords.addAll(createSinkRecords(recordAfterTombstone, key, schema, kafkaOffset + 1));
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
+    List<String> expectedFiles = new ArrayList<>();
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT));
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 9, extension, ZERO_PAD_FMT));
+    List<Integer> expectedSizes = new LinkedList<>(Arrays.asList(3,3,3,1));
+    verify(expectedFiles, expectedSizes, schema, records);
+  }
+
+  @Test
   public void testAddingS3ObjectTags() throws Exception{
     // Setting size-based rollup to 10 but will produce fewer records. Commit should not happen.
     localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
@@ -1257,17 +1394,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     tearDown(); // clear mock S3 port for follow up test
     // test with faulty being first in batch
     testExceptionReportedToDLQ(faultyRecord, DataException.class, exceptionMessage, true, false);
-  }
-
-  @Test
-  public void testSchemaProjectionExceptionReported() throws Exception {
-    String recordValue = "1";
-    int kafkaOffset = 1;
-    SinkRecord faultyRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key",
-        null, recordValue, kafkaOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
-
-    String exceptionMessage = "Switch between schema-based and schema-less data is not supported";
-    testExceptionReportedToDLQ(faultyRecord, SchemaProjectorException.class, exceptionMessage, false, true);
   }
 
   @Test
@@ -1530,6 +1656,21 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
                .put("double", (double) fbase);
   }
 
+  private Struct createNullRecord(Schema sch) {
+    Schema schema = SchemaBuilder.struct().name("record").version(1)
+        .field("boolean", Schema.OPTIONAL_BOOLEAN_SCHEMA)
+        .field("bytes", Schema.OPTIONAL_BYTES_SCHEMA)
+        .field("double", Schema.OPTIONAL_FLOAT64_SCHEMA)
+        .field("float", Schema.OPTIONAL_FLOAT32_SCHEMA)
+        .field("int", Schema.OPTIONAL_INT32_SCHEMA)
+        .field("long", Schema.OPTIONAL_INT64_SCHEMA)
+        .field("string", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("array", Schema.OPTIONAL_BYTES_SCHEMA)
+        .field("map", Schema.OPTIONAL_BYTES_SCHEMA)
+        .build();
+    return new Struct(schema);
+  }
+
   // Create a batch of records with incremental numeric field values. Total number of records is given by 'size'.
   private List<Struct> createRecordBatch(Schema schema, int size) {
     ArrayList<Struct> records = new ArrayList<>(size);
@@ -1619,6 +1760,37 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       for (Object avroRecord : actualRecords) {
         Object expectedRecord = format.getAvroData().fromConnectData(schema, records.get(index++));
         assertEquals(expectedRecord, avroRecord);
+      }
+    }
+  }
+
+  private void verify(List<String> expectedFileKeys, List<Integer> expectedSizes, Schema schema, List<Struct> records)
+          throws IOException {
+    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<String> actualFiles = new ArrayList<>();
+    for (S3ObjectSummary summary : summaries) {
+      String fileKey = summary.getKey();
+      actualFiles.add(fileKey);
+    }
+
+    Collections.sort(actualFiles);
+    Collections.sort(expectedFileKeys);
+    assertThat(actualFiles, is(expectedFileKeys));
+
+    int index = 0;
+    int expectedSizeIndex = 0;
+    for (String fileKey : actualFiles) {
+      Collection<Object> actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3);
+      assertEquals((int)(expectedSizes.get(expectedSizeIndex++)), actualRecords.size());
+      for (Object avroRecord : actualRecords) {
+        Struct record = records.get(index++);
+        if (record == null) {
+          log.info("Skipping tombstone record");
+        } else {
+          Object expectedRecord = format.getAvroData().fromConnectData(schema, record);
+          assertEquals(expectedRecord, avroRecord);
+        }
+
       }
     }
   }
