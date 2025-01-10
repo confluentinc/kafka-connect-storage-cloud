@@ -496,7 +496,7 @@ public abstract class BaseConnectorIT {
     try (ParquetReader<SimpleRecord> reader = ParquetReader
         .builder(new SimpleReadSupport(), new Path(filePath)).build()){
       ParquetMetadata metadata = ParquetFileReader
-          .readFooter(new Configuration(), new Path(filePath));
+              .readFooter(new Configuration(), new Path(filePath));
       JsonRecordFormatter.JsonGroupFormatter formatter = JsonRecordFormatter
           .fromSchema(metadata.getFileMetaData().getSchema());
       List<JsonNode> fileRows = new ArrayList<>();
