@@ -288,18 +288,12 @@ public class TopicPartitionWriter {
         }
         Schema currentValueSchema = currentSchemas.get(encodedPartition);
         boolean shouldRotateForNullSchema = false;
-
-
+        // Rotation will happen for:
+        // 1. non-tombstone followed by tombstone
+        // 2. tombstone (valueSchema is null) followed by non-tombstone
         if (currentValueSchema == null || valueSchema == null) {
-          // Rotation will happen for:
-          // 1. non-tombstone followed by tombstone
-          if ((currentSchemas.containsKey(encodedPartition)
-                  && currentValueSchema == null
-                  && valueSchema != null)
-                  // 2. tombstone (valueSchema is null) followed by non-tombstone
-                  || currentValueSchema != null) {
-            shouldRotateForNullSchema = true;
-          }
+          shouldRotateForNullSchema = currentSchemas.containsKey(encodedPartition)
+                  && (currentValueSchema != null || valueSchema != null);
           currentSchemas.put(encodedPartition, valueSchema);
           currentValueSchema = valueSchema;
         }
