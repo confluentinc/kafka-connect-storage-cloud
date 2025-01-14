@@ -292,7 +292,11 @@ public class TopicPartitionWriter {
         // 2. tombstone (valueSchema is null) followed by non-tombstone
         boolean shouldRotateForNullSchema = currentSchemas.containsKey(encodedPartition)
                 && (currentValueSchema == null ^ valueSchema == null);
-        if (currentValueSchema == null) {
+
+        // TB: Tombstone, NTB: Non-Tombstone, -> : followed by
+        // Cases handled: TB -> TB, TB -> NTB, NTB -> TB
+        // NTB -> NTB is handled by schema compatibility checks
+        if (currentValueSchema == null || valueSchema == null) {
           currentSchemas.put(encodedPartition, valueSchema);
           currentValueSchema = valueSchema;
         }
@@ -338,6 +342,7 @@ public class TopicPartitionWriter {
   ) {
 
     if (shouldRotateForNullSchema) {
+      fileRotationTracker.incrementRotationByNullSchemaCount(encodedPartition);
       nextState();
       return true;
     }
