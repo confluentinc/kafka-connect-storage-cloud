@@ -17,19 +17,19 @@
 package io.confluent.connect.s3.format;
 
 
-import javax.annotation.Nullable;
-import javax.validation.constraints.NotNull;
-import org.apache.kafka.connect.errors.DataException;
-import org.apache.kafka.connect.sink.SinkRecord;
+import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
+import static java.util.Objects.requireNonNull;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
+import java.util.Optional;
+import javax.annotation.Nullable;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
-import static java.util.Objects.requireNonNull;
 
 /**
  * A class that adds a record writer layer to manage writing values, keys and headers
@@ -42,7 +42,7 @@ public class KeyValueHeaderRecordWriterProvider
   private static final Logger log =
       LoggerFactory.getLogger(KeyValueHeaderRecordWriterProvider.class);
 
-  @NotNull
+  @Nullable
   private final RecordWriterProvider<S3SinkConnectorConfig> valueProvider;
 
   @Nullable
@@ -75,20 +75,26 @@ public class KeyValueHeaderRecordWriterProvider
         ? filename.substring(0, filename.length() - valueProvider.getExtension().length())
         : filename;
 
-    RecordWriter valueWriter = valueProvider.getRecordWriter(conf, strippedFilename);
-    RecordWriter keyWriter =
-        keyProvider == null ? null : keyProvider.getRecordWriter(conf, strippedFilename);
-    RecordWriter headerWriter =
-        headerProvider == null ? null : headerProvider.getRecordWriter(conf, strippedFilename);
+    Optional<RecordWriter> valueWriter = filename.contains(conf.getTombstoneEncodedPartition())
+        ? Optional.empty() : Optional.of(valueProvider.getRecordWriter(conf, strippedFilename));
+    Optional<RecordWriter> keyWriter = Optional.ofNullable(keyProvider)
+            .map(keyProvider -> keyProvider.getRecordWriter(conf, strippedFilename));
+    Optional<RecordWriter> headerWriter = Optional.ofNullable(headerProvider)
+            .map(headerProvider -> headerProvider.getRecordWriter(conf, strippedFilename));
 
     return new RecordWriter() {
       @Override
       public void write(SinkRecord sinkRecord) {
+        if (conf.isTombstoneWriteEnabled() && !keyWriter.isPresent()) {
+          throw new ConnectException(
+              "Key Writer must be configured when writing tombstone records is enabled.");
+        }
+
         // The two data exceptions below must be caught before writing the value
         // to avoid misaligned K/V/H files.
 
         // keyWriter != null means writing keys is turned on
-        if (keyWriter != null && sinkRecord.key() == null) {
+        if (keyWriter.isPresent() && sinkRecord.key() == null) {
           throw new DataException(
               String.format("Key cannot be null for SinkRecord: %s",
                   sinkRecordToLoggableString(sinkRecord))
@@ -96,7 +102,7 @@ public class KeyValueHeaderRecordWriterProvider
         }
 
         // headerWriter != null means writing headers is turned on
-        if (headerWriter != null
+        if (headerWriter.isPresent()
             && (sinkRecord.headers() == null || sinkRecord.headers().isEmpty())) {
           throw new DataException(
               String.format("Headers cannot be null for SinkRecord: %s",
@@ -104,35 +110,35 @@ public class KeyValueHeaderRecordWriterProvider
           );
         }
 
-        valueWriter.write(sinkRecord); // null check happens in sink task
-        if (keyWriter != null) {
-          keyWriter.write(sinkRecord);
+        if (valueWriter.isPresent()) {
+          valueWriter.get().write(sinkRecord);
+        } else {
+          // Should only encounter tombstones here.
+          if (sinkRecord.value() != null) {
+            throw new ConnectException(
+                String.format("Value writer not configured for SinkRecord: %s."
+                        + " fileName: %s, tombstonePartition: %s",
+                    sinkRecordToLoggableString(sinkRecord), filename,
+                    conf.getTombstoneEncodedPartition())
+            );
+          }
         }
-        if (headerWriter != null) {
-          headerWriter.write(sinkRecord);
-        }
+        keyWriter.ifPresent(writer -> writer.write(sinkRecord));
+        headerWriter.ifPresent(writer -> writer.write(sinkRecord));
       }
 
       @Override
       public void close() {
-        valueWriter.close();
-        if (keyWriter != null) {
-          keyWriter.close();
-        }
-        if (headerWriter != null) {
-          headerWriter.close();
-        }
+        valueWriter.ifPresent(RecordWriter::close);
+        keyWriter.ifPresent(RecordWriter::close);
+        headerWriter.ifPresent(RecordWriter::close);
       }
 
       @Override
       public void commit() {
-        valueWriter.commit();
-        if (keyWriter != null) {
-          keyWriter.commit();
-        }
-        if (headerWriter != null) {
-          headerWriter.commit();
-        }
+        valueWriter.ifPresent(RecordWriter::commit);
+        keyWriter.ifPresent(RecordWriter::commit);
+        headerWriter.ifPresent(RecordWriter::commit);
       }
     };
   }
