@@ -1039,14 +1039,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         throw new ConfigException(
             name,
             region,
-            "Value must be one of: " + RegionUtils.getRegions().stream().map((Region::toString)).collect(Collectors.joining(", "))
+            "Value must be one of: " + RegionUtils.getRegions().stream()
+                .map((Region::toString))
+                .collect(Collectors.joining(", "))
         );
       }
     }
 
     @Override
     public String toString() {
-      return "[" + RegionUtils.getRegions().stream().map((Region::toString)).collect(Collectors.joining(", ")) + "]";
+      return "[" + RegionUtils.getRegions().stream()
+          .map((Region::toString))
+          .collect(Collectors.joining(", ")) + "]";
     }
   }
 
