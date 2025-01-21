@@ -84,6 +84,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String S3_OBJECT_TAGGING_CONFIG = "s3.object.tagging";
   public static final boolean S3_OBJECT_TAGGING_DEFAULT = false;
+  public static final String S3_OBJECT_TAGGING_EXTRA_KV = "s3.object.tagging.key.value.pairs";
+  public static final String S3_OBJECT_TAGGING_EXTRA_KV_DEFAULT = "";
 
   public static final String S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG =
           "s3.object.behavior.on.tagging.error";
@@ -290,6 +292,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         Arrays.stream(AffixType.names()).collect(Collectors.toList()));
   }
 
+  @SuppressWarnings({"checkstyle:JavaNCSS"})
   public static ConfigDef newConfigDef() {
     ConfigDef configDef = StorageSinkConnectorConfig.newConfigDef(
         FORMAT_CLASS_RECOMMENDER,
@@ -334,6 +337,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "S3 Object Tagging"
+      );
+
+      configDef.define(
+              S3_OBJECT_TAGGING_EXTRA_KV,
+              Type.LIST,
+              S3_OBJECT_TAGGING_EXTRA_KV_DEFAULT,
+              Importance.LOW,
+              "Additional S3 tag key value pairs",
+              group,
+              ++orderInGroup,
+              Width.LONG,
+              "S3 Object Tagging Extra Key Value pairs"
       );
 
       configDef.define(

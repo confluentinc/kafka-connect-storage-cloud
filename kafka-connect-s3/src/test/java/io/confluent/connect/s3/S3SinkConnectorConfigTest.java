@@ -30,6 +30,7 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -338,6 +339,15 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     properties.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
     connectorConfig = new S3SinkConnectorConfig(properties);
     assertEquals(true, connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG));
+    assertEquals(new ArrayList<String>(), connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_EXTRA_KV));
+
+    properties.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_EXTRA_KV, "key1:value1,key2:value2");
+    List<String> expectedConfigKeyValuePair = new ArrayList<String>() {{
+      add("key1:value1");
+      add("key2:value2");
+    }};
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    assertEquals(expectedConfigKeyValuePair, connectorConfig.get(S3SinkConnectorConfig.S3_OBJECT_TAGGING_EXTRA_KV));
 
     properties.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "false");
     connectorConfig = new S3SinkConnectorConfig(properties);

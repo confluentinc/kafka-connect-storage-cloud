@@ -41,6 +41,7 @@ import org.apache.parquet.schema.InvalidSchemaException;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
@@ -78,6 +79,8 @@ public class TopicPartitionWriter {
   private final Queue<SinkRecord> buffer;
   private final SinkTaskContext context;
   private final boolean isTaggingEnabled;
+  private final List<String> extraTagKeyValuePair;
+  private HashMap<String, String> hashMapTag;
   private final boolean ignoreTaggingErrors;
   private int recordCount;
   private final int flushSize;
@@ -151,6 +154,9 @@ public class TopicPartitionWriter {
     }
 
     isTaggingEnabled = connectorConfig.getBoolean(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG);
+    extraTagKeyValuePair =
+        connectorConfig.getList(S3SinkConnectorConfig.S3_OBJECT_TAGGING_EXTRA_KV);
+    getS3Tag();
     ignoreTaggingErrors = connectorConfig.getString(
             S3SinkConnectorConfig.S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG)
             .equalsIgnoreCase(S3SinkConnectorConfig.IgnoreOrFailBehavior.IGNORE.toString());
@@ -198,6 +204,16 @@ public class TopicPartitionWriter {
 
     // Initialize scheduled rotation timer if applicable
     setNextScheduledRotation();
+  }
+
+  private void getS3Tag() {
+    hashMapTag = new HashMap<>();
+    if (extraTagKeyValuePair.size() != 0) {
+      for (int i = 0; i < extraTagKeyValuePair.size(); i++) {
+        String[] singleKv = extraTagKeyValuePair.get(i).split(":");
+        hashMapTag.put(singleKv[0], singleKv[1]);
+      }
+    }
   }
 
   private enum State {
@@ -704,7 +720,11 @@ public class TopicPartitionWriter {
       String encodedPartition = entry.getKey();
       commitFile(encodedPartition);
       if (isTaggingEnabled) {
-        RetryUtil.exponentialBackoffRetry(() -> tagFile(encodedPartition, entry.getValue()),
+        RetryUtil.exponentialBackoffRetry(() -> tagFile(
+                    encodedPartition,
+                    entry.getValue(),
+                    hashMapTag
+                ),
                 ConnectException.class,
                 connectorConfig.getInt(S3_PART_RETRIES_CONFIG),
                 connectorConfig.getLong(S3_RETRY_BACKOFF_CONFIG)
@@ -739,7 +759,10 @@ public class TopicPartitionWriter {
     }
   }
 
-  private void tagFile(String encodedPartition, String s3ObjectPath) {
+  private void tagFile(
+      String encodedPartition,
+      String s3ObjectPath,
+      Map<String,String> extraHashMapTag) {
     Long startOffset = startOffsets.get(encodedPartition);
     Long endOffset = endOffsets.get(encodedPartition);
     Long recordCount = recordCounts.get(encodedPartition);
@@ -762,7 +785,9 @@ public class TopicPartitionWriter {
     tags.put("startOffset", Long.toString(startOffset));
     tags.put("endOffset", Long.toString(endOffset));
     tags.put("recordCount", Long.toString(recordCount));
-
+    if (extraHashMapTag != null) {
+      tags.putAll(extraHashMapTag);
+    }
     try {
       storage.addTags(s3ObjectPath, tags);
       log.info("Tagged S3 object {} with starting offset {}, ending offset {}, record count {}",
