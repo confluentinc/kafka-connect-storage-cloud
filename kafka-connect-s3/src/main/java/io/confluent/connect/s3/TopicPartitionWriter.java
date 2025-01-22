@@ -97,7 +97,10 @@ public class TopicPartitionWriter {
   private Long baseRecordTimestamp;
   private Long offsetToCommit;
   private final RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
-  private Map<Long, String> offsetToFilenameMap;
+
+  // VisibleForTesting
+  Map<Long, String> offsetToFilenameMap;
+
   private final Map<String, Long> startOffsets;
   private final Map<String, Long> endOffsets;
   private final Map<String, Long> recordCounts;
@@ -326,6 +329,7 @@ public class TopicPartitionWriter {
           }
         }
 
+        // TODO: Set appropriate upper bound
         if (offsetToFilenameMap.size() < MAX_SCAN_LIMIT) {
           offsetToFilenameMap.put(record.kafkaOffset(), getCommitFilename(record));
         }
@@ -644,7 +648,7 @@ public class TopicPartitionWriter {
     return commitFile;
   }
 
-  private String getCommitFilename(SinkRecord sinkRecord) {
+  String getCommitFilename(SinkRecord sinkRecord) {
     String prefix = getDirectoryPrefix(partitioner.encodePartition(sinkRecord));
     return fileKeyToCommit(prefix, sinkRecord.kafkaOffset());
   }
@@ -792,29 +796,34 @@ public class TopicPartitionWriter {
   }
 
   public long findNextAvailableFile(String encodedPartition) {
-    long startOffset = startOffsets.get(encodedPartition);
+    long startOffset = startOffsets.get(encodedPartition) + 1;
     long targetEndOffset = startOffset + MAX_SCAN_LIMIT;
     log.info("Scanning for available files for start_offset:{} and file {}",
         startOffset, commitFiles.get(encodedPartition));
     do {
       String commitFile = offsetToFilenameMap.get(startOffset);
       try {
-        if (offsetToFilenameMap.containsKey(startOffset)
-            && !storage.exists(offsetToFilenameMap.get(startOffset))) {
+        if (!offsetToFilenameMap.containsKey(startOffset)) {
+          log.info("Start offset {} not present in offsets map. "
+              + "Considering {} as next offset to process from", startOffset, startOffset);
           return startOffset;
-        } else {
-          log.info("File {} already exists, checking for next available file", commitFile);
         }
+        if (!storage.exists(offsetToFilenameMap.get(startOffset))) {
+          log.info("File {} does not exist in S3. Next target offset to reset to is {}",
+              offsetToFilenameMap.get(startOffset), startOffset);
+          return startOffset;
+        }
+        log.debug("File {} already exists, checking for next available file", commitFile);
       } catch (AmazonS3Exception e) {
         if (e.getStatusCode() == 403) {
           log.warn("Connector failed with 403 error. Incrementing offset by 1", e);
-          return startOffset + 1;
+          return startOffset;
         }
         throw e;
       }
       startOffset++;
     } while (startOffset < targetEndOffset);
-
+    log.info("Max scanning limit reached. Resetting offset to {}", targetEndOffset);
     return targetEndOffset;
   }
 

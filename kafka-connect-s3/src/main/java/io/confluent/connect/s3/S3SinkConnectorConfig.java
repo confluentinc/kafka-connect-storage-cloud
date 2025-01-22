@@ -107,7 +107,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String WAN_MODE_CONFIG = "s3.wan.mode";
   private static final boolean WAN_MODE_DEFAULT = false;
 
-  private static final String ENABLE_CONDITIONAL_WRITES_CONFIG = "enable.conditional.writes";
+  public static final String ENABLE_CONDITIONAL_WRITES_CONFIG = "enable.conditional.writes";
   private static final boolean ENABLE_CONDITIONAL_WRITES_DEFAULT = true;
 
   public static final String CREDENTIALS_PROVIDER_CLASS_CONFIG = "s3.credentials.provider.class";
