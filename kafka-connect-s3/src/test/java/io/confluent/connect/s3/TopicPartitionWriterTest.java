@@ -17,11 +17,14 @@ package io.confluent.connect.s3;
 
 import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.services.s3.model.Tag;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableSet;
 import io.confluent.common.utils.SystemTime;
+import io.confluent.connect.s3.errors.FileExistsException;
 import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
 import io.confluent.connect.s3.format.RecordViewSetter;
 import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
@@ -1655,6 +1658,229 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     expectedHeaderFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6,
         HEADER_JSON_EXT, ZERO_PAD_FMT));
     verifyRecordElement(expectedHeaderFiles, 3, sinkRecords, RecordElement.HEADERS);
+  }
+
+  @Test
+  public void testOffsetToFilenameMapIsPopulated() throws ConnectException, Exception {
+    localProps.put(FLUSH_SIZE_CONFIG, "10");
+    localProps.put(DIRECTORY_DELIM_CONFIG, "/");
+    setUp();
+
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatch(schema, 5);
+    List<SinkRecord> sinkRecords = createSinkRecordsWithHeaders(records, "key", schema);
+
+    Partitioner<?> partitioner = new DefaultPartitioner();
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, getKeyHeaderValueProviderJsonHeaders(),  partitioner,  connectorConfig, context, null);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test write and verify file names populated in offset map
+    topicPartitionWriter.write();
+    assertEquals(5, topicPartitionWriter.offsetToFilenameMap.size());
+    String expectedFileFormat = "topics/test-topic/partition=12/test-topic#12#000000000%d.avro";
+    for (long offset = 0; offset < 5; offset++) {
+      assertEquals(String.format(expectedFileFormat, offset), topicPartitionWriter.offsetToFilenameMap.get(offset));
+    }
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test write and verify file names in offset map cleared on flush
+    topicPartitionWriter.write();
+    assertTrue(topicPartitionWriter.offsetToFilenameMap.isEmpty());
+  }
+
+  private class S3StorageWithConditionalWrite extends S3Storage {
+
+    private Set<String> existingFiles = ImmutableSet.of(
+        "topics_test-topic_partition=12_test-topic#12#0000000000.avro",
+        "topics_test-topic_partition=12_test-topic#12#0000000001.avro",
+        "topics_test-topic_partition=12_test-topic#12#0000000002.avro");
+    private boolean hasGetPermission = true;
+
+    public S3StorageWithConditionalWrite(S3SinkConnectorConfig conf, String url, String bucketName, AmazonS3 s3) {
+      super(conf, url, bucketName, s3);
+    }
+
+    public S3StorageWithConditionalWrite(S3SinkConnectorConfig conf, String url, String bucketName, AmazonS3 s3,
+                                         boolean hasGetPermission) {
+      super(conf, url, bucketName, s3);
+      this.hasGetPermission = hasGetPermission;
+    }
+
+    @Override
+    public boolean exists(String path) {
+      if (!hasGetPermission) {
+        AmazonS3Exception exception = new AmazonS3Exception("file exists");
+        exception.setStatusCode(403);
+        throw exception;
+      }
+      return existingFiles.contains(path);
+    }
+
+    @Override
+    public S3OutputStream create(String path, boolean overwrite, Class<?> formatClass) {
+      return new S3OutputStream(path, connectorConfig, s3) {
+        @Override
+        public void commit() {
+          if (existingFiles.contains(path)) {
+            throw new FileExistsException("file exists");
+          }
+        }
+      };
+    }
+
+    void setExistingFiles(Set<String> existingFiles) {
+      this.existingFiles = existingFiles;
+    }
+  }
+
+  public void testCommitFileScansForNextAvailableFileWhenFileExists() throws Exception {
+    localProps.put(FLUSH_SIZE_CONFIG, "10");
+    setUp();
+
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3, true);
+
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatch(schema, 10);
+    List<SinkRecord> sinkRecords = createSinkRecordsWithHeaders(records, "key", schema);
+
+    Partitioner<?> partitioner = new DefaultPartitioner();
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(),  partitioner,  connectorConfig, context, null);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    try {
+      topicPartitionWriter.write();
+    } catch (FileExistsException e) {
+      // Verify start offset has been updated
+      assertEquals(Long.valueOf(3), topicPartitionWriter.currentStartOffset());
+      return;
+    }
+    fail("Unexpected execution. Expecting FileExistsException to have been thrown");
+  }
+
+  @Test
+  public void testFindNextAvailableFileFailWith403Error() throws Exception {
+    localProps.put(FLUSH_SIZE_CONFIG, "10");
+    setUp();
+
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3, false);
+
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatch(schema, 10);
+    List<SinkRecord> sinkRecords = createSinkRecordsWithHeaders(records, "key", schema);
+
+    Partitioner<?> partitioner = new DefaultPartitioner();
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(),  partitioner,  connectorConfig, context, null);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    try {
+      topicPartitionWriter.write();
+    } catch (FileExistsException e) {
+      // Start offset will be simply incremented
+      assertEquals(Long.valueOf(1), topicPartitionWriter.currentStartOffset());
+      return;
+    }
+    fail("Unexpected execution. Expecting FileExistsException to have been thrown");
+  }
+
+  @Test
+  public void testFindNextAvailableFileFailWithMaxFilesScanned() throws Exception {
+    localProps.put(FLUSH_SIZE_CONFIG, "100");
+    setUp();
+
+    Partitioner<?> partitioner = new DefaultPartitioner();
+    partitioner.configure(parsedConfig);
+
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatch(schema, 200);
+    List<SinkRecord> sinkRecords = createSinkRecordsWithHeaders(records, "key", schema);
+
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(),  partitioner,  connectorConfig, context, null);
+
+    Set<String> existingFiles = new HashSet<>();
+    for (int i = 0; i < 120; i++) {
+      existingFiles.add(topicPartitionWriter.getCommitFilename(sinkRecords.get(i)));
+    }
+    ((S3StorageWithConditionalWrite)storage).setExistingFiles(existingFiles);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    try {
+      topicPartitionWriter.write();
+    } catch (FileExistsException e) {
+      // Returns 100 based on max elements stored in map, even though the file exists
+      assertEquals(Long.valueOf(100), topicPartitionWriter.currentStartOffset());
+      return;
+    }
+    fail("Unexpected execution. Expecting FileExistsException to have been thrown");
+  }
+
+  @Test
+  public void testFindNextAvailableFileWhenSomeOffsetsSkippedAsBadRecord() throws Exception {
+    localProps.put(FLUSH_SIZE_CONFIG, "9");
+    setUp();
+
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatch(schema, 10);
+    List<SinkRecord> sinkRecords = createSinkRecordsWithHeaders(records, "key", schema);
+    SinkRecord badRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key", schema, "not a struct", 1);
+    sinkRecords.remove(2);
+
+    Partitioner<?> partitioner = new FieldPartitioner<>();
+    parsedConfig.put(PARTITION_FIELD_NAME_CONFIG, Arrays.asList("boolean"));
+    partitioner.configure(parsedConfig);
+
+    ErrantRecordReporter mockReporter = mock(ErrantRecordReporter.class);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(),  partitioner,  connectorConfig, context, mockReporter);
+
+    Set<String> existingFiles = new HashSet<>();
+    for (SinkRecord record : sinkRecords) {
+      existingFiles.add(topicPartitionWriter.getCommitFilename(record));
+    }
+    ((S3StorageWithConditionalWrite)storage).setExistingFiles(existingFiles);
+
+    sinkRecords.add(2, badRecord);
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    try {
+      topicPartitionWriter.write();
+    } catch (FileExistsException e) {
+      // Next offset will be of the bad record, since it's entry will be missing from offsets map
+      assertEquals(Long.valueOf(2), topicPartitionWriter.currentStartOffset());
+      return;
+    }
+    fail("Unexpected execution. Expecting FileExistsException to have been thrown");
   }
 
   // Test if a given exception type was reported to the DLQ

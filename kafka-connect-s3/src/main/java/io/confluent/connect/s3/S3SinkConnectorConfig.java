@@ -107,6 +107,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String WAN_MODE_CONFIG = "s3.wan.mode";
   private static final boolean WAN_MODE_DEFAULT = false;
 
+  public static final String ENABLE_CONDITIONAL_WRITES_CONFIG = "enable.conditional.writes";
+  private static final boolean ENABLE_CONDITIONAL_WRITES_DEFAULT = true;
+
   public static final String CREDENTIALS_PROVIDER_CLASS_CONFIG = "s3.credentials.provider.class";
   public static final Class<? extends AWSCredentialsProvider> CREDENTIALS_PROVIDER_CLASS_DEFAULT =
       DefaultAWSCredentialsProviderChain.class;
@@ -769,6 +772,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.SHORT,
           "S3 Send Upload Message Digest"
       );
+
+      configDef.define(
+          ENABLE_CONDITIONAL_WRITES_CONFIG,
+          Type.BOOLEAN,
+          ENABLE_CONDITIONAL_WRITES_DEFAULT,
+          Importance.LOW,
+          "Enable conditional writes during multipart upload",
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Enable conditional writes during multipart upload"
+      );
     }
 
     {
@@ -1050,6 +1065,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public int getElasticBufferInitCap() {
     return getInt(ELASTIC_BUFFER_INIT_CAPACITY);
+  }
+
+  public boolean shouldEnableConditionalWrites() {
+    return getBoolean(ENABLE_CONDITIONAL_WRITES_CONFIG)
+        && getLong(ROTATE_SCHEDULE_INTERVAL_MS_CONFIG) != -1;
   }
 
   public boolean isTombstoneWriteEnabled() {
