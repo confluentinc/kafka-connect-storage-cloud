@@ -1069,7 +1069,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public boolean shouldEnableConditionalWrites() {
     return getBoolean(ENABLE_CONDITIONAL_WRITES_CONFIG)
-        && getLong(ROTATE_SCHEDULE_INTERVAL_MS_CONFIG) != -1;
+        && getLong(ROTATE_SCHEDULE_INTERVAL_MS_CONFIG) != -1
+        && !getBoolean(STORE_KAFKA_HEADERS_CONFIG)
+        && !getBoolean(STORE_KAFKA_KEYS_CONFIG);
   }
 
   public boolean isTombstoneWriteEnabled() {

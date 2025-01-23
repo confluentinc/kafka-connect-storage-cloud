@@ -32,6 +32,7 @@ import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.s3.util.SchemaPartitioner;
+import io.confluent.connect.s3.util.TombstoneSupportedPartitioner;
 import io.confluent.connect.storage.errors.PartitionException;
 import io.confluent.kafka.serializers.NonRecordContainer;
 
@@ -104,6 +105,7 @@ import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.storage.common.StorageCommonConfig.DIRECTORY_DELIM_CONFIG;
 import static io.confluent.connect.storage.partitioner.PartitionerConfig.PARTITION_FIELD_NAME_CONFIG;
+import static io.confluent.connect.storage.partitioner.PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -120,6 +122,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   private static final String HEADER_AVRO_EXT = ".headers.avro";
   private static final String KEYS_AVRO_EXT = ".keys.avro";
   private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriterTest.class);
+  private static long timestamp = 1737543576000L;
 
   private enum RecordElement {
     KEYS,
@@ -1850,7 +1853,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     Schema schema = createSchema();
     List<Struct> records = createRecordBatch(schema, 10);
     List<SinkRecord> sinkRecords = createSinkRecordsWithHeaders(records, "key", schema);
-    SinkRecord badRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key", schema, "not a struct", 1);
+    SinkRecord badRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key", schema, "not a struct", 2);
     sinkRecords.remove(2);
 
     Partitioner<?> partitioner = new FieldPartitioner<>();
@@ -1880,6 +1883,96 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       assertEquals(Long.valueOf(2), topicPartitionWriter.currentStartOffset());
       return;
     }
+    fail("Unexpected execution. Expecting FileExistsException to have been thrown");
+  }
+
+  @Test
+  public void testFindNextAvailableFileOnTombstone() throws Exception {
+    localProps.put(FLUSH_SIZE_CONFIG, "3");
+    setUp();
+
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatch(schema, 3);
+    List<SinkRecord> sinkRecords = createSinkRecordsWithHeaders(records, "key", schema);
+    SinkRecord tombstoneRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, "key", null, null,
+        2, timestamp, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders());
+    sinkRecords.remove(2);
+
+    Partitioner<?> partitioner = new HourlyPartitioner<>();
+    parsedConfig.put(TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
+    partitioner.configure(parsedConfig);
+
+    TombstoneSupportedPartitioner tombstoneSupportedPartitioner = new TombstoneSupportedPartitioner(partitioner, "tombstone");
+
+    ErrantRecordReporter mockReporter = mock(ErrantRecordReporter.class);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(),  tombstoneSupportedPartitioner,  connectorConfig, context, mockReporter);
+
+    Set<String> existingFiles =  ImmutableSet.of(
+        "topics_test-topic_year=2025_month=01_day=22_hour=02_test-topic#12#0000000000.avro",
+        "topics_test-topic_year=2025_month=01_day=22_hour=02_test-topic#12#0000000001.avro",
+        "topics_test-topic_tombstone_test-topic#12#0000000002.avro");
+    ((S3StorageWithConditionalWrite)storage).setExistingFiles(existingFiles);
+
+    sinkRecords.add(2, tombstoneRecord);
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    try {
+      topicPartitionWriter.write();
+    } catch (FileExistsException e) {
+      // Next offset will be of the tombstone
+      assertEquals(Long.valueOf(2), topicPartitionWriter.currentStartOffset());
+      return;
+    }
+
+    fail("Unexpected execution. Expecting FileExistsException to have been thrown");
+  }
+
+  @Test
+  public void testFindNextAvailableFileWithMultipleEncodedPartition() throws Exception {
+    localProps.put(FLUSH_SIZE_CONFIG, "3");
+    setUp();
+
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+
+    Schema schema = SchemaBuilder.struct().field("field", Schema.STRING_SCHEMA).build();
+    List<Struct> records = new ArrayList<>();
+    for (int i = 0; i < 3; i++) {
+      Struct s = (new Struct(schema).put("field", "field" + (i%2)));
+      records.add(s);
+    }
+    List<SinkRecord> sinkRecords = createSinkRecordsWithHeaders(records, "key", schema);
+
+    FieldPartitioner fieldPartitioner = new FieldPartitioner();
+    parsedConfig.put(PARTITION_FIELD_NAME_CONFIG, Arrays.asList("field"));
+    fieldPartitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(),  fieldPartitioner,  connectorConfig, context, null);
+
+    Set<String> existingFiles =  ImmutableSet.of(
+        "topics_test-topic_field=field0_test-topic#12#0000000000.avro",
+        "topics_test-topic_field=field1_test-topic#12#0000000001.avro");
+    ((S3StorageWithConditionalWrite)storage).setExistingFiles(existingFiles);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    try {
+      topicPartitionWriter.write();
+    } catch (FileExistsException e) {
+      // Next offset will be the minimum of all encoded partitions.
+      // Partition 'field=field0' will be reset to offset 2 after scan, and 'field=field1' will be at offset 1
+      assertEquals(Long.valueOf(1), topicPartitionWriter.currentStartOffset());
+      return;
+    }
+
     fail("Unexpected execution. Expecting FileExistsException to have been thrown");
   }
 
@@ -2288,7 +2381,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     ArrayList<SinkRecord> sinkRecords = new ArrayList<>();
     for (int i = 0; i < records.size(); ++i) {
       sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(i),
-          i + startOffset, 0L, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders()));
+          i + startOffset, timestamp, TimestampType.NO_TIMESTAMP_TYPE, sampleHeaders()));
     }
     return sinkRecords;
   }
