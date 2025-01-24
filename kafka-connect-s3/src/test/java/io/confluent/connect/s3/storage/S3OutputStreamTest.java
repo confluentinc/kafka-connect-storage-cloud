@@ -1,5 +1,6 @@
 package io.confluent.connect.s3.storage;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -12,11 +13,16 @@ import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.AmazonServiceException.ErrorType;
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.AmazonS3Exception;
+import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
+import com.amazonaws.services.s3.model.CompleteMultipartUploadResult;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadResult;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
+import com.amazonaws.services.s3.model.UploadPartResult;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.S3SinkConnectorTestBase;
+import io.confluent.connect.s3.errors.FileExistsException;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -34,7 +40,10 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
   private AmazonS3 s3Mock;
 
   @Captor
-  ArgumentCaptor<InitiateMultipartUploadRequest> captor;
+  ArgumentCaptor<InitiateMultipartUploadRequest> initMultipartRequestCaptor;
+
+  @Captor
+  ArgumentCaptor<CompleteMultipartUploadRequest> completeMultipartRequestCaptor;
 
   @Before
   public void before() throws Exception {
@@ -78,12 +87,12 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
     when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
     stream.newMultipartUpload();
 
-    verify(s3Mock).initiateMultipartUpload(captor.capture());
+    verify(s3Mock).initiateMultipartUpload(initMultipartRequestCaptor.capture());
 
-    assertNotNull(captor.getValue());
-    assertNotNull(captor.getValue().getObjectMetadata());
-    assertNull(captor.getValue().getSSECustomerKey());
-    assertNull(captor.getValue().getSSEAwsKeyManagementParams());
+    assertNotNull(initMultipartRequestCaptor.getValue());
+    assertNotNull(initMultipartRequestCaptor.getValue().getObjectMetadata());
+    assertNull(initMultipartRequestCaptor.getValue().getSSECustomerKey());
+    assertNull(initMultipartRequestCaptor.getValue().getSSEAwsKeyManagementParams());
   }
 
   @Test
@@ -97,12 +106,12 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
     when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
     stream.newMultipartUpload();
 
-    verify(s3Mock).initiateMultipartUpload(captor.capture());
+    verify(s3Mock).initiateMultipartUpload(initMultipartRequestCaptor.capture());
 
-    assertNotNull(captor.getValue());
-    assertNull(captor.getValue().getObjectMetadata());
-    assertNotNull(captor.getValue().getSSEAwsKeyManagementParams());
-    assertNull(captor.getValue().getSSECustomerKey());
+    assertNotNull(initMultipartRequestCaptor.getValue());
+    assertNull(initMultipartRequestCaptor.getValue().getObjectMetadata());
+    assertNotNull(initMultipartRequestCaptor.getValue().getSSEAwsKeyManagementParams());
+    assertNull(initMultipartRequestCaptor.getValue().getSSECustomerKey());
 
   }
 
@@ -117,12 +126,12 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
     when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
     stream.newMultipartUpload();
 
-    verify(s3Mock).initiateMultipartUpload(captor.capture());
+    verify(s3Mock).initiateMultipartUpload(initMultipartRequestCaptor.capture());
 
-    assertNotNull(captor.getValue());
-    assertNull(captor.getValue().getObjectMetadata());
-    assertNotNull(captor.getValue().getSSECustomerKey());
-    assertNull(captor.getValue().getSSEAwsKeyManagementParams());
+    assertNotNull(initMultipartRequestCaptor.getValue());
+    assertNull(initMultipartRequestCaptor.getValue().getObjectMetadata());
+    assertNotNull(initMultipartRequestCaptor.getValue().getSSECustomerKey());
+    assertNull(initMultipartRequestCaptor.getValue().getSSEAwsKeyManagementParams());
 
   }
 
@@ -133,11 +142,97 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
     when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
     stream.newMultipartUpload();
 
-    verify(s3Mock).initiateMultipartUpload(captor.capture());
+    verify(s3Mock).initiateMultipartUpload(initMultipartRequestCaptor.capture());
 
-    assertNotNull(captor.getValue());
-    assertNull(captor.getValue().getObjectMetadata());
-    assertNull(captor.getValue().getSSECustomerKey());
-    assertNull(captor.getValue().getSSEAwsKeyManagementParams());
+    assertNotNull(initMultipartRequestCaptor.getValue());
+    assertNull(initMultipartRequestCaptor.getValue().getObjectMetadata());
+    assertNull(initMultipartRequestCaptor.getValue().getSSECustomerKey());
+    assertNull(initMultipartRequestCaptor.getValue().getSSEAwsKeyManagementParams());
+  }
+
+  @Test
+  public void testCompleteMultipartUploadWithConditionalWrites() throws IOException {
+    Map<String, String> props = super.createProps();
+    props.put(S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_CONFIG, "true");
+    props.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "100");
+
+    stream = new S3OutputStream(S3_TEST_KEY_NAME, new S3SinkConnectorConfig(props), s3Mock);
+
+    when(s3Mock.completeMultipartUpload(any())).thenReturn(mock(CompleteMultipartUploadResult.class));
+    when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
+    when(s3Mock.uploadPart(any())).thenReturn(mock(UploadPartResult.class));
+
+    stream.commit();
+
+    verify(s3Mock).completeMultipartUpload(completeMultipartRequestCaptor.capture());
+
+    assertNotNull(completeMultipartRequestCaptor.getValue());
+    assertEquals("*", completeMultipartRequestCaptor.getValue().getIfNoneMatch());
+  }
+
+  @Test
+  public void testCompleteMultipartUploadWithoutConditionalWrites() throws IOException {
+    Map<String, String> props = super.createProps();
+    props.put(S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_CONFIG, "false");
+    props.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "100");
+
+    stream = new S3OutputStream(S3_TEST_KEY_NAME, new S3SinkConnectorConfig(props), s3Mock);
+
+    when(s3Mock.completeMultipartUpload(any())).thenReturn(mock(CompleteMultipartUploadResult.class));
+    when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
+    when(s3Mock.uploadPart(any())).thenReturn(mock(UploadPartResult.class));
+
+    stream.commit();
+
+    verify(s3Mock).completeMultipartUpload(completeMultipartRequestCaptor.capture());
+
+    assertNotNull(completeMultipartRequestCaptor.getValue());
+    assertNull(completeMultipartRequestCaptor.getValue().getIfNoneMatch());
+  }
+
+  @Test(expected = FileExistsException.class)
+  public void testCompleteMultipartUploadThrowsExceptionWhenFileExists() throws IOException {
+    Map<String, String> props = super.createProps();
+    props.put(S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_CONFIG, "true");
+    props.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "100");
+
+    stream = new S3OutputStream(S3_TEST_KEY_NAME, new S3SinkConnectorConfig(props), s3Mock);
+
+    AmazonS3Exception exception = new AmazonS3Exception("file exists");
+    exception.setStatusCode(412);
+
+    when(s3Mock.completeMultipartUpload(any())).thenThrow(exception);
+    when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
+    when(s3Mock.uploadPart(any())).thenReturn(mock(UploadPartResult.class));
+
+    stream.commit();
+
+    verify(s3Mock).completeMultipartUpload(completeMultipartRequestCaptor.capture());
+
+    assertNotNull(completeMultipartRequestCaptor.getValue());
+    assertNull(completeMultipartRequestCaptor.getValue().getIfNoneMatch());
+  }
+
+  @Test(expected = IOException.class)
+  public void testCompleteMultipartUploadRethrowsExceptionWhenAmazonS3Exception() throws IOException {
+    Map<String, String> props = super.createProps();
+    props.put(S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_CONFIG, "true");
+    props.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "100");
+
+    stream = new S3OutputStream(S3_TEST_KEY_NAME, new S3SinkConnectorConfig(props), s3Mock);
+
+    AmazonS3Exception exception = new AmazonS3Exception("file conflict");
+    exception.setStatusCode(422);
+
+    when(s3Mock.completeMultipartUpload(any())).thenThrow(exception);
+    when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
+    when(s3Mock.uploadPart(any())).thenReturn(mock(UploadPartResult.class));
+
+    stream.commit();
+
+    verify(s3Mock).completeMultipartUpload(completeMultipartRequestCaptor.capture());
+
+    assertNotNull(completeMultipartRequestCaptor.getValue());
+    assertNull(completeMultipartRequestCaptor.getValue().getIfNoneMatch());
   }
 }

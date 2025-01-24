@@ -183,6 +183,7 @@ public class S3SinkDataFormatIT extends BaseConnectorIT {
           thisTopicName,
           TOPIC_PARTITION,
           FLUSH_SIZE_STANDARD,
+          0,
           NUM_RECORDS_INSERT,
           AVRO_EXTENSION
       );
