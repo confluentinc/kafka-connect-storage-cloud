@@ -20,6 +20,7 @@ import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.regions.Region;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
@@ -34,7 +35,6 @@ import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.DecimalFormat;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -1165,14 +1165,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         throw new ConfigException(
             name,
             region,
-            "Value must be one of: " + Utils.join(RegionUtils.getRegions(), ", ")
+            "Value must be one of: " + RegionUtils.getRegions().stream()
+                .map((Region::toString))
+                .collect(Collectors.joining(", "))
         );
       }
     }
 
     @Override
     public String toString() {
-      return "[" + Utils.join(RegionUtils.getRegions(), ", ") + "]";
+      return "[" + RegionUtils.getRegions().stream()
+          .map((Region::toString))
+          .collect(Collectors.joining(", ")) + "]";
     }
   }
 
@@ -1186,7 +1190,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         TYPES_BY_NAME.put(compressionType.name, compressionType);
         names.add(compressionType.name);
       }
-      ALLOWED_VALUES = Utils.join(names, ", ");
+      ALLOWED_VALUES = String.join(", ", names);
     }
 
     @Override
@@ -1262,7 +1266,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
     @Override
     public String toString() {
-      return "[" + Utils.join(ALLOWED_VALUES, ", ") + "]";
+      return "[" + String.join(", ", ALLOWED_VALUES) + "]";
     }
   }
 
@@ -1276,7 +1280,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         ACLS_BY_HEADER_VALUE.put(acl.toString(), acl);
         aclHeaderValues.add(acl.toString());
       }
-      ALLOWED_VALUES = Utils.join(aclHeaderValues, ", ");
+      ALLOWED_VALUES = String.join(", ", aclHeaderValues);
     }
 
     @Override
