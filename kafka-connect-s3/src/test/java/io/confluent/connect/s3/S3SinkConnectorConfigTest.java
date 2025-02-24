@@ -55,11 +55,15 @@ import io.confluent.connect.avro.AvroDataConfig;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AffixType;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.DECIMAL_FORMAT_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.DECIMAL_FORMAT_DEFAULT;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.HEADERS_FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.SCHEMA_PARTITION_AFFIX_TYPE_CONFIG;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.SEND_DIGEST_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG;
+import static io.confluent.connect.storage.StorageSinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -663,6 +667,34 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   public void testSendDigestConfigOnWrongValue() {
     properties.put(SEND_DIGEST_CONFIG, "Random");
     new S3SinkConnectorConfig(properties);
+  }
+
+  @Test
+  public void testConditionalWritesEnabledConfig() {
+
+    // Default false -> since scheduled rotation is enabled
+    assertFalse(new S3SinkConnectorConfig(properties).shouldEnableConditionalWrites());
+
+    // Should return false, because scheduled rotation is not enabled
+    properties.put(ENABLE_CONDITIONAL_WRITES_CONFIG, "true");
+    assertFalse(new S3SinkConnectorConfig(properties).shouldEnableConditionalWrites());
+
+    // Both scheduled rotation and conditional write enabled
+    properties.put(ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "100");
+    assertTrue(new S3SinkConnectorConfig(properties).shouldEnableConditionalWrites());
+
+    properties.put(STORE_KAFKA_HEADERS_CONFIG, "true");
+    assertFalse(new S3SinkConnectorConfig(properties).shouldEnableConditionalWrites());
+
+    properties.put(STORE_KAFKA_HEADERS_CONFIG, "false");
+    properties.put(STORE_KAFKA_KEYS_CONFIG, "true");
+    assertFalse(new S3SinkConnectorConfig(properties).shouldEnableConditionalWrites());
+
+    // Conditional write disabled, but scheduled rotation enabled
+    properties.put(ENABLE_CONDITIONAL_WRITES_CONFIG, "false");
+    properties.remove(STORE_KAFKA_HEADERS_CONFIG);
+    properties.remove(STORE_KAFKA_KEYS_CONFIG);
+    assertFalse(new S3SinkConnectorConfig(properties).shouldEnableConditionalWrites());
   }
 }
 
