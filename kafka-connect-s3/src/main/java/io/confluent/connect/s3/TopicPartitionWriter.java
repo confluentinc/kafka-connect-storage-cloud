@@ -796,7 +796,7 @@ public class TopicPartitionWriter {
 
   public long findNextAvailableFile(String encodedPartition) {
     long startOffset = startOffsets.get(encodedPartition) + 1;
-    long targetEndOffset = startOffset + MAX_SCAN_LIMIT;
+    long targetEndOffset = startOffset + connectorConfig.getInt(MAX_FILE_SCAN_LIMIT_CONFIG);
     log.info("Scanning for available files for start_offset:{} and file {}",
         startOffset, commitFiles.get(encodedPartition));
     do {
