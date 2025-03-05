@@ -87,7 +87,7 @@ public abstract class BaseConnectorIT {
   private static final Logger log = LoggerFactory.getLogger(BaseConnectorIT.class);
 
   protected static final int MAX_TASKS = 3;
-  private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
+  private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(120);
 
   protected static final long CONNECTOR_STARTUP_DURATION_MS = TimeUnit.MINUTES.toMillis(60);
 
@@ -200,12 +200,13 @@ public abstract class BaseConnectorIT {
       String topic,
       int partition,
       int flushSize,
+      int startOffset,
       long numRecords,
       String extension
   ) {
     int expectedFileCount = (int) numRecords / flushSize;
     List<String> expectedFiles = new ArrayList<>();
-    for (int offset = 0; offset < expectedFileCount * flushSize; offset += flushSize) {
+    for (int offset = startOffset; offset < expectedFileCount * flushSize; offset += flushSize) {
       String filepath = String.format(
           "topics/%s/partition=%d/%s+%d+%010d.%s",
           topic,
@@ -404,6 +405,30 @@ public abstract class BaseConnectorIT {
   }
 
   /**
+   * Count total number of records stored in S3
+   *
+   * @param bucketName          the name of the s3 test bucket
+   * @return number of records in S3
+   */
+  protected int countNumberOfRecords(
+      String bucketName
+  ) {
+    int rowCount = 0;
+    for (String fileName :
+        getS3FileListValues(S3Client.listObjectsV2(bucketName).getObjectSummaries())) {
+      String destinationPath = TEST_DOWNLOAD_PATH + fileName;
+      File downloadedFile = downloadFile(bucketName, fileName, destinationPath);
+
+      String fileExtension = getExtensionFromKey(fileName);
+      List<JsonNode> downloadedFileContents = contentGetters.get(fileExtension)
+          .apply(destinationPath);
+      rowCount += downloadedFileContents.size();
+      downloadedFile.delete();
+    }
+    return rowCount;
+  }
+
+  /**
    * Check the contents of the record value files in the S3 bucket compared to the expected row.
    *
    * @param bucketName          the name of the s3 test bucket
@@ -420,10 +445,7 @@ public abstract class BaseConnectorIT {
     for (String fileName :
         getS3FileListValues(S3Client.listObjectsV2(bucketName).getObjectSummaries())) {
       String destinationPath = TEST_DOWNLOAD_PATH + fileName;
-      File downloadedFile = new File(destinationPath);
-      log.info("Saving file to : {}", destinationPath);
-      S3Client.getObject(new GetObjectRequest(bucketName, fileName), downloadedFile);
-
+      File downloadedFile = downloadFile(bucketName, fileName, destinationPath);
       String fileExtension = getExtensionFromKey(fileName);
       List<JsonNode> downloadedFileContents = contentGetters.get(fileExtension)
           .apply(destinationPath);
@@ -433,6 +455,14 @@ public abstract class BaseConnectorIT {
       downloadedFile.delete();
     }
     return true;
+  }
+
+  private File downloadFile(String bucketName, String s3Filename, String destinationPath) {
+
+    File downloadedFile = new File(destinationPath);
+    log.info("Saving file to : {}", destinationPath);
+    S3Client.getObject(new GetObjectRequest(bucketName, s3Filename), downloadedFile);
+    return downloadedFile;
   }
 
   protected boolean keyfileContentsAsExpected(

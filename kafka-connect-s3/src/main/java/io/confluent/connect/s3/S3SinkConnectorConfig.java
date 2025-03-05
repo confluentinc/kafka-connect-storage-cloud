@@ -107,6 +107,16 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String WAN_MODE_CONFIG = "s3.wan.mode";
   private static final boolean WAN_MODE_DEFAULT = false;
 
+  public static final String ENABLE_CONDITIONAL_WRITES_CONFIG = "enable.conditional.writes";
+  private static final boolean ENABLE_CONDITIONAL_WRITES_DEFAULT = true;
+  private static final String ENABLE_CONDITIONAL_WRITES_DOC = "Flag to control whether to enable "
+      + "conditional writes during multipart upload. The config will be ignored if scheduled "
+      + "rotation is disabled by setting `rotate.schedule.interval.ms` to -1 or the connector is "
+      + "configured to write kafka keys or headers to S3";
+
+  public static final String MAX_FILE_SCAN_LIMIT_CONFIG = "max.files.scan.limit";
+  private static final String MAX_FILE_SCAN_LIMIT_DEFAULT = "100";
+
   public static final String CREDENTIALS_PROVIDER_CLASS_CONFIG = "s3.credentials.provider.class";
   public static final Class<? extends AWSCredentialsProvider> CREDENTIALS_PROVIDER_CLASS_DEFAULT =
       DefaultAWSCredentialsProviderChain.class;
@@ -769,6 +779,25 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.SHORT,
           "S3 Send Upload Message Digest"
       );
+
+      configDef.define(
+          ENABLE_CONDITIONAL_WRITES_CONFIG,
+          Type.BOOLEAN,
+          ENABLE_CONDITIONAL_WRITES_DEFAULT,
+          Importance.LOW,
+          ENABLE_CONDITIONAL_WRITES_DOC,
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Enable conditional writes during multipart upload"
+      );
+
+      configDef.defineInternal(
+          MAX_FILE_SCAN_LIMIT_CONFIG,
+          Type.INT,
+          MAX_FILE_SCAN_LIMIT_DEFAULT,
+          Importance.LOW
+      );
     }
 
     {
@@ -1050,6 +1079,13 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public int getElasticBufferInitCap() {
     return getInt(ELASTIC_BUFFER_INIT_CAPACITY);
+  }
+
+  public boolean shouldEnableConditionalWrites() {
+    return getBoolean(ENABLE_CONDITIONAL_WRITES_CONFIG)
+        && getLong(ROTATE_SCHEDULE_INTERVAL_MS_CONFIG) != -1
+        && !getBoolean(STORE_KAFKA_HEADERS_CONFIG)
+        && !getBoolean(STORE_KAFKA_KEYS_CONFIG);
   }
 
   public boolean isTombstoneWriteEnabled() {
