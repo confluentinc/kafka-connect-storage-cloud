@@ -16,6 +16,8 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.SdkClientException;
+import com.amazonaws.services.s3.model.AmazonS3Exception;
+import io.confluent.connect.s3.errors.FileExistsException;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileRotationTracker;
 import io.confluent.connect.s3.util.RetryUtil;
@@ -40,6 +42,7 @@ import org.apache.parquet.schema.InvalidSchemaException;
 
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -60,6 +63,7 @@ import io.confluent.connect.storage.partitioner.TimestampExtractor;
 import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
 import io.confluent.connect.storage.util.DateTimeUtils;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.MAX_FILE_SCAN_LIMIT_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
 
@@ -93,6 +97,10 @@ public class TopicPartitionWriter {
   private Long baseRecordTimestamp;
   private Long offsetToCommit;
   private final RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
+
+  // VisibleForTesting
+  Map<Long, String> offsetToFilenameMap;
+
   private final Map<String, Long> startOffsets;
   private final Map<String, Long> endOffsets;
   private final Map<String, Long> recordCounts;
@@ -182,7 +190,7 @@ public class TopicPartitionWriter {
         connectorConfig.getString(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG));
 
     buffer = new LinkedList<>();
-    commitFiles = new HashMap<>();
+    commitFiles = new LinkedHashMap<>();
     writers = new HashMap<>();
     currentSchemas = new HashMap<>();
     startOffsets = new HashMap<>();
@@ -201,6 +209,8 @@ public class TopicPartitionWriter {
 
     maxWriteDurationMs = connectorConfig.getLong(S3SinkConnectorConfig.MAX_WRITE_DURATION);
     writeDeadline = Long.MAX_VALUE;
+
+    offsetToFilenameMap = new HashMap<>();
 
     // Initialize scheduled rotation timer if applicable
     setNextScheduledRotation();
@@ -298,6 +308,7 @@ public class TopicPartitionWriter {
         // fallthrough
       case WRITE_PARTITION_PAUSED:
         SinkRecord record = buffer.peek();
+
         if (timestampExtractor != null) {
           currentTimestamp = timestampExtractor.extract(record, now);
           if (baseRecordTimestamp == null) {
@@ -317,6 +328,11 @@ public class TopicPartitionWriter {
             throw e;
           }
         }
+
+        if (offsetToFilenameMap.size() < connectorConfig.getInt(MAX_FILE_SCAN_LIMIT_CONFIG)) {
+          offsetToFilenameMap.put(record.kafkaOffset(), getCommitFilename(record));
+        }
+
         Schema currentValueSchema = currentSchemas.get(encodedPartition);
         // Rotation will happen for:
         // 1. non-tombstone followed by tombstone
@@ -631,6 +647,11 @@ public class TopicPartitionWriter {
     return commitFile;
   }
 
+  String getCommitFilename(SinkRecord sinkRecord) {
+    String prefix = getDirectoryPrefix(partitioner.encodePartition(sinkRecord));
+    return fileKeyToCommit(prefix, sinkRecord.kafkaOffset());
+  }
+
   private String fileKey(String topicsPrefix, String keyPrefix, String name) {
     String suffix = keyPrefix + dirDelim + name;
     return StringUtils.isNotBlank(topicsPrefix)
@@ -739,6 +760,8 @@ public class TopicPartitionWriter {
     offsetToCommit = currentOffset + 1;
     commitFiles.clear();
     currentSchemas.clear();
+    offsetToFilenameMap.clear();
+
     recordCount = 0;
     baseRecordTimestamp = null;
     log.info("Files committed to S3. Target commit offset for {} is {}", tp, offsetToCommit);
@@ -753,10 +776,54 @@ public class TopicPartitionWriter {
     if (writers.containsKey(encodedPartition)) {
       RecordWriter writer = writers.get(encodedPartition);
       // Commits the file and closes the underlying output stream.
-      writer.commit();
+      tryCommitFile(writer, encodedPartition);
       writers.remove(encodedPartition);
       log.debug("Removed writer for '{}'", encodedPartition);
     }
+  }
+
+  private void tryCommitFile(RecordWriter writer, String encodedPartition) {
+    try {
+      writer.commit();
+    } catch (FileExistsException e) {
+      long nextStartOffset = findNextAvailableFile(encodedPartition);
+      log.info("Next available offset for encoded partition {} is {}",
+          encodedPartition, nextStartOffset);
+      startOffsets.put(encodedPartition, nextStartOffset);
+      throw e;
+    }
+  }
+
+  public long findNextAvailableFile(String encodedPartition) {
+    long startOffset = startOffsets.get(encodedPartition) + 1;
+    long targetEndOffset = startOffset + MAX_SCAN_LIMIT;
+    log.info("Scanning for available files for start_offset:{} and file {}",
+        startOffset, commitFiles.get(encodedPartition));
+    do {
+      String commitFile = offsetToFilenameMap.get(startOffset);
+      try {
+        if (!offsetToFilenameMap.containsKey(startOffset)) {
+          log.info("Start offset {} not present in offsets map. "
+              + "Considering {} as next offset to process from", startOffset, startOffset);
+          return startOffset;
+        }
+        if (!storage.exists(offsetToFilenameMap.get(startOffset))) {
+          log.info("File {} does not exist in S3. Next target offset to reset to is {}",
+              offsetToFilenameMap.get(startOffset), startOffset);
+          return startOffset;
+        }
+        log.debug("File {} already exists, checking for next available file", commitFile);
+      } catch (AmazonS3Exception e) {
+        if (e.getStatusCode() == 403) {
+          log.warn("Connector failed with 403 error. Incrementing offset by 1", e);
+          return startOffset;
+        }
+        throw e;
+      }
+      startOffset++;
+    } while (startOffset < targetEndOffset);
+    log.info("Max scanning limit reached. Resetting offset to {}", targetEndOffset);
+    return targetEndOffset;
   }
 
   private void tagFile(
