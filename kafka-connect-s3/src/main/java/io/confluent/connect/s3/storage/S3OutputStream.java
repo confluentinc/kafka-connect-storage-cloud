@@ -20,6 +20,7 @@ import com.amazonaws.event.ProgressEvent;
 import com.amazonaws.event.ProgressListener;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
+import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
@@ -30,6 +31,7 @@ import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import com.amazonaws.services.s3.model.SSECustomerKey;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.errors.FileExistsException;
 import io.confluent.connect.storage.common.util.StringUtils;
 
 import org.apache.commons.codec.digest.DigestUtils;
@@ -69,6 +71,7 @@ public class S3OutputStream extends PositionOutputStream {
   private volatile OutputStream compressionFilter;
   private Long position;
   private final boolean enableDigest;
+  private final boolean enableConditionalWrites;
 
   public S3OutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
     this.s3 = s3;
@@ -98,6 +101,8 @@ public class S3OutputStream extends PositionOutputStream {
     this.compressionType = conf.getCompressionType();
     this.compressionLevel = conf.getCompressionLevel();
     this.position = 0L;
+
+    this.enableConditionalWrites = conf.shouldEnableConditionalWrites();
     log.info("Create S3OutputStream for bucket '{}' key '{}'", bucket, key);
   }
 
@@ -314,8 +319,22 @@ public class S3OutputStream extends PositionOutputStream {
       CompleteMultipartUploadRequest completeRequest =
           new CompleteMultipartUploadRequest(bucket, key, uploadId, partETags);
 
+      if (enableConditionalWrites) {
+        completeRequest.ifNoneMatch("*");
+      }
+
       handleAmazonExceptions(
-          () -> s3.completeMultipartUpload(completeRequest)
+          () -> {
+            try {
+              return s3.completeMultipartUpload(completeRequest);
+            } catch (AmazonS3Exception e) {
+              log.error("Failed to complete multipart upload of file {}", key, e);
+              if (e.getStatusCode() == 412) {
+                throw new FileExistsException("File already exists");
+              }
+              throw e;
+            }
+          }
       );
     }
 

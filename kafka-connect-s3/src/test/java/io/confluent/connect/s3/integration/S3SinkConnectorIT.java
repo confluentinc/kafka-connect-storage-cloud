@@ -16,6 +16,7 @@
 package io.confluent.connect.s3.integration;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.SEND_DIGEST_CONFIG;
@@ -26,6 +27,7 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KE
 import static io.confluent.connect.s3.S3SinkConnectorConfig.TOMBSTONE_ENCODED_PARTITION;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
+import static io.confluent.connect.storage.StorageSinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -34,6 +36,7 @@ import static org.hamcrest.core.StringStartsWith.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import com.amazonaws.services.s3.model.ObjectMetadata;
 import io.confluent.connect.s3.S3SinkConnector;
 import io.confluent.connect.s3.S3SinkConnectorConfig.IgnoreOrFailBehavior;
 import io.confluent.connect.s3.S3SinkConnectorConfig.OutputWriteBehavior;
@@ -41,6 +44,8 @@ import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.storage.S3Storage;
+
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -54,6 +59,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import io.confluent.connect.s3.util.EmbeddedConnectUtils;
+import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import org.apache.commons.io.FileUtils;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -201,6 +207,74 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     testBasicRecordsWritten(JSON_EXTENSION, true);
   }
 
+  @Test
+  public void testConnectorWithConditionalWrites() throws Throwable {
+    props.put(ENABLE_CONDITIONAL_WRITES_CONFIG, "true");
+    props.put(ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "60000");
+    props.put(STORE_KAFKA_HEADERS_CONFIG, "false");
+    props.put(STORE_KAFKA_KEYS_CONFIG, "false");
+    props.put(PartitionerConfig.TIMEZONE_CONFIG, "UTC");
+    props.put(PartitionerConfig.LOCALE_CONFIG, "en-GB");
+    props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+
+    testRecordsWrittenWithConditionalWrites(JSON_EXTENSION);
+  }
+
+  private void writeDummyFile(String key) {
+    String initialFileContents = "{\"ID\":1,\"myBool\":true,\"myInt32\":32,\"myFloat32\":3.2,\"myFloat64\":64.64,\"myString\":\"theStringVal\"}\n"
+        + "{\"ID\":1,\"myBool\":true,\"myInt32\":32,\"myFloat32\":3.2,\"myFloat64\":64.64,\"myString\":\"theStringVal\"}";
+    S3Client.putObject(TEST_BUCKET_NAME, key, new ByteArrayInputStream(initialFileContents.getBytes()), new ObjectMetadata());
+  }
+
+  private void testRecordsWrittenWithConditionalWrites(String expectedFileExtension) throws InterruptedException, ExecutionException {
+
+    // Create some initial file - presumed to be created by another task instance. The file contains the first two records
+    String key = String.format("topics/%s/partition=0/%s+0+0000000000.json", DEFAULT_TEST_TOPIC_NAME, DEFAULT_TEST_TOPIC_NAME);
+    writeDummyFile(key);
+
+    // start sink connector
+    connect.configureConnector(CONNECTOR_NAME, props);
+    // wait for tasks to spin up
+    EmbeddedConnectUtils.waitForConnectorToStart(connect, CONNECTOR_NAME, Math.min(KAFKA_TOPICS.size(), MAX_TASKS));
+
+    Schema recordValueSchema = getSampleStructSchema();
+    Struct recordValueStruct = getSampleStructVal(recordValueSchema);
+
+    for (String topic : KAFKA_TOPICS) {
+      // Create and send records to Kafka using the topic name in the current 'thisTopicName'
+      SinkRecord sampleRecord = getSampleTopicRecord(topic, recordValueSchema, recordValueStruct);
+      produceRecordsNoHeaders(NUM_RECORDS_INSERT, sampleRecord);
+    }
+
+    log.info("Waiting for files in S3...");
+    int countPerTopic = NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
+    // Expected 1 additional file in S3
+    int expectedTotalFileCount = countPerTopic * KAFKA_TOPICS.size() + 1;
+    waitForFilesInBucket(TEST_BUCKET_NAME, expectedTotalFileCount);
+
+    Set<String> expectedTopicFilenames = new TreeSet<>();
+    for (String topic : KAFKA_TOPICS) {
+      List<String> expectedFilenames = getExpectedFilenames(
+          topic,
+          TOPIC_PARTITION,
+          FLUSH_SIZE_STANDARD,
+          1, // New files in S3 will start from offset 1, since file with offset 0 already exists in S3
+          NUM_RECORDS_INSERT,
+          expectedFileExtension
+      );
+      assertEquals(expectedFilenames.size(), countPerTopic);
+      expectedTopicFilenames.addAll(expectedFilenames);
+    }
+    expectedTopicFilenames.add(key);
+
+    assertEquals(expectedTopicFilenames.size(), expectedTotalFileCount);
+
+    // The total number of files allowed in the bucket is number of topics * # records produced for each
+    assertFileNamesValid(TEST_BUCKET_NAME, new ArrayList<>(expectedTopicFilenames));
+    // verify number of records written to S3
+    assertEquals(NUM_RECORDS_INSERT + 1, countNumberOfRecords(TEST_BUCKET_NAME)); // 1 duplicate record will be present in the seed file
+  }
+
   /**
    * Test that the expected records are written for a given file extension
    * Optionally, test that topics which have "*.{expectedFileExtension}*" in them are processed
@@ -253,6 +327,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
               thisTopicName,
               TOPIC_PARTITION,
               FLUSH_SIZE_STANDARD,
+              0,
               NUM_RECORDS_INSERT,
               expectedFileExtension
       );
