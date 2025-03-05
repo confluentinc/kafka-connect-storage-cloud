@@ -210,7 +210,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   @Test
   public void testConnectorWithConditionalWrites() throws Throwable {
     props.put(ENABLE_CONDITIONAL_WRITES_CONFIG, "true");
-    props.put(ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "120000");
+    props.put(ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "60000");
     props.put(STORE_KAFKA_HEADERS_CONFIG, "false");
     props.put(STORE_KAFKA_KEYS_CONFIG, "false");
     props.put(PartitionerConfig.TIMEZONE_CONFIG, "UTC");
