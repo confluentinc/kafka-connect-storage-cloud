@@ -672,7 +672,7 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   @Test
   public void testConditionalWritesEnabledConfig() {
 
-    // Default false -> since scheduled rotation is enabled
+    // Default false -> since scheduled rotation is not enabled
     assertFalse(new S3SinkConnectorConfig(properties).shouldEnableConditionalWrites());
 
     // Should return false, because scheduled rotation is not enabled
@@ -683,9 +683,11 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     properties.put(ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "100");
     assertTrue(new S3SinkConnectorConfig(properties).shouldEnableConditionalWrites());
 
+    // Both scheduled rotation and conditional write enabled. But, returns false because store kafka headers is enabled
     properties.put(STORE_KAFKA_HEADERS_CONFIG, "true");
     assertFalse(new S3SinkConnectorConfig(properties).shouldEnableConditionalWrites());
 
+    // Both scheduled rotation and conditional write enabled. But, returns false because store kafka keys is enabled
     properties.put(STORE_KAFKA_HEADERS_CONFIG, "false");
     properties.put(STORE_KAFKA_KEYS_CONFIG, "true");
     assertFalse(new S3SinkConnectorConfig(properties).shouldEnableConditionalWrites());

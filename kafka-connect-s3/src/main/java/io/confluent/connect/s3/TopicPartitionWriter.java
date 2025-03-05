@@ -63,13 +63,13 @@ import io.confluent.connect.storage.partitioner.TimestampExtractor;
 import io.confluent.connect.storage.schema.StorageSchemaCompatibility;
 import io.confluent.connect.storage.util.DateTimeUtils;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.MAX_FILE_SCAN_LIMIT_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
 
 public class TopicPartitionWriter {
 
   private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriter.class);
-  private static final int MAX_SCAN_LIMIT = 100;
 
   private final Map<String, String> commitFiles;
   private final Map<String, RecordWriter> writers;
@@ -329,8 +329,7 @@ public class TopicPartitionWriter {
           }
         }
 
-        // TODO: Set appropriate upper bound
-        if (offsetToFilenameMap.size() < MAX_SCAN_LIMIT) {
+        if (offsetToFilenameMap.size() < connectorConfig.getInt(MAX_FILE_SCAN_LIMIT_CONFIG)) {
           offsetToFilenameMap.put(record.kafkaOffset(), getCommitFilename(record));
         }
 

@@ -109,6 +109,13 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String ENABLE_CONDITIONAL_WRITES_CONFIG = "enable.conditional.writes";
   private static final boolean ENABLE_CONDITIONAL_WRITES_DEFAULT = true;
+  private static final String ENABLE_CONDITIONAL_WRITES_DOC = "Flag to control whether to enable "
+      + "conditional writes during multipart upload. The config will be ignored if scheduled "
+      + "rotation is disabled by setting `rotate.schedule.interval.ms` to -1 or the connector is "
+      + "configured to write kafka keys or headers to S3";
+
+  public static final String MAX_FILE_SCAN_LIMIT_CONFIG = "max.files.scan.limit";
+  private static final String MAX_FILE_SCAN_LIMIT_DEFAULT = "100";
 
   public static final String CREDENTIALS_PROVIDER_CLASS_CONFIG = "s3.credentials.provider.class";
   public static final Class<? extends AWSCredentialsProvider> CREDENTIALS_PROVIDER_CLASS_DEFAULT =
@@ -778,11 +785,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Type.BOOLEAN,
           ENABLE_CONDITIONAL_WRITES_DEFAULT,
           Importance.LOW,
-          "Enable conditional writes during multipart upload",
+          ENABLE_CONDITIONAL_WRITES_DOC,
           group,
           ++orderInGroup,
           Width.SHORT,
           "Enable conditional writes during multipart upload"
+      );
+
+      configDef.defineInternal(
+          MAX_FILE_SCAN_LIMIT_CONFIG,
+          Type.INT,
+          MAX_FILE_SCAN_LIMIT_DEFAULT,
+          Importance.LOW
       );
     }
 
