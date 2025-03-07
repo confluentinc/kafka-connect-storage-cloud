@@ -665,7 +665,6 @@ public class TopicPartitionWriter {
     }
 
     if (writers.containsKey(encodedPartition)) {
-      sleepIfRequired();
       RecordWriter writer = writers.get(encodedPartition);
       // Commits the file and closes the underlying output stream.
       writer.commit();
@@ -674,18 +673,6 @@ public class TopicPartitionWriter {
     }
   }
 
-  private void sleepIfRequired() {
-    boolean shouldSleep = connectorConfig.getShouldSleep();
-    long sleepDuration = connectorConfig.sleepDuartion();
-    if (shouldSleep) {
-      try {
-        log.info("Sleeping for {}ms", sleepDuration);
-        Thread.sleep(sleepDuration);
-      } catch (InterruptedException e) {
-        log.error("Interrupted in sleep", e);
-      }
-    }
-  }
 
   private void tagFile(String encodedPartition, String s3ObjectPath) {
     Long startOffset = startOffsets.get(encodedPartition);
