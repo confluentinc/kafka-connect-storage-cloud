@@ -673,7 +673,6 @@ public class TopicPartitionWriter {
     }
   }
 
-
   private void tagFile(String encodedPartition, String s3ObjectPath) {
     Long startOffset = startOffsets.get(encodedPartition);
     Long endOffset = endOffsets.get(encodedPartition);
