@@ -26,4 +26,9 @@
       files="(TopicPartitionWriter).java"
     />
 
+    <suppress
+            checks="NCSS"
+            files="(S3SinkConnectorConfig).java"
+    />
+
 </suppressions>
