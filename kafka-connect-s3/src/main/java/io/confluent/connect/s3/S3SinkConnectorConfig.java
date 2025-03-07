@@ -49,6 +49,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -223,6 +224,11 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
    * Elastic buffer to save memory. {@link io.confluent.connect.s3.storage.S3OutputStream#buffer}
    */
 
+
+
+  private static final String SHOULD_SLEEP_ON_COMMIT = "sleep.on.commit";
+  private static final String SLEEP_INTERVAL = "sleep.interval";
+  private static final String SLEEP_PROBABILITY = "sleep.probability";
   public static final String ELASTIC_BUFFER_ENABLE = "s3.elastic.buffer.enable";
   public static final boolean ELASTIC_BUFFER_ENABLE_DEFAULT = false;
 
@@ -895,6 +901,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "Elastic buffer initial capacity"
       );
 
+      addZombieConfigs(configDef);
+
     }
     return configDef;
   }
@@ -931,6 +939,46 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           )
       );
     }
+  }
+
+  private static void addZombieConfigs(ConfigDef config) {
+    String group = "zombie";
+    int orderInGroup = 0;
+    config.define(
+        SLEEP_INTERVAL,
+        Type.LONG,
+        -1,
+        Importance.HIGH,
+        "Sleep interval millis",
+        group,
+        ++orderInGroup,
+        Width.LONG,
+        "Sleep interval millis"
+    );
+
+    config.define(
+        SHOULD_SLEEP_ON_COMMIT,
+        Type.BOOLEAN,
+        false,
+        Importance.HIGH,
+        "Should sleep on commit",
+        group,
+        ++orderInGroup,
+        Width.LONG,
+        "Should sleep on commit"
+    );
+
+    config.define(
+        SLEEP_PROBABILITY,
+        Type.INT,
+        2,
+        Importance.HIGH,
+        "Probability index",
+        group,
+        ++orderInGroup,
+        Width.LONG,
+        "Probability index"
+    );
   }
 
   private void addToGlobal(AbstractConfig config) {
@@ -1075,6 +1123,17 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public boolean getElasticBufferEnable() {
     return getBoolean(ELASTIC_BUFFER_ENABLE);
+  }
+
+
+  private Random random = new Random();
+
+  public boolean getShouldSleep() {
+    return getBoolean(SHOULD_SLEEP_ON_COMMIT) && random.nextInt() % getInt(SLEEP_PROBABILITY) == 0;
+  }
+
+  public long sleepDuartion() {
+    return getLong(SLEEP_INTERVAL);
   }
 
   public int getElasticBufferInitCap() {

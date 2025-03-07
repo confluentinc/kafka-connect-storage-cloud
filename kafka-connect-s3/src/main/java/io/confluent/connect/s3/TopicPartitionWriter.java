@@ -767,6 +767,19 @@ public class TopicPartitionWriter {
     log.info("Files committed to S3. Target commit offset for {} is {}", tp, offsetToCommit);
   }
 
+  private void sleepIfRequired() {
+    boolean shouldSleep = connectorConfig.getShouldSleep();
+    long sleepDuration = connectorConfig.sleepDuartion();
+    if (shouldSleep) {
+      try {
+        log.info("Sleeping for {}ms", sleepDuration);
+        Thread.sleep(sleepDuration);
+      } catch (InterruptedException e) {
+        log.error("Interrupted in sleep", e);
+      }
+    }
+  }
+
   private void commitFile(String encodedPartition) {
     if (!startOffsets.containsKey(encodedPartition)) {
       log.warn("Tried to commit file with missing starting offset partition: {}. Ignoring.");
@@ -774,6 +787,7 @@ public class TopicPartitionWriter {
     }
 
     if (writers.containsKey(encodedPartition)) {
+      sleepIfRequired();
       RecordWriter writer = writers.get(encodedPartition);
       // Commits the file and closes the underlying output stream.
       tryCommitFile(writer, encodedPartition);
