@@ -341,8 +341,8 @@ public class S3OutputStream extends PositionOutputStream {
                 if (exists) {
                   throw new FileExistsException("File already exists");
                 }
-                throw new ConnectException("Unexpected state - Contradicting response from " +
-                    "conditional upload and file exists call in S3");
+                throw new ConnectException("Unexpected state - Contradicting response from "
+                    + "conditional upload and file exists call in S3");
               }
               throw e;
             }
@@ -357,7 +357,8 @@ public class S3OutputStream extends PositionOutputStream {
         if (e.getStatusCode() == 403) {
           log.warn("Connector failed with 403 error. Defaulting as file exists", e);
           // To avoid failing connector due to missing ACL, we consider as file exists.
-          // We should be fine to assume file exists here since the call is being made only as an additional sanity check after file upload failed with 412
+          // We should be fine to assume file exists here since the call is being made only as an
+          // additional sanity check after file upload failed with 412
           return true;
         }
         throw e;
