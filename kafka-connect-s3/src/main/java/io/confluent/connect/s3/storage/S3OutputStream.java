@@ -35,6 +35,7 @@ import io.confluent.connect.s3.errors.FileExistsException;
 import io.confluent.connect.storage.common.util.StringUtils;
 
 import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.parquet.io.PositionOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,6 +73,8 @@ public class S3OutputStream extends PositionOutputStream {
   private Long position;
   private final boolean enableDigest;
   private final boolean enableConditionalWrites;
+
+  private static final String PRECONDITION_FAILED_ERROR = "PreconditionFailed";
 
   public S3OutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
     this.s3 = s3;
@@ -329,13 +332,36 @@ public class S3OutputStream extends PositionOutputStream {
               return s3.completeMultipartUpload(completeRequest);
             } catch (AmazonS3Exception e) {
               log.error("Failed to complete multipart upload of file {}", key, e);
-              if (e.getStatusCode() == 412) {
-                throw new FileExistsException("File already exists");
+              // There can be cases where the s3 api returns 200 status code, but the error code
+              // is set to "PreconditionFailed". We include additional check on error code to
+              // capture such cases.
+              if (e.getStatusCode() == 412 || PRECONDITION_FAILED_ERROR.equals(e.getErrorCode())) {
+                // Sanity check to double-check file exists in S3 before skipping the offset
+                boolean exists = fileExists();
+                if (exists) {
+                  throw new FileExistsException("File already exists");
+                }
+                throw new ConnectException("Unexpected state - Contradicting response from " +
+                    "conditional upload and file exists call in S3");
               }
               throw e;
             }
           }
       );
+    }
+
+    private boolean fileExists() {
+      try {
+        return s3.doesObjectExist(bucket, key);
+      } catch (AmazonS3Exception e) {
+        if (e.getStatusCode() == 403) {
+          log.warn("Connector failed with 403 error. Defaulting as file exists", e);
+          // To avoid failing connector due to missing ACL, we consider as file exists.
+          // We should be fine to assume file exists here since the call is being made only as an additional sanity check after file upload failed with 412
+          return true;
+        }
+        throw e;
+      }
     }
 
     public void abort() {
