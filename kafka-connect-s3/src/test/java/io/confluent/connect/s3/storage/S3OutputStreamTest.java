@@ -23,6 +23,8 @@ import com.amazonaws.services.s3.model.UploadPartResult;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.S3SinkConnectorTestBase;
 import io.confluent.connect.s3.errors.FileExistsException;
+import io.findify.s3mock.S3Mock;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -204,6 +206,32 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
     when(s3Mock.completeMultipartUpload(any())).thenThrow(exception);
     when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
     when(s3Mock.uploadPart(any())).thenReturn(mock(UploadPartResult.class));
+    when(s3Mock.doesObjectExist(any(), any())).thenReturn(true);
+
+    stream.commit();
+
+    verify(s3Mock).completeMultipartUpload(completeMultipartRequestCaptor.capture());
+
+    assertNotNull(completeMultipartRequestCaptor.getValue());
+    assertNull(completeMultipartRequestCaptor.getValue().getIfNoneMatch());
+  }
+
+  @Test(expected = FileExistsException.class)
+  public void testCompleteMultipartUploadThrowsExceptionWhenS3Returns200WithPreconditionFailedError() throws IOException {
+    Map<String, String> props = super.createProps();
+    props.put(S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_CONFIG, "true");
+    props.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "100");
+
+    stream = new S3OutputStream(S3_TEST_KEY_NAME, new S3SinkConnectorConfig(props), s3Mock);
+
+    AmazonS3Exception exception = new AmazonS3Exception("file exists");
+    exception.setStatusCode(200);
+    exception.setErrorCode("PreconditionFailed");
+
+    when(s3Mock.completeMultipartUpload(any())).thenThrow(exception);
+    when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
+    when(s3Mock.uploadPart(any())).thenReturn(mock(UploadPartResult.class));
+    when(s3Mock.doesObjectExist(any(), any())).thenReturn(true);
 
     stream.commit();
 
@@ -227,6 +255,30 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
     when(s3Mock.completeMultipartUpload(any())).thenThrow(exception);
     when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
     when(s3Mock.uploadPart(any())).thenReturn(mock(UploadPartResult.class));
+
+    stream.commit();
+
+    verify(s3Mock).completeMultipartUpload(completeMultipartRequestCaptor.capture());
+
+    assertNotNull(completeMultipartRequestCaptor.getValue());
+    assertNull(completeMultipartRequestCaptor.getValue().getIfNoneMatch());
+  }
+
+  @Test(expected = ConnectException.class)
+  public void testCompleteMultipartUploadWithIncorrectS3ResponseThrowsConnectException() throws IOException {
+    Map<String, String> props = super.createProps();
+    props.put(S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_CONFIG, "true");
+    props.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "100");
+
+    stream = new S3OutputStream(S3_TEST_KEY_NAME, new S3SinkConnectorConfig(props), s3Mock);
+
+    AmazonS3Exception exception = new AmazonS3Exception("file exists");
+    exception.setStatusCode(412);
+
+    when(s3Mock.completeMultipartUpload(any())).thenThrow(exception);
+    when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
+    when(s3Mock.uploadPart(any())).thenReturn(mock(UploadPartResult.class));
+    when(s3Mock.doesObjectExist(any(), any())).thenReturn(false);
 
     stream.commit();
 
