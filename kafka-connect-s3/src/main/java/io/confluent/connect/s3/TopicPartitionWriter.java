@@ -482,6 +482,8 @@ public class TopicPartitionWriter {
         && timestampExtractor != null
         && (
         recordTimestamp - baseRecordTimestamp >= rotateIntervalMs
+            || (connectorConfig.shouldRotateOnPartitionChange()
+            && !encodedPartition.equals(currentEncodedPartition))
     );
 
     log.trace(
