@@ -67,7 +67,7 @@
         <hadoop.version>3.4.1</hadoop.version>
         <jettison.version>1.5.4</jettison.version>
         <snakeyaml.version>2.0</snakeyaml.version>
-        <woodstox.version>5.4.0</woodstox.version>
+        <woodstox.version>7.1.0</woodstox.version>
         <guava.version>32.1.2-jre</guava.version>
         <zookeeper.version>3.8.4</zookeeper.version>
         <dnsjava.version>3.6.1</dnsjava.version>
