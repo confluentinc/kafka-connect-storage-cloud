@@ -570,6 +570,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
         String.valueOf(TimeUnit.MINUTES.toMillis(10))
     );
+    localProps.put(S3SinkConnectorConfig.ROTATE_FILE_ON_PARTITION_CHANGE, "false");
     setUp();
 
     // Define the partitioner
@@ -624,6 +625,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
         String.valueOf(TimeUnit.DAYS.toMillis(1))
     );
+    localProps.put(S3SinkConnectorConfig.ROTATE_FILE_ON_PARTITION_CHANGE, "false");
     setUp();
 
     // Define the partitioner
