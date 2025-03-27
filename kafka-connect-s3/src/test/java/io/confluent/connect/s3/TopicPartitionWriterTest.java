@@ -15,6 +15,7 @@
 
 package io.confluent.connect.s3;
 
+import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.services.s3.model.Tag;
@@ -93,8 +94,7 @@ import static io.confluent.connect.storage.partitioner.PartitionerConfig.PARTITI
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -157,6 +157,30 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     };
 
     format = new AvroFormat(storage);
+
+    Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
+    writerProvider = format.getRecordWriterProvider();
+    extension = writerProvider.getExtension();
+  }
+
+  public void setUpWithTaggingException(boolean mockSdkClientException) throws Exception {
+    super.setUp();
+
+    s3 = newS3Client(connectorConfig);
+    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3) {
+      @Override
+      public void addTags(String fileName, Map<String, String> tags) throws SdkClientException {
+        if (mockSdkClientException) {
+          throw new SdkClientException("Mock SdkClientException while tagging");
+        }
+        throw new RuntimeException("Mock RuntimeException while tagging");
+      }
+    };
+
+    format = new AvroFormat(storage);
+
+    s3.createBucket(S3_TEST_BUCKET_NAME);
+    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
 
     Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
     writerProvider = format.getRecordWriterProvider();
@@ -1413,6 +1437,34 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
+  public void testIgnoreS3ObjectTaggingSdkClientException() throws Exception {
+    // Tagging error occurred (SdkClientException) but getting ignored.
+    testS3ObjectTaggingErrorHelper(true, true);
+  }
+
+  @Test
+  public void testIgnoreS3ObjectTaggingRuntimeException() throws Exception {
+    // Tagging error occurred (RuntimeException) but getting ignored.
+    testS3ObjectTaggingErrorHelper(false, true);
+  }
+
+  @Test
+  public void testFailS3ObjectTaggingSdkClientException() throws Exception {
+    ConnectException exception = assertThrows(ConnectException.class,
+            () -> testS3ObjectTaggingErrorHelper(true, false));
+    assertEquals("Unable to tag S3 object topics_test-topic_partition=12_test-topic#12#0000000000.avro", exception.getMessage());
+    assertEquals("Mock SdkClientException while tagging", exception.getCause().getMessage());
+  }
+
+  @Test
+  public void testFailS3ObjectTaggingRuntimeException() throws Exception {
+    ConnectException exception = assertThrows(ConnectException.class, () ->
+            testS3ObjectTaggingErrorHelper(false, false));
+    assertEquals("Unable to tag S3 object topics_test-topic_partition=12_test-topic#12#0000000000.avro", exception.getMessage());
+    assertEquals("Mock RuntimeException while tagging", exception.getCause().getMessage());
+  }
+
+  @Test
   public void testExceptionOnNullKeysReported() throws Exception {
     String recordValue = "1";
     int kafkaOffset = 2;
@@ -1968,6 +2020,35 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       List<Tag> expectedTags = expectedTaggedFiles.get(fileKey);
       assertTrue(actualTags.containsAll(expectedTags));
     }
+  }
+
+  private void testS3ObjectTaggingErrorHelper(boolean mockSdkClientException, boolean ignoreTaggingError) throws Exception {
+    // Enabling tagging and setting behavior for tagging error.
+    localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
+    localProps.put(S3SinkConnectorConfig.S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG, ignoreTaggingError ? "ignore" : "fail");
+
+    // Setup mock exception while tagging
+    setUpWithTaggingException(mockSdkClientException);
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 3);
+
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Invoke write so as to simulate tagging error.
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
   }
 
   public static class MockedWallclockTimestampExtractor implements TimestampExtractor {

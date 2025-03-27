@@ -16,7 +16,7 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.AmazonClientException;
-import io.confluent.connect.s3.S3SinkConnectorConfig.BehaviorOnNullValues;
+import io.confluent.connect.s3.S3SinkConnectorConfig.IgnoreOrFailBehavior;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -265,7 +265,7 @@ public class S3SinkTask extends SinkTask {
   private boolean maybeSkipOnNullValue(SinkRecord record) {
     if (record.value() == null) {
       if (connectorConfig.nullValueBehavior()
-          .equalsIgnoreCase(BehaviorOnNullValues.IGNORE.toString())) {
+          .equalsIgnoreCase(IgnoreOrFailBehavior.IGNORE.toString())) {
         log.debug(
             "Null valued record from topic '{}', partition {} and offset {} was skipped.",
             record.topic(),
@@ -303,14 +303,14 @@ public class S3SinkTask extends SinkTask {
 
   @Override
   public void close(Collection<TopicPartition> partitions) {
-    for (TopicPartition tp : partitions) {
+    for (TopicPartition tp : topicPartitionWriters.keySet()) {
       try {
         topicPartitionWriters.get(tp).close();
       } catch (ConnectException e) {
         log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
       }
-      topicPartitionWriters.remove(tp);
     }
+    topicPartitionWriters.clear();
   }
 
   @Override

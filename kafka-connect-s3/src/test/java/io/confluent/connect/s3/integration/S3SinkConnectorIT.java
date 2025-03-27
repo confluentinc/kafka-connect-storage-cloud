@@ -30,7 +30,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import io.confluent.connect.s3.S3SinkConnector;
-import io.confluent.connect.s3.S3SinkConnectorConfig.BehaviorOnNullValues;
+import io.confluent.connect.s3.S3SinkConnectorConfig.IgnoreOrFailBehavior;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
@@ -229,7 +229,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   @Test
   public void testFaultyRecordsReportedToDLQ() throws Throwable {
     props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
-    props.put(BEHAVIOR_ON_NULL_VALUES_CONFIG, BehaviorOnNullValues.IGNORE.toString());
+    props.put(BEHAVIOR_ON_NULL_VALUES_CONFIG, IgnoreOrFailBehavior.IGNORE.toString());
     props.put(STORE_KAFKA_KEYS_CONFIG, "true");
     props.put(STORE_KAFKA_HEADERS_CONFIG, "true");
     props.put(DLQ_TOPIC_CONFIG, DLQ_TOPIC_NAME);
