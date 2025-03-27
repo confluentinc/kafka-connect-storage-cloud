@@ -170,6 +170,13 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       + "being revoked from the group. It also mitigates (but does not eliminate) the risk of "
       + "a zombie task to continue writing to S3 after it has been revoked.";
 
+  public static final String ROTATE_FILE_ON_PARTITION_CHANGE = "rotate.file.on.partition.change";
+  public static final String ROTATE_FILE_ON_PARTITION_CHANGE_DOC
+      = "Flag to determine whether we want to rotate existing files when the record belongs to a "
+      + "new file. This flag will be honored when rotate.interval.ms is set and timestamp.extractor"
+      + " is configured";
+  public static final boolean ROTATE_FILE_ON_PARTITION_CHANGE_DEFAULT = true;
+
   /**
    * Maximum back-off time when retrying failed requests.
    */
@@ -660,6 +667,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.SHORT,
           "Maximum write duration"
+      );
+
+      configDef.define(
+          ROTATE_FILE_ON_PARTITION_CHANGE,
+          Type.BOOLEAN,
+          ROTATE_FILE_ON_PARTITION_CHANGE_DEFAULT,
+          Importance.LOW,
+          ROTATE_FILE_ON_PARTITION_CHANGE_DOC,
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Rotate files on partition change"
       );
     }
 
@@ -1211,6 +1230,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public boolean reportNullRecordsToDlq() {
     return getBoolean(REPORT_NULL_RECORDS_TO_DLQ);
+  }
+
+  public boolean shouldRotateOnPartitionChange() {
+    return getBoolean(ROTATE_FILE_ON_PARTITION_CHANGE);
   }
 
   public enum BehaviorOnNullValues {
