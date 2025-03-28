@@ -611,6 +611,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
         String.valueOf(TimeUnit.MINUTES.toMillis(10))
     );
+    localProps.put(S3SinkConnectorConfig.ROTATE_FILE_ON_PARTITION_CHANGE, "false");
     setUp();
 
     // Define the partitioner
@@ -658,6 +659,62 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
+  public void testWriteRecordTimeBasedPartitionRecordTimestampHoursOutOfOrderAndRotateOnPartitionChange() throws Exception {
+    localProps.put(FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.MINUTES.toMillis(10))
+    );
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new HourlyPartitioner<>();
+    parsedConfig.put(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG, TimeUnit.MINUTES.toMillis(10));
+    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null
+    );
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 1, 5);
+
+    DateTime hour = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
+
+    Collection<SinkRecord> sinkRecords = new ArrayList<>();
+    sinkRecords.add(sinkRecord(key, schema, records.get(0), 0, hour.getMillis()));
+    sinkRecords.add(sinkRecord(key, schema, records.get(1), 1, hour.minusMinutes(2).getMillis()));
+    sinkRecords.add(sinkRecord(key, schema, records.get(2), 2, hour.plusMinutes(9).getMillis()));
+    sinkRecords.add(sinkRecord(key, schema, records.get(3), 3, hour.minusMinutes(5).getMillis()));
+
+    sinkRecords.add(sinkRecord(key, schema, records.get(4), 4, hour.plusMinutes(10).getMillis()));
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    String dirPrefixFirst = partitioner.generatePartitionedPath(
+        TOPIC,
+        getTimebasedEncodedPartition(hour.minusMinutes(1).getMillis())
+    );
+    String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC, getTimebasedEncodedPartition(hour.getMillis()));
+    List<String> expectedFiles = Arrays.asList(
+        FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT),
+        FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, 1, extension, ZERO_PAD_FMT),
+
+        FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, 2, extension, ZERO_PAD_FMT),
+        FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT)
+    );
+
+    verify(expectedFiles, 1, schema, records);
+  }
+
+  @Test
   public void testWriteRecordTimeBasedPartitionRecordTimestampHoursDailyRotationInterval() throws Exception {
     // Do not roll on size, only based on time.
     localProps.put(FLUSH_SIZE_CONFIG, "1000");
@@ -665,6 +722,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
         String.valueOf(TimeUnit.DAYS.toMillis(1))
     );
+    localProps.put(S3SinkConnectorConfig.ROTATE_FILE_ON_PARTITION_CHANGE, "false");
     setUp();
 
     // Define the partitioner
