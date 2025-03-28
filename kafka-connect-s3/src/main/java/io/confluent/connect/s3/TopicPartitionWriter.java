@@ -488,6 +488,11 @@ public class TopicPartitionWriter {
     this.state = state;
   }
 
+  private boolean rotateOnPartitionChange(String encodedPartition) {
+    return connectorConfig.shouldRotateOnPartitionChange()
+        && !encodedPartition.equals(currentEncodedPartition);
+  }
+
   private boolean rotateOnTime(String encodedPartition, Long recordTimestamp, long now) {
     if (recordCount <= 0) {
       return false;
@@ -497,6 +502,7 @@ public class TopicPartitionWriter {
         && timestampExtractor != null
         && (
         recordTimestamp - baseRecordTimestamp >= rotateIntervalMs
+            || rotateOnPartitionChange(encodedPartition)
     );
 
     log.trace(
