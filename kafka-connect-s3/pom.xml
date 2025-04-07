@@ -36,7 +36,6 @@
         <aws.version>1.12.650</aws.version>
         <s3mock.version>0.2.5</s3mock.version>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
-        <parquet.tools.version>1.11.1</parquet.tools.version>
         <formatters.version>0.2.2</formatters.version>
         <confluent.connect.testcontainers.version>1.0.1</confluent.connect.testcontainers.version>
         <org.testcontainer.version>1.15.0</org.testcontainer.version>
@@ -161,12 +160,7 @@
             <version>${guava.version}</version>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.apache.parquet</groupId>
-            <artifactId>parquet-tools</artifactId>
-            <version>${parquet.tools.version}</version>
-            <scope>test</scope>
-        </dependency>
+
         <dependency>
             <groupId>com.github.tomakehurst</groupId>
             <artifactId>wiremock-jre8-standalone</artifactId>
