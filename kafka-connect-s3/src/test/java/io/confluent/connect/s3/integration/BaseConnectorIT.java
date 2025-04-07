@@ -19,6 +19,7 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CO
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
 import static io.confluent.kafka.schemaregistry.ClusterTestHarness.KAFKASTORE_TOPIC;
 
+import org.apache.avro.generic.GenericData;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.services.s3.AmazonS3;
@@ -33,6 +34,9 @@ import com.google.common.collect.ImmutableMap;
 import io.confluent.common.utils.IntegrationTest;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.RestApp;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
+import org.apache.parquet.io.InputFile;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -53,6 +57,8 @@ import java.util.stream.Collectors;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.parquet.avro.AvroParquetReader;
+
 import org.apache.avro.io.DatumReader;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -68,9 +74,6 @@ import org.apache.kafka.test.TestUtils;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
-import org.apache.parquet.tools.json.JsonRecordFormatter;
-import org.apache.parquet.tools.read.SimpleReadSupport;
-import org.apache.parquet.tools.read.SimpleRecord;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -609,18 +612,20 @@ public abstract class BaseConnectorIT {
    * @return the rows of the file as JsonNodes
    */
   private static List<JsonNode> getContentsFromParquet(String filePath) {
-    try (ParquetReader<SimpleRecord> reader = ParquetReader
-        .builder(new SimpleReadSupport(), new Path(filePath)).build()){
-      ParquetMetadata metadata = ParquetFileReader
-          .readFooter(new Configuration(), new Path(filePath));
-      JsonRecordFormatter.JsonGroupFormatter formatter = JsonRecordFormatter
-          .fromSchema(metadata.getFileMetaData().getSchema());
-      List<JsonNode> fileRows = new ArrayList<>();
-      for (SimpleRecord value = reader.read(); value != null; value = reader.read()) {
-        JsonNode jsonNode = jsonMapper.readTree(formatter.formatRecord(value));
-        fileRows.add(jsonNode);
+    List<JsonNode> fileRows = new ArrayList<JsonNode>();
+    try {
+      InputFile inputFile = HadoopInputFile.fromPath(new org.apache.hadoop.fs.Path(filePath), new Configuration());
+      try (ParquetReader<GenericData.Record> recordAvroParquetReader =
+               AvroParquetReader.<GenericData.Record>builder(inputFile)
+                   .build()) {
+        GenericData.Record record;
+        while ((record = recordAvroParquetReader.read()) != null) {
+          fileRows.add(jsonMapper.readTree(record.toString()));
+        }
+        return fileRows;
+      } catch (IOException e) {
+        throw new RuntimeException(e);
       }
-      return fileRows;
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
