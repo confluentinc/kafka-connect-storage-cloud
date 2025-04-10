@@ -261,6 +261,10 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
         configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_EXTERNAL_ID_CONFIG),
         "my-external-id"
     );
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.STS_REGION_CONFIG),
+        "us-west-2"
+    );
     connectorConfig = new S3SinkConnectorConfig(properties);
 
     AwsAssumeRoleCredentialsProvider credentialsProvider =
