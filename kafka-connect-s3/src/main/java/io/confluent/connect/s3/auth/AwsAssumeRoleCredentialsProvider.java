@@ -22,6 +22,8 @@ import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -42,6 +44,11 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
   public static final String ROLE_EXTERNAL_ID_CONFIG = "sts.role.external.id";
   public static final String ROLE_ARN_CONFIG = "sts.role.arn";
   public static final String ROLE_SESSION_NAME_CONFIG = "sts.role.session.name";
+  public static final String REGION = "sts.region";
+
+  private static final String STS_REGION_DEFAULT = "";
+
+  private static final Logger log = LoggerFactory.getLogger(AwsAssumeRoleCredentialsProvider.class);
 
   private static final ConfigDef STS_CONFIG_DEF = new ConfigDef()
       .define(
@@ -59,11 +66,18 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
           ConfigDef.Type.STRING,
           ConfigDef.Importance.HIGH,
           "Role session name to use when starting a session"
+      ).define(
+          REGION,
+          ConfigDef.Type.STRING,
+          STS_REGION_DEFAULT,
+          ConfigDef.Importance.MEDIUM,
+          "STS Region"
       );
 
   private String roleArn;
   private String roleExternalId;
   private String roleSessionName;
+  private String region;
 
   private BasicAWSCredentials basicCredentials;
 
@@ -77,16 +91,23 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
     roleArn = config.getString(ROLE_ARN_CONFIG);
     roleExternalId = config.getString(ROLE_EXTERNAL_ID_CONFIG);
     roleSessionName = config.getString(ROLE_SESSION_NAME_CONFIG);
+    region = config.getString(REGION);
     final String accessKeyId = (String) configs.get(AWS_ACCESS_KEY_ID_CONFIG);
     final String secretKey = (String) configs.get(AWS_SECRET_ACCESS_KEY_CONFIG);
+
     if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
       basicCredentials = new BasicAWSCredentials(accessKeyId, secretKey);
+      AWSSecurityTokenServiceClientBuilder stsClientBuilder = AWSSecurityTokenServiceClientBuilder
+          .standard()
+          .withCredentials(new AWSStaticCredentialsProvider(basicCredentials));
+      if (StringUtils.isNotBlank(region)) {
+        log.info("Configuring region {}", region);
+        stsClientBuilder.withRegion(region);
+      }
+
       stsCredentialProvider = new STSAssumeRoleSessionCredentialsProvider
           .Builder(roleArn, roleSessionName)
-          .withStsClient(AWSSecurityTokenServiceClientBuilder
-              .standard()
-              .withCredentials(new AWSStaticCredentialsProvider(basicCredentials)).build()
-          )
+          .withStsClient(stsClientBuilder.build())
           .withExternalId(roleExternalId)
           .build();
     } else {
