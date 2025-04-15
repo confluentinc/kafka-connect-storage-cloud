@@ -76,7 +76,7 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
           ConfigDef.Importance.MEDIUM,
           "Region to use when setting up STS client. By default, connector would use the "
               + "default region provider chain (refer " + REGION_PROVIDER_DOC_URL + "). This config"
-              + "can be used to directly set the region to be set when connecting to STS"
+              + " can be used to directly set the region when connecting to STS."
       );
 
   private String roleArn;
