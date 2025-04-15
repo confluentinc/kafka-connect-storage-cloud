@@ -45,6 +45,9 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
   public static final String ROLE_ARN_CONFIG = "sts.role.arn";
   public static final String ROLE_SESSION_NAME_CONFIG = "sts.role.session.name";
   public static final String REGION = "sts.region";
+  private static String REGION_PROVIDER_DOC_URL =
+      "https://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/java-dg-region-selection.html"
+          + "#automatically-determine-the-aws-region-from-the-environment";
 
   private static final String STS_REGION_DEFAULT = "";
 
@@ -71,7 +74,9 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
           ConfigDef.Type.STRING,
           STS_REGION_DEFAULT,
           ConfigDef.Importance.MEDIUM,
-          "STS Region"
+          "Region to use when setting up STS client. By default, connector would use the "
+              + "default region provider chain (refer " + REGION_PROVIDER_DOC_URL + "). This config"
+              + "can be used to directly set the region to be set when connecting to STS"
       );
 
   private String roleArn;
@@ -101,7 +106,7 @@ public class AwsAssumeRoleCredentialsProvider implements AWSCredentialsProvider,
           .standard()
           .withCredentials(new AWSStaticCredentialsProvider(basicCredentials));
       if (StringUtils.isNotBlank(region)) {
-        log.info("Configuring region {}", region);
+        log.info("Configuring sts client region from config 'sts.region' to {}", region);
         stsClientBuilder.withRegion(region);
       }
 
