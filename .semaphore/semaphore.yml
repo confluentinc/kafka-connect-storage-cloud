@@ -45,9 +45,9 @@ blocks:
             - trivy version
             - echo "Check go/connector-dev-vuln-remediation for fixing or suppressing vulnerabilities found by trivy"
             - trivy --skip-files "*.zip" rootfs --scanners vuln --db-repository public.ecr.aws/aquasecurity/trivy-db --java-db-repository public.ecr.aws/aquasecurity/trivy-java-db --ignore-unfixed --ignorefile
-              .trivyignore --exit-code 1 --severity CRITICAL target/components/packages
+              .trivyignore --exit-code 1 --severity CRITICAL kafka-connect-s3/target/components/packages
             - trivy --skip-files "*.zip" rootfs --scanners vuln --db-repository public.ecr.aws/aquasecurity/trivy-db --java-db-repository public.ecr.aws/aquasecurity/trivy-java-db --ignore-unfixed --ignorefile
-              .trivyignore --severity HIGH,LOW,MEDIUM target/components/packages
+              .trivyignore --severity HIGH,LOW,MEDIUM kafka-connect-s3/target/components/packages
             - . cache-maven store
       epilogue:
         always:
