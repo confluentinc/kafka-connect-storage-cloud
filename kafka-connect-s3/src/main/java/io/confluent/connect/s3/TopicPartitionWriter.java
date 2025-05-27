@@ -463,7 +463,7 @@ public class TopicPartitionWriter {
     }
 
     boolean rotate = recordCount >= fieldPartitionerFlushSize;
-    log.info("Rotate on field partitioner for topic-partition '{}': "
+    log.trace("Rotate on field partitioner for topic-partition '{}': "
             + "(count {} >= field partitioner flush size {})? {}",
         tp,
         recordCount,
