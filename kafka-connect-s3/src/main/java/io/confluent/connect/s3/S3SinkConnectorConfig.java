@@ -250,6 +250,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       + "to prefix or suffix in the s3 path after the topic name."
       + " None will not append the schema name in the s3 path.";
 
+  public static final String FIELD_PARTITIONER_FLUSH_SIZE_CONFIG = "field.partitioner.flush.size";
+  public static final int FIELD_PARTITIONER_FLUSH_SIZE_DEFAULT = -1;
+
   private static final GenericRecommender SCHEMA_PARTITION_AFFIX_TYPE_RECOMMENDER =
       new GenericRecommender();
 
@@ -913,6 +916,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "Elastic buffer initial capacity"
       );
 
+      configDef.defineInternal(
+          FIELD_PARTITIONER_FLUSH_SIZE_CONFIG,
+          Type.INT,
+          FIELD_PARTITIONER_FLUSH_SIZE_DEFAULT,
+          Importance.LOW
+      );
     }
     return configDef;
   }
