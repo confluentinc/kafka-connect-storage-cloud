@@ -462,14 +462,10 @@ public class TopicPartitionWriter {
       return false;
     }
 
-    boolean rotate = recordCount >= fieldPartitionerFlushSize;
-    log.info("Rotate on field partitioner for topic-partition '{}': "
-            + "(count {} >= field partitioner flush size {})? {}",
-        tp,
-        recordCount,
-        fieldPartitionerFlushSize,
-        rotate
-    );
+    boolean rotate = commitFiles.size() >= fieldPartitionerFlushSize;
+    log.info("Should apply field partitioner rotation for topic-partition '{}':"
+            + " (commitFiles.size {} >= fieldPartitionerFlushSize {})? {}",
+        tp, commitFiles.size(), fieldPartitionerFlushSize, rotate);
     return rotate;
   }
 
