@@ -27,7 +27,7 @@
     <groupId>io.confluent</groupId>
     <artifactId>kafka-connect-storage-cloud</artifactId>
     <packaging>pom</packaging>
-    <version>10.6.6-SNAPSHOT</version>
+    <version>10.6.6</version>
     <name>kafka-connect-storage-cloud</name>
     <organization>
         <name>Confluent, Inc.</name>
@@ -50,7 +50,7 @@
         <connection>scm:git:git://github.com/confluentinc/kafka-connect-storage-cloud.git</connection>
         <developerConnection>scm:git:git@github.com:confluentinc/kafka-connect-storage-cloud.git</developerConnection>
         <url>https://github.com/confluentinc/kafka-connect-storage-cloud</url>
-        <tag>10.6.x</tag>
+        <tag>v10.6.6</tag>
     </scm>
 
     <modules>
