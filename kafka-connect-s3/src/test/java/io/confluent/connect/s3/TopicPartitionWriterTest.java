@@ -661,8 +661,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   @Test
   public void testWriteRecordFieldBasedPartitionAndRotateOnFlushSize() throws Exception {
-    localProps.put(FIELD_PARTITIONER_FLUSH_SIZE_CONFIG, "5");
-    localProps.put(FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(FIELD_PARTITIONER_FLUSH_SIZE_CONFIG, "1");
+    localProps.put(FLUSH_SIZE_CONFIG, "100");
     setUp();
 
     // Define the partitioner
@@ -674,7 +674,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     String key = "key";
     Schema schema = createSchema();
-    List<Struct> records = createRecordBatches(schema, 1, 5);
+    List<Struct> records = createRecordBatches(schema, 1, 2);
 
     Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
 
@@ -693,7 +693,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     List<String> expectedFiles = new ArrayList<>();
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
-    verify(expectedFiles, 5, schema, records);
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, 1, extension, ZERO_PAD_FMT));
+    verify(expectedFiles, 1, schema, records);
   }
 
   @Test
