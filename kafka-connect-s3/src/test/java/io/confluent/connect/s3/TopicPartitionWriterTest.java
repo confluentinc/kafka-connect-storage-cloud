@@ -99,6 +99,7 @@ import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.FIELD_PARTITIONER_FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.SCHEMA_PARTITION_AFFIX_TYPE_CONFIG;
 import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
@@ -656,6 +657,80 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     );
 
     verify(expectedFiles, 2, schema, records);
+  }
+
+  @Test
+  public void testWriteRecordFieldBasedPartitionAndRotateOnFlushSize() throws Exception {
+    localProps.put(FIELD_PARTITIONER_FLUSH_SIZE_CONFIG, "1");
+    localProps.put(FLUSH_SIZE_CONFIG, "100");
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new FieldPartitioner<>();
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 1, 2);
+
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    @SuppressWarnings("unchecked")
+    List<String> partitionFields = (List<String>) parsedConfig.get(PARTITION_FIELD_NAME_CONFIG);
+    String partitionField = partitionFields.get(0);
+    String dirPrefix1 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(16));
+
+    List<String> expectedFiles = new ArrayList<>();
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, 1, extension, ZERO_PAD_FMT));
+    verify(expectedFiles, 1, schema, records);
+  }
+
+  @Test
+  public void testWriteRecordFieldBasedPartitionAndRotateOnFlushSizeWhenFlushSizeIsUnset() throws Exception {
+    localProps.put(FIELD_PARTITIONER_FLUSH_SIZE_CONFIG, "-1");
+    localProps.put(FLUSH_SIZE_CONFIG, "1000");
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new FieldPartitioner<>();
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 1, 5);
+
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    @SuppressWarnings("unchecked")
+    List<String> partitionFields = (List<String>) parsedConfig.get(PARTITION_FIELD_NAME_CONFIG);
+    String partitionField = partitionFields.get(0);
+    String dirPrefix1 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(16));
+
+    List<String> expectedFiles = new ArrayList<>();
+    verify(expectedFiles, 0, schema, records);
   }
 
   @Test
