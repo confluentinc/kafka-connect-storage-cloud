@@ -89,7 +89,7 @@ public class TopicPartitionWriter {
   private final boolean ignoreTaggingErrors;
   private int recordCount;
   private final int flushSize;
-  private final int fieldPartitionerFlushSize;
+  private final int partitionerMaxOpenFiles;
   private final long rotateIntervalMs;
   private final long rotateScheduleIntervalMs;
   private long nextScheduledRotation;
@@ -171,8 +171,8 @@ public class TopicPartitionWriter {
             S3SinkConnectorConfig.S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG)
             .equalsIgnoreCase(S3SinkConnectorConfig.IgnoreOrFailBehavior.IGNORE.toString());
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
-    fieldPartitionerFlushSize = connectorConfig.getInt(
-        S3SinkConnectorConfig.FIELD_PARTITIONER_FLUSH_SIZE_CONFIG);
+    partitionerMaxOpenFiles = connectorConfig.getInt(
+        S3SinkConnectorConfig.PARTITIONER_MAX_OPEN_FILES_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
     if (rotateIntervalMs > 0 && timestampExtractor == null) {
@@ -458,14 +458,14 @@ public class TopicPartitionWriter {
   }
 
   private boolean rotateOnFieldPartitioner() {
-    if (!(partitioner instanceof FieldPartitioner) || fieldPartitionerFlushSize == -1) {
+    if (!(partitioner instanceof FieldPartitioner) || partitionerMaxOpenFiles == -1) {
       return false;
     }
 
-    boolean rotate = commitFiles.size() >= fieldPartitionerFlushSize;
+    boolean rotate = commitFiles.size() > partitionerMaxOpenFiles;
     log.trace("Should apply field partitioner rotation for topic-partition '{}': "
-            + "(commitFiles.size {} >= fieldPartitionerFlushSize {})? {}",
-        tp, commitFiles.size(), fieldPartitionerFlushSize, rotate);
+            + "(commitFiles.size {} >= partitionerMaxOpenFiles {})? {}",
+        tp, commitFiles.size(), partitionerMaxOpenFiles, rotate);
     return rotate;
   }
 

@@ -99,7 +99,7 @@ import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static io.confluent.connect.s3.S3SinkConnectorConfig.FIELD_PARTITIONER_FLUSH_SIZE_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.PARTITIONER_MAX_OPEN_FILES_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.SCHEMA_PARTITION_AFFIX_TYPE_CONFIG;
 import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
@@ -660,9 +660,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
-  public void testWriteRecordFieldBasedPartitionAndRotateOnFlushSize() throws Exception {
-    localProps.put(FIELD_PARTITIONER_FLUSH_SIZE_CONFIG, "1");
-    localProps.put(FLUSH_SIZE_CONFIG, "100");
+  public void testWriteRecordFieldBasedPartitionAndRotateOnMaxSize() throws Exception {
+    localProps.put(PARTITIONER_MAX_OPEN_FILES_CONFIG, "5");
+    localProps.put(FLUSH_SIZE_CONFIG, "10");
     setUp();
 
     // Define the partitioner
@@ -674,7 +674,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     String key = "key";
     Schema schema = createSchema();
-    List<Struct> records = createRecordBatches(schema, 1, 2);
+    List<Struct> records = createRecordBatches(schema, 6, 1);
 
     Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
 
@@ -689,22 +689,24 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     @SuppressWarnings("unchecked")
     List<String> partitionFields = (List<String>) parsedConfig.get(PARTITION_FIELD_NAME_CONFIG);
     String partitionField = partitionFields.get(0);
-    String dirPrefix1 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(16));
 
     List<String> expectedFiles = new ArrayList<>();
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
-    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, 1, extension, ZERO_PAD_FMT));
+    for (int i = 0; i < 6; i++) {
+      String dirPrefix = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(16 + i));
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
+    }
     verify(expectedFiles, 1, schema, records);
   }
 
   @Test
-  public void testWriteRecordFieldBasedPartitionAndRotateOnFlushSizeWhenFlushSizeIsUnset() throws Exception {
-    localProps.put(FIELD_PARTITIONER_FLUSH_SIZE_CONFIG, "-1");
-    localProps.put(FLUSH_SIZE_CONFIG, "1000");
+  public void testWriteRecordFieldBasedPartitionAndRotateOnMaxSizeWithMultipleFields() throws Exception {
+    localProps.put(PARTITIONER_MAX_OPEN_FILES_CONFIG, "5");
+    localProps.put(FLUSH_SIZE_CONFIG, "10");
     setUp();
 
     // Define the partitioner
     Partitioner<?> partitioner = new FieldPartitioner<>();
+    parsedConfig.put(PARTITION_FIELD_NAME_CONFIG, Arrays.asList("int", "boolean"));
     partitioner.configure(parsedConfig);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
@@ -712,7 +714,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     String key = "key";
     Schema schema = createSchema();
-    List<Struct> records = createRecordBatches(schema, 1, 5);
+    List<Struct> records = createRecordBatches(schema, 6, 1);
 
     Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
 
@@ -727,10 +729,53 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     @SuppressWarnings("unchecked")
     List<String> partitionFields = (List<String>) parsedConfig.get(PARTITION_FIELD_NAME_CONFIG);
     String partitionField = partitionFields.get(0);
-    String dirPrefix1 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(16));
 
     List<String> expectedFiles = new ArrayList<>();
-    verify(expectedFiles, 0, schema, records);
+    for (int i = 0; i < 6; i++) {
+      String dirPrefix = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(16 + i));
+      dirPrefix = partitioner.generatePartitionedPath(dirPrefix, "boolean=true");
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
+    }
+    verify(expectedFiles, 1, schema, records);
+  }
+
+  @Test
+  public void testWriteRecordFieldBasedPartitionAndRotateOnFlushSizeWhenMaxFilesIsUnset() throws Exception {
+    localProps.put(PARTITIONER_MAX_OPEN_FILES_CONFIG, "-1");
+    localProps.put(FLUSH_SIZE_CONFIG, "10");
+    setUp();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new FieldPartitioner<>();
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 1, 20);
+
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    @SuppressWarnings("unchecked")
+    List<String> partitionFields = (List<String>) parsedConfig.get(PARTITION_FIELD_NAME_CONFIG);
+    String partitionField = partitionFields.get(0);
+
+    List<String> expectedFiles = new ArrayList<>();
+    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(16));
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 10, extension, ZERO_PAD_FMT));
+
+    verify(expectedFiles, 10, schema, records);
   }
 
   @Test
