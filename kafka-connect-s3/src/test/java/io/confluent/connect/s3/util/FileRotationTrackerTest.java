@@ -17,7 +17,7 @@ public class FileRotationTrackerTest {
     FileRotationTracker fileRotationTracker = new FileRotationTracker();
     fileRotationTracker.incrementRotationByRotationIntervalCount(FILE_1);
     fileRotationTracker.incrementRotationByFlushSizeCount(FILE_2);
-    fileRotationTracker.incrementRotationByFieldPartitionerCount(FILE_2);
+    fileRotationTracker.incrementRotationByPartitionerMaxFilesCount(FILE_2);
     fileRotationTracker
         .incrementRotationBySchemaChangeCount(FILE_3, SchemaIncompatibilityType.DIFFERENT_VERSION);
     fileRotationTracker.incrementRotationByFlushSizeCount(FILE_1);
@@ -33,7 +33,7 @@ public class FileRotationTrackerTest {
     FileRotationTracker fileRotationTracker = new FileRotationTracker();
     fileRotationTracker.incrementRotationByRotationIntervalCount(FILE_1);
     fileRotationTracker.incrementRotationByFlushSizeCount(FILE_2);
-    fileRotationTracker.incrementRotationByFieldPartitionerCount(FILE_3);
+    fileRotationTracker.incrementRotationByPartitionerMaxFilesCount(FILE_3);
     fileRotationTracker
         .incrementRotationBySchemaChangeCount(FILE_3, SchemaIncompatibilityType.DIFFERENT_VERSION);
     fileRotationTracker.incrementRotationByFlushSizeCount(FILE_1);
