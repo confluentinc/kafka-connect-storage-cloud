@@ -27,7 +27,7 @@ public final class FileRotationTracker {
 
     int rotationByFlushSize = 0;
 
-    int rotationByFieldPartitioner = 0;
+    int rotationByPartitionerMaxFiles = 0;
 
     int rotationByRotationInterval = 0;
 
@@ -71,8 +71,8 @@ public final class FileRotationTracker {
       rotationByFlushSize++;
     }
 
-    public void incrementRotationByFieldPartitionerCount() {
-      rotationByFieldPartitioner++;
+    public void incrementRotationByPartitionerMaxFilesCount() {
+      rotationByPartitionerMaxFiles++;
     }
 
     public void incrementRotationByRotationIntervalCount() {
@@ -103,11 +103,11 @@ public final class FileRotationTracker {
     metrics.get(outputPartition).incrementRotationByFlushSizeCount();
   }
 
-  public void incrementRotationByFieldPartitionerCount(String outputPartition) {
+  public void incrementRotationByPartitionerMaxFilesCount(String outputPartition) {
     if (!metrics.containsKey(outputPartition)) {
       metrics.put(outputPartition, new RotationMetrics());
     }
-    metrics.get(outputPartition).incrementRotationByFieldPartitionerCount();
+    metrics.get(outputPartition).incrementRotationByPartitionerMaxFilesCount();
   }
 
   public void incrementRotationByRotationIntervalCount(String outputPartition) {
@@ -148,8 +148,8 @@ public final class FileRotationTracker {
       sb.append(rotationMetrics.rotationByScheduledRotationInterval);
       sb.append(", RotationByFlushSize: ");
       sb.append(rotationMetrics.rotationByFlushSize);
-      sb.append(", RotationByFieldPartitioner: ");
-      sb.append(rotationMetrics.rotationByFieldPartitioner);
+      sb.append(", RotationByPartitionerMaxFiles: ");
+      sb.append(rotationMetrics.rotationByPartitionerMaxFiles);
       sb.append(", RotationByDiffName: ");
       sb.append(rotationMetrics.rotationByDiffName);
       sb.append(", RotationByDiffSchema: ");

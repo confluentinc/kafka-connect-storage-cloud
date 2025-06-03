@@ -424,16 +424,8 @@ public class TopicPartitionWriter {
       return true;
     }
 
-    SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
-    boolean validRecord = writeRecord(projectedRecord, encodedPartition, record);
-    buffer.poll();
-    if (!validRecord) {
-      // skip the faulty record and don't rotate
-      return false;
-    }
-
     if (rotateOnFieldPartitioner()) {
-      fileRotationTracker.incrementRotationByFieldPartitionerCount(encodedPartition);
+      fileRotationTracker.incrementRotationByPartitionerMaxFilesCount(encodedPartition);
       log.info(
           "Starting commit and rotation for topic partition {} with start offset {}",
           tp,
@@ -441,6 +433,14 @@ public class TopicPartitionWriter {
       );
       nextState();
       return true;
+    }
+
+    SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
+    boolean validRecord = writeRecord(projectedRecord, encodedPartition, record);
+    buffer.poll();
+    if (!validRecord) {
+      // skip the faulty record and don't rotate
+      return false;
     }
 
     if (rotateOnSize()) {
@@ -462,10 +462,11 @@ public class TopicPartitionWriter {
       return false;
     }
 
-    boolean rotate = commitFiles.size() > partitionerMaxOpenFiles;
+    boolean rotate = !commitFiles.containsKey(currentEncodedPartition)
+        && commitFiles.size() > partitionerMaxOpenFiles;
     log.trace("Should apply field partitioner rotation for topic-partition '{}': "
-            + "(commitFiles.size {} >= partitionerMaxOpenFiles {})? {}",
-        tp, commitFiles.size(), partitionerMaxOpenFiles, rotate);
+            + "(partitionerMaxOpenFiles: '{}', commitFiles.size(): '{}')? {}",
+        tp, partitionerMaxOpenFiles, commitFiles.size(), rotate);
     return rotate;
   }
 
