@@ -23,6 +23,7 @@ import io.confluent.connect.s3.util.FileRotationTracker;
 import io.confluent.connect.s3.util.RetryUtil;
 import io.confluent.connect.s3.util.TombstoneTimestampExtractor;
 import io.confluent.connect.storage.errors.PartitionException;
+import io.confluent.connect.storage.partitioner.FieldPartitioner;
 import io.confluent.connect.storage.schema.SchemaCompatibilityResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
@@ -88,6 +89,7 @@ public class TopicPartitionWriter {
   private final boolean ignoreTaggingErrors;
   private int recordCount;
   private final int flushSize;
+  private final int partitionerMaxOpenFiles;
   private final long rotateIntervalMs;
   private final long rotateScheduleIntervalMs;
   private long nextScheduledRotation;
@@ -169,6 +171,8 @@ public class TopicPartitionWriter {
             S3SinkConnectorConfig.S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG)
             .equalsIgnoreCase(S3SinkConnectorConfig.IgnoreOrFailBehavior.IGNORE.toString());
     flushSize = connectorConfig.getInt(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG);
+    partitionerMaxOpenFiles = connectorConfig.getInt(
+        S3SinkConnectorConfig.PARTITIONER_MAX_OPEN_FILES_CONFIG);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     rotateIntervalMs = connectorConfig.getLong(S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
     if (rotateIntervalMs > 0 && timestampExtractor == null) {
@@ -420,6 +424,17 @@ public class TopicPartitionWriter {
       return true;
     }
 
+    if (rotateOnFieldPartitioner()) {
+      fileRotationTracker.incrementRotationByPartitionerMaxFilesCount(encodedPartition);
+      log.info(
+          "Starting commit and rotation for topic partition {} with start offset {}",
+          tp,
+          startOffsets
+      );
+      nextState();
+      return true;
+    }
+
     SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
     boolean validRecord = writeRecord(projectedRecord, encodedPartition, record);
     buffer.poll();
@@ -440,6 +455,19 @@ public class TopicPartitionWriter {
     }
 
     return false;
+  }
+
+  private boolean rotateOnFieldPartitioner() {
+    if (!(partitioner instanceof FieldPartitioner) || partitionerMaxOpenFiles == -1) {
+      return false;
+    }
+
+    boolean rotate = !commitFiles.containsKey(currentEncodedPartition)
+        && commitFiles.size() > partitionerMaxOpenFiles;
+    log.trace("Should apply field partitioner rotation for topic-partition '{}': "
+            + "(partitionerMaxOpenFiles: '{}', commitFiles.size(): '{}')? {}",
+        tp, partitionerMaxOpenFiles, commitFiles.size(), rotate);
+    return rotate;
   }
 
   private void commitOnTimeIfNoData(long now) {
