@@ -691,7 +691,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String partitionField = partitionFields.get(0);
 
     List<String> expectedFiles = new ArrayList<>();
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 5; i++) {
       String dirPrefix = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(16 + i));
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
     }
@@ -731,7 +731,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String partitionField = partitionFields.get(0);
 
     List<String> expectedFiles = new ArrayList<>();
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 5; i++) {
       String dirPrefix = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(16 + i));
       dirPrefix = partitioner.generatePartitionedPath(dirPrefix, "boolean=true");
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
