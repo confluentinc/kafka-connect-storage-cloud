@@ -71,7 +71,7 @@ public final class FileRotationTracker {
       rotationByFlushSize++;
     }
 
-    public void incrementRotationByPartitionerMaxFilesCount() {
+    public void incrementRotationByPartitionerMaxOpenFilesCount() {
       rotationByPartitionerMaxFiles++;
     }
 
@@ -103,11 +103,11 @@ public final class FileRotationTracker {
     metrics.get(outputPartition).incrementRotationByFlushSizeCount();
   }
 
-  public void incrementRotationByPartitionerMaxFilesCount(String outputPartition) {
+  public void incrementRotationByPartitionerMaxOpenFilesCount(String outputPartition) {
     if (!metrics.containsKey(outputPartition)) {
       metrics.put(outputPartition, new RotationMetrics());
     }
-    metrics.get(outputPartition).incrementRotationByPartitionerMaxFilesCount();
+    metrics.get(outputPartition).incrementRotationByPartitionerMaxOpenFilesCount();
   }
 
   public void incrementRotationByRotationIntervalCount(String outputPartition) {
