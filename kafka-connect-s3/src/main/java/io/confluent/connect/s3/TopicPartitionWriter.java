@@ -23,7 +23,6 @@ import io.confluent.connect.s3.util.FileRotationTracker;
 import io.confluent.connect.s3.util.RetryUtil;
 import io.confluent.connect.s3.util.TombstoneTimestampExtractor;
 import io.confluent.connect.storage.errors.PartitionException;
-import io.confluent.connect.storage.partitioner.FieldPartitioner;
 import io.confluent.connect.storage.schema.SchemaCompatibilityResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
@@ -424,8 +423,8 @@ public class TopicPartitionWriter {
       return true;
     }
 
-    if (rotateOnFieldPartitioner()) {
-      fileRotationTracker.incrementRotationByPartitionerMaxFilesCount(encodedPartition);
+    if (rotateOnPartitionerMaxOpenFiles(encodedPartition)) {
+      fileRotationTracker.incrementRotationByPartitionerMaxOpenFilesCount(encodedPartition);
       log.info(
           "Starting commit and rotation for topic partition {} with start offset {}",
           tp,
@@ -457,13 +456,13 @@ public class TopicPartitionWriter {
     return false;
   }
 
-  private boolean rotateOnFieldPartitioner() {
-    if (!(partitioner instanceof FieldPartitioner) || partitionerMaxOpenFiles == -1) {
+  private boolean rotateOnPartitionerMaxOpenFiles(String encodedPartition) {
+    if (partitionerMaxOpenFiles == -1) {
       return false;
     }
 
-    boolean rotate = !commitFiles.containsKey(currentEncodedPartition)
-        && commitFiles.size() > partitionerMaxOpenFiles;
+    boolean rotate = !commitFiles.containsKey(encodedPartition)
+        && commitFiles.size() == partitionerMaxOpenFiles;
     log.trace("Should apply field partitioner rotation for topic-partition '{}': "
             + "(partitionerMaxOpenFiles: '{}', commitFiles.size(): '{}')? {}",
         tp, partitionerMaxOpenFiles, commitFiles.size(), rotate);
