@@ -463,7 +463,7 @@ public class TopicPartitionWriter {
 
     boolean rotate = !commitFiles.containsKey(encodedPartition)
         && commitFiles.size() == partitionerMaxOpenFiles;
-    log.trace("Should apply field partitioner rotation for topic-partition '{}': "
+    log.trace("Should apply rotation on max open files for topic-partition '{}': "
             + "(partitionerMaxOpenFiles: '{}', commitFiles.size(): '{}')? {}",
         tp, partitionerMaxOpenFiles, commitFiles.size(), rotate);
     return rotate;
