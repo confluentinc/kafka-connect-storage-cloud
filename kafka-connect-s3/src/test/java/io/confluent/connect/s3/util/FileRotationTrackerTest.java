@@ -17,13 +17,14 @@ public class FileRotationTrackerTest {
     FileRotationTracker fileRotationTracker = new FileRotationTracker();
     fileRotationTracker.incrementRotationByRotationIntervalCount(FILE_1);
     fileRotationTracker.incrementRotationByFlushSizeCount(FILE_2);
+    fileRotationTracker.incrementRotationByPartitionerMaxOpenFilesCount(FILE_2);
     fileRotationTracker
         .incrementRotationBySchemaChangeCount(FILE_3, SchemaIncompatibilityType.DIFFERENT_VERSION);
     fileRotationTracker.incrementRotationByFlushSizeCount(FILE_1);
     String actual = fileRotationTracker.toString();
-    String expected = "OutputPartition: file2, RotationByInterval: 0, RotationByScheduledInterval: 0, RotationByFlushSize: 1, RotationByDiffName: 0, RotationByDiffSchema: 0, RotationByDiffType: 0, RotationByDiffVersion: 0, RotationByDiffParams: 0, RotationByNullSchema: 0\n"
-        + "OutputPartition: file3, RotationByInterval: 0, RotationByScheduledInterval: 0, RotationByFlushSize: 0, RotationByDiffName: 0, RotationByDiffSchema: 0, RotationByDiffType: 0, RotationByDiffVersion: 1, RotationByDiffParams: 0, RotationByNullSchema: 0\n"
-        + "OutputPartition: file1, RotationByInterval: 1, RotationByScheduledInterval: 0, RotationByFlushSize: 1, RotationByDiffName: 0, RotationByDiffSchema: 0, RotationByDiffType: 0, RotationByDiffVersion: 0, RotationByDiffParams: 0, RotationByNullSchema: 0\n";
+    String expected = "OutputPartition: file2, RotationByInterval: 0, RotationByScheduledInterval: 0, RotationByFlushSize: 1, RotationByPartitionerMaxFiles: 1, RotationByDiffName: 0, RotationByDiffSchema: 0, RotationByDiffType: 0, RotationByDiffVersion: 0, RotationByDiffParams: 0, RotationByNullSchema: 0\n"
+        + "OutputPartition: file3, RotationByInterval: 0, RotationByScheduledInterval: 0, RotationByFlushSize: 0, RotationByPartitionerMaxFiles: 0, RotationByDiffName: 0, RotationByDiffSchema: 0, RotationByDiffType: 0, RotationByDiffVersion: 1, RotationByDiffParams: 0, RotationByNullSchema: 0\n"
+        + "OutputPartition: file1, RotationByInterval: 1, RotationByScheduledInterval: 0, RotationByFlushSize: 1, RotationByPartitionerMaxFiles: 0, RotationByDiffName: 0, RotationByDiffSchema: 0, RotationByDiffType: 0, RotationByDiffVersion: 0, RotationByDiffParams: 0, RotationByNullSchema: 0\n";
     Assert.assertEquals(expected, actual);
   }
 
@@ -32,13 +33,14 @@ public class FileRotationTrackerTest {
     FileRotationTracker fileRotationTracker = new FileRotationTracker();
     fileRotationTracker.incrementRotationByRotationIntervalCount(FILE_1);
     fileRotationTracker.incrementRotationByFlushSizeCount(FILE_2);
+    fileRotationTracker.incrementRotationByPartitionerMaxOpenFilesCount(FILE_3);
     fileRotationTracker
         .incrementRotationBySchemaChangeCount(FILE_3, SchemaIncompatibilityType.DIFFERENT_VERSION);
     fileRotationTracker.incrementRotationByFlushSizeCount(FILE_1);
     String actual = fileRotationTracker.toString();
-    String expected = "OutputPartition: file2, RotationByInterval: 0, RotationByScheduledInterval: 0, RotationByFlushSize: 1, RotationByDiffName: 0, RotationByDiffSchema: 0, RotationByDiffType: 0, RotationByDiffVersion: 0, RotationByDiffParams: 0, RotationByNullSchema: 0\n"
-        + "OutputPartition: file3, RotationByInterval: 0, RotationByScheduledInterval: 0, RotationByFlushSize: 0, RotationByDiffName: 0, RotationByDiffSchema: 0, RotationByDiffType: 0, RotationByDiffVersion: 1, RotationByDiffParams: 0, RotationByNullSchema: 0\n"
-        + "OutputPartition: file1, RotationByInterval: 1, RotationByScheduledInterval: 0, RotationByFlushSize: 1, RotationByDiffName: 0, RotationByDiffSchema: 0, RotationByDiffType: 0, RotationByDiffVersion: 0, RotationByDiffParams: 0, RotationByNullSchema: 0\n";
+    String expected = "OutputPartition: file2, RotationByInterval: 0, RotationByScheduledInterval: 0, RotationByFlushSize: 1, RotationByPartitionerMaxFiles: 0, RotationByDiffName: 0, RotationByDiffSchema: 0, RotationByDiffType: 0, RotationByDiffVersion: 0, RotationByDiffParams: 0, RotationByNullSchema: 0\n"
+        + "OutputPartition: file3, RotationByInterval: 0, RotationByScheduledInterval: 0, RotationByFlushSize: 0, RotationByPartitionerMaxFiles: 1, RotationByDiffName: 0, RotationByDiffSchema: 0, RotationByDiffType: 0, RotationByDiffVersion: 1, RotationByDiffParams: 0, RotationByNullSchema: 0\n"
+        + "OutputPartition: file1, RotationByInterval: 1, RotationByScheduledInterval: 0, RotationByFlushSize: 1, RotationByPartitionerMaxFiles: 0, RotationByDiffName: 0, RotationByDiffSchema: 0, RotationByDiffType: 0, RotationByDiffVersion: 0, RotationByDiffParams: 0, RotationByNullSchema: 0\n";
     Assert.assertEquals(expected, actual);
     fileRotationTracker.clear();
     actual = fileRotationTracker.toString();
