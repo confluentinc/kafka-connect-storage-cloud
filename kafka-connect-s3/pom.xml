@@ -21,7 +21,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-cloud</artifactId>
-        <version>10.6.7</version>
+        <version>10.6.8-SNAPSHOT</version>
     </parent>
 
     <artifactId>kafka-connect-s3</artifactId>
