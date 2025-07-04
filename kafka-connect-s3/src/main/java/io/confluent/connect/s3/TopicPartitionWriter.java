@@ -18,6 +18,7 @@ package io.confluent.connect.s3;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import io.confluent.connect.s3.errors.FileExistsException;
+import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileRotationTracker;
 import io.confluent.connect.s3.util.RetryUtil;
@@ -101,6 +102,8 @@ public class TopicPartitionWriter {
 
   // VisibleForTesting
   Map<Long, String> offsetToFilenameMap;
+  Map<Long, String> offsetToKeyFilenameMap;
+  Map<Long, String> offsetToHeaderFilenameMap;
 
   private final Map<String, Long> startOffsets;
   private final Map<String, Long> endOffsets;
@@ -214,6 +217,8 @@ public class TopicPartitionWriter {
     writeDeadline = Long.MAX_VALUE;
 
     offsetToFilenameMap = new HashMap<>();
+    offsetToKeyFilenameMap = new HashMap<>();
+    offsetToHeaderFilenameMap = new HashMap<>();
 
     // Initialize scheduled rotation timer if applicable
     setNextScheduledRotation();
@@ -334,6 +339,10 @@ public class TopicPartitionWriter {
 
         if (offsetToFilenameMap.size() < connectorConfig.getInt(MAX_FILE_SCAN_LIMIT_CONFIG)) {
           offsetToFilenameMap.put(record.kafkaOffset(), getCommitFilename(record));
+          offsetToKeyFilenameMap.put(record.kafkaOffset(),
+              ((KeyValueHeaderRecordWriterProvider) writerProvider).getKeyFilename(getCommitFilename(record)));
+          offsetToKeyFilenameMap.put(record.kafkaOffset(),
+              ((KeyValueHeaderRecordWriterProvider)writerProvider).getHeaderFilename(getCommitFilename(record)));
         }
 
         Schema currentValueSchema = currentSchemas.get(encodedPartition);
@@ -794,6 +803,9 @@ public class TopicPartitionWriter {
     commitFiles.clear();
     currentSchemas.clear();
     offsetToFilenameMap.clear();
+    offsetToKeyFilenameMap.clear();
+    offsetToHeaderFilenameMap.clear();
+
 
     recordCount = 0;
     baseRecordTimestamp = null;
@@ -840,7 +852,11 @@ public class TopicPartitionWriter {
               + "Considering {} as next offset to process from", startOffset, startOffset);
           return startOffset;
         }
-        if (!storage.exists(offsetToFilenameMap.get(startOffset))) {
+        if (!storage.exists(offsetToFilenameMap.get(startOffset))
+            || (offsetToKeyFilenameMap.get(startOffset) != null
+            && !storage.exists(offsetToKeyFilenameMap.get(startOffset)))
+            || (offsetToHeaderFilenameMap.get(startOffset) != null
+            && !storage.exists(offsetToHeaderFilenameMap.get(startOffset)))) {
           log.info("File {} does not exist in S3. Next target offset to reset to is {}",
               offsetToFilenameMap.get(startOffset), startOffset);
           return startOffset;
