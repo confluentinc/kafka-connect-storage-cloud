@@ -27,4 +27,8 @@ public class RecordViewSetter {
     this.recordView = requireNonNull(recordView);
   }
 
+  public RecordView getRecordView() {
+    return this.recordView;
+  }
+
 }

@@ -90,7 +90,7 @@ public class S3SinkTask extends SinkTask {
     this.time = time;
 
     url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
-    writerProvider = this.format.getRecordWriterProvider();
+    writerProvider = new KeyValueHeaderRecordWriterProvider(this.format.getRecordWriterProvider(), null, null);
 
     open(context.assignment());
     log.info("Started S3 connector task with assigned partitions {}",

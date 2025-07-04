@@ -21,6 +21,8 @@ import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 import static java.util.Objects.requireNonNull;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.s3.errors.FileExistsException;
+import io.confluent.connect.s3.util.Utils;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import java.util.Optional;
@@ -66,7 +68,7 @@ public class KeyValueHeaderRecordWriterProvider
   }
 
   @Override
-  public RecordWriter getRecordWriter(S3SinkConnectorConfig conf, String filename) {
+  public RecordWriter getRecordWriter(S3SinkConnectorConfig conf, final String filename) {
     // Remove extension to allow different formats for value, key and headers.
     // Each provider will add its own extension. The filename comes in with the value file format,
     // e.g. filename.avro, but when the format class is different for the key or the headers the
@@ -136,10 +138,54 @@ public class KeyValueHeaderRecordWriterProvider
 
       @Override
       public void commit() {
-        valueWriter.ifPresent(RecordWriter::commit);
-        keyWriter.ifPresent(RecordWriter::commit);
-        headerWriter.ifPresent(RecordWriter::commit);
+        boolean commitSuccessful = true;
+        if (valueWriter.isPresent()) {
+          commitSuccessful &= commitWriter(valueWriter.get());
+        }
+        if (keyWriter.isPresent()) {
+          commitSuccessful &= commitWriter(keyWriter.get());
+        }
+        if (headerWriter.isPresent()) {
+          commitSuccessful &= commitWriter(headerWriter.get());
+        }
+        if (!commitSuccessful) {
+          throw new FileExistsException("File already exists 2");
+        }
+      }
+
+      private boolean commitWriter(RecordWriter recordWriter) {
+        try {
+          recordWriter.commit();
+          return true;
+        } catch (FileExistsException e) {
+          log.error("Failed to write file due to {}", e);
+          return false;
+        }
       }
     };
+  }
+
+  public String getKeyFilename(String filename) {
+    if (keyProvider == null) {
+      return null;
+    }
+    String strippedFilename = filename.endsWith(valueProvider.getExtension())
+        ? filename.substring(0, filename.length() - valueProvider.getExtension().length())
+        : filename;
+    return Utils.getAdjustedFilename(
+        ((RecordViewSetter) keyProvider).getRecordView(), strippedFilename,
+        valueProvider.getExtension());
+  }
+
+  public String getHeaderFilename(String filename) {
+    if (headerProvider == null) {
+      return null;
+    }
+    String strippedFilename = filename.endsWith(valueProvider.getExtension())
+        ? filename.substring(0, filename.length() - valueProvider.getExtension().length())
+        : filename;
+    return Utils.getAdjustedFilename(
+        ((RecordViewSetter) headerProvider).getRecordView(), strippedFilename,
+        valueProvider.getExtension());
   }
 }
