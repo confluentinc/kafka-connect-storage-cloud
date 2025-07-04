@@ -157,7 +157,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
 
     Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
-    writerProvider = format.getRecordWriterProvider();
+    writerProvider = new KeyValueHeaderRecordWriterProvider(format.getRecordWriterProvider(), null, null);
     extension = writerProvider.getExtension();
   }
 
@@ -177,7 +177,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     format = new AvroFormat(storage);
 
     Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
-    writerProvider = format.getRecordWriterProvider();
+    writerProvider = new KeyValueHeaderRecordWriterProvider(format.getRecordWriterProvider(), null, null);
     extension = writerProvider.getExtension();
   }
 
@@ -201,7 +201,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
 
     Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
-    writerProvider = format.getRecordWriterProvider();
+    writerProvider = new KeyValueHeaderRecordWriterProvider(format.getRecordWriterProvider(), null, null);
     extension = writerProvider.getExtension();
   }
 
@@ -2272,7 +2272,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     Format<S3SinkConnectorConfig, String> myFormat = new JsonFormat(storage);
-    writerProvider = myFormat.getRecordWriterProvider();
+    writerProvider = new KeyValueHeaderRecordWriterProvider(myFormat.getRecordWriterProvider(), null, null);
     extension = writerProvider.getExtension();
 
     parsedConfig.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, affixType.name());
