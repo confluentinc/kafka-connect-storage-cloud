@@ -15,6 +15,7 @@ import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_KEYS_HEADERS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.HEADERS_FORMAT_CLASS_CONFIG;
 import static org.junit.Assert.assertEquals;
 
@@ -112,6 +113,7 @@ public class S3SinkConditionalWriteIT extends BaseConnectorIT {
     props.put("s3.region", "us-west-1");
     props.put(ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "60000");
     props.put(ENABLE_CONDITIONAL_WRITES_CONFIG, "true");
+    props.put(ENABLE_CONDITIONAL_WRITES_KEYS_HEADERS_CONFIG, "true");
 
     props.put(STORE_KAFKA_HEADERS_CONFIG, String.valueOf(storeHeaders));
     props.put(STORE_KAFKA_KEYS_CONFIG, String.valueOf(storeKeys));
