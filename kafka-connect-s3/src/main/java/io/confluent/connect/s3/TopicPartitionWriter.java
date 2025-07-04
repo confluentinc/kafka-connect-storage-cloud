@@ -340,9 +340,11 @@ public class TopicPartitionWriter {
         if (offsetToFilenameMap.size() < connectorConfig.getInt(MAX_FILE_SCAN_LIMIT_CONFIG)) {
           offsetToFilenameMap.put(record.kafkaOffset(), getCommitFilename(record));
           offsetToKeyFilenameMap.put(record.kafkaOffset(),
-              ((KeyValueHeaderRecordWriterProvider) writerProvider).getKeyFilename(getCommitFilename(record)));
+              ((KeyValueHeaderRecordWriterProvider) writerProvider)
+                  .getKeyFilename(getCommitFilename(record)));
           offsetToKeyFilenameMap.put(record.kafkaOffset(),
-              ((KeyValueHeaderRecordWriterProvider)writerProvider).getHeaderFilename(getCommitFilename(record)));
+              ((KeyValueHeaderRecordWriterProvider)writerProvider)
+                  .getHeaderFilename(getCommitFilename(record)));
         }
 
         Schema currentValueSchema = currentSchemas.get(encodedPartition);
@@ -852,11 +854,9 @@ public class TopicPartitionWriter {
               + "Considering {} as next offset to process from", startOffset, startOffset);
           return startOffset;
         }
-        if (!storage.exists(offsetToFilenameMap.get(startOffset))
-            || (offsetToKeyFilenameMap.get(startOffset) != null
-            && !storage.exists(offsetToKeyFilenameMap.get(startOffset)))
-            || (offsetToHeaderFilenameMap.get(startOffset) != null
-            && !storage.exists(offsetToHeaderFilenameMap.get(startOffset)))) {
+        if (!fileExists(offsetToFilenameMap.get(startOffset))
+            && !fileExists(offsetToKeyFilenameMap.get(startOffset))
+            && !fileExists(offsetToHeaderFilenameMap.get(startOffset))) {
           log.info("File {} does not exist in S3. Next target offset to reset to is {}",
               offsetToFilenameMap.get(startOffset), startOffset);
           return startOffset;
@@ -873,6 +873,10 @@ public class TopicPartitionWriter {
     } while (startOffset < targetEndOffset);
     log.info("Max scanning limit reached. Resetting offset to {}", targetEndOffset);
     return targetEndOffset;
+  }
+
+  private boolean fileExists(String key) {
+    return key != null && storage.exists(key);
   }
 
   private void tagFile(
