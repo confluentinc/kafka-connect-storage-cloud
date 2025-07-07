@@ -41,6 +41,10 @@ import org.slf4j.LoggerFactory;
 public class KeyValueHeaderRecordWriterProvider
     implements RecordWriterProvider<S3SinkConnectorConfig> {
 
+  private enum RecordView {
+    VALUE, KEY, HEADER
+  }
+
   private static final Logger log =
       LoggerFactory.getLogger(KeyValueHeaderRecordWriterProvider.class);
 
@@ -140,25 +144,26 @@ public class KeyValueHeaderRecordWriterProvider
       public void commit() {
         boolean commitSuccessful = true;
         if (valueWriter.isPresent()) {
-          commitSuccessful &= commitWriter(valueWriter.get());
+          commitSuccessful &= commitWriter(valueWriter.get(), RecordView.VALUE);
         }
         if (keyWriter.isPresent()) {
-          commitSuccessful &= commitWriter(keyWriter.get());
+          commitSuccessful &= commitWriter(keyWriter.get(), RecordView.KEY);
         }
         if (headerWriter.isPresent()) {
-          commitSuccessful &= commitWriter(headerWriter.get());
+          commitSuccessful &= commitWriter(headerWriter.get(), RecordView.HEADER);
         }
         if (!commitSuccessful) {
-          throw new FileExistsException("File already exists 2");
+          throw new FileExistsException("File already exists");
         }
       }
 
-      private boolean commitWriter(RecordWriter recordWriter) {
+      private boolean commitWriter(RecordWriter recordWriter, RecordView recordView) {
         try {
+          log.debug("Committing the data buffered in {} writer", recordView.name().toLowerCase());
           recordWriter.commit();
           return true;
         } catch (FileExistsException e) {
-          log.error("Failed to write file due to {}", e);
+          log.error("Failed to write {} file", recordView.name().toLowerCase(), e);
           return false;
         }
       }
@@ -173,7 +178,7 @@ public class KeyValueHeaderRecordWriterProvider
         ? filename.substring(0, filename.length() - valueProvider.getExtension().length())
         : filename;
     return Utils.getAdjustedFilename(
-        ((RecordViewSetter) keyProvider).getRecordView(), strippedFilename,
+        ((RecordViewWrapper) keyProvider).getRecordView(), strippedFilename,
         keyProvider.getExtension());
   }
 
@@ -185,7 +190,7 @@ public class KeyValueHeaderRecordWriterProvider
         ? filename.substring(0, filename.length() - valueProvider.getExtension().length())
         : filename;
     return Utils.getAdjustedFilename(
-        ((RecordViewSetter) headerProvider).getRecordView(), strippedFilename,
+        ((RecordViewWrapper) headerProvider).getRecordView(), strippedFilename,
         headerProvider.getExtension());
   }
 }

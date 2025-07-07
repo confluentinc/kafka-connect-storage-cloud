@@ -26,7 +26,7 @@ import com.google.common.collect.ImmutableSet;
 import io.confluent.common.utils.SystemTime;
 import io.confluent.connect.s3.errors.FileExistsException;
 import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
-import io.confluent.connect.s3.format.RecordViewSetter;
+import io.confluent.connect.s3.format.RecordViewWrapper;
 import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
 import io.confluent.connect.s3.format.json.JsonFormat;
@@ -2376,11 +2376,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // setup key record provider for writing record key files.
     RecordWriterProvider<S3SinkConnectorConfig> keyWriterProvider =
         new AvroFormat(storage).getRecordWriterProvider();
-    ((RecordViewSetter) keyWriterProvider).setRecordView(new KeyRecordView());
+    ((RecordViewWrapper) keyWriterProvider).setRecordView(new KeyRecordView());
     // setup header record provider for writing record header files.
     RecordWriterProvider<S3SinkConnectorConfig> headerWriterProvider =
         new AvroFormat(storage).getRecordWriterProvider();
-    ((RecordViewSetter) headerWriterProvider).setRecordView(new HeaderRecordView());
+    ((RecordViewWrapper) headerWriterProvider).setRecordView(new HeaderRecordView());
     // initialize the KVHWriterProvider with header and key writers turned on.
     return new KeyValueHeaderRecordWriterProvider(
         new AvroFormat(storage).getRecordWriterProvider(),
@@ -2393,7 +2393,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // setup header record provider for writing record header files.
     RecordWriterProvider<S3SinkConnectorConfig> headerWriterProvider =
         new JsonFormat(storage).getRecordWriterProvider();
-    ((RecordViewSetter) headerWriterProvider).setRecordView(new HeaderRecordView());
+    ((RecordViewWrapper) headerWriterProvider).setRecordView(new HeaderRecordView());
     // initialize the KVHWriterProvider with header and key writers turned on.
     return new KeyValueHeaderRecordWriterProvider(
         new AvroFormat(storage).getRecordWriterProvider(),

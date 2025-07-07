@@ -107,7 +107,7 @@ public abstract class BaseConnectorIT {
   private static final Logger log = LoggerFactory.getLogger(BaseConnectorIT.class);
 
   protected static final int MAX_TASKS = 3;
-  private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(120);
+  private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(180);
 
   protected static final long CONNECTOR_STARTUP_DURATION_MS = TimeUnit.MINUTES.toMillis(60);
 

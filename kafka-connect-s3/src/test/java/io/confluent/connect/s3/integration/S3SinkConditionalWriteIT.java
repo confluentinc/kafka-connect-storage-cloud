@@ -1,6 +1,5 @@
 package io.confluent.connect.s3.integration;
 
-import io.confluent.connect.s3.S3SinkConnector;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.EmbeddedConnectUtils;
@@ -39,9 +38,7 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -69,7 +66,7 @@ public class S3SinkConditionalWriteIT extends BaseConnectorIT {
   public boolean storeKeys;
 
   @Parameterized.Parameter(2)
-  public List<DummyFileWriter> fileWriters;
+  public List<FileWriter> fileWriters;
 
   @Parameterized.Parameter(3)
   public List<String>[] expectedFileNames;
@@ -137,14 +134,14 @@ public class S3SinkConditionalWriteIT extends BaseConnectorIT {
   }
 
   @FunctionalInterface
-  public interface DummyFileWriter<T> {
-    void write(T t);
+  public interface FileWriter {
+    void write();
   }
 
   @Test
   public void testConditionalWrites() throws Exception {
 
-    fileWriters.forEach( writer -> writer.write(null));
+    fileWriters.forEach( writer -> writer.write());
 
     // Start connector
     connect.configureConnector(CONNECTOR_NAME, props);
@@ -163,7 +160,7 @@ public class S3SinkConditionalWriteIT extends BaseConnectorIT {
     // Validate files in S3
     waitForFilesInBucket(TEST_BUCKET_NAME, expectedFiles.size());
     assertFileNamesValid(TEST_BUCKET_NAME, expectedFiles);
-    assertEquals(expectedRecordCount, countNumberOfRecords(TEST_BUCKET_NAME)); // 1 duplicate record will be present in the seed file, 2 duplicate record will be present in key file
+    assertEquals(expectedRecordCount, countNumberOfRecords(TEST_BUCKET_NAME));
   }
 
   protected static List<String> getExpectedFilenames(
@@ -219,19 +216,19 @@ public class S3SinkConditionalWriteIT extends BaseConnectorIT {
     return expectedFilenames;
   }
 
-  private static DummyFileWriter keyWriter = new FileWriter("topics/%s/partition=0/%s+0+0000000000.keys.json");
-  private static DummyFileWriter valueWriter = new FileWriter("topics/%s/partition=0/%s+0+0000000000.json");
-  private static DummyFileWriter headerWriter = new FileWriter("topics/%s/partition=0/%s+0+0000000000.headers.json");
+  private static FileWriter keyWriter = new DummyFileWriter("topics/%s/partition=0/%s+0+0000000000.keys.json");
+  private static FileWriter valueWriter = new DummyFileWriter("topics/%s/partition=0/%s+0+0000000000.json");
+  private static FileWriter headerWriter = new DummyFileWriter("topics/%s/partition=0/%s+0+0000000000.headers.json");
 
-  static class FileWriter implements DummyFileWriter {
+  static class DummyFileWriter implements FileWriter {
     private final String key;
 
-    public FileWriter(String key) {
+    public DummyFileWriter(String key) {
       this.key = key;
     }
 
     @Override
-    public void write(Object o) {
+    public void write() {
       String keyFilename = String.format(key, DEFAULT_TEST_TOPIC_NAME, DEFAULT_TEST_TOPIC_NAME);
       writeDummyFile(keyFilename);
     }
