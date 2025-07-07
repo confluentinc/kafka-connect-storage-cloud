@@ -342,7 +342,7 @@ public class TopicPartitionWriter {
           offsetToKeyFilenameMap.put(record.kafkaOffset(),
               ((KeyValueHeaderRecordWriterProvider) writerProvider)
                   .getKeyFilename(getCommitFilename(record)));
-          offsetToKeyFilenameMap.put(record.kafkaOffset(),
+          offsetToHeaderFilenameMap.put(record.kafkaOffset(),
               ((KeyValueHeaderRecordWriterProvider)writerProvider)
                   .getHeaderFilename(getCommitFilename(record)));
         }
@@ -854,9 +854,9 @@ public class TopicPartitionWriter {
               + "Considering {} as next offset to process from", startOffset, startOffset);
           return startOffset;
         }
-        if (!fileExists(offsetToFilenameMap.get(startOffset))
-            && !fileExists(offsetToKeyFilenameMap.get(startOffset))
-            && !fileExists(offsetToHeaderFilenameMap.get(startOffset))) {
+        if (!(fileExists(offsetToFilenameMap.get(startOffset))
+            && fileExists(offsetToKeyFilenameMap.get(startOffset))
+            && fileExists(offsetToHeaderFilenameMap.get(startOffset)))) {
           log.info("File {} does not exist in S3. Next target offset to reset to is {}",
               offsetToFilenameMap.get(startOffset), startOffset);
           return startOffset;
@@ -876,7 +876,7 @@ public class TopicPartitionWriter {
   }
 
   private boolean fileExists(String key) {
-    return key != null && storage.exists(key);
+    return key == null || storage.exists(key);
   }
 
   private void tagFile(

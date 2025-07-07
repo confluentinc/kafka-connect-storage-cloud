@@ -174,7 +174,7 @@ public class KeyValueHeaderRecordWriterProvider
         : filename;
     return Utils.getAdjustedFilename(
         ((RecordViewSetter) keyProvider).getRecordView(), strippedFilename,
-        valueProvider.getExtension());
+        keyProvider.getExtension());
   }
 
   public String getHeaderFilename(String filename) {
@@ -186,6 +186,6 @@ public class KeyValueHeaderRecordWriterProvider
         : filename;
     return Utils.getAdjustedFilename(
         ((RecordViewSetter) headerProvider).getRecordView(), strippedFilename,
-        valueProvider.getExtension());
+        headerProvider.getExtension());
   }
 }
