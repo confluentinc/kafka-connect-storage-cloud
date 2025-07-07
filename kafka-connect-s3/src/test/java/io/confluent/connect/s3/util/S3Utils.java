@@ -6,12 +6,8 @@ import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.util.stream.Collectors;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
-
 
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 public class S3Utils {
     private static final Logger log = LoggerFactory.getLogger(S3Utils.class);
@@ -45,7 +41,6 @@ public class S3Utils {
      */
     private static Optional<Boolean> assertFileCountInBucket(AmazonS3 s3, String bucketName, int expectedNumFiles) {
         try {
-            log.info("File count in S3 {}, expected {}", getBucketFileCount(s3, bucketName), expectedNumFiles);
             return Optional.of(getBucketFileCount(s3, bucketName) == expectedNumFiles);
         } catch (Exception e) {
             log.warn("Could not check file count in bucket: {}", bucketName);

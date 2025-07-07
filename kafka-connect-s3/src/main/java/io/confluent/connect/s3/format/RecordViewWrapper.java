@@ -20,7 +20,7 @@ import io.confluent.connect.s3.format.RecordViews.ValueRecordView;
 
 import static java.util.Objects.requireNonNull;
 
-public class RecordViewSetter {
+public class RecordViewWrapper {
   protected RecordView recordView = new ValueRecordView();
 
   public void setRecordView(RecordView recordView) {

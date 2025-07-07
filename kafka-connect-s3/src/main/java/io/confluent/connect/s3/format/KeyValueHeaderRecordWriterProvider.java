@@ -173,7 +173,7 @@ public class KeyValueHeaderRecordWriterProvider
         ? filename.substring(0, filename.length() - valueProvider.getExtension().length())
         : filename;
     return Utils.getAdjustedFilename(
-        ((RecordViewSetter) keyProvider).getRecordView(), strippedFilename,
+        ((RecordViewWrapper) keyProvider).getRecordView(), strippedFilename,
         keyProvider.getExtension());
   }
 
@@ -185,7 +185,7 @@ public class KeyValueHeaderRecordWriterProvider
         ? filename.substring(0, filename.length() - valueProvider.getExtension().length())
         : filename;
     return Utils.getAdjustedFilename(
-        ((RecordViewSetter) headerProvider).getRecordView(), strippedFilename,
+        ((RecordViewWrapper) headerProvider).getRecordView(), strippedFilename,
         headerProvider.getExtension());
   }
 }

@@ -28,8 +28,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
 
-import java.util.Collections;
-
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -286,7 +284,7 @@ public class KeyValueHeaderWriterProviderTest {
     assertNull(headerFilename);
   }
 
-  class TestKeyHeaderProvider extends RecordViewSetter
+  class TestKeyHeaderProvider extends RecordViewWrapper
       implements RecordWriterProvider<S3SinkConnectorConfig> {
     String extension;
     RecordView recordView;
