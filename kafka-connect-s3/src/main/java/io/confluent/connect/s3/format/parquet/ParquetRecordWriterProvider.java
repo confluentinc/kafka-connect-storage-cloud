@@ -23,7 +23,7 @@ import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.storage.IORecordWriter;
-import io.confluent.connect.s3.format.RecordViewSetter;
+import io.confluent.connect.s3.format.RecordViewWrapper;
 import io.confluent.connect.s3.format.S3RetriableRecordWriter;
 import io.confluent.connect.s3.storage.S3ParquetOutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
@@ -46,7 +46,7 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 
-public class ParquetRecordWriterProvider extends RecordViewSetter
+public class ParquetRecordWriterProvider extends RecordViewWrapper
     implements RecordWriterProvider<S3SinkConnectorConfig> {
   private static final Logger log = LoggerFactory.getLogger(ParquetRecordWriterProvider.class);
   private static final String EXTENSION = ".parquet";
