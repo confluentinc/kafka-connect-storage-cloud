@@ -434,7 +434,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
       List<String> validSsea = new ArrayList<>(ServerSideEncryption.values().length + 1);
       validSsea.add("");
-      for (ServerSideEncryption algo : ServerSideEncryption.values()) {
+      for (ServerSideEncryption algo : ServerSideEncryption.knownValues()) {
         validSsea.add(algo.toString());
       }
       configDef.define(
@@ -916,7 +916,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   public ObjectCannedACL getCannedAcl() {
-    return CannedAclValidator.ACLS_BY_HEADER_VALUE.get(getString(ACL_CANNED_CONFIG));
+    return ObjectCannedACL.fromValue(getString(ACL_CANNED_CONFIG));
   }
 
   public String awsAccessKeyId() {
@@ -1229,17 +1229,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   private static class CannedAclValidator implements ConfigDef.Validator {
-    public static final Map<String, ObjectCannedACL> ACLS_BY_HEADER_VALUE = new HashMap<>();
-    public static final String ALLOWED_VALUES;
-
-    static {
-      List<String> aclHeaderValues = new ArrayList<>();
-      for (ObjectCannedACL acl : ObjectCannedACL.values()) {
-        ACLS_BY_HEADER_VALUE.put(acl.toString(), acl);
-        aclHeaderValues.add(acl.toString());
-      }
-      ALLOWED_VALUES = Utils.join(aclHeaderValues, ", ");
-    }
 
     @Override
     public void ensureValid(String name, Object cannedAcl) {
@@ -1247,14 +1236,15 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         return;
       }
       String aclStr = ((String) cannedAcl).trim();
-      if (!ACLS_BY_HEADER_VALUE.containsKey(aclStr)) {
-        throw new ConfigException(name, cannedAcl, "Value must be one of: " + ALLOWED_VALUES);
+      if (ObjectCannedACL.UNKNOWN_TO_SDK_VERSION.equals(ObjectCannedACL.fromValue(aclStr))) {
+        throw new ConfigException(name, cannedAcl, "Value must be one of: "
+            + ObjectCannedACL.knownValues());
       }
     }
 
     @Override
     public String toString() {
-      return "[" + ALLOWED_VALUES + "]";
+      return "[" + ObjectCannedACL.knownValues() + "]";
     }
   }
 
@@ -1281,8 +1271,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   private static class SseAlgorithmRecommender implements ConfigDef.Recommender {
     @Override
     public List<Object> validValues(String name, Map<String, Object> connectorConfigs) {
-      List<ServerSideEncryption> list = Arrays.asList(ServerSideEncryption.values());
-      return new ArrayList<Object>(list);
+      return new ArrayList<Object>(ServerSideEncryption.knownValues());
     }
 
     @Override

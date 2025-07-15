@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.services.s3.model.Protocol;
 
 import java.net.MalformedURLException;
 import java.net.URI;
@@ -83,9 +84,11 @@ public class S3ProxyConfig {
 
   public static String extractProtocol(String protocol) {
     if (StringUtils.isBlank(protocol)) {
-      return "https";
+      return Protocol.HTTPS.name();
     }
-    return "http".equals(protocol.trim().toLowerCase(Locale.ROOT)) ? "http" : "https";
+    return "http".equals(protocol.trim().toLowerCase(Locale.ROOT))
+        ? Protocol.HTTP.name()
+        : Protocol.HTTPS.name();
   }
 
   public static String extractUser(String userInfo) {

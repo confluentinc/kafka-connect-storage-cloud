@@ -42,8 +42,10 @@ import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
-import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.PutObjectTaggingRequest;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.http.HttpStatusCode;
 import software.amazon.awssdk.services.s3.model.Tag;
 import software.amazon.awssdk.services.s3.model.Tagging;
 
@@ -75,12 +77,6 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
   private final S3Client s3;
   private final S3SinkConnectorConfig conf;
   private static final String VERSION_FORMAT = "APN/1.0 Confluent/1.0 KafkaS3Connector/%s";
-  //  private static final String VERSION = String.format(VERSION_FORMAT, Version.getVersion());
-
-  //private static AwsRequestOverrideConfiguration requestOverrideConfiguration
-  //    = AwsRequestOverrideConfiguration.builder()
-  //    .addApiName(ApiName.builder().name(VERSION).build()).build();
-
 
   /**
    * Construct an S3 storage class given a configuration and an AWS S3 address.
@@ -191,11 +187,6 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
   protected RetryStrategy newRetryStrategy(S3SinkConnectorConfig conf) {
     return StandardRetryStrategy.builder()
         .maxAttempts(conf.getS3PartRetries())
-        .throttlingBackoffStrategy(
-            new ExponentialDelayWithJitter(
-                Random::new,
-                Duration.ofMillis(conf.getLong(S3_RETRY_BACKOFF_CONFIG).intValue()),
-                S3_RETRY_MAX_BACKOFF_TIME_MS))
         .backoffStrategy(
             new ExponentialDelayWithJitter(
                 Random::new,
@@ -237,16 +228,46 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
 
   @Override
   public boolean exists(String name) {
-    return StringUtils.isNotBlank(name)
-        && s3.headObject(HeadObjectRequest.builder().bucket(bucketName).key(name).build()) != null;
+    if (StringUtils.isBlank(name)) {
+      log.debug("Name can not be empty!");
+      return false;
+    }
+    try {
+      s3.headObject(HeadObjectRequest.builder().bucket(bucketName).key(name).build());
+      return true;
+    } catch (AwsServiceException ase) {
+      // A redirect error or an AccessDenied exception means the bucket exists but it's not in this
+      // region or we don't have permissions to it.
+      if ((ase.statusCode() == HttpStatusCode.MOVED_PERMANENTLY)
+          || "AccessDenied".equals(ase.awsErrorDetails().errorCode())) {
+        return true;
+      }
+      if (ase.statusCode() == HttpStatusCode.NOT_FOUND) {
+        return false;
+      }
+      throw ase;
+    }
   }
 
   public boolean bucketExists() {
-    try {
-      return StringUtils.isNotBlank(bucketName)
-          && s3.headBucket(HeadBucketRequest.builder().bucket(bucketName).build()) != null;
-    } catch (NoSuchBucketException e) {
+    if (StringUtils.isBlank(bucketName)) {
       return false;
+    }
+    try {
+      s3.headBucket(HeadBucketRequest.builder().bucket(bucketName).build());
+      return true;
+    } catch (AwsServiceException ase) {
+      // A redirect error or an AccessDenied exception means the bucket exists but it's not in
+      // this region or we don't have permissions to it.
+      if ((ase.statusCode() == HttpStatusCode.MOVED_PERMANENTLY)
+          || "AccessDenied".equals(ase.awsErrorDetails().errorCode())) {
+        System.out.println("bucket exists " + ase.statusCode());
+      }
+      if (ase.statusCode() == HttpStatusCode.NOT_FOUND) {
+        System.out.println("bucket does not exist " + ase.statusCode());
+
+      }
+      throw ase;
     }
   }
 
@@ -303,7 +324,9 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
   @Override
   public void close() {}
 
-  public void addTags(String fileName, Map<String, String> tags) throws SdkClientException {
+  public void addTags(String fileName, Map<String, String> tags) throws AwsServiceException,
+      SdkClientException,
+      S3Exception {
     Collection<Tag> tagSet = tags.entrySet().stream()
         .map(e -> Tag.builder()
             .key(e.getKey())

@@ -34,6 +34,7 @@
 
     <properties>
         <aws.version>1.12.650</aws.version>
+        <aws.v2.version>2.28.23</aws.v2.version>
         <s3mock.version>0.2.5</s3mock.version>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <parquet.tools.version>1.11.1</parquet.tools.version>
@@ -52,14 +53,14 @@
             <dependency>
                 <groupId>software.amazon.awssdk</groupId>
                 <artifactId>bom</artifactId>
-                <version>2.28.23</version>
+                <version>${aws.v2.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
             <dependency>
                 <groupId>software.amazon.awssdk</groupId>
                 <artifactId>sts</artifactId>
-                <version>2.28.23</version>
+                <version>${aws.v2.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
