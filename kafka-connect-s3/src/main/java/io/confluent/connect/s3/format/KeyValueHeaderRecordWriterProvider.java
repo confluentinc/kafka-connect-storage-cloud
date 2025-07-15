@@ -174,23 +174,23 @@ public class KeyValueHeaderRecordWriterProvider
     if (keyProvider == null) {
       return null;
     }
-    String strippedFilename = filename.endsWith(valueProvider.getExtension())
-        ? filename.substring(0, filename.length() - valueProvider.getExtension().length())
-        : filename;
-    return Utils.getAdjustedFilename(
-        ((RecordViewWrapper) keyProvider).getRecordView(), strippedFilename,
-        keyProvider.getExtension());
+    return getFilename(filename, keyProvider);
   }
 
   public String getHeaderFilename(String filename) {
     if (headerProvider == null) {
       return null;
     }
+    return getFilename(filename, headerProvider);
+  }
+
+  private String getFilename(String filename,
+  RecordWriterProvider<S3SinkConnectorConfig> provider) {
     String strippedFilename = filename.endsWith(valueProvider.getExtension())
         ? filename.substring(0, filename.length() - valueProvider.getExtension().length())
         : filename;
     return Utils.getAdjustedFilename(
-        ((RecordViewWrapper) headerProvider).getRecordView(), strippedFilename,
-        headerProvider.getExtension());
+        ((RecordViewWrapper) provider).getRecordView(), strippedFilename,
+        provider.getExtension());
   }
 }
