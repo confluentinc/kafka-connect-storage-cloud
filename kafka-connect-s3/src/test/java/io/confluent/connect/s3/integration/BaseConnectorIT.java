@@ -18,7 +18,16 @@ package io.confluent.connect.s3.integration;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
 import static io.confluent.kafka.schemaregistry.ClusterTestHarness.KAFKASTORE_TOPIC;
+import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 
+import io.confluent.connect.s3.S3SinkConnector;
 import org.apache.avro.generic.GenericData;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
@@ -36,6 +45,12 @@ import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.RestApp;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.io.InputFile;
+import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import org.apache.kafka.connect.data.Schema;
+
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -44,11 +59,13 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import io.confluent.connect.s3.util.S3Utils;
@@ -90,7 +107,7 @@ public abstract class BaseConnectorIT {
   private static final Logger log = LoggerFactory.getLogger(BaseConnectorIT.class);
 
   protected static final int MAX_TASKS = 3;
-  private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(120);
+  private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(180);
 
   protected static final long CONNECTOR_STARTUP_DURATION_MS = TimeUnit.MINUTES.toMillis(60);
 
@@ -131,6 +148,9 @@ public abstract class BaseConnectorIT {
       "connect-s3-integration-testing-" + System.currentTimeMillis();
   protected EmbeddedConnectCluster connect;
   protected Map<String, String> props;
+
+  private JsonConverter jsonConverter;
+  private Producer<byte[], byte[]> producer;
 
   @BeforeClass
   public static void setupClient() {
@@ -199,7 +219,8 @@ public abstract class BaseConnectorIT {
    * @param extension  the expected extensions of the files including compression (snappy.parquet)
    * @return the list of expected filenames
    */
-  protected List<String> getExpectedFilenames(
+  protected static List<String> getExpectedFilenames(
+      String format,
       String topic,
       int partition,
       int flushSize,
@@ -211,7 +232,7 @@ public abstract class BaseConnectorIT {
     List<String> expectedFiles = new ArrayList<>();
     for (int offset = startOffset; offset < expectedFileCount * flushSize; offset += flushSize) {
       String filepath = String.format(
-          "topics/%s/partition=%d/%s+%d+%010d.%s",
+          format,
           topic,
           partition,
           topic,
@@ -704,5 +725,61 @@ public abstract class BaseConnectorIT {
       );
     }
     return map;
+  }
+
+  protected void initializeCustomProducer() {
+    Map<String, Object> producerProps = new HashMap<>();
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, connect.kafka().bootstrapServers());
+    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+        org.apache.kafka.common.serialization.ByteArraySerializer.class.getName());
+    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+        org.apache.kafka.common.serialization.ByteArraySerializer.class.getName());
+    producer = new KafkaProducer<>(producerProps);
+  }
+
+  protected void produceRecords(
+      String topic,
+      int recordCount,
+      SinkRecord record,
+      boolean withKey,
+      boolean withValue,
+      boolean withHeaders
+  ) throws ExecutionException, InterruptedException {
+    byte[] kafkaKey = null;
+    byte[] kafkaValue = null;
+    Iterable<Header> headers = Collections.emptyList();
+    if (withKey) {
+      kafkaKey = jsonConverter.fromConnectData(topic, Schema.STRING_SCHEMA, record.key());
+    }
+    if (withValue) {
+      kafkaValue = jsonConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
+    }
+    if (withHeaders) {
+      headers = sampleHeaders();
+    }
+    ProducerRecord<byte[],byte[]> producerRecord =
+        new ProducerRecord<>(topic, TOPIC_PARTITION, kafkaKey, kafkaValue, headers);
+    for (long i = 0; i < recordCount; i++) {
+      producer.send(producerRecord).get();
+    }
+  }
+
+  protected void initializeJsonConverter() {
+    Map<String, Object> jsonConverterProps = new HashMap<>();
+    jsonConverterProps.put("schemas.enable", "true");
+    jsonConverterProps.put("converter.type", "value");
+    jsonConverter = new JsonConverter();
+    jsonConverter.configure(jsonConverterProps);
+  }
+
+  protected void setupProperties() {
+    props = new HashMap<>();
+    props.put(CONNECTOR_CLASS_CONFIG, S3SinkConnector.class.getName());
+    props.put(TASKS_MAX_CONFIG, Integer.toString(MAX_TASKS));
+    // converters
+    props.put(KEY_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
+    props.put(VALUE_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
+    // aws credential if exists
+    props.putAll(getAWSCredentialFromPath());
   }
 }

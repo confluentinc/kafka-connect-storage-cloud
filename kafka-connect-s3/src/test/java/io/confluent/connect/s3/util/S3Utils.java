@@ -41,6 +41,7 @@ public class S3Utils {
      */
     private static Optional<Boolean> assertFileCountInBucket(AmazonS3 s3, String bucketName, int expectedNumFiles) {
         try {
+            log.info("File count in S3 {}, expected {}", getBucketFileCount(s3, bucketName), expectedNumFiles);
             return Optional.of(getBucketFileCount(s3, bucketName) == expectedNumFiles);
         } catch (Exception e) {
             log.warn("Could not check file count in bucket: {}", bucketName);

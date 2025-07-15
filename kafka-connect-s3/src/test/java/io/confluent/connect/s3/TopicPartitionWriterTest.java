@@ -26,7 +26,7 @@ import com.google.common.collect.ImmutableSet;
 import io.confluent.common.utils.SystemTime;
 import io.confluent.connect.s3.errors.FileExistsException;
 import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
-import io.confluent.connect.s3.format.RecordViewSetter;
+import io.confluent.connect.s3.format.RecordViewWrapper;
 import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
 import io.confluent.connect.s3.format.json.JsonFormat;
@@ -157,7 +157,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
 
     Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
-    writerProvider = format.getRecordWriterProvider();
+    writerProvider = new KeyValueHeaderRecordWriterProvider(format.getRecordWriterProvider(), null, null);
     extension = writerProvider.getExtension();
   }
 
@@ -177,7 +177,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     format = new AvroFormat(storage);
 
     Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
-    writerProvider = format.getRecordWriterProvider();
+    writerProvider = new KeyValueHeaderRecordWriterProvider(format.getRecordWriterProvider(), null, null);
     extension = writerProvider.getExtension();
   }
 
@@ -201,7 +201,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
 
     Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
-    writerProvider = format.getRecordWriterProvider();
+    writerProvider = new KeyValueHeaderRecordWriterProvider(format.getRecordWriterProvider(), null, null);
     extension = writerProvider.getExtension();
   }
 
@@ -1864,9 +1864,15 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Test write and verify file names populated in offset map
     topicPartitionWriter.write();
     assertEquals(5, topicPartitionWriter.offsetToFilenameMap.size());
+    assertEquals(5, topicPartitionWriter.offsetToKeyFilenameMap.size());
+    assertEquals(5, topicPartitionWriter.offsetToHeaderFilenameMap.size());
+
     String expectedFileFormat = "topics/test-topic/partition=12/test-topic#12#000000000%d.avro";
+    String expectedHeadersFileFormat = "topics/test-topic/partition=12/test-topic#12#000000000%d.headers.json";
     for (long offset = 0; offset < 5; offset++) {
       assertEquals(String.format(expectedFileFormat, offset), topicPartitionWriter.offsetToFilenameMap.get(offset));
+      assertNull(topicPartitionWriter.offsetToKeyFilenameMap.get(offset));
+      assertEquals(String.format(expectedHeadersFileFormat, offset), topicPartitionWriter.offsetToHeaderFilenameMap.get(offset));
     }
 
     for (SinkRecord record : sinkRecords) {
@@ -1876,6 +1882,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Test write and verify file names in offset map cleared on flush
     topicPartitionWriter.write();
     assertTrue(topicPartitionWriter.offsetToFilenameMap.isEmpty());
+    assertTrue(topicPartitionWriter.offsetToKeyFilenameMap.isEmpty());
+    assertTrue(topicPartitionWriter.offsetToHeaderFilenameMap.isEmpty());
   }
 
   private class S3StorageWithConditionalWrite extends S3Storage {
@@ -1923,7 +1931,39 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     }
   }
 
+  @Test
   public void testCommitFileScansForNextAvailableFileWhenFileExists() throws Exception {
+    localProps.put(FLUSH_SIZE_CONFIG, "10");
+    setUp();
+
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3, true);
+
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatch(schema, 10);
+    List<SinkRecord> sinkRecords = createSinkRecordsWithHeaders(records, "key", schema);
+
+    Partitioner<?> partitioner = new DefaultPartitioner();
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, getAvroValueProvider(),  partitioner,  connectorConfig, context, null);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    try {
+      topicPartitionWriter.write();
+    } catch (FileExistsException e) {
+      // Verify start offset has been updated
+      assertEquals(Long.valueOf(3), topicPartitionWriter.currentStartOffset());
+      return;
+    }
+    fail("Unexpected execution. Expecting FileExistsException to have been thrown");
+  }
+
+  @Test
+  public void testCommitFileDoesNotForwardOffsetWhenValueFileExistsAndKeyFileDoesNotExist() throws Exception {
     localProps.put(FLUSH_SIZE_CONFIG, "10");
     setUp();
 
@@ -1939,6 +1979,13 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, getKeyHeaderValueProvider(),  partitioner,  connectorConfig, context, null);
 
+    Set<String> existingFiles =  ImmutableSet.of(
+        "topics_test-topic_partition=12_test-topic#12#0000000000.avro",
+        "topics_test-topic_partition=12_test-topic#12#0000000000.keys.avro",
+        "topics_test-topic_partition=12_test-topic#12#0000000000.headers.avro",
+        "topics_test-topic_partition=12_test-topic#12#0000000001.avro");
+    ((S3StorageWithConditionalWrite)storage).setExistingFiles(existingFiles);
+
     for (SinkRecord record : sinkRecords) {
       topicPartitionWriter.buffer(record);
     }
@@ -1947,7 +1994,86 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       topicPartitionWriter.write();
     } catch (FileExistsException e) {
       // Verify start offset has been updated
-      assertEquals(Long.valueOf(3), topicPartitionWriter.currentStartOffset());
+      assertEquals(Long.valueOf(1), topicPartitionWriter.currentStartOffset());
+      return;
+    }
+    fail("Unexpected execution. Expecting FileExistsException to have been thrown");
+  }
+
+  @Test
+  public void testCommitFileDoesNotForwardOffsetWhenKeyValueFilesExistsAndHeadersFileDoesNotExist() throws Exception {
+    localProps.put(FLUSH_SIZE_CONFIG, "10");
+    setUp();
+
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3, true);
+
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatch(schema, 10);
+    List<SinkRecord> sinkRecords = createSinkRecordsWithHeaders(records, "key", schema);
+
+    Partitioner<?> partitioner = new DefaultPartitioner();
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(),  partitioner,  connectorConfig, context, null);
+
+    Set<String> existingFiles =  ImmutableSet.of(
+        "topics_test-topic_partition=12_test-topic#12#0000000000.avro",
+        "topics_test-topic_partition=12_test-topic#12#0000000000.keys.avro",
+        "topics_test-topic_partition=12_test-topic#12#0000000000.headers.avro",
+        "topics_test-topic_partition=12_test-topic#12#0000000001.avro",
+        "topics_test-topic_partition=12_test-topic#12#0000000001.keys.avro");
+    ((S3StorageWithConditionalWrite)storage).setExistingFiles(existingFiles);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    try {
+      topicPartitionWriter.write();
+    } catch (FileExistsException e) {
+      // Verify start offset has been updated
+      assertEquals(Long.valueOf(1), topicPartitionWriter.currentStartOffset());
+      return;
+    }
+    fail("Unexpected execution. Expecting FileExistsException to have been thrown");
+  }
+
+  @Test
+  public void testCommitFileForwardsOffsetWhenKeyValueHeadersFilesExist() throws Exception {
+    localProps.put(FLUSH_SIZE_CONFIG, "10");
+    setUp();
+
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3, true);
+
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatch(schema, 10);
+    List<SinkRecord> sinkRecords = createSinkRecordsWithHeaders(records, "key", schema);
+
+    Partitioner<?> partitioner = new DefaultPartitioner();
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(),  partitioner,  connectorConfig, context, null);
+
+    Set<String> existingFiles =  ImmutableSet.of(
+        "topics_test-topic_partition=12_test-topic#12#0000000000.avro",
+        "topics_test-topic_partition=12_test-topic#12#0000000000.keys.avro",
+        "topics_test-topic_partition=12_test-topic#12#0000000000.headers.avro",
+        "topics_test-topic_partition=12_test-topic#12#0000000001.avro",
+        "topics_test-topic_partition=12_test-topic#12#0000000001.keys.avro",
+        "topics_test-topic_partition=12_test-topic#12#0000000001.headers.avro");
+    ((S3StorageWithConditionalWrite)storage).setExistingFiles(existingFiles);
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    try {
+      topicPartitionWriter.write();
+    } catch (FileExistsException e) {
+      // Verify start offset has been updated
+      assertEquals(Long.valueOf(2), topicPartitionWriter.currentStartOffset());
       return;
     }
     fail("Unexpected execution. Expecting FileExistsException to have been thrown");
@@ -1999,7 +2125,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(),  partitioner,  connectorConfig, context, null);
+        TOPIC_PARTITION, storage, getAvroValueProvider(),  partitioner,  connectorConfig, context, null);
 
     Set<String> existingFiles = new HashSet<>();
     for (int i = 0; i < 120; i++) {
@@ -2041,7 +2167,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     ErrantRecordReporter mockReporter = mock(ErrantRecordReporter.class);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(),  partitioner,  connectorConfig, context, mockReporter);
+        TOPIC_PARTITION, storage, getAvroValueProvider(),  partitioner,  connectorConfig, context, mockReporter);
 
     Set<String> existingFiles = new HashSet<>();
     for (SinkRecord record : sinkRecords) {
@@ -2087,7 +2213,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     ErrantRecordReporter mockReporter = mock(ErrantRecordReporter.class);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-        TOPIC_PARTITION, storage, getKeyHeaderValueProvider(),  tombstoneSupportedPartitioner,  connectorConfig, context, mockReporter);
+        TOPIC_PARTITION, storage, getAvroValueProvider(),  tombstoneSupportedPartitioner,  connectorConfig, context, mockReporter);
 
     Set<String> existingFiles =  ImmutableSet.of(
         "topics_test-topic_year=2025_month=01_day=22_hour=02_test-topic#12#0000000000.avro",
@@ -2234,15 +2360,27 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     }
   }
 
+  private RecordWriterProvider<S3SinkConnectorConfig> getAvroValueProvider() {
+    // setup value record provider for writing record value files.
+    RecordWriterProvider<S3SinkConnectorConfig> valueWriterProvider =
+        new AvroFormat(storage).getRecordWriterProvider();
+
+    return new KeyValueHeaderRecordWriterProvider(
+        valueWriterProvider,
+        null,
+        null
+    );
+  }
+
   private RecordWriterProvider<S3SinkConnectorConfig> getKeyHeaderValueProvider() {
     // setup key record provider for writing record key files.
     RecordWriterProvider<S3SinkConnectorConfig> keyWriterProvider =
         new AvroFormat(storage).getRecordWriterProvider();
-    ((RecordViewSetter) keyWriterProvider).setRecordView(new KeyRecordView());
+    ((RecordViewWrapper) keyWriterProvider).setRecordView(new KeyRecordView());
     // setup header record provider for writing record header files.
     RecordWriterProvider<S3SinkConnectorConfig> headerWriterProvider =
         new AvroFormat(storage).getRecordWriterProvider();
-    ((RecordViewSetter) headerWriterProvider).setRecordView(new HeaderRecordView());
+    ((RecordViewWrapper) headerWriterProvider).setRecordView(new HeaderRecordView());
     // initialize the KVHWriterProvider with header and key writers turned on.
     return new KeyValueHeaderRecordWriterProvider(
         new AvroFormat(storage).getRecordWriterProvider(),
@@ -2255,7 +2393,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // setup header record provider for writing record header files.
     RecordWriterProvider<S3SinkConnectorConfig> headerWriterProvider =
         new JsonFormat(storage).getRecordWriterProvider();
-    ((RecordViewSetter) headerWriterProvider).setRecordView(new HeaderRecordView());
+    ((RecordViewWrapper) headerWriterProvider).setRecordView(new HeaderRecordView());
     // initialize the KVHWriterProvider with header and key writers turned on.
     return new KeyValueHeaderRecordWriterProvider(
         new AvroFormat(storage).getRecordWriterProvider(),
@@ -2272,7 +2410,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     Format<S3SinkConnectorConfig, String> myFormat = new JsonFormat(storage);
-    writerProvider = myFormat.getRecordWriterProvider();
+    writerProvider = new KeyValueHeaderRecordWriterProvider(myFormat.getRecordWriterProvider(), null, null);
     extension = writerProvider.getExtension();
 
     parsedConfig.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, affixType.name());
