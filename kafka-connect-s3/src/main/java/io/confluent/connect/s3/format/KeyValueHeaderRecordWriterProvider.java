@@ -185,7 +185,7 @@ public class KeyValueHeaderRecordWriterProvider
   }
 
   private String getFilename(String filename,
-  RecordWriterProvider<S3SinkConnectorConfig> provider) {
+                             RecordWriterProvider<S3SinkConnectorConfig> provider) {
     String strippedFilename = filename.endsWith(valueProvider.getExtension())
         ? filename.substring(0, filename.length() - valueProvider.getExtension().length())
         : filename;
