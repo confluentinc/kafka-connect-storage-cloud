@@ -42,7 +42,7 @@ import java.util.Map;
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
-import io.confluent.connect.s3.format.RecordViewSetter;
+import io.confluent.connect.s3.format.RecordViewWrapper;
 import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
 import io.confluent.connect.s3.storage.S3Storage;
@@ -90,7 +90,8 @@ public class S3SinkTask extends SinkTask {
     this.time = time;
 
     url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
-    writerProvider = this.format.getRecordWriterProvider();
+    writerProvider = new KeyValueHeaderRecordWriterProvider(this.format.getRecordWriterProvider(),
+        null, null);
 
     open(context.assignment());
     log.info("Started S3 connector task with assigned partitions {}",
@@ -182,13 +183,13 @@ public class S3SinkTask extends SinkTask {
     if (config.getBoolean(S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG)) {
       keyWriterProvider = newFormat(S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG)
           .getRecordWriterProvider();
-      ((RecordViewSetter) keyWriterProvider).setRecordView(new KeyRecordView());
+      ((RecordViewWrapper) keyWriterProvider).setRecordView(new KeyRecordView());
     }
     RecordWriterProvider<S3SinkConnectorConfig> headerWriterProvider = null;
     if (config.getBoolean(S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG)) {
       headerWriterProvider = newFormat(S3SinkConnectorConfig.HEADERS_FORMAT_CLASS_CONFIG)
           .getRecordWriterProvider();
-      ((RecordViewSetter) headerWriterProvider).setRecordView(new HeaderRecordView());
+      ((RecordViewWrapper) headerWriterProvider).setRecordView(new HeaderRecordView());
     }
 
     return new KeyValueHeaderRecordWriterProvider(
