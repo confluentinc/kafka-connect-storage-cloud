@@ -15,9 +15,8 @@
  */
 
 package io.confluent.connect.s3;
-
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
@@ -30,8 +29,12 @@ import io.confluent.connect.storage.partitioner.Partitioner;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.powermock.api.mockito.PowerMockito;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
+import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -52,7 +55,7 @@ public abstract class DataWriterTestBase<
   protected static final String ZERO_PAD_FMT = "%010d";
 
   protected S3Storage storage;
-  protected AmazonS3 s3;
+  protected S3Client s3;
   protected Partitioner<?> partitioner;
   protected S3SinkTask task;
   protected Map<String, String> localProps = new HashMap<>();
@@ -121,7 +124,7 @@ public abstract class DataWriterTestBase<
 
     super.setUp();
 
-    s3 = PowerMockito.spy(newS3Client(connectorConfig));
+    s3 = newS3Client(connectorConfig);
 
     storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
 
@@ -130,8 +133,9 @@ public abstract class DataWriterTestBase<
     format = clazz.getDeclaredConstructor(S3Storage.class).newInstance(storage);
     assertEquals(format.getClass().getName(), clazz.getName());
 
-    s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
+    s3.createBucket(CreateBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME)
+        .build());
+    assertTrue(s3.headBucket(HeadBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME).build()) != null);
   }
 
   protected List<String> getExpectedFiles(long[] validOffsets, TopicPartition tp, String extension) {
@@ -159,10 +163,10 @@ public abstract class DataWriterTestBase<
   }
 
   protected void verifyFileListing(List<String> expectedFiles) throws IOException {
-    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
     List<String> actualFiles = new ArrayList<>();
-    for (S3ObjectSummary summary : summaries) {
-      String fileKey = summary.getKey();
+    for (S3Object summary : summaries) {
+      String fileKey = URLDecoder.decode(summary.key(), StandardCharsets.UTF_8);
       actualFiles.add(fileKey);
     }
 
