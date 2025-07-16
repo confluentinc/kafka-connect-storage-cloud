@@ -166,7 +166,7 @@ public abstract class DataWriterTestBase<
     List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
     List<String> actualFiles = new ArrayList<>();
     for (S3Object summary : summaries) {
-      String fileKey = URLDecoder.decode(summary.key(), StandardCharsets.UTF_8);
+      String fileKey = URLDecoder.decode(summary.key(), StandardCharsets.UTF_8.toString());
       actualFiles.add(fileKey);
     }
 

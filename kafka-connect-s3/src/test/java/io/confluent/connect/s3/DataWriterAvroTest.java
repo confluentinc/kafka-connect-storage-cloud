@@ -205,7 +205,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, "/", s3);
     for(S3Object summary: summaries){
 
-      String key = URLDecoder.decode(summary.key(), StandardCharsets.UTF_8);
+      String key = URLDecoder.decode(summary.key(), StandardCharsets.UTF_8.toString());
       ResponseInputStream<GetObjectResponse> in = s3.getObject(GetObjectRequest.builder().bucket(S3_TEST_BUCKET_NAME).key(key).build());
       DatumReader<Object> reader = new GenericDatumReader<>();
       DataFileStream<Object> streamReader = new DataFileStream<>(in, reader);
