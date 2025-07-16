@@ -17,6 +17,11 @@
     />
 
     <suppress
+            checks="JavaNCSS"
+            files="(S3SinkConnectorConfig).java"
+    />
+
+    <suppress
       checks="CyclomaticComplexity"
       files="(TopicPartitionWriter).java"
     />

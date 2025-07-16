@@ -27,6 +27,8 @@ public final class FileRotationTracker {
 
     int rotationByFlushSize = 0;
 
+    int rotationByPartitionerMaxFiles = 0;
+
     int rotationByRotationInterval = 0;
 
     int rotationByScheduledRotationInterval = 0;
@@ -40,6 +42,8 @@ public final class FileRotationTracker {
     int rotationByDiffType = 0;
 
     int rotationByDiffVersion = 0;
+
+    int rotationByNullSchema = 0;
 
     public void incrementRotationBySchemaChangeCount(
         SchemaIncompatibilityType schemaIncompatibilityType) {
@@ -67,12 +71,20 @@ public final class FileRotationTracker {
       rotationByFlushSize++;
     }
 
+    public void incrementRotationByPartitionerMaxOpenFilesCount() {
+      rotationByPartitionerMaxFiles++;
+    }
+
     public void incrementRotationByRotationIntervalCount() {
       rotationByRotationInterval++;
     }
 
     public void incrementRotationByScheduledRotationIntervalCount() {
       rotationByScheduledRotationInterval++;
+    }
+
+    public void incrementRotationByNullSchemaCount() {
+      rotationByNullSchema++;
     }
   }
 
@@ -91,6 +103,13 @@ public final class FileRotationTracker {
     metrics.get(outputPartition).incrementRotationByFlushSizeCount();
   }
 
+  public void incrementRotationByPartitionerMaxOpenFilesCount(String outputPartition) {
+    if (!metrics.containsKey(outputPartition)) {
+      metrics.put(outputPartition, new RotationMetrics());
+    }
+    metrics.get(outputPartition).incrementRotationByPartitionerMaxOpenFilesCount();
+  }
+
   public void incrementRotationByRotationIntervalCount(String outputPartition) {
     if (!metrics.containsKey(outputPartition)) {
       metrics.put(outputPartition, new RotationMetrics());
@@ -103,6 +122,13 @@ public final class FileRotationTracker {
       metrics.put(outputPartition, new RotationMetrics());
     }
     metrics.get(outputPartition).incrementRotationByScheduledRotationIntervalCount();
+  }
+
+  public void incrementRotationByNullSchemaCount(String outputPartition) {
+    if (!metrics.containsKey(outputPartition)) {
+      metrics.put(outputPartition, new RotationMetrics());
+    }
+    metrics.get(outputPartition).incrementRotationByNullSchemaCount();
   }
 
   public void clear() {
@@ -122,6 +148,8 @@ public final class FileRotationTracker {
       sb.append(rotationMetrics.rotationByScheduledRotationInterval);
       sb.append(", RotationByFlushSize: ");
       sb.append(rotationMetrics.rotationByFlushSize);
+      sb.append(", RotationByPartitionerMaxFiles: ");
+      sb.append(rotationMetrics.rotationByPartitionerMaxFiles);
       sb.append(", RotationByDiffName: ");
       sb.append(rotationMetrics.rotationByDiffName);
       sb.append(", RotationByDiffSchema: ");
@@ -132,6 +160,8 @@ public final class FileRotationTracker {
       sb.append(rotationMetrics.rotationByDiffVersion);
       sb.append(", RotationByDiffParams: ");
       sb.append(rotationMetrics.rotationByDiffParams);
+      sb.append(", RotationByNullSchema: ");
+      sb.append(rotationMetrics.rotationByNullSchema);
       sb.append("\n");
     }
     return sb.toString();

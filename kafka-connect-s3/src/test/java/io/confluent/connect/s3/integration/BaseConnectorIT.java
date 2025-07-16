@@ -18,13 +18,16 @@ package io.confluent.connect.s3.integration;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
 import static io.confluent.kafka.schemaregistry.ClusterTestHarness.KAFKASTORE_TOPIC;
-
+import org.apache.avro.generic.GenericData;
 import org.apache.commons.io.FileUtils;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.paginators.ListObjectsV2Iterable;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
@@ -40,6 +43,9 @@ import com.google.common.collect.ImmutableMap;
 import io.confluent.common.utils.IntegrationTest;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.RestApp;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
+import org.apache.parquet.io.InputFile;
+import java.nio.file.Paths;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -63,6 +69,8 @@ import java.util.stream.Collectors;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.parquet.avro.AvroParquetReader;
+
 import org.apache.avro.io.DatumReader;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -78,9 +86,7 @@ import org.apache.kafka.test.TestUtils;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
-import org.apache.parquet.tools.json.JsonRecordFormatter;
-import org.apache.parquet.tools.read.SimpleReadSupport;
-import org.apache.parquet.tools.read.SimpleRecord;
+
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -99,7 +105,7 @@ public abstract class BaseConnectorIT {
   private static final Logger log = LoggerFactory.getLogger(BaseConnectorIT.class);
 
   protected static final int MAX_TASKS = 3;
-  private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
+  private static final long S3_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(120);
 
   protected static final long CONNECTOR_STARTUP_DURATION_MS = TimeUnit.MINUTES.toMillis(60);
 
@@ -226,12 +232,13 @@ public abstract class BaseConnectorIT {
       String topic,
       int partition,
       int flushSize,
+      int startOffset,
       long numRecords,
       String extension
   ) {
     int expectedFileCount = (int) numRecords / flushSize;
     List<String> expectedFiles = new ArrayList<>();
-    for (int offset = 0; offset < expectedFileCount * flushSize; offset += flushSize) {
+    for (int offset = startOffset; offset < expectedFileCount * flushSize; offset += flushSize) {
       String filepath = String.format(
           "topics/%s/partition=%d/%s+%d+%010d.%s",
           topic,
@@ -430,6 +437,30 @@ public abstract class BaseConnectorIT {
   }
 
   /**
+   * Count total number of records stored in S3
+   *
+   * @param bucketName          the name of the s3 test bucket
+   * @return number of records in S3
+   */
+  protected int countNumberOfRecords(
+      String bucketName
+  ) {
+    int rowCount = 0;
+    for (String fileName :
+        getS3FileListValues(s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(bucketName).build()))) {
+      String destinationPath = TEST_DOWNLOAD_PATH + fileName;
+      File downloadedFile = downloadFile(bucketName, fileName, destinationPath);
+
+      String fileExtension = getExtensionFromKey(fileName);
+      List<JsonNode> downloadedFileContents = contentGetters.get(fileExtension)
+          .apply(destinationPath);
+      rowCount += downloadedFileContents.size();
+      downloadedFile.delete();
+    }
+    return rowCount;
+  }
+
+  /**
    * Check the contents of the record value files in the S3 bucket compared to the expected row.
    *
    * @param bucketName          the name of the s3 test bucket
@@ -450,8 +481,7 @@ public abstract class BaseConnectorIT {
       log.info("Saving file to : {}", destinationPath);
       ResponseInputStream<GetObjectResponse> is = s3Client.getObject(
           GetObjectRequest.builder()
-              .bucket(bucketName
-              ).key(fileName)
+              .bucket(bucketName).key(fileName)
               .build());
 
       FileUtils.copyInputStreamToFile(is, downloadedFile);
@@ -467,14 +497,27 @@ public abstract class BaseConnectorIT {
     return true;
   }
 
+  private File downloadFile(String bucketName, String s3Filename, String destinationPath) {
+
+    log.info("Saving file to : {}", destinationPath);
+    s3Client.getObject(GetObjectRequest.builder().bucket(bucketName).key(s3Filename).build(),
+        ResponseTransformer.toFile(Paths.get(destinationPath)));
+    return new File(destinationPath);
+  }
+
   protected boolean keyfileContentsAsExpected(
       String bucketName,
       int expectedRowsPerFile,
       String expectedKey
   ) throws IOException {
     log.info("expectedKey: {}", expectedKey);
+
+    ListObjectsV2Request listObjectsV2Request = ListObjectsV2Request.builder()
+        .bucket(bucketName)
+        .build();
+
     for (String fileName :
-        getS3KeyFileList(s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(bucketName).build()))) {
+        getS3KeyFileList(s3Client.listObjectsV2Paginator(listObjectsV2Request))) {
       String destinationPath = TEST_DOWNLOAD_PATH + fileName;
       File downloadedFile = new File(destinationPath);
       log.info("Saving file to : {}", destinationPath);
@@ -541,7 +584,7 @@ public abstract class BaseConnectorIT {
     return true;
   }
 
-  private List<String> getS3KeyFileList(ListObjectsV2Response response) {
+  private List<String> getS3KeyFileList(ListObjectsV2Iterable response) {
     final String includeExtensions = ".keys.";
     return response.contents().stream()
         .filter(summary -> summary.key().contains(includeExtensions))
@@ -619,18 +662,20 @@ public abstract class BaseConnectorIT {
    * @return the rows of the file as JsonNodes
    */
   private static List<JsonNode> getContentsFromParquet(String filePath) {
-    try (ParquetReader<SimpleRecord> reader = ParquetReader
-        .builder(new SimpleReadSupport(), new Path(filePath)).build()){
-      ParquetMetadata metadata = ParquetFileReader
-          .readFooter(new Configuration(), new Path(filePath));
-      JsonRecordFormatter.JsonGroupFormatter formatter = JsonRecordFormatter
-          .fromSchema(metadata.getFileMetaData().getSchema());
-      List<JsonNode> fileRows = new ArrayList<>();
-      for (SimpleRecord value = reader.read(); value != null; value = reader.read()) {
-        JsonNode jsonNode = jsonMapper.readTree(formatter.formatRecord(value));
-        fileRows.add(jsonNode);
+    List<JsonNode> fileRows = new ArrayList<JsonNode>();
+    try {
+      InputFile inputFile = HadoopInputFile.fromPath(new org.apache.hadoop.fs.Path(filePath), new Configuration());
+      try (ParquetReader<GenericData.Record> recordAvroParquetReader =
+               AvroParquetReader.<GenericData.Record>builder(inputFile)
+                   .build()) {
+        GenericData.Record record;
+        while ((record = recordAvroParquetReader.read()) != null) {
+          fileRows.add(jsonMapper.readTree(record.toString()));
+        }
+        return fileRows;
+      } catch (IOException e) {
+        throw new RuntimeException(e);
       }
-      return fileRows;
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

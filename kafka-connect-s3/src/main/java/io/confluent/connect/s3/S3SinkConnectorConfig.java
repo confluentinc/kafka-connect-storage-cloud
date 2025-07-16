@@ -31,7 +31,6 @@ import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.DecimalFormat;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -107,6 +106,16 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String WAN_MODE_CONFIG = "s3.wan.mode";
   private static final boolean WAN_MODE_DEFAULT = false;
 
+  public static final String ENABLE_CONDITIONAL_WRITES_CONFIG = "enable.conditional.writes";
+  private static final boolean ENABLE_CONDITIONAL_WRITES_DEFAULT = true;
+  private static final String ENABLE_CONDITIONAL_WRITES_DOC = "Flag to control whether to enable "
+      + "conditional writes during multipart upload. The config will be ignored if scheduled "
+      + "rotation is disabled by setting `rotate.schedule.interval.ms` to -1 or the connector is "
+      + "configured to write kafka keys or headers to S3";
+
+  public static final String MAX_FILE_SCAN_LIMIT_CONFIG = "max.files.scan.limit";
+  private static final String MAX_FILE_SCAN_LIMIT_DEFAULT = "100";
+
   public static final String CREDENTIALS_PROVIDER_CLASS_CONFIG = "s3.credentials.provider.class";
   public static final Class<? extends AwsCredentialsProvider> CREDENTIALS_PROVIDER_CLASS_DEFAULT =
       DefaultCredentialsProvider.class;
@@ -176,6 +185,21 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           + "`errors.tolerance` should be set to 'all' for successfully writing into dlq";
   public static final String REPORT_NULL_RECORDS_TO_DLQ_DISPLAY = "Report null value to dlq";
 
+  public static final String MAX_WRITE_DURATION = "max.write.duration.ms";
+  public static final long MAX_WRITE_DURATION_DEFAULT = Long.MAX_VALUE;
+  public static final String MAX_WRITE_DURATION_DOC = "The maximum duration that a task will "
+      + "spend in batching and writing to S3. If the write operation takes longer than this "
+      + "the task will voluntarily return from the put method. This prevents the consumer from "
+      + "being revoked from the group. It also mitigates (but does not eliminate) the risk of "
+      + "a zombie task to continue writing to S3 after it has been revoked.";
+
+  public static final String ROTATE_FILE_ON_PARTITION_CHANGE = "rotate.file.on.partition.change";
+  public static final String ROTATE_FILE_ON_PARTITION_CHANGE_DOC
+      = "Flag to determine whether we want to rotate existing files when the record belongs to a "
+      + "new file. This flag will be honored when rotate.interval.ms is set and timestamp.extractor"
+      + " is configured";
+  public static final boolean ROTATE_FILE_ON_PARTITION_CHANGE_DEFAULT = true;
+
   /**
    * Maximum back-off time when retrying failed requests.
    */
@@ -224,6 +248,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String SCHEMA_PARTITION_AFFIX_TYPE_DOC = "Append the record schema name "
       + "to prefix or suffix in the s3 path after the topic name."
       + " None will not append the schema name in the s3 path.";
+
+  public static final String PARTITIONER_MAX_OPEN_FILES_CONFIG = "partitioner.max.open.files";
+  public static final int PARTITIONER_MAX_OPEN_FILES_DEFAULT = -1;
 
   private static final GenericRecommender SCHEMA_PARTITION_AFFIX_TYPE_RECOMMENDER =
       new GenericRecommender();
@@ -708,6 +735,30 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           REPORT_NULL_RECORDS_TO_DLQ_DISPLAY
       );
 
+      configDef.define(
+          MAX_WRITE_DURATION,
+          Type.LONG,
+          MAX_WRITE_DURATION_DEFAULT,
+          Importance.LOW,
+          MAX_WRITE_DURATION_DOC,
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Maximum write duration"
+      );
+
+      configDef.define(
+          ROTATE_FILE_ON_PARTITION_CHANGE,
+          Type.BOOLEAN,
+          ROTATE_FILE_ON_PARTITION_CHANGE_DEFAULT,
+          Importance.LOW,
+          ROTATE_FILE_ON_PARTITION_CHANGE_DOC,
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Rotate files on partition change"
+      );
+
       // This is done to avoid aggressive schema based rotations resulting out of interleaving
       // of tombstones with regular records.
       configDef.define(
@@ -722,7 +773,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.SHORT,
           "Tombstone Encoded Partition"
       );
-
 
       configDef.define(
           SCHEMA_PARTITION_AFFIX_TYPE_CONFIG,
@@ -748,6 +798,25 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.SHORT,
           "S3 Send Upload Message Digest"
+      );
+
+      configDef.define(
+          ENABLE_CONDITIONAL_WRITES_CONFIG,
+          Type.BOOLEAN,
+          ENABLE_CONDITIONAL_WRITES_DEFAULT,
+          Importance.LOW,
+          ENABLE_CONDITIONAL_WRITES_DOC,
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Enable conditional writes during multipart upload"
+      );
+
+      configDef.defineInternal(
+          MAX_FILE_SCAN_LIMIT_CONFIG,
+          Type.INT,
+          MAX_FILE_SCAN_LIMIT_DEFAULT,
+          Importance.LOW
       );
     }
 
@@ -846,6 +915,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "Elastic buffer initial capacity"
       );
 
+      configDef.defineInternal(
+          PARTITIONER_MAX_OPEN_FILES_CONFIG,
+          Type.INT,
+          PARTITIONER_MAX_OPEN_FILES_DEFAULT,
+          Importance.LOW
+      );
     }
     return configDef;
   }
@@ -1036,6 +1111,13 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getInt(ELASTIC_BUFFER_INIT_CAPACITY);
   }
 
+  public boolean shouldEnableConditionalWrites() {
+    return getBoolean(ENABLE_CONDITIONAL_WRITES_CONFIG)
+        && getLong(ROTATE_SCHEDULE_INTERVAL_MS_CONFIG) != -1
+        && !getBoolean(STORE_KAFKA_HEADERS_CONFIG)
+        && !getBoolean(STORE_KAFKA_KEYS_CONFIG);
+  }
+
   public boolean isTombstoneWriteEnabled() {
     return OutputWriteBehavior.WRITE.toString().equalsIgnoreCase(nullValueBehavior());
   }
@@ -1127,14 +1209,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         throw new ConfigException(
             name,
             region,
-            "Value must be one of: " + Utils.join(Region.regions(), ", ")
+            "Value must be one of: " + Region.regions().stream()
+                .map((Region::toString))
+                .collect(Collectors.joining(", "))
         );
       }
     }
 
     @Override
     public String toString() {
-      return "[" + Utils.join(Region.regions(), ", ") + "]";
+      return "[" + Region.regions().stream()
+          .map((Region::toString))
+          .collect(Collectors.joining(", ")) + "]";
     }
   }
 
@@ -1148,7 +1234,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         TYPES_BY_NAME.put(compressionType.name, compressionType);
         names.add(compressionType.name);
       }
-      ALLOWED_VALUES = Utils.join(names, ", ");
+      ALLOWED_VALUES = String.join(", ", names);
     }
 
     @Override
@@ -1224,7 +1310,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
     @Override
     public String toString() {
-      return "[" + Utils.join(ALLOWED_VALUES, ", ") + "]";
+      return "[" + String.join(", ", ALLOWED_VALUES) + "]";
     }
   }
 
@@ -1324,6 +1410,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public boolean reportNullRecordsToDlq() {
     return getBoolean(REPORT_NULL_RECORDS_TO_DLQ);
+  }
+
+  public boolean shouldRotateOnPartitionChange() {
+    return getBoolean(ROTATE_FILE_ON_PARTITION_CHANGE);
   }
 
   public enum IgnoreOrFailBehavior {

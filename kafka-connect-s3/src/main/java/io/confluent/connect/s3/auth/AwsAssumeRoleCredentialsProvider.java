@@ -27,6 +27,12 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
 import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
+import software.amazon.awssdk.services.sts.StsClientBuilder;
+import software.amazon.awssdk.regions.Region;
+
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
@@ -43,6 +49,14 @@ public class AwsAssumeRoleCredentialsProvider implements AwsCredentialsProvider,
   public static final String ROLE_EXTERNAL_ID_CONFIG = "sts.role.external.id";
   public static final String ROLE_ARN_CONFIG = "sts.role.arn";
   public static final String ROLE_SESSION_NAME_CONFIG = "sts.role.session.name";
+  public static final String REGION = "sts.region";
+  private static String REGION_PROVIDER_DOC_URL =
+      "https://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/java-dg-region-selection.html"
+          + "#automatically-determine-the-aws-region-from-the-environment";
+
+  private static final String STS_REGION_DEFAULT = "";
+
+  private static final Logger log = LoggerFactory.getLogger(AwsAssumeRoleCredentialsProvider.class);
 
   private static final ConfigDef STS_CONFIG_DEF = new ConfigDef()
       .define(
@@ -60,11 +74,20 @@ public class AwsAssumeRoleCredentialsProvider implements AwsCredentialsProvider,
           ConfigDef.Type.STRING,
           ConfigDef.Importance.HIGH,
           "Role session name to use when starting a session"
+      ).define(
+          REGION,
+          ConfigDef.Type.STRING,
+          STS_REGION_DEFAULT,
+          ConfigDef.Importance.MEDIUM,
+          "Region to use when setting up STS client. By default, connector would use the "
+              + "default region provider chain (refer " + REGION_PROVIDER_DOC_URL + "). This config"
+              + " can be used to directly set the region when connecting to STS."
       );
 
   private String roleArn;
   private String roleExternalId;
   private String roleSessionName;
+  private String region;
 
   private AwsBasicCredentials basicCredentials;
 
@@ -78,15 +101,24 @@ public class AwsAssumeRoleCredentialsProvider implements AwsCredentialsProvider,
     roleArn = config.getString(ROLE_ARN_CONFIG);
     roleExternalId = config.getString(ROLE_EXTERNAL_ID_CONFIG);
     roleSessionName = config.getString(ROLE_SESSION_NAME_CONFIG);
+    region = config.getString(REGION);
     final String accessKeyId = (String) configs.get(AWS_ACCESS_KEY_ID_CONFIG);
     final String secretKey = (String) configs.get(AWS_SECRET_ACCESS_KEY_CONFIG);
+
     if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
-      basicCredentials = AwsBasicCredentials.create(accessKeyId, secretKey);
+      AwsBasicCredentials basicCredentials = AwsBasicCredentials.create(accessKeyId, secretKey);
       //TODO: Set defaults if any to StsClient.builder() equiaveltn to
       // AWSSecurityTokenServiceClientBuilder.standard()
-      stsCredentialProvider = StsAssumeRoleCredentialsProvider.builder()
-          .stsClient(StsClient.builder()
-              .credentialsProvider(StaticCredentialsProvider.create(basicCredentials)).build())
+      StsClientBuilder clientBuilder = StsClient.builder()
+          .credentialsProvider(StaticCredentialsProvider.create(basicCredentials));
+      if (StringUtils.isNotBlank(region)) {
+        log.info("Configuring sts client region from config 'sts.region' to {}", region);
+        clientBuilder.region(Region.of(region));
+      }
+
+      StsAssumeRoleCredentialsProvider stsCredentialProvider
+          = StsAssumeRoleCredentialsProvider.builder()
+          .stsClient(clientBuilder.build())
           .refreshRequest(
               AssumeRoleRequest.builder()
                   .roleArn(roleArn)
@@ -94,6 +126,8 @@ public class AwsAssumeRoleCredentialsProvider implements AwsCredentialsProvider,
                   .externalId(roleExternalId)
                   .build())
           .build();
+
+
     } else {
       basicCredentials = null;
       stsCredentialProvider = StsAssumeRoleCredentialsProvider.builder()
