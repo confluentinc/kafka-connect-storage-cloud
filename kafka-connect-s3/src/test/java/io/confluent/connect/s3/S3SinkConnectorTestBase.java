@@ -38,6 +38,8 @@ import org.junit.runner.Description;
 import org.powermock.api.mockito.PowerMockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import static org.mockito.Mockito.when;
+
 
 import java.net.URI;
 import java.util.HashMap;
@@ -89,7 +91,7 @@ public class S3SinkConnectorTestBase extends StorageSinkTestBase {
   public void setUp() throws Exception {
     super.setUp();
     connectorConfig = PowerMockito.spy(new S3SinkConnectorConfig(properties));
-    PowerMockito.doReturn(1024).when(connectorConfig).getPartSize();
+    when(connectorConfig.getPartSize()).thenReturn(1024);
     topicsDir = connectorConfig.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
     parsedConfig = new HashMap<>(connectorConfig.plainValues());
     compatibility = StorageSchemaCompatibility.getCompatibility(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG);

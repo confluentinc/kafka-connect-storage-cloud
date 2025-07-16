@@ -42,6 +42,8 @@ import org.junit.Test;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -203,7 +205,8 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, "/", s3);
     for(S3Object summary: summaries){
 
-      ResponseInputStream<GetObjectResponse> in = s3.getObject(GetObjectRequest.builder().bucket(S3_TEST_BUCKET_NAME).key(summary.key()).build());
+      String key = URLDecoder.decode(summary.key(), StandardCharsets.UTF_8);
+      ResponseInputStream<GetObjectResponse> in = s3.getObject(GetObjectRequest.builder().bucket(S3_TEST_BUCKET_NAME).key(key).build());
       DatumReader<Object> reader = new GenericDatumReader<>();
       DataFileStream<Object> streamReader = new DataFileStream<>(in, reader);
       // make sure that produced Avro file has proper codec set

@@ -33,6 +33,8 @@ import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -122,7 +124,7 @@ public abstract class DataWriterTestBase<
 
     super.setUp();
 
-    s3 = PowerMockito.spy(newS3Client(connectorConfig));
+    s3 = newS3Client(connectorConfig);
 
     storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
 
@@ -164,7 +166,7 @@ public abstract class DataWriterTestBase<
     List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
     List<String> actualFiles = new ArrayList<>();
     for (S3Object summary : summaries) {
-      String fileKey = summary.key();
+      String fileKey = URLDecoder.decode(summary.key(), StandardCharsets.UTF_8);
       actualFiles.add(fileKey);
     }
 

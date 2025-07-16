@@ -24,6 +24,7 @@ import io.confluent.connect.storage.common.util.StringUtils;
 import org.apache.avro.file.SeekableInput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.core.retry.backoff.BackoffStrategy;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.core.client.config.SdkAdvancedClientOption;
@@ -48,6 +49,10 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.http.HttpStatusCode;
 import software.amazon.awssdk.services.s3.model.Tag;
 import software.amazon.awssdk.services.s3.model.Tagging;
+import static software.amazon.awssdk.core.retry.RetryMode.LEGACY;
+import software.amazon.awssdk.core.retry.backoff.EqualJitterBackoffStrategy;
+import software.amazon.awssdk.core.internal.retry.SdkDefaultRetrySetting;
+
 
 import java.io.OutputStream;
 import java.net.URI;
@@ -188,6 +193,12 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
     return StandardRetryStrategy.builder()
         .maxAttempts(conf.getS3PartRetries())
         .backoffStrategy(
+            new ExponentialDelayWithJitter(
+                Random::new,
+                Duration.ofMillis(conf.getLong(S3_RETRY_BACKOFF_CONFIG).intValue()),
+                S3_RETRY_MAX_BACKOFF_TIME_MS))
+        .throttlingBackoffStrategy(
+            //EqualJitterBackoffStrategy.builder().baseDelay(SdkDefaultRetrySetting.throttledBaseDelay(LEGACY)).maxBackoffTime(SdkDefaultRetrySetting.MAX_BACKOFF).build()
             new ExponentialDelayWithJitter(
                 Random::new,
                 Duration.ofMillis(conf.getLong(S3_RETRY_BACKOFF_CONFIG).intValue()),

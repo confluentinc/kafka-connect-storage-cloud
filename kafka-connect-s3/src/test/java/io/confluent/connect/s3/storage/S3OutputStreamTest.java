@@ -62,6 +62,24 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
     stream = new S3OutputStream(S3_TEST_KEY_NAME, connectorConfig, s3Mock);
     MockitoAnnotations.initMocks(this);
   }
+  
+  private CreateMultipartUploadResponse mockCreateMultipartResponse = CreateMultipartUploadResponse.builder()
+      .bucket("my-bucket")
+      .key("my-object-key")
+      .uploadId("upload-id-123")
+      .build();
+  
+  private CompleteMultipartUploadResponse mockCompleteMultipartResponse = CompleteMultipartUploadResponse.builder()
+      .bucket("my-bucket")
+      .key("my-object-key")
+      .build();
+  
+  private UploadPartResponse mockUploadPartResponse = UploadPartResponse.builder()
+      .eTag("etag-123")
+      .build();
+  
+  private HeadObjectResponse mockHeadObjectResponse = HeadObjectResponse.builder()
+      .build();
 
   @Test
   public void testPropagateUnretriableS3Exceptions() {
@@ -92,7 +110,7 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
     props.put(S3SinkConnectorConfig.SSEA_CONFIG, ServerSideEncryption.AES256.toString());
     stream = new S3OutputStream(S3_TEST_KEY_NAME, new S3SinkConnectorConfig(props), s3Mock);
 
-    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mock(CreateMultipartUploadResponse.class));
+    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
     stream.newMultipartUpload();
 
     verify(s3Mock).createMultipartUpload(initMultipartRequestCaptor.capture());
@@ -111,7 +129,7 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
     props.put(S3SinkConnectorConfig.SSE_KMS_KEY_ID_CONFIG, "key1");
     stream = new S3OutputStream(S3_TEST_KEY_NAME, new S3SinkConnectorConfig(props), s3Mock);
 
-    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mock(CreateMultipartUploadResponse.class));
+    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
     stream.newMultipartUpload();
 
     verify(s3Mock).createMultipartUpload(initMultipartRequestCaptor.capture());
@@ -131,7 +149,7 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
     props.put(S3SinkConnectorConfig.SSE_CUSTOMER_KEY, "key1");
     stream = new S3OutputStream(S3_TEST_KEY_NAME, new S3SinkConnectorConfig(props), s3Mock);
 
-    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mock(CreateMultipartUploadResponse.class));
+    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
     stream.newMultipartUpload();
 
     verify(s3Mock).createMultipartUpload(initMultipartRequestCaptor.capture());
@@ -147,7 +165,7 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
   public void testNewMultipartUploadDefaultSSE() throws IOException {
     stream = new S3OutputStream(S3_TEST_KEY_NAME, connectorConfig, s3Mock);
 
-    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mock(CreateMultipartUploadResponse.class));
+    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
     stream.newMultipartUpload();
 
     verify(s3Mock).createMultipartUpload(initMultipartRequestCaptor.capture());
@@ -166,9 +184,9 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
 
     stream = new S3OutputStream(S3_TEST_KEY_NAME, new S3SinkConnectorConfig(props), s3Mock);
 
-    when(s3Mock.completeMultipartUpload(any(CompleteMultipartUploadRequest.class))).thenReturn(mock(CompleteMultipartUploadResponse.class));
-    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mock(CreateMultipartUploadResponse.class));
-    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(mock(UploadPartResponse.class));
+    when(s3Mock.completeMultipartUpload(any(CompleteMultipartUploadRequest.class))).thenReturn(mockCompleteMultipartResponse);
+    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
+    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(mockUploadPartResponse);
 
     stream.commit();
 
@@ -186,9 +204,9 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
 
     stream = new S3OutputStream(S3_TEST_KEY_NAME, new S3SinkConnectorConfig(props), s3Mock);
 
-    when(s3Mock.completeMultipartUpload(any(CompleteMultipartUploadRequest.class))).thenReturn(mock(CompleteMultipartUploadResponse.class));
-    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mock(CreateMultipartUploadResponse.class));
-    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(mock(UploadPartResponse.class));
+    when(s3Mock.completeMultipartUpload(any(CompleteMultipartUploadRequest.class))).thenReturn(mockCompleteMultipartResponse);
+    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
+    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(mockUploadPartResponse);
 
     stream.commit();
 
@@ -210,9 +228,9 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
         .build();
 
     when(s3Mock.completeMultipartUpload(any(CompleteMultipartUploadRequest.class))).thenThrow(exception);
-    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mock(CreateMultipartUploadResponse.class));
-    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(mock(UploadPartResponse.class));
-    when(s3Mock.headObject(any(HeadObjectRequest.class))).thenReturn(mock(HeadObjectResponse.class));
+    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
+    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(mockUploadPartResponse);
+    when(s3Mock.headObject(any(HeadObjectRequest.class))).thenReturn(mockHeadObjectResponse);
 
     stream.commit();
 
@@ -235,9 +253,9 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
         .build();
 
     when(s3Mock.completeMultipartUpload(any(CompleteMultipartUploadRequest.class))).thenThrow(exception);
-    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mock(CreateMultipartUploadResponse.class));
-    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(mock(UploadPartResponse.class));
-    when(s3Mock.headObject(any(HeadObjectRequest.class))).thenReturn(mock(HeadObjectResponse.class));
+    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
+    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(mockUploadPartResponse);
+    when(s3Mock.headObject(any(HeadObjectRequest.class))).thenReturn(mockHeadObjectResponse);
 
     stream.commit();
 
@@ -255,12 +273,13 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
 
     stream = new S3OutputStream(S3_TEST_KEY_NAME, new S3SinkConnectorConfig(props), s3Mock);
 
-    AwsServiceException exception = S3Exception.builder().statusCode(422).message("file conflict")
+    AwsServiceException exception = S3Exception.builder().statusCode(409).message("file conflict")
+        .awsErrorDetails(AwsErrorDetails.builder().errorCode("ConditionalRequestConflict").build())
         .build();
 
     when(s3Mock.completeMultipartUpload(any(CompleteMultipartUploadRequest.class))).thenThrow(exception);
-    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mock(CreateMultipartUploadResponse.class));
-    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(mock(UploadPartResponse.class));
+    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
+    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(mockUploadPartResponse);
 
     stream.commit();
 
@@ -282,9 +301,9 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
         .build();
 
     when(s3Mock.completeMultipartUpload(any(CompleteMultipartUploadRequest.class))).thenThrow(exception);
-    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mock(CreateMultipartUploadResponse.class));
-    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(mock(UploadPartResponse.class));
-    when(s3Mock.headObject(any(HeadObjectRequest.class))).thenReturn(mock(HeadObjectResponse.class));
+    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
+    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(mockUploadPartResponse);
+    when(s3Mock.headObject(any(HeadObjectRequest.class))).thenReturn(mockHeadObjectResponse);
 
     stream.commit();
 

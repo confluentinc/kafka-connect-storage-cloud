@@ -320,24 +320,23 @@ public class S3OutputStream extends PositionOutputStream {
 
     public void complete() throws IOException {
       log.debug("Completing multi-part upload for key '{}', id '{}'", key, uploadId);
-      CompleteMultipartUploadRequest completeRequest =
+      CompleteMultipartUploadRequest.Builder completeRequestBuilder =
           CompleteMultipartUploadRequest.builder()
               .bucket(bucket)
               .key(key)
               .uploadId(uploadId)
               .multipartUpload(CompletedMultipartUpload.builder()
                   .parts(completedParts)
-                  .build())
-              .build();
+                  .build());
 
       if (enableConditionalWrites) {
-        completeRequest.ifNoneMatch();
+        completeRequestBuilder.ifNoneMatch("*");
       }
 
       handleAmazonExceptions(
           () -> {
             try {
-              return s3.completeMultipartUpload(completeRequest);
+              return s3.completeMultipartUpload(completeRequestBuilder.build());
             } catch (S3Exception e) {
               log.error("Failed to complete multipart upload of file {}", key, e);
               // There can be cases where the s3 api returns 200 status code, but the error code

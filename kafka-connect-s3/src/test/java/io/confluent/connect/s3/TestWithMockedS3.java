@@ -15,13 +15,15 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.auth.AnonymousAWSCredentials;
-import com.amazonaws.client.builder.AwsClientBuilder;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+
 import com.amazonaws.services.s3.model.GetObjectTaggingResult;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectTaggingRequest;
@@ -202,18 +204,21 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
 
       @Override
       public AwsCredentials resolveCredentials() {
-        return null;
+        return AwsBasicCredentials.create("accessKey", "secretKey");
       }
     };
 
     S3ClientBuilder builder = S3Client.builder()
         .accelerate(config.getBoolean(S3SinkConnectorConfig.WAN_MODE_CONFIG))
-        .forcePathStyle(config.getBoolean(S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG))
+        //.forcePathStyle(config.getBoolean(S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG))
+        .forcePathStyle(true)
         .credentialsProvider(provider);
 
     builder = url == null ?
         builder.region(Region.of(config.getString(S3SinkConnectorConfig.REGION_CONFIG))) :
-        builder.endpointOverride(URI.create(url)).region(Region.of(config.getString(S3SinkConnectorConfig.REGION_CONFIG)));
+        builder
+            .endpointOverride(URI.create(url))
+            .region(Region.of(config.getString(S3SinkConnectorConfig.REGION_CONFIG)));
 
     return builder.build();
   }

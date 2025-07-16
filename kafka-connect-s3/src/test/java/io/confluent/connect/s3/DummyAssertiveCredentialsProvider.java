@@ -62,4 +62,8 @@ public final class DummyAssertiveCredentialsProvider implements AwsCredentialsPr
   public AwsCredentials resolveCredentials() {
     return credentials;
   }
+
+  public static DummyAssertiveCredentialsProvider create() {
+    return new DummyAssertiveCredentialsProvider();
+  }
 }
