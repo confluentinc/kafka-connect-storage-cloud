@@ -15,10 +15,12 @@
 
 package io.confluent.connect.s3;
 
+import java.nio.file.Paths;
+
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-
-import com.amazonaws.services.s3.model.GetObjectTaggingResult;
+import software.amazon.awssdk.core.sync.ResponseTransformer;
+import software.amazon.awssdk.services.s3.model.GetObjectTaggingRequest;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -49,6 +51,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -63,6 +66,7 @@ import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.common.StorageCommonConfig;
+import org.apache.commons.io.IOUtils;
 
 public class TestWithMockedS3 extends S3SinkConnectorTestBase {
 
@@ -178,18 +182,17 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
   }
 
   public static List<Tag> getS3ObjectTags(String bucketName, String fileKey, S3Client s3) throws IOException {
-      //findify S3 mock does not currently support S3 object tag mocks, instead tags are stored as object data in AWS XML format
-      //leverage this workaround to parse the xml until tag mocks are supported
-      log.debug("Reading tags from bucket '{}' key '{}': ", bucketName, fileKey);
+    //findify S3 mock does not currently support S3 object tag mocks, instead tags are stored as object data in AWS XML format
+    //leverage this workaround to parse the xml until tag mocks are supported
+    log.debug("Reading tags from bucket '{}' key '{}': ", bucketName, fileKey);
 
-    InputStream in = s3.getObject(GetObjectRequest.builder().bucket(bucketName).key( fileKey).build());
-    XmlResponsesSaxParser parser = new XmlResponsesSaxParser();
-    GetObjectTaggingResult tagsResult = parser.parseObjectTaggingResponse(in).getResult();
-
+    InputStream in = s3.getObject(GetObjectRequest.builder().bucket(bucketName).key(fileKey).build());
+    //XmlResponsesSaxParser parser = new XmlResponsesSaxParser();
+    //GetObjectTaggingResponse tagsResult = parser.parseObjectTaggingResponse(in).getResult();
 
     List<Tag> tagList = new ArrayList<>();
-      //tagList.addAll(tagsResult.getTagSet());
-      return tagList;
+    //tagList.addAll(tagsResult.getTagSet());
+    return tagList;
   }
 
   public static Collection<Object> readRecordsParquet(String bucketName, String fileKey, S3Client s3) throws IOException {

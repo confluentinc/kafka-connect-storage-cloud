@@ -105,6 +105,8 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         props.put(S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG, "12345");
         props.put(S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG, "12345");
 
+        props.put(S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG, "true");
+
         props.put(SinkConnectorConfig.TOPICS_CONFIG, topicName);
 
         return props;
