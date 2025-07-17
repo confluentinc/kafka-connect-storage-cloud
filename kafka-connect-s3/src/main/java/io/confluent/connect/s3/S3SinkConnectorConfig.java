@@ -114,6 +114,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       + "rotation is disabled by setting `rotate.schedule.interval.ms` to -1 or the connector is "
       + "configured to write kafka keys or headers to S3";
 
+  public static final String ENABLE_CONDITIONAL_WRITES_KEYS_HEADERS_CONFIG
+      = "keysheaders.enable.conditional.writes";
+  private static final boolean ENABLE_CONDITIONAL_WRITES_KEYS_HEADERS_DEFAULT = false;
+  private static final String ENABLE_CONDITIONAL_WRITES_KEYS_HEADERS_DOC = "Flag to control whether"
+      + " to enable conditional writes on keys and headers files during multipart upload. "
+      + "The config will be ignored if scheduled rotation is disabled by setting "
+      + "`rotate.schedule.interval.ms`to -1 or `enable.conditional.writes` is disabled.";
+
   public static final String MAX_FILE_SCAN_LIMIT_CONFIG = "max.files.scan.limit";
   private static final String MAX_FILE_SCAN_LIMIT_DEFAULT = "100";
 
@@ -813,6 +821,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "Enable conditional writes during multipart upload"
       );
 
+      configDef.define(
+          ENABLE_CONDITIONAL_WRITES_KEYS_HEADERS_CONFIG,
+          Type.BOOLEAN,
+          ENABLE_CONDITIONAL_WRITES_KEYS_HEADERS_DEFAULT,
+          Importance.LOW,
+          ENABLE_CONDITIONAL_WRITES_KEYS_HEADERS_DOC,
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Enable conditional writes of keys and headers during multipart upload"
+      );
+
       configDef.defineInternal(
           MAX_FILE_SCAN_LIMIT_CONFIG,
           Type.INT,
@@ -1111,9 +1131,20 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public boolean shouldEnableConditionalWrites() {
     return getBoolean(ENABLE_CONDITIONAL_WRITES_CONFIG)
         && getLong(ROTATE_SCHEDULE_INTERVAL_MS_CONFIG) != -1
-        && !getBoolean(STORE_KAFKA_HEADERS_CONFIG)
-        && !getBoolean(STORE_KAFKA_KEYS_CONFIG);
+        && shouldEnableConditionalWritesKeysHeaders();
   }
+
+  private boolean shouldEnableConditionalWritesKeysHeaders() {
+    boolean keyHeadersStoreEnabled = getBoolean(STORE_KAFKA_KEYS_CONFIG)
+        || getBoolean(STORE_KAFKA_HEADERS_CONFIG);
+
+    boolean enableConditionalWritesKeysHeaders =
+        getBoolean(ENABLE_CONDITIONAL_WRITES_KEYS_HEADERS_CONFIG);
+
+    return !keyHeadersStoreEnabled
+        || enableConditionalWritesKeysHeaders;
+  }
+
 
   public boolean isTombstoneWriteEnabled() {
     return OutputWriteBehavior.WRITE.toString().equalsIgnoreCase(nullValueBehavior());

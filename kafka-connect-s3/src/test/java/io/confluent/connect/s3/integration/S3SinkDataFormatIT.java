@@ -229,7 +229,7 @@ public class S3SinkDataFormatIT extends BaseConnectorIT {
     return new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer());
   }
 
-  private void setupProperties() {
+  protected void setupProperties() {
     props = new HashMap<>();
     props.put(CONNECTOR_CLASS_CONFIG, S3SinkConnector.class.getName());
     props.put(TASKS_MAX_CONFIG, Integer.toString(MAX_TASKS));
