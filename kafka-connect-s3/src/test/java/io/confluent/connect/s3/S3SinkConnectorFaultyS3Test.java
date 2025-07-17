@@ -93,7 +93,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         props.put(SinkConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, converterClass.getName());
 
         props.put(StorageSinkConnectorConfig.PARQUET_CODEC_CONFIG, "none"); // disable compressor to lower CPU usage for parquet tests
-        props.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "0"); // disable AWS SDK retries
+        props.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "1"); // disable AWS SDK retries, try once and no retries
         props.put(StorageSinkConnectorConfig.RETRY_BACKOFF_CONFIG, "100"); // lower Connect Framework retry backoff
 
         // If flushSize > PART_SIZE, then first uploadPart() is called from S3OutputStream::write() method.
