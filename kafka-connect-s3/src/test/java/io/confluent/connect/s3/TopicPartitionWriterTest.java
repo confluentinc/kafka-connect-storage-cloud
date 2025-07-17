@@ -25,7 +25,6 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
 import software.amazon.awssdk.services.s3.model.GetObjectTaggingResponse;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.S3Object;
@@ -70,6 +69,8 @@ import org.junit.After;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -1935,8 +1936,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     @Override
     public boolean exists(String path) {
       if (!hasGetPermission) {
-        throw S3Exception.builder().statusCode(400)
-            .message("Invalid request")
+        throw S3Exception.builder().statusCode(403)
+            .message("access denied")
             .build();
       }
       return existingFiles.contains(path);
@@ -2624,7 +2625,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<String> actualFiles = new ArrayList<>();
     for (S3Object summary : summaries) {
       String fileKey = summary.key();
-      actualFiles.add(fileKey);
+      actualFiles.add(URLDecoder.decode(fileKey, StandardCharsets.UTF_8.toString()));
     }
 
     Collections.sort(actualFiles);
@@ -2650,7 +2651,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<String> actualFiles = new ArrayList<>();
     for (S3Object summary : summaries) {
       String fileKey = summary.key();
-      actualFiles.add(fileKey);
+      actualFiles.add(URLDecoder.decode(fileKey, StandardCharsets.UTF_8.toString()));
     }
 
     Collections.sort(actualFiles);
@@ -2694,8 +2695,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<String> actualFiles = new ArrayList<>();
     for (S3Object s3Object : paginatedResponses.contents()) {
       System.out.println("  - Key: " + s3Object.key() + " | Size: " + s3Object.size() + " bytes");
-      actualFiles.add(s3Object.key());
-
+      actualFiles.add(URLDecoder.decode(s3Object.key(), StandardCharsets.UTF_8.toString()));
     }
 
     Collections.sort(actualFiles);
@@ -2799,34 +2799,35 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   // filter for values only.
-  private List<String> getS3FileListValues(List<S3Object> summaries) {
+  private List<String> getS3FileListValues(List<S3Object> summaries) throws IOException {
     Set<String> excludeExtensions = new HashSet<>(Arrays.asList(HEADER_AVRO_EXT, HEADER_JSON_EXT,
         KEYS_AVRO_EXT));
     List<String> filteredFiles = new ArrayList<>();
     for (S3Object summary : summaries) {
       String fileKey = summary.key();
       if (!filenameContainsExtensions(fileKey, excludeExtensions)) {
-        filteredFiles.add(fileKey);
+        filteredFiles.add(URLDecoder.decode(fileKey, StandardCharsets.UTF_8.toString()));
       }
     }
     return filteredFiles;
   }
 
-  private List<String> getS3FileListHeaders(List<S3Object> summaries) {
+  private List<String> getS3FileListHeaders(List<S3Object> summaries) throws IOException {
     return getS3FileListFilter(summaries, RecordElement.HEADERS.name().toLowerCase());
   }
 
-  private List<String> getS3FileListKeys(List<S3Object> summaries) {
+  private List<String> getS3FileListKeys(List<S3Object> summaries) throws IOException {
     return getS3FileListFilter(summaries, RecordElement.KEYS.name().toLowerCase());
   }
 
   // filter for keys or headers
-  private List<String> getS3FileListFilter(List<S3Object> summaries, String extension) {
+  private List<String> getS3FileListFilter(List<S3Object> summaries, String extension)
+      throws IOException {
     List<String> filteredFiles = new ArrayList<>();
     for (S3Object summary : summaries) {
       String fileKey = summary.key();
       if (fileKey.contains(extension)) {
-        filteredFiles.add(fileKey);
+        filteredFiles.add(URLDecoder.decode(fileKey, StandardCharsets.UTF_8.toString()));
       }
     }
     return filteredFiles;
@@ -2838,7 +2839,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<String> actualFiles = new ArrayList<>();
     for (S3Object summary : summaries) {
       String fileKey = summary.key();
-      actualFiles.add(fileKey);
+      actualFiles.add(URLDecoder.decode(fileKey, StandardCharsets.UTF_8.toString()));
     }
 
     List<String> expectedFileKeys = new ArrayList<>(expectedTaggedFiles.keySet());

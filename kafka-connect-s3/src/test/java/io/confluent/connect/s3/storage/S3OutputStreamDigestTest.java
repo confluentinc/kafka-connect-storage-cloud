@@ -33,6 +33,15 @@ public class S3OutputStreamDigestTest extends S3SinkConnectorTestBase {
   final static String S3_EXCEPTION_MESSAGE = "this is an s3 exception";
   private Map<String,String> localProps = new HashMap<>();
 
+  private CreateMultipartUploadResponse mockCreateMultipartResponse = CreateMultipartUploadResponse.builder()
+      .bucket("my-bucket")
+      .key("my-object-key")
+      .uploadId("upload-id")
+      .build();
+  private UploadPartResponse mockUploadPartResponse = UploadPartResponse.builder()
+      .eTag("etag-123")
+      .build();
+
   @Override
   public void setUp() throws Exception {
     super.setUp();
@@ -41,13 +50,9 @@ public class S3OutputStreamDigestTest extends S3SinkConnectorTestBase {
     connectorConfig = PowerMockito.spy(new S3SinkConnectorConfig(properties));
     stream = new S3OutputStream(S3_TEST_KEY_NAME, connectorConfig, s3Mock);
 
-    CreateMultipartUploadResponse initiateResult = mock(CreateMultipartUploadResponse.class);
-    when(s3Mock.createMultipartUpload(Mockito.any(CreateMultipartUploadRequest.class))).thenReturn(initiateResult);
-    when(initiateResult.uploadId()).thenReturn("upload-id");
+    when(s3Mock.createMultipartUpload(Mockito.any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
 
-    UploadPartResponse result = mock(UploadPartResponse.class);
-    when(s3Mock.uploadPart(Mockito.any(UploadPartRequest.class), Mockito.any(RequestBody.class))).thenReturn(result);
-    when(result.eTag()).thenReturn(mock(String.class));
+    when(s3Mock.uploadPart(Mockito.any(UploadPartRequest.class), Mockito.any(RequestBody.class))).thenReturn(mockUploadPartResponse);
   }
 
   @Override
