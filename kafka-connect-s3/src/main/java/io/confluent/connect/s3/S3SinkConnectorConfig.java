@@ -418,7 +418,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
               + "the connector uses ``"
               + DefaultAWSCredentialsProviderChain.class.getSimpleName()
               + "``."
-              + " If you are using a assume role in the credentials provider, a proxy configuration will not work."
+              + " If you are using a assume role in the credentials provider,"
+              + " a proxy configuration will not work."
               + " This is a limitation of the underlying AWS SDK client.",
           group,
           ++orderInGroup,
