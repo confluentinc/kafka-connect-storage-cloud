@@ -36,7 +36,9 @@ import static org.hamcrest.core.StringStartsWith.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import com.amazonaws.services.s3.model.ObjectMetadata;
+import software.amazon.awssdk.core.sync.RequestBody;
+
+
 import io.confluent.connect.s3.S3SinkConnector;
 import io.confluent.connect.s3.S3SinkConnectorConfig.IgnoreOrFailBehavior;
 import io.confluent.connect.s3.S3SinkConnectorConfig.OutputWriteBehavior;
@@ -47,6 +49,7 @@ import io.confluent.connect.s3.storage.S3Storage;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -82,6 +85,9 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+
 
 @SuppressWarnings({"unchecked", "deprecation"})
 @Category(IntegrationTest.class)
@@ -223,7 +229,12 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private void writeDummyFile(String key) {
     String initialFileContents = "{\"ID\":1,\"myBool\":true,\"myInt32\":32,\"myFloat32\":3.2,\"myFloat64\":64.64,\"myString\":\"theStringVal\"}\n"
         + "{\"ID\":1,\"myBool\":true,\"myInt32\":32,\"myFloat32\":3.2,\"myFloat64\":64.64,\"myString\":\"theStringVal\"}";
-    S3Client.putObject(TEST_BUCKET_NAME, key, new ByteArrayInputStream(initialFileContents.getBytes()), new ObjectMetadata());
+    RequestBody requestBody = RequestBody.fromString(initialFileContents, Charset.defaultCharset());
+
+    s3Client.putObject(
+        PutObjectRequest.builder()
+            .bucket(TEST_BUCKET_NAME)
+            .key(key).build(), requestBody);
   }
 
   private void testRecordsWrittenWithConditionalWrites(String expectedFileExtension) throws InterruptedException, ExecutionException {
