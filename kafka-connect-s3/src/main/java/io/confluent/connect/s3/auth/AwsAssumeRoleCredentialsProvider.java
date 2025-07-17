@@ -148,4 +148,8 @@ public class AwsAssumeRoleCredentialsProvider implements AwsCredentialsProvider,
   public AwsCredentials resolveCredentials() {
     return stsCredentialProvider.resolveCredentials();
   }
+
+  public static AwsAssumeRoleCredentialsProvider create() {
+    return new AwsAssumeRoleCredentialsProvider();
+  }
 }
