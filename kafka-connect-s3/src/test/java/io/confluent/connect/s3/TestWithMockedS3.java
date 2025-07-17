@@ -66,7 +66,6 @@ import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.common.StorageCommonConfig;
-import org.apache.commons.io.IOUtils;
 
 public class TestWithMockedS3 extends S3SinkConnectorTestBase {
 

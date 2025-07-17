@@ -22,7 +22,7 @@ import org.apache.kafka.connect.errors.RetriableException;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.retry.RetryPolicyContext;
 import software.amazon.awssdk.core.retry.conditions.SdkRetryCondition;
-import software.amazon.awssdk.http.SdkHttpFullRequest;
+//import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
 
 import java.io.IOException;
 
@@ -57,7 +57,7 @@ public class S3ErrorUtils {
         // TODO: Compare the two
         return SdkRetryCondition.DEFAULT.shouldRetry(
             RetryPolicyContext.builder()
-                .request(SdkHttpFullRequest.builder().build()) // NOOP request
+                //.request(GetCallerIdentityRequest.builder().build()) // NOOP request
                 .retriesAttempted(Integer.MAX_VALUE)
                 .exception((SdkException) cause)
                 .build());
