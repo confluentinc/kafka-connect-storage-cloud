@@ -23,6 +23,8 @@ import software.amazon.awssdk.core.exception.SdkException;
 //import software.amazon.awssdk.core.retry.RetryPolicyContext;
 //import software.amazon.awssdk.core.retry.conditions.SdkRetryCondition;
 //import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -31,6 +33,7 @@ import java.io.IOException;
  */
 public class S3ErrorUtils {
 
+  private final Logger log = LoggerFactory.getLogger(S3ErrorUtils.class);
   /**
    * Return whether the given exception is a "retryable" exception.
    * @param exception The exception to analyze
@@ -61,6 +64,7 @@ public class S3ErrorUtils {
         //        .retriesAttempted(Integer.MAX_VALUE)
         //        .exception((SdkException) cause)
         //        .build());
+        log.info("Exception cause: {}", cause.getMessage());
         return ((SdkException) cause).retryable();
       }
 
