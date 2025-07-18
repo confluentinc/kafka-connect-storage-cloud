@@ -35,6 +35,7 @@ import java.io.IOException;
 public class S3ErrorUtils {
 
   private final Logger log = LoggerFactory.getLogger(S3ErrorUtils.class);
+
   /**
    * Return whether the given exception is a "retryable" exception.
    * @param exception The exception to analyze
