@@ -15,12 +15,14 @@
 
 package io.confluent.connect.s3.util;
 
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.AmazonWebServiceRequest;
-import com.amazonaws.retry.PredefinedRetryPolicies;
+
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
+import software.amazon.awssdk.core.exception.SdkException;
+//import software.amazon.awssdk.core.retry.RetryPolicyContext;
+//import software.amazon.awssdk.core.retry.conditions.SdkRetryCondition;
+//import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
 
 import java.io.IOException;
 
@@ -48,14 +50,18 @@ public class S3ErrorUtils {
     // as its parent (as the SDK does), in which case, shouldRetry()
     // will often find it retriable.
     for (Throwable cause : ExceptionUtils.getThrowableList(exception)) {
-      if (cause instanceof AmazonClientException) {
+      if (cause instanceof SdkException) {
         // The AWS SDK maintains a check for what it considers to be
         // retriable exceptions.
-        return PredefinedRetryPolicies.DEFAULT_RETRY_CONDITION.shouldRetry(
-                AmazonWebServiceRequest.NOOP,
-                (AmazonClientException) cause,
-                Integer.MAX_VALUE
-        );
+
+        // TODO: Compare the two
+        //return SdkRetryCondition.DEFAULT.shouldRetry(
+        //    RetryPolicyContext.builder()
+        //        .request(GetCallerIdentityRequest.builder().build()) // NOOP request
+        //        .retriesAttempted(Integer.MAX_VALUE)
+        //        .exception((SdkException) cause)
+        //        .build());
+        return ((SdkException) cause).retryable();
       }
 
       if (!(cause instanceof IOException)) {
