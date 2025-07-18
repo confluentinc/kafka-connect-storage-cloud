@@ -34,7 +34,7 @@ import java.io.IOException;
  */
 public class S3ErrorUtils {
 
-  private final Logger log = LoggerFactory.getLogger(S3ErrorUtils.class);
+  private static final Logger log = LoggerFactory.getLogger(S3ErrorUtils.class);
 
   /**
    * Return whether the given exception is a "retryable" exception.
@@ -61,14 +61,14 @@ public class S3ErrorUtils {
 
         AwsServiceException awsServiceException = (AwsServiceException) cause;
         // TODO: Compare the two
+        log.info("Exception cause: {}", cause.getMessage());
         return SdkRetryCondition.DEFAULT.shouldRetry(
             RetryPolicyContext.builder()
                 .retriesAttempted(Integer.MAX_VALUE)
                 .exception((SdkException) cause)
                 .httpStatusCode(awsServiceException.statusCode())
                 .build());
-        // log.info("Exception cause: {}", cause.getMessage());
-        // return ((SdkException) cause).retryable();
+        //return ((SdkException) cause).retryable();
       }
 
       if (!(cause instanceof IOException)) {
