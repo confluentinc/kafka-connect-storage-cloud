@@ -23,12 +23,10 @@ import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.retry.RetryPolicyContext;
 import software.amazon.awssdk.core.retry.conditions.SdkRetryCondition;
-//import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.net.SocketException;
 
 /**
  * Utilities related to basic S3 error/exception analysis.
@@ -56,24 +54,20 @@ public class S3ErrorUtils {
     // as its parent (as the SDK does), in which case, shouldRetry()
     // will often find it retriable.
     for (Throwable cause : ExceptionUtils.getThrowableList(exception)) {
-      if (cause instanceof AwsServiceException) {
+      if (cause instanceof SdkException) {
         // The AWS SDK maintains a check for what it considers to be
         // retriable exceptions.
 
-        AwsServiceException awsServiceException = (AwsServiceException) cause;
-        // TODO: Compare the two
-        log.info("Exception cause: {}", cause.getMessage());
-        return SdkRetryCondition.DEFAULT.shouldRetry(
-            RetryPolicyContext.builder()
-                .retriesAttempted(Integer.MAX_VALUE)
-                .exception((SdkException) cause)
-                .httpStatusCode(awsServiceException.statusCode())
-                .build());
-        //return ((SdkException) cause).retryable();
-      }
+        RetryPolicyContext.Builder retryContextBuilder = RetryPolicyContext.builder()
+            .retriesAttempted(Integer.MAX_VALUE)
+            .exception((SdkException) cause);
 
-      if (cause instanceof SocketException) {
-        return true;
+        if (cause instanceof AwsServiceException) {
+          AwsServiceException awsServiceException = (AwsServiceException) cause;
+          retryContextBuilder.httpStatusCode(awsServiceException.statusCode());
+        }
+
+        return SdkRetryCondition.DEFAULT.shouldRetry(retryContextBuilder.build());
       }
 
       if (!(cause instanceof IOException)) {
