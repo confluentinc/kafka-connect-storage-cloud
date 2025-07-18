@@ -15,7 +15,6 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.AmazonClientException;
 import io.confluent.connect.s3.S3SinkConnectorConfig.OutputWriteBehavior;
 import io.confluent.connect.s3.util.TombstoneSupportedPartitioner;
 import io.confluent.connect.s3.util.SchemaPartitioner;
@@ -30,6 +29,7 @@ import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.core.exception.SdkException;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
@@ -38,6 +38,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.lang.Exception;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
@@ -141,7 +142,7 @@ public class S3SinkTask extends SinkTask {
     } catch (ClassNotFoundException | IllegalAccessException | InstantiationException
         | InvocationTargetException | NoSuchMethodException e) {
       throw new ConnectException("Reflection exception: ", e);
-    } catch (AmazonClientException e) {
+    } catch (SdkException e) {
       throw new ConnectException(e);
     }
   }
@@ -331,7 +332,7 @@ public class S3SinkTask extends SinkTask {
     for (TopicPartition tp : topicPartitionWriters.keySet()) {
       try {
         topicPartitionWriters.get(tp).close();
-      } catch (ConnectException e) {
+      } catch (Exception e) {
         log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
       }
     }
