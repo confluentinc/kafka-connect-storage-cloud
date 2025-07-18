@@ -61,6 +61,7 @@ public class S3ErrorUtils {
         //        .retriesAttempted(Integer.MAX_VALUE)
         //        .exception((SdkException) cause)
         //        .build());
+        log.info("Exception cause: {}", cause.getMessage());
         return ((SdkException) cause).retryable();
       }
 
