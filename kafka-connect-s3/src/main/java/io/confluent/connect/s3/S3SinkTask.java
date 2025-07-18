@@ -331,7 +331,7 @@ public class S3SinkTask extends SinkTask {
     for (TopicPartition tp : topicPartitionWriters.keySet()) {
       try {
         topicPartitionWriters.get(tp).close();
-      } catch (Exception e) {
+      } catch (ConnectException e) {
         log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
       }
     }
