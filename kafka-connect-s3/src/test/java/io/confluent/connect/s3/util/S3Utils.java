@@ -1,8 +1,8 @@
 package io.confluent.connect.s3.util;
 
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.ListObjectsV2Request;
-import com.amazonaws.services.s3.model.ListObjectsV2Result;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +22,7 @@ public class S3Utils {
      * @return the time this method discovered the connector has written the files
      * @throws InterruptedException if this was interrupted
      */
-    public static long waitForFilesInBucket(AmazonS3 s3, String bucketName, int numFiles, long timeoutMs)
+    public static long waitForFilesInBucket(S3Client s3, String bucketName, int numFiles, long timeoutMs)
             throws InterruptedException {
         TestUtils.waitForCondition(
                 () -> assertFileCountInBucket(s3, bucketName, numFiles).orElse(false),
@@ -39,7 +39,7 @@ public class S3Utils {
      * @param expectedNumFiles the number of files expected
      * @return true if the number of files in the bucket match the expected number; false otherwise
      */
-    private static Optional<Boolean> assertFileCountInBucket(AmazonS3 s3, String bucketName, int expectedNumFiles) {
+    private static Optional<Boolean> assertFileCountInBucket(S3Client s3, String bucketName, int expectedNumFiles) {
         try {
             return Optional.of(getBucketFileCount(s3, bucketName) == expectedNumFiles);
         } catch (Exception e) {
@@ -54,20 +54,21 @@ public class S3Utils {
      * @param bucketName the name of the bucket containing the files.
      * @return the number of files in the bucket
      */
-    private static int getBucketFileCount(AmazonS3 s3, String bucketName) {
+    private static int getBucketFileCount(S3Client s3, String bucketName) {
         int totalFilesInBucket = 0;
-        ListObjectsV2Request request = new ListObjectsV2Request().withBucketName(bucketName);
-        ListObjectsV2Result result;
+        ListObjectsV2Request.Builder request = ListObjectsV2Request.builder().bucket(bucketName);
+
+        ListObjectsV2Response result;
         do {
             /*
             Need the result object to extract the continuation token from the request as each request
             to listObjectsV2() returns a maximum of 1000 files.
             */
-            result = s3.listObjectsV2(request);
-            totalFilesInBucket += result.getKeyCount();
-            String token = result.getNextContinuationToken();
-            // To get the next batch of files.
-            request.setContinuationToken(token);
+            result = s3.listObjectsV2(request.build());
+            totalFilesInBucket += result.keyCount();
+            String token = result.nextContinuationToken();
+          // To get the next batch of files.
+          request.continuationToken(token);
         } while(result.isTruncated());
         return totalFilesInBucket;
     }
