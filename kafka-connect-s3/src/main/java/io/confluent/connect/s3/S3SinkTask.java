@@ -38,6 +38,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.lang.Exception;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
@@ -331,7 +332,7 @@ public class S3SinkTask extends SinkTask {
     for (TopicPartition tp : topicPartitionWriters.keySet()) {
       try {
         topicPartitionWriters.get(tp).close();
-      } catch (ConnectException e) {
+      } catch (Exception e) {
         log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
       }
     }
