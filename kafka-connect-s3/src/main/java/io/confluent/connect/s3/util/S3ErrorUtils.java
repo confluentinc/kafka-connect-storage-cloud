@@ -28,6 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.SocketException;
 
 /**
  * Utilities related to basic S3 error/exception analysis.
@@ -69,6 +70,10 @@ public class S3ErrorUtils {
                 .httpStatusCode(awsServiceException.statusCode())
                 .build());
         //return ((SdkException) cause).retryable();
+      }
+
+      if (cause instanceof SocketException) {
+        return true;
       }
 
       if (!(cause instanceof IOException)) {
