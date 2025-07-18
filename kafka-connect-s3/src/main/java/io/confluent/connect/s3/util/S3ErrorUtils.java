@@ -20,8 +20,8 @@ import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import software.amazon.awssdk.core.exception.SdkException;
-import software.amazon.awssdk.core.retry.RetryPolicyContext;
-import software.amazon.awssdk.core.retry.conditions.SdkRetryCondition;
+//import software.amazon.awssdk.core.retry.RetryPolicyContext;
+//import software.amazon.awssdk.core.retry.conditions.SdkRetryCondition;
 //import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
 
 import java.io.IOException;
@@ -55,12 +55,13 @@ public class S3ErrorUtils {
         // retriable exceptions.
 
         // TODO: Compare the two
-        return SdkRetryCondition.DEFAULT.shouldRetry(
-            RetryPolicyContext.builder()
-                //.request(GetCallerIdentityRequest.builder().build()) // NOOP request
-                .retriesAttempted(Integer.MAX_VALUE)
-                .exception((SdkException) cause)
-                .build());
+        //return SdkRetryCondition.DEFAULT.shouldRetry(
+        //    RetryPolicyContext.builder()
+        //        .request(GetCallerIdentityRequest.builder().build()) // NOOP request
+        //        .retriesAttempted(Integer.MAX_VALUE)
+        //        .exception((SdkException) cause)
+        //        .build());
+        return ((SdkException) cause).retryable();
       }
 
       if (!(cause instanceof IOException)) {
