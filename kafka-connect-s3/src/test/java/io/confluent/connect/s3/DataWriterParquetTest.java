@@ -55,6 +55,8 @@ import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import io.confluent.kafka.serializers.NonRecordContainer;
 import org.testcontainers.shaded.com.google.common.collect.ImmutableList;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.junit.Assert.assertEquals;
@@ -122,7 +124,7 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
     List<SinkRecord> sinkRecords = createRecords(2);
     byte[] partialData = ParquetUtils.putRecords(sinkRecords, format.getAvroData());
     String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, EXTENSION, ZERO_PAD_FMT);
-    s3.putObject(S3_TEST_BUCKET_NAME, fileKey, new ByteArrayInputStream(partialData), null);
+    s3.putObject(PutObjectRequest.builder().bucket(S3_TEST_BUCKET_NAME).key(fileKey).build(), RequestBody.fromInputStream(new ByteArrayInputStream(partialData), partialData.length));
 
     // Accumulate rest of the records.
     sinkRecords.addAll(createRecords(5, 2));
