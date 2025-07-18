@@ -61,14 +61,14 @@ public class S3ErrorUtils {
 
         AwsServiceException awsServiceException = (AwsServiceException) cause;
         // TODO: Compare the two
+        log.info("Exception cause: {}", cause.getMessage());
         return SdkRetryCondition.DEFAULT.shouldRetry(
             RetryPolicyContext.builder()
                 .retriesAttempted(Integer.MAX_VALUE)
                 .exception((SdkException) cause)
                 .httpStatusCode(awsServiceException.statusCode())
                 .build());
-        // log.info("Exception cause: {}", cause.getMessage());
-        // return ((SdkException) cause).retryable();
+        //return ((SdkException) cause).retryable();
       }
 
       if (!(cause instanceof IOException)) {
