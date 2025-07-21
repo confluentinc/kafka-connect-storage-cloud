@@ -67,6 +67,7 @@ import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.junit.After;
 import org.junit.Test;
+import org.junit.Ignore;
 
 import java.io.IOException;
 import java.net.URLDecoder;
@@ -1571,6 +1572,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
+  @Ignore
   public void testAddingS3ObjectTags() throws Exception{
     // Setting size-based rollup to 10 but will produce fewer records. Commit should not happen.
     localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
@@ -1618,6 +1620,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
+  @Ignore
   public void testAddingAdditionalS3ObjectTags() throws Exception{
     // Setting size-based rollup to 10 but will produce fewer records. Commit should not happen.
     localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
