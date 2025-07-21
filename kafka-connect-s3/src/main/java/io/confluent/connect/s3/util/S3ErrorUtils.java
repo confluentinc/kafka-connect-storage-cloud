@@ -15,12 +15,16 @@
 
 package io.confluent.connect.s3.util;
 
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.AmazonWebServiceRequest;
-import com.amazonaws.retry.PredefinedRetryPolicies;
+
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
+import software.amazon.awssdk.core.exception.SdkException;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.core.retry.RetryPolicyContext;
+import software.amazon.awssdk.core.retry.conditions.SdkRetryCondition;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -28,6 +32,8 @@ import java.io.IOException;
  * Utilities related to basic S3 error/exception analysis.
  */
 public class S3ErrorUtils {
+
+  private static final Logger log = LoggerFactory.getLogger(S3ErrorUtils.class);
 
   /**
    * Return whether the given exception is a "retryable" exception.
@@ -48,14 +54,20 @@ public class S3ErrorUtils {
     // as its parent (as the SDK does), in which case, shouldRetry()
     // will often find it retriable.
     for (Throwable cause : ExceptionUtils.getThrowableList(exception)) {
-      if (cause instanceof AmazonClientException) {
+      if (cause instanceof SdkException) {
         // The AWS SDK maintains a check for what it considers to be
         // retriable exceptions.
-        return PredefinedRetryPolicies.DEFAULT_RETRY_CONDITION.shouldRetry(
-                AmazonWebServiceRequest.NOOP,
-                (AmazonClientException) cause,
-                Integer.MAX_VALUE
-        );
+
+        RetryPolicyContext.Builder retryContextBuilder = RetryPolicyContext.builder()
+            .retriesAttempted(Integer.MAX_VALUE)
+            .exception((SdkException) cause);
+
+        if (cause instanceof AwsServiceException) {
+          AwsServiceException awsServiceException = (AwsServiceException) cause;
+          retryContextBuilder.httpStatusCode(awsServiceException.statusCode());
+        }
+
+        return SdkRetryCondition.DEFAULT.shouldRetry(retryContextBuilder.build());
       }
 
       if (!(cause instanceof IOException)) {
