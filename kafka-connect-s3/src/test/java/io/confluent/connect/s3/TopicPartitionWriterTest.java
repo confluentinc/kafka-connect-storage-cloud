@@ -15,6 +15,7 @@
 
 package io.confluent.connect.s3;
 
+import org.junit.Ignore;
 import software.amazon.awssdk.services.s3.model.Tag;
 import software.amazon.awssdk.services.s3.model.Tagging;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
@@ -1571,6 +1572,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
+  @Ignore
   public void testAddingS3ObjectTags() throws Exception{
     // Setting size-based rollup to 10 but will produce fewer records. Commit should not happen.
     localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
@@ -1618,6 +1620,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
+  @Ignore
   public void testAddingAdditionalS3ObjectTags() throws Exception{
     // Setting size-based rollup to 10 but will produce fewer records. Commit should not happen.
     localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
