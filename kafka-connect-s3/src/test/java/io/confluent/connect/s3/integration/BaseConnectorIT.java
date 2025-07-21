@@ -37,6 +37,9 @@ import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadBucketResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.Tag;
+import software.amazon.awssdk.services.s3.model.Tagging;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
@@ -239,18 +242,56 @@ public abstract class BaseConnectorIT {
     int expectedFileCount = (int) numRecords / flushSize;
     List<String> expectedFiles = new ArrayList<>();
     for (int offset = startOffset; offset < expectedFileCount * flushSize; offset += flushSize) {
-      String filepath = String.format(
-          "topics/%s/partition=%d/%s+%d+%010d.%s",
-          topic,
-          partition,
-          topic,
-          partition,
-          offset,
-          extension
-      );
+      String filepath = getFilePath(topic, partition, offset, extension);
       expectedFiles.add(filepath);
     }
     return expectedFiles;
+  }
+
+  private String getFilePath(String topic,
+                             int partition,
+                             int offset,
+                             String extension) {
+    return String.format(
+        "topics/%s/partition=%d/%s+%d+%010d.%s",
+        topic,
+        partition,
+        topic,
+        partition,
+        offset,
+        extension
+    );
+  }
+  protected Map<String, Tagging> getExpectedTags(
+      String topic,
+                                    int partition,
+                                    int flushSize,
+                                    int startOffset,
+                                    long numRecords,
+      String extension) {
+    int expectedFileCount = (int) numRecords / flushSize;
+    Map<String, Tagging> tags = new HashMap<>();
+    for (int offset = startOffset; offset < expectedFileCount * flushSize; offset += flushSize) {
+      String filepath = getFilePath(topic, partition, offset, extension);
+      Tag startOffsetTag = Tag.builder()
+          .key("startOffset")
+          .value(String.valueOf(offset))
+          .build();
+
+      Tag endOffset = Tag.builder()
+          .key("endOffset")
+          .value(String.valueOf(offset + flushSize - 1))
+          .build();
+
+      Tag recordCount = Tag.builder()
+          .key("recordCount")
+          .value(String.valueOf(flushSize))
+          .build();
+      tags.put(filepath, Tagging.builder()
+          .tagSet(Arrays.asList(startOffsetTag, endOffset, recordCount))
+          .build());
+    }
+    return tags;
   }
 
   /**
