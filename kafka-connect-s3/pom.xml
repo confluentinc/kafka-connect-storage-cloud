@@ -374,8 +374,6 @@
                   <configuration>
                       <!-- Skip the Integration tests as part of surefire run -->
                       <excludedGroups>org.apache.kafka.test.IntegrationTest</excludedGroups>
-                      <!-- Add JVM arguments for PowerMock compatibility with Java 9+ -->
-                      <argLine>@{argLine} -Djava.awt.headless=true --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.lang.reflect=ALL-UNNAMED --add-opens java.base/java.text=ALL-UNNAMED --add-opens java.base/java.io=ALL-UNNAMED --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/java.security=ALL-UNNAMED --add-opens java.base/java.util.concurrent=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/sun.security.util=ALL-UNNAMED --add-opens java.desktop/java.awt.font=ALL-UNNAMED</argLine>
                   </configuration>
             </plugin>
             <plugin>
