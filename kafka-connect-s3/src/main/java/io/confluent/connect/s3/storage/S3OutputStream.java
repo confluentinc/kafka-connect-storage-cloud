@@ -182,8 +182,10 @@ public class S3OutputStream extends PositionOutputStream {
       if (buffer.hasRemaining()) {
         uploadPart(buffer.position());
       }
-      multiPartUpload.complete();
-      log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
+      if (multiPartUpload != null) {
+        multiPartUpload.complete();
+        log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
+      }
     } catch (IOException e) {
       log.error(
           "Multipart upload failed to complete for bucket '{}' key '{}'. Reason: {}",
