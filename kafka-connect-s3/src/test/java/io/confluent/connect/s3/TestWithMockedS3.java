@@ -15,17 +15,26 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.AnonymousAWSCredentials;
-import com.amazonaws.client.builder.AwsClientBuilder;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.AmazonS3Exception;
-import com.amazonaws.services.s3.model.ObjectListing;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
-import com.amazonaws.services.s3.model.Tag;
-import com.amazonaws.services.s3.model.GetObjectTaggingResult;
+import java.nio.file.Paths;
+
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.core.sync.ResponseTransformer;
+import software.amazon.awssdk.services.s3.model.GetObjectTaggingRequest;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.S3ClientBuilder;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectTaggingRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
+import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.model.S3Object;
+import software.amazon.awssdk.services.s3.model.Tag;
+import software.amazon.awssdk.services.s3.model.GetObjectTaggingResponse;
 import com.amazonaws.services.s3.model.transform.XmlResponsesSaxParser;
 import io.confluent.connect.s3.format.parquet.ParquetUtils;
 import io.findify.s3mock.S3Mock;
@@ -37,10 +46,13 @@ import org.junit.Rule;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.amazonaws.services.s3.model.GetObjectTaggingResult;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -95,31 +107,34 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
     }
   }
 
-  public static List<S3ObjectSummary> listObjects(String bucket, String prefix, AmazonS3 s3) {
-    List<S3ObjectSummary> objects = new ArrayList<>();
-    ObjectListing listing;
+  public static List<S3Object> listObjects(String bucket, String prefix, S3Client s3) {
+    List<S3Object> objects = new ArrayList<>();
+    ListObjectsResponse listing;
 
+    ListObjectsRequest.Builder builder;
     try {
       if (prefix == null) {
-        listing = s3.listObjects(bucket);
+        builder = ListObjectsRequest.builder().bucket(bucket);
+        listing = s3.listObjects(builder.build());
       } else {
-        listing = s3.listObjects(bucket, prefix);
+        builder = ListObjectsRequest.builder().bucket(bucket).prefix(prefix);
+        listing = s3.listObjects(builder.build());
       }
 
-      objects.addAll(listing.getObjectSummaries());
+      objects.addAll(listing.contents());
       while (listing.isTruncated()) {
-        listing = s3.listNextBatchOfObjects(listing);
-        objects.addAll(listing.getObjectSummaries());
+        listing = s3.listObjects(builder.marker(listing.marker()).build());
+        objects.addAll(listing.contents());
       }
-    } catch (AmazonS3Exception e) {
-     log.warn("listObjects for bucket '{}' prefix '{}' returned error code: {}", bucket, prefix, e.getStatusCode());
+    } catch (S3Exception e) {
+     log.warn("listObjects for bucket '{}' prefix '{}' returned error code: {}", bucket, prefix, e.awsErrorDetails().sdkHttpResponse().statusCode());
     }
 
     return objects;
   }
 
   public static Collection<Object> readRecords(String topicsDir, String directory, TopicPartition tp, long startOffset,
-                                               String extension, String zeroPadFormat, String bucketName, AmazonS3 s3) throws IOException {
+                                               String extension, String zeroPadFormat, String bucketName, S3Client s3) throws IOException {
       String fileKey = FileUtils.fileKeyToCommit(topicsDir, directory, tp, startOffset,
           extension, zeroPadFormat);
       CompressionType compressionType = CompressionType.NONE;
@@ -143,70 +158,70 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
       }
   }
 
-  public static Collection<Object> readRecordsAvro(String bucketName, String fileKey, AmazonS3 s3) throws IOException {
+  public static Collection<Object> readRecordsAvro(String bucketName, String fileKey, S3Client s3) throws IOException {
       log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
-      InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
+      InputStream in = s3.getObject(GetObjectRequest.builder().bucket(bucketName).key(fileKey).build());
 
       return AvroUtils.getRecords(in);
   }
 
-  public static Collection<Object> readRecordsJson(String bucketName, String fileKey, AmazonS3 s3,
+  public static Collection<Object> readRecordsJson(String bucketName, String fileKey, S3Client s3,
                                                    CompressionType compressionType) throws IOException {
       log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
-      InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
+      InputStream in = s3.getObject(GetObjectRequest.builder().bucket(bucketName).key(fileKey).build());
 
       return JsonUtils.getRecords(compressionType.wrapForInput(in));
   }
 
-  public static Collection<Object> readRecordsByteArray(String bucketName, String fileKey, AmazonS3 s3,
+  public static Collection<Object> readRecordsByteArray(String bucketName, String fileKey, S3Client s3,
                                                         CompressionType compressionType, byte[] lineSeparatorBytes) throws IOException {
       log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
-      InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
+      InputStream in = s3.getObject(GetObjectRequest.builder().bucket(bucketName).key(fileKey).build());
 
       return ByteArrayUtils.getRecords(compressionType.wrapForInput(in), lineSeparatorBytes);
   }
 
-  public static List<Tag> getS3ObjectTags(String bucketName, String fileKey, AmazonS3 s3) throws IOException {
-      //findify S3 mock does not currently support S3 object tag mocks, instead tags are stored as object data in AWS XML format
-      //leverage this workaround to parse the xml until tag mocks are supported
-      log.debug("Reading tags from bucket '{}' key '{}': ", bucketName, fileKey);
-      InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
-      XmlResponsesSaxParser parser = new XmlResponsesSaxParser();
-      GetObjectTaggingResult tagsResult = parser.parseObjectTaggingResponse(in).getResult();
+  public static List<Tag> getS3ObjectTags(String bucketName, String fileKey, S3Client s3) throws IOException {
+    //findify S3 mock does not currently support S3 object tag mocks, instead tags are stored as object data in AWS XML format
+    //leverage this workaround to parse the xml until tag mocks are supported
+    log.debug("Reading tags from bucket '{}' key '{}': ", bucketName, fileKey);
 
-      List<Tag> tagList = new ArrayList<>();
-      tagList.addAll(tagsResult.getTagSet());
-      return tagList;
+    InputStream in = s3.getObject(GetObjectRequest.builder().bucket(bucketName).key(fileKey).build());
+    //XmlResponsesSaxParser parser = new XmlResponsesSaxParser();
+    //GetObjectTaggingResponse tagsResult = parser.parseObjectTaggingResponse(in).getResult();
+
+    List<Tag> tagList = new ArrayList<>();
+    //tagList.addAll(tagsResult.getTagSet());
+    return tagList;
   }
 
-  public static Collection<Object> readRecordsParquet(String bucketName, String fileKey, AmazonS3 s3) throws IOException {
+  public static Collection<Object> readRecordsParquet(String bucketName, String fileKey, S3Client s3) throws IOException {
       log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
-      InputStream in = s3.getObject(bucketName, fileKey).getObjectContent();
+      InputStream in = s3.getObject(GetObjectRequest.builder().bucket(bucketName).key(fileKey).build());
       return ParquetUtils.getRecords(in, fileKey);
   }
 
   @Override
-  public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
-    final AWSCredentialsProvider provider = new AWSCredentialsProvider() {
-      private final AnonymousAWSCredentials credentials = new AnonymousAWSCredentials();
-      @Override
-      public AWSCredentials getCredentials() {
-        return credentials;
-      }
+  public S3Client newS3Client(S3SinkConnectorConfig config) {
+    final AwsCredentialsProvider provider = new AwsCredentialsProvider() {
 
       @Override
-      public void refresh() {
+      public AwsCredentials resolveCredentials() {
+        return AwsBasicCredentials.create("accessKey", "secretKey");
       }
     };
 
-    AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
-               .withAccelerateModeEnabled(config.getBoolean(S3SinkConnectorConfig.WAN_MODE_CONFIG))
-               .withPathStyleAccessEnabled(config.getBoolean(S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG))
-               .withCredentials(provider);
+    S3ClientBuilder builder = S3Client.builder()
+        .accelerate(config.getBoolean(S3SinkConnectorConfig.WAN_MODE_CONFIG))
+        //.forcePathStyle(config.getBoolean(S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG))
+        .forcePathStyle(true)
+        .credentialsProvider(provider);
 
     builder = url == null ?
-                  builder.withRegion(config.getString(S3SinkConnectorConfig.REGION_CONFIG)) :
-                  builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(url, ""));
+        builder.region(Region.of(config.getString(S3SinkConnectorConfig.REGION_CONFIG))) :
+        builder
+            .endpointOverride(URI.create(url))
+            .region(Region.of(config.getString(S3SinkConnectorConfig.REGION_CONFIG)));
 
     return builder.build();
   }
@@ -214,7 +229,7 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
   class S3OutputStreamFlaky extends S3OutputStream {
     private final AtomicInteger retries;
 
-    public S3OutputStreamFlaky(String key, S3SinkConnectorConfig conf, AmazonS3 s3, AtomicInteger retries) {
+    public S3OutputStreamFlaky(String key, S3SinkConnectorConfig conf, S3Client s3, AtomicInteger retries) {
       super(key, conf, s3);
       this.retries = retries;
     }

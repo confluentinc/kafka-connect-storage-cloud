@@ -15,21 +15,22 @@
 
 package io.confluent.connect.s3.storage;
 
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.event.ProgressEvent;
-import com.amazonaws.event.ProgressListener;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
-import com.amazonaws.services.s3.model.AmazonS3Exception;
-import com.amazonaws.services.s3.model.CannedAccessControlList;
-import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
-import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.PartETag;
-import com.amazonaws.services.s3.model.SSEAlgorithm;
-import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
-import com.amazonaws.services.s3.model.SSECustomerKey;
-import com.amazonaws.services.s3.model.UploadPartRequest;
+import software.amazon.awssdk.core.exception.SdkException;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.AbortMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.CompletedMultipartUpload;
+import software.amazon.awssdk.services.s3.model.CompletedPart;
+import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
+import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.ServerSideEncryption;
+import software.amazon.awssdk.services.s3.model.UploadPartRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.http.HttpStatusCode;
+
+
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.errors.FileExistsException;
 import io.confluent.connect.storage.common.util.StringUtils;
@@ -39,6 +40,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.parquet.io.PositionOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.services.s3.model.UploadPartResponse;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -55,15 +57,16 @@ import java.util.function.Supplier;
  */
 public class S3OutputStream extends PositionOutputStream {
   private static final Logger log = LoggerFactory.getLogger(S3OutputStream.class);
-  private final AmazonS3 s3;
+  private final S3Client s3;
   private final String bucket;
   private final String key;
   private final String ssea;
-  private final SSECustomerKey sseCustomerKey;
+  private String sseCustomerKey; // TODO: Manual test with SSE key
   private final String sseKmsKeyId;
-  private final ProgressListener progressListener;
+
+  // private final ProgressListener progressListener; TODO find alternative?
   private final int partSize;
-  private final CannedAccessControlList cannedAcl;
+  private final ObjectCannedACL cannedAcl; // TODO: Test with canned acl
   private boolean closed;
   private final ByteBuf buffer;
   private MultipartUpload multiPartUpload;
@@ -76,15 +79,15 @@ public class S3OutputStream extends PositionOutputStream {
 
   private static final String PRECONDITION_FAILED_ERROR = "PreconditionFailed";
 
-  public S3OutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
+  public S3OutputStream(String key, S3SinkConnectorConfig conf, S3Client s3) {
     this.s3 = s3;
     this.bucket = conf.getBucketName();
     this.key = key;
     this.ssea = conf.getSsea();
     final String sseCustomerKeyConfig = conf.getSseCustomerKey();
-    this.sseCustomerKey = (SSEAlgorithm.AES256.toString().equalsIgnoreCase(ssea)
+    this.sseCustomerKey = (ServerSideEncryption.AES256.toString().equalsIgnoreCase(ssea)
         && StringUtils.isNotBlank(sseCustomerKeyConfig))
-      ? new SSECustomerKey(sseCustomerKeyConfig) : null;
+      ? sseCustomerKeyConfig : null;
     this.sseKmsKeyId = conf.getSseKmsKeyId();
     this.partSize = conf.getPartSize();
     this.cannedAcl = conf.getCannedAcl();
@@ -99,7 +102,6 @@ public class S3OutputStream extends PositionOutputStream {
       this.buffer = new SimpleByteBuffer(this.partSize);
     }
 
-    this.progressListener = new ConnectProgressListener();
     this.multiPartUpload = null;
     this.compressionType = conf.getCompressionType();
     this.compressionLevel = conf.getCompressionLevel();
@@ -180,8 +182,10 @@ public class S3OutputStream extends PositionOutputStream {
       if (buffer.hasRemaining()) {
         uploadPart(buffer.position());
       }
-      multiPartUpload.complete();
-      log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
+      if (multiPartUpload != null) {
+        multiPartUpload.complete();
+        log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
+      }
     } catch (IOException e) {
       log.error(
           "Multipart upload failed to complete for bucket '{}' key '{}'. Reason: {}",
@@ -214,35 +218,27 @@ public class S3OutputStream extends PositionOutputStream {
     super.close();
   }
 
-  private ObjectMetadata newObjectMetadata() {
-    ObjectMetadata meta = new ObjectMetadata();
-    if (StringUtils.isNotBlank(ssea)) {
-      meta.setSSEAlgorithm(ssea);
-    }
-    return meta;
-  }
-
   MultipartUpload newMultipartUpload() throws IOException {
-    InitiateMultipartUploadRequest initRequest = new InitiateMultipartUploadRequest(
-        bucket,
-        key
-    ).withCannedACL(cannedAcl);
+    CreateMultipartUploadRequest.Builder initRequest =
+        CreateMultipartUploadRequest.builder().acl(cannedAcl).bucket(bucket).key(key);
 
-    if (SSEAlgorithm.AES256.toString().equalsIgnoreCase(ssea)
+    if (ServerSideEncryption.AES256.toString().equalsIgnoreCase(ssea)
         && sseCustomerKey == null) {
       log.debug("Using SSE (AES256) without customer key");
-      initRequest.setObjectMetadata(newObjectMetadata());
-    } else if (SSEAlgorithm.KMS.toString().equalsIgnoreCase(ssea)
+      initRequest.serverSideEncryption(ServerSideEncryption.AES256);
+    } else if (ServerSideEncryption.AWS_KMS.toString().equalsIgnoreCase(ssea)
         && StringUtils.isNotBlank(sseKmsKeyId)) {
       log.debug("Using KMS Key ID: {}", sseKmsKeyId);
-      initRequest.setSSEAwsKeyManagementParams(new SSEAwsKeyManagementParams(sseKmsKeyId));
+      initRequest.ssekmsKeyId(sseKmsKeyId);
+      initRequest.serverSideEncryption(ServerSideEncryption.AWS_KMS);
     } else if (sseCustomerKey != null) {
       log.debug("Using KMS Customer Key");
-      initRequest.setSSECustomerKey(sseCustomerKey);
+      initRequest.sseCustomerKey(sseCustomerKey);
+      initRequest.sseCustomerAlgorithm("AES256");
     }
 
     return handleAmazonExceptions(
-      () -> new MultipartUpload(s3.initiateMultipartUpload(initRequest).getUploadId())
+      () -> new MultipartUpload(s3.createMultipartUpload(initRequest.build()).uploadId())
     );
   }
 
@@ -259,18 +255,20 @@ public class S3OutputStream extends PositionOutputStream {
   private static <T> T handleAmazonExceptions(Supplier<T> supplier) throws IOException {
     try {
       return supplier.get();
-    } catch (AmazonClientException e) {
+    } catch (SdkException e) {
       throw new IOException(e.getMessage(), e);
     }
   }
 
   private class MultipartUpload {
     private final String uploadId;
-    private final List<PartETag> partETags;
+    //private final List<String> partETags;
+    private final List<CompletedPart> completedParts;
 
     public MultipartUpload(String uploadId) {
       this.uploadId = uploadId;
-      this.partETags = new ArrayList<>();
+      //this.partETags = new ArrayList<>();
+      this.completedParts = new ArrayList<>();
       log.debug(
           "Initiated multi-part upload for bucket '{}' key '{}' with id '{}'",
           bucket,
@@ -280,23 +278,28 @@ public class S3OutputStream extends PositionOutputStream {
     }
 
     public void uploadPart(ByteArrayInputStream inputStream, int partSize) {
-      int currentPartNumber = partETags.size() + 1;
-      UploadPartRequest request = new UploadPartRequest()
-                                            .withBucketName(bucket)
-                                            .withKey(key)
-                                            .withUploadId(uploadId)
-                                            .withSSECustomerKey(sseCustomerKey)
-                                            .withInputStream(inputStream)
-                                            .withPartNumber(currentPartNumber)
-                                            .withPartSize(partSize)
-                                            .withGeneralProgressListener(progressListener);
+      int currentPartNumber = completedParts.size() + 1;
+      UploadPartRequest.Builder requestBuilder = UploadPartRequest.builder()
+          .bucket(bucket)
+          .key(key)
+          .uploadId(uploadId)
+          .sseCustomerKey(sseCustomerKey)
+          .partNumber(currentPartNumber)
+          .contentLength((long) partSize);
+
+      RequestBody requestBody = RequestBody.fromInputStream(inputStream, partSize);
 
       if (enableDigest) {
-        request = request.withMD5Digest(computeDigest(inputStream, partSize));
+        requestBuilder = requestBuilder.contentMD5(computeDigest(inputStream, partSize));
       }
 
       log.debug("Uploading part {} for id '{}'", currentPartNumber, uploadId);
-      partETags.add(s3.uploadPart(request).getPartETag());
+      UploadPartResponse uploadPartResponse = s3.uploadPart(requestBuilder.build(), requestBody);
+      //partETags.add(uploadPartResponse.eTag());
+      completedParts.add(CompletedPart.builder()
+          .eTag(uploadPartResponse.eTag())
+          .partNumber(currentPartNumber)
+          .build());
     }
 
     /**
@@ -319,23 +322,30 @@ public class S3OutputStream extends PositionOutputStream {
 
     public void complete() throws IOException {
       log.debug("Completing multi-part upload for key '{}', id '{}'", key, uploadId);
-      CompleteMultipartUploadRequest completeRequest =
-          new CompleteMultipartUploadRequest(bucket, key, uploadId, partETags);
+      CompleteMultipartUploadRequest.Builder completeRequestBuilder =
+          CompleteMultipartUploadRequest.builder()
+              .bucket(bucket)
+              .key(key)
+              .uploadId(uploadId)
+              .multipartUpload(CompletedMultipartUpload.builder()
+                  .parts(completedParts)
+                  .build());
 
       if (enableConditionalWrites) {
-        completeRequest.ifNoneMatch("*");
+        completeRequestBuilder.ifNoneMatch("*");
       }
 
       handleAmazonExceptions(
           () -> {
             try {
-              return s3.completeMultipartUpload(completeRequest);
-            } catch (AmazonS3Exception e) {
+              return s3.completeMultipartUpload(completeRequestBuilder.build());
+            } catch (S3Exception e) {
               log.error("Failed to complete multipart upload of file {}", key, e);
               // There can be cases where the s3 api returns 200 status code, but the error code
               // is set to "PreconditionFailed". We include additional check on error code to
               // capture such cases.
-              if (e.getStatusCode() == 412 || PRECONDITION_FAILED_ERROR.equals(e.getErrorCode())) {
+              if (e.statusCode() == 412
+                  || PRECONDITION_FAILED_ERROR.equals(e.awsErrorDetails().errorCode())) {
                 // Sanity check to double-check file exists in S3 before skipping the offset
                 boolean exists = fileExists();
                 if (exists) {
@@ -350,11 +360,18 @@ public class S3OutputStream extends PositionOutputStream {
       );
     }
 
+
+
     private boolean fileExists() {
       try {
-        return s3.doesObjectExist(bucket, key);
-      } catch (AmazonS3Exception e) {
-        if (e.getStatusCode() == 403) {
+        s3.headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build());
+        return true;
+      } catch (S3Exception e) {
+        if (e.statusCode() == HttpStatusCode.NOT_FOUND) {
+          return false;
+        }
+        if (e.statusCode() == HttpStatusCode.MOVED_PERMANENTLY
+            || "AccessDenied".equals(e.awsErrorDetails().errorCode())) {
           log.warn("Connector failed with 403 error. Defaulting as file exists", e);
           // To avoid failing connector due to missing ACL, we consider as file exists.
           // We should be fine to assume file exists here since the call is being made only as an
@@ -368,7 +385,11 @@ public class S3OutputStream extends PositionOutputStream {
     public void abort() {
       log.warn("Aborting multi-part upload with id '{}'", uploadId);
       try {
-        s3.abortMultipartUpload(new AbortMultipartUploadRequest(bucket, key, uploadId));
+        s3.abortMultipartUpload(AbortMultipartUploadRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .uploadId(uploadId)
+            .build());
       } catch (Exception e) {
         // ignoring failure on abort.
         log.warn("Unable to abort multipart upload, you may need to purge uploaded parts: ", e);
@@ -382,13 +403,6 @@ public class S3OutputStream extends PositionOutputStream {
       compressionFilter = compressionType.wrapForOutput(this, compressionLevel);
     }
     return compressionFilter;
-  }
-
-  // Dummy listener for now, just logs the event progress.
-  private static class ConnectProgressListener implements ProgressListener {
-    public void progressChanged(ProgressEvent progressEvent) {
-      log.debug("Progress event: " + progressEvent);
-    }
   }
 
   public long getPos() {
