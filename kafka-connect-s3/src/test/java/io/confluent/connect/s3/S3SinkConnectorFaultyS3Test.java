@@ -121,7 +121,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         super.setUp();
 
         s3 = newS3Client(connectorConfig);
-      s3.createBucket(CreateBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME)
+        s3.createBucket(CreateBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME)
           .build());
 
         connectorName = CONNECTOR_NAME + UUID.randomUUID();

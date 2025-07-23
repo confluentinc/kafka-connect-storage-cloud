@@ -107,8 +107,6 @@ public class AwsAssumeRoleCredentialsProvider implements AwsCredentialsProvider,
 
     if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
       AwsBasicCredentials basicCredentials = AwsBasicCredentials.create(accessKeyId, secretKey);
-      //TODO: Set defaults if any to StsClient.builder() equiaveltn to
-      // AWSSecurityTokenServiceClientBuilder.standard()
       StsClientBuilder clientBuilder = StsClient.builder()
           .credentialsProvider(StaticCredentialsProvider.create(basicCredentials));
       if (StringUtils.isNotBlank(region)) {
@@ -116,7 +114,7 @@ public class AwsAssumeRoleCredentialsProvider implements AwsCredentialsProvider,
         clientBuilder.region(Region.of(region));
       }
 
-      StsAssumeRoleCredentialsProvider stsCredentialProvider
+      stsCredentialProvider
           = StsAssumeRoleCredentialsProvider.builder()
           .stsClient(clientBuilder.build())
           .refreshRequest(
@@ -127,11 +125,9 @@ public class AwsAssumeRoleCredentialsProvider implements AwsCredentialsProvider,
                   .build())
           .build();
 
-
     } else {
       basicCredentials = null;
       stsCredentialProvider = StsAssumeRoleCredentialsProvider.builder()
-          // TODO: Add equiaveltn of AWSSecurityTokenServiceClientBuilder.defaultClient()
           .stsClient(StsClient.create())
           .refreshRequest(AssumeRoleRequest.builder()
               .roleArn(roleArn)

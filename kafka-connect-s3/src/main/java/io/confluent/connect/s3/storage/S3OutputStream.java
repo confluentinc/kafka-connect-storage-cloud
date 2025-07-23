@@ -61,12 +61,11 @@ public class S3OutputStream extends PositionOutputStream {
   private final String bucket;
   private final String key;
   private final String ssea;
-  private String sseCustomerKey; // TODO: Manual test with SSE key
+  private String sseCustomerKey;
   private final String sseKmsKeyId;
 
-  // private final ProgressListener progressListener; TODO find alternative?
   private final int partSize;
-  private final ObjectCannedACL cannedAcl; // TODO: Test with canned acl
+  private final ObjectCannedACL cannedAcl;
   private boolean closed;
   private final ByteBuf buffer;
   private MultipartUpload multiPartUpload;
@@ -262,12 +261,10 @@ public class S3OutputStream extends PositionOutputStream {
 
   private class MultipartUpload {
     private final String uploadId;
-    //private final List<String> partETags;
     private final List<CompletedPart> completedParts;
 
     public MultipartUpload(String uploadId) {
       this.uploadId = uploadId;
-      //this.partETags = new ArrayList<>();
       this.completedParts = new ArrayList<>();
       log.debug(
           "Initiated multi-part upload for bucket '{}' key '{}' with id '{}'",
@@ -295,7 +292,6 @@ public class S3OutputStream extends PositionOutputStream {
 
       log.debug("Uploading part {} for id '{}'", currentPartNumber, uploadId);
       UploadPartResponse uploadPartResponse = s3.uploadPart(requestBuilder.build(), requestBody);
-      //partETags.add(uploadPartResponse.eTag());
       completedParts.add(CompletedPart.builder()
           .eTag(uploadPartResponse.eTag())
           .partNumber(currentPartNumber)

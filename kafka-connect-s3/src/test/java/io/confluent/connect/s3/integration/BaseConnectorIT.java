@@ -152,7 +152,7 @@ public abstract class BaseConnectorIT {
 
   @BeforeClass
   public static void setupClient() {
-    //log.info("Starting ITs...");
+    log.info("Starting ITs...");
     s3Client = getS3Client();
 
     if (bucketExists(TEST_BUCKET_NAME)) {

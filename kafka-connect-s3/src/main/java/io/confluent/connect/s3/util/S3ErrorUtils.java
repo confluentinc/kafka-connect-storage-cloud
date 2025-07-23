@@ -23,8 +23,6 @@ import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.retry.RetryPolicyContext;
 import software.amazon.awssdk.core.retry.conditions.SdkRetryCondition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -32,8 +30,6 @@ import java.io.IOException;
  * Utilities related to basic S3 error/exception analysis.
  */
 public class S3ErrorUtils {
-
-  private static final Logger log = LoggerFactory.getLogger(S3ErrorUtils.class);
 
   /**
    * Return whether the given exception is a "retryable" exception.

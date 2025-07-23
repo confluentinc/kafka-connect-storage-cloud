@@ -146,21 +146,6 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
         .advancedOptions(
             Collections.singletonMap(SdkAdvancedClientOption.USER_AGENT_PREFIX, version))
         .build();
-    /*AWS SDK for Java v2 migration: userAgentPrefix override is a request-level config in v2. See https://sdk.amazonaws.com/java/api/latest/software/amazon/awssdk/core/RequestOverrideConfiguration.Builder.html#addApiName(software.amazon.awssdk.core.ApiName).*/
-    // TODO: Move to individual calls
-    //clientConfiguration
-    //.userAgentPrefix(version) -> Refer listObjects for reference
-    //.retryPolicy(newFullJitterRetryPolicy(config)); -> Move to builder
-
-    // Moved to http client builder
-    /*if (StringUtils.isNotBlank(config.getString(S3_PROXY_URL_CONFIG))) {
-      S3ProxyConfig proxyConfig = new S3ProxyConfig(config);
-      clientConfiguration.protocol(proxyConfig.protocol())
-          .proxyHost(proxyConfig.host())
-          .proxyPort(proxyConfig.port())
-          .proxyUsername(proxyConfig.user())
-          .proxyPassword(proxyConfig.pass());
-    }*/
 
     return clientConfiguration;
   }
@@ -202,31 +187,6 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
                 S3_RETRY_MAX_BACKOFF_TIME_MS))
         .build();
   }
-
-  /**
-   * Creates a retry policy, based on full jitter backoff strategy
-   * and default retry condition.
-   * Visible for testing.
-   *
-   * @param config the S3 configuration.
-   * @return retry policy
-   */
-  /*protected RetryPolicy newFullJitterRetryPolicy(S3SinkConnectorConfig config) {
-    PredefinedBackoffStrategies.FullJitterBackoffStrategy backoffStrategy =
-        new PredefinedBackoffStrategies.FullJitterBackoffStrategy(
-            config.getLong(S3_RETRY_BACKOFF_CONFIG).intValue(),
-            S3_RETRY_MAX_BACKOFF_TIME_MS
-        );
-
-    RetryPolicy retryPolicy = new RetryPolicy(
-        PredefinedRetryPolicies.DEFAULT_RETRY_CONDITION,
-        backoffStrategy,
-        conf.getS3PartRetries(),
-        false
-    );
-    log.info("Created a retry policy for the connector");
-    return retryPolicy;
-  }*/
 
   protected AwsCredentialsProvider newCredentialsProvider(S3SinkConnectorConfig config) {
     log.info("Returning new credentials provider based on the configured "
@@ -348,11 +308,9 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
     s3.putObjectTagging(request);
   }
 
-  //Example of request override configuration
   @Override
   public ListObjectsResponse list(String path) {
     return s3.listObjects(ListObjectsRequest.builder().bucket(bucketName).prefix(path)
-        //.overrideConfiguration(requestOverrideConfiguration)
         .build());
   }
 

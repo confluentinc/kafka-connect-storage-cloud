@@ -181,20 +181,6 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
       return ByteArrayUtils.getRecords(compressionType.wrapForInput(in), lineSeparatorBytes);
   }
 
-  public static List<Tag> getS3ObjectTags(String bucketName, String fileKey, S3Client s3) throws IOException {
-    //findify S3 mock does not currently support S3 object tag mocks, instead tags are stored as object data in AWS XML format
-    //leverage this workaround to parse the xml until tag mocks are supported
-    log.debug("Reading tags from bucket '{}' key '{}': ", bucketName, fileKey);
-
-    InputStream in = s3.getObject(GetObjectRequest.builder().bucket(bucketName).key(fileKey).build());
-    //XmlResponsesSaxParser parser = new XmlResponsesSaxParser();
-    //GetObjectTaggingResponse tagsResult = parser.parseObjectTaggingResponse(in).getResult();
-
-    List<Tag> tagList = new ArrayList<>();
-    //tagList.addAll(tagsResult.getTagSet());
-    return tagList;
-  }
-
   public static Collection<Object> readRecordsParquet(String bucketName, String fileKey, S3Client s3) throws IOException {
       log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
       InputStream in = s3.getObject(GetObjectRequest.builder().bucket(bucketName).key(fileKey).build());
@@ -213,7 +199,6 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
 
     S3ClientBuilder builder = S3Client.builder()
         .accelerate(config.getBoolean(S3SinkConnectorConfig.WAN_MODE_CONFIG))
-        //.forcePathStyle(config.getBoolean(S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG))
         .forcePathStyle(true)
         .credentialsProvider(provider);
 
