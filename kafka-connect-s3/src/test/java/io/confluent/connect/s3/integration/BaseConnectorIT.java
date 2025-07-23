@@ -485,7 +485,7 @@ public abstract class BaseConnectorIT {
    */
   protected int countNumberOfRecords(
       String bucketName
-  ) {
+  ) throws IOException {
     int rowCount = 0;
     for (String fileName :
         getS3FileListValues(s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(bucketName).build()))) {
@@ -538,12 +538,17 @@ public abstract class BaseConnectorIT {
     return true;
   }
 
-  private File downloadFile(String bucketName, String s3Filename, String destinationPath) {
+  private File downloadFile(String bucketName, String s3Filename, String destinationPath) throws IOException {
 
     log.info("Saving file to : {}", destinationPath);
-    s3Client.getObject(GetObjectRequest.builder().bucket(bucketName).key(s3Filename).build(),
-        ResponseTransformer.toFile(Paths.get(destinationPath)));
-    return new File(destinationPath);
+
+    ResponseInputStream<GetObjectResponse> is = s3Client.getObject(
+        GetObjectRequest.builder()
+            .bucket(bucketName).key(s3Filename)
+            .build());
+    File downloadedFile = new File(destinationPath);
+    FileUtils.copyInputStreamToFile(is, downloadedFile);
+    return downloadedFile;
   }
 
   protected boolean keyfileContentsAsExpected(

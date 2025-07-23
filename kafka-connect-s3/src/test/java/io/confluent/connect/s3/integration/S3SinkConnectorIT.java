@@ -53,6 +53,7 @@ import io.confluent.connect.s3.storage.S3Storage;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -249,7 +250,7 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
             .key(key).build(), requestBody);
   }
 
-  private void testRecordsWrittenWithConditionalWrites(String expectedFileExtension) throws InterruptedException, ExecutionException {
+  private void testRecordsWrittenWithConditionalWrites(String expectedFileExtension) throws InterruptedException, ExecutionException, IOException {
 
     // Create some initial file - presumed to be created by another task instance. The file contains the first two records
     String key = String.format("topics/%s/partition=0/%s+0+0000000000.json", DEFAULT_TEST_TOPIC_NAME, DEFAULT_TEST_TOPIC_NAME);
@@ -397,7 +398,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
       GetObjectTaggingResponse getObjectTaggingResponse = s3Client.getObjectTagging(getObjectTaggingRequest);
       List<Tag> actualTags = getObjectTaggingResponse.tagSet();
-      assertEquals(entry.getValue().tagSet(), actualTags);
+      assertEquals(actualTags.size(), entry.getValue().tagSet().size());
+      assertTrue(actualTags.containsAll(entry.getValue().tagSet()));
     }
   }
 
