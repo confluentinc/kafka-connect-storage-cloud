@@ -36,7 +36,13 @@ import static org.hamcrest.core.StringStartsWith.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import com.amazonaws.services.s3.model.ObjectMetadata;
+import software.amazon.awssdk.services.s3.model.Tag;
+import software.amazon.awssdk.services.s3.model.Tagging;
+import software.amazon.awssdk.services.s3.model.GetObjectTaggingRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectTaggingResponse;
+import software.amazon.awssdk.core.sync.RequestBody;
+
+import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.S3SinkConnector;
 import io.confluent.connect.s3.S3SinkConnectorConfig.IgnoreOrFailBehavior;
 import io.confluent.connect.s3.S3SinkConnectorConfig.OutputWriteBehavior;
@@ -47,6 +53,8 @@ import io.confluent.connect.s3.storage.S3Storage;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -82,6 +90,9 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+
 
 @SuppressWarnings({"unchecked", "deprecation"})
 @Category(IntegrationTest.class)
@@ -208,6 +219,14 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   @Test
+  public void testFilesWrittenToBucketWithTagsEnabled() throws Throwable {
+    //add test specific props
+    props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+    props.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
+    testBasicRecordsWritten(JSON_EXTENSION, true, true);
+  }
+
+  @Test
   public void testConnectorWithConditionalWrites() throws Throwable {
     props.put(ENABLE_CONDITIONAL_WRITES_CONFIG, "true");
     props.put(ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "60000");
@@ -223,10 +242,15 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private void writeDummyFile(String key) {
     String initialFileContents = "{\"ID\":1,\"myBool\":true,\"myInt32\":32,\"myFloat32\":3.2,\"myFloat64\":64.64,\"myString\":\"theStringVal\"}\n"
         + "{\"ID\":1,\"myBool\":true,\"myInt32\":32,\"myFloat32\":3.2,\"myFloat64\":64.64,\"myString\":\"theStringVal\"}";
-    S3Client.putObject(TEST_BUCKET_NAME, key, new ByteArrayInputStream(initialFileContents.getBytes()), new ObjectMetadata());
+    RequestBody requestBody = RequestBody.fromString(initialFileContents, Charset.defaultCharset());
+
+    s3Client.putObject(
+        PutObjectRequest.builder()
+            .bucket(TEST_BUCKET_NAME)
+            .key(key).build(), requestBody);
   }
 
-  private void testRecordsWrittenWithConditionalWrites(String expectedFileExtension) throws InterruptedException, ExecutionException {
+  private void testRecordsWrittenWithConditionalWrites(String expectedFileExtension) throws InterruptedException, ExecutionException, IOException {
 
     // Create some initial file - presumed to be created by another task instance. The file contains the first two records
     String key = String.format("topics/%s/partition=0/%s+0+0000000000.json", DEFAULT_TEST_TOPIC_NAME, DEFAULT_TEST_TOPIC_NAME);
@@ -284,8 +308,23 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
    * @throws Throwable
    */
   private void testBasicRecordsWritten(
+      String expectedFileExtension,
+      boolean addExtensionInTopic) throws Throwable {
+    testBasicRecordsWritten(expectedFileExtension, addExtensionInTopic, false);
+  }
+
+  /**
+   * Test that the expected records are written for a given file extension
+   * Optionally, test that topics which have "*.{expectedFileExtension}*" in them are processed
+   * and written.
+   * @param expectedFileExtension The file extension to test against
+   * @param addExtensionInTopic Add a topic to to the test which contains the extension
+   * @throws Throwable
+   */
+  private void testBasicRecordsWritten(
           String expectedFileExtension,
-          boolean addExtensionInTopic
+          boolean addExtensionInTopic,
+          boolean taggingEnabled
   ) throws Throwable {
     final String topicNameWithExt = "other." + expectedFileExtension + ".topic." + expectedFileExtension;
 
@@ -322,7 +361,9 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     waitForFilesInBucket(TEST_BUCKET_NAME, expectedTotalFileCount);
 
     Set<String> expectedTopicFilenames = new TreeSet<>();
+    Map<String, Tagging> tags = new HashMap<>();
     for (String thisTopicName : topicNames) {
+      tags.putAll(getExpectedTags(thisTopicName, TOPIC_PARTITION, FLUSH_SIZE_STANDARD, 0, NUM_RECORDS_INSERT, expectedFileExtension));
       List<String> theseFiles = getExpectedFilenames(
               thisTopicName,
               TOPIC_PARTITION,
@@ -342,6 +383,24 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     // Now check that all files created by the sink have the contents that were sent
     // to the producer (they're all the same content)
     assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
+
+    if (taggingEnabled) {
+      validateTags(tags);
+    }
+  }
+
+  private void validateTags(Map<String, Tagging> tags) {
+    for (Map.Entry<String, Tagging> entry : tags.entrySet()) {
+      GetObjectTaggingRequest getObjectTaggingRequest = GetObjectTaggingRequest.builder()
+          .bucket(TEST_BUCKET_NAME)
+          .key(entry.getKey())
+          .build();
+
+      GetObjectTaggingResponse getObjectTaggingResponse = s3Client.getObjectTagging(getObjectTaggingRequest);
+      List<Tag> actualTags = getObjectTaggingResponse.tagSet();
+      assertEquals(actualTags.size(), entry.getValue().tagSet().size());
+      assertTrue(actualTags.containsAll(entry.getValue().tagSet()));
+    }
   }
 
   private void testTombstoneRecordsWritten(
