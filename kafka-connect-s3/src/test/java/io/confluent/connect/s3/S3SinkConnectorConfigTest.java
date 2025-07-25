@@ -261,6 +261,13 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
         configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_EXTERNAL_ID_CONFIG),
         "my-external-id"
     );
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.REGION),
+        "us-west-2"
+    );
+    // Add dummy AWS credentials to ensure the region configuration is used
+    properties.put(S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG, "DUMMY_ACCESS_KEY");
+    properties.put(S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG, "DUMMY_SECRET_KEY");
     connectorConfig = new S3SinkConnectorConfig(properties);
 
     AwsAssumeRoleCredentialsProvider credentialsProvider =
@@ -323,6 +330,13 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
         configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_EXTERNAL_ID_CONFIG),
         "my-external-id"
     );
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.REGION),
+        "us-west-2"
+    );
+    // Add dummy AWS credentials to ensure the region configuration is used
+    properties.put(S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG, "DUMMY_ACCESS_KEY");
+    properties.put(S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG, "DUMMY_SECRET_KEY");
     connectorConfig = new S3SinkConnectorConfig(properties);
 
     AwsAssumeRoleCredentialsProvider credentialsProvider =
@@ -697,6 +711,54 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     properties.remove(STORE_KAFKA_HEADERS_CONFIG);
     properties.remove(STORE_KAFKA_KEYS_CONFIG);
     assertFalse(new S3SinkConnectorConfig(properties).shouldEnableConditionalWrites());
+  }
+
+  @Test 
+  public void testAwsAssumeRoleCredentialsProviderStsRegionConfigValidation() {
+    // Test that STS region config is properly included in configuration
+    properties.put(
+        S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG,
+        AwsAssumeRoleCredentialsProvider.class.getName()
+    );
+    String configPrefix = S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_ARN_CONFIG),
+        "arn:aws:iam::012345678901:role/my-restricted-role"
+    );
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_SESSION_NAME_CONFIG),
+        "my-session-name"
+    );
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.ROLE_EXTERNAL_ID_CONFIG),
+        "my-external-id"
+    );
+    
+    // Test that STS region configuration is properly set and validated
+    String testRegion = "eu-west-1";
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.REGION),
+        testRegion
+    );
+    
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    
+    // Verify that the credentials provider class is correctly configured
+    assertEquals(AwsAssumeRoleCredentialsProvider.class, 
+        connectorConfig.getClass(S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG));
+    
+    // Verify that the STS region configuration is present in the properties
+    Map<String, Object> credentialsProviderConfigs = connectorConfig.originalsWithPrefix(configPrefix);
+    assertEquals(testRegion, credentialsProviderConfigs.get(AwsAssumeRoleCredentialsProvider.REGION));
+    
+    // Test with empty region (should also be valid)
+    properties.put(
+        configPrefix.concat(AwsAssumeRoleCredentialsProvider.REGION),
+        ""
+    );
+    connectorConfig = new S3SinkConnectorConfig(properties);
+    credentialsProviderConfigs = connectorConfig.originalsWithPrefix(configPrefix);
+    assertEquals("", credentialsProviderConfigs.get(AwsAssumeRoleCredentialsProvider.REGION));
   }
 }
 

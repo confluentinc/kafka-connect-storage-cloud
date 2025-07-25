@@ -375,12 +375,16 @@ public abstract class BaseConnectorIT {
     );
   }
 
+  protected static AmazonS3 getS3Client() {
+    return getS3Client(AWS_REGION);
+  }
+
   /**
    * Get an S3 client based on existing credentials
    *
    * @return an authenticated S3 client
    */
-  protected static AmazonS3 getS3Client() {
+  protected static AmazonS3 getS3Client(final String region) {
     Map<String, String> creds = getAWSCredentialFromPath();
     // If AWS credentials found on AWS_CREDENTIALS_PATH, use them (Jenkins)
     if (creds.size() == 2) {
@@ -393,7 +397,7 @@ public abstract class BaseConnectorIT {
     }
     // DefaultAWSCredentialsProviderChain,
     // For local testing,  ~/.aws/credentials needs to be defined or other environment variables
-    return AmazonS3ClientBuilder.standard().withRegion(AWS_REGION).build();
+    return AmazonS3ClientBuilder.standard().withRegion(region).build();
   }
 
   /**

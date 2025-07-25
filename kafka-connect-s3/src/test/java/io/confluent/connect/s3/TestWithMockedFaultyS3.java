@@ -19,6 +19,9 @@ public class TestWithMockedFaultyS3 extends TestWithMockedS3 {
     // replace original S3 mock port by a WireMock proxy
     protected final static int PROXIED_S3_PORT = Integer.parseInt(S3_TEST_URL.substring(S3_TEST_URL.lastIndexOf(":") + 1));
 
+    // unique scenario name for each test instance to avoid state collisions
+    protected final String scenarioName = "TestWithMockedFaultyS3-" + System.nanoTime() + "-" + Thread.currentThread().getId();
+
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(PROXIED_S3_PORT);
 
@@ -41,28 +44,35 @@ public class TestWithMockedFaultyS3 extends TestWithMockedS3 {
      * Inject the specified failure for two times.
      * Third and following requests will go to mocked S3 instance.
      */
-    protected static void injectS3FailureFor(MappingBuilder mapping) {
+    protected static void injectS3FailureFor(MappingBuilder mapping, String scenarioName) {
         stubFor(mapping
                 .atPriority(1)
-                .inScenario("TestWithMockedFaultyS3")
+                .inScenario(scenarioName)
                 .whenScenarioStateIs(STARTED)
                 .willSetStateTo("SECOND_FAILURE")
         );
 
         stubFor(mapping
                 .atPriority(1)
-                .inScenario("TestWithMockedFaultyS3")
+                .inScenario(scenarioName)
                 .whenScenarioStateIs("SECOND_FAILURE")
                 .willSetStateTo("RECOVER")
         );
 
         stubFor(mapping
                 .atPriority(1)
-                .inScenario("TestWithMockedFaultyS3")
+                .inScenario(scenarioName)
                 .whenScenarioStateIs("RECOVER")
                 .willReturn(
                         aResponse().proxiedFrom(MOCKED_S3_URL) // success
                 )
         );
+    }
+    
+    /**
+     * Instance method that calls the static method with the unique scenario name.
+     */
+    protected void injectS3FailureFor(MappingBuilder mapping) {
+        injectS3FailureFor(mapping, scenarioName);
     }
 }

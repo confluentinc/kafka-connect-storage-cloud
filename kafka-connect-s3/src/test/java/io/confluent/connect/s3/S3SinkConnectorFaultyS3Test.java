@@ -256,7 +256,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     @Test
     public void testErrorIsRetriedByConnectFramework() throws Exception {
         // inject failure
-        failure.inject();
+        failure.inject(this);
 
         // produce enough messages to generate file commit
         for (int i = 0; i < flushSize; i++) {
@@ -268,7 +268,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     }
 
     interface Failure {
-        void inject();
+        void inject(S3SinkConnectorFaultyS3Test testInstance);
     }
 
     private static class CreateMultipartUploadRequestFailure implements Failure {
@@ -279,10 +279,10 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         }
 
         @Override
-        public void inject() {
-            injectS3FailureFor(post(anyUrl())
+        public void inject(S3SinkConnectorFaultyS3Test testInstance) {
+            TestWithMockedFaultyS3.injectS3FailureFor(post(anyUrl())
                     .withQueryParam("uploads", matching("$^"))
-                    .willReturn(response)
+                    .willReturn(response), testInstance.scenarioName
             );
         }
     }
@@ -295,11 +295,11 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         }
 
         @Override
-        public void inject() {
-                injectS3FailureFor(put(anyUrl())
+        public void inject(S3SinkConnectorFaultyS3Test testInstance) {
+                TestWithMockedFaultyS3.injectS3FailureFor(put(anyUrl())
                         .withQueryParam("partNumber", matching(".*"))
                         .withQueryParam("uploadId", matching(".*"))
-                        .willReturn(response)
+                        .willReturn(response), testInstance.scenarioName
                 );
         }
     }
@@ -312,10 +312,10 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         }
 
         @Override
-        public void inject() {
-                injectS3FailureFor(post(anyUrl())
+        public void inject(S3SinkConnectorFaultyS3Test testInstance) {
+                TestWithMockedFaultyS3.injectS3FailureFor(post(anyUrl())
                         .withQueryParam("uploadId", matching(".*"))
-                        .willReturn(response)
+                        .willReturn(response), testInstance.scenarioName
                 );
         }
     }
@@ -334,8 +334,8 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         FAIL_COMPLETE_MULTIPART_UPLOAD_REQUEST_WITH_RESET(new CompleteMultipartUploadRequestFailure(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
 
         private final Failure failure;
-        public void inject() {
-            failure.inject();
+        public void inject(S3SinkConnectorFaultyS3Test testInstance) {
+            failure.inject(testInstance);
         }
 
         Failures(Failure failure) {
