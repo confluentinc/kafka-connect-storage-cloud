@@ -229,11 +229,13 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
       // this region or we don't have permissions to it.
       if ((ase.statusCode() == HttpStatusCode.MOVED_PERMANENTLY)
           || "AccessDenied".equals(ase.awsErrorDetails().errorCode())) {
-        System.out.println("bucket exists " + ase.statusCode());
+        log.info("Bucket {} exists, but not in this region or we don't have permissions to it.",
+            bucketName);
+        return true;
       }
       if (ase.statusCode() == HttpStatusCode.NOT_FOUND) {
-        System.out.println("bucket does not exist " + ase.statusCode());
-
+        log.info("Bucket {} does not exist.", bucketName);
+        return false;
       }
       throw ase;
     }

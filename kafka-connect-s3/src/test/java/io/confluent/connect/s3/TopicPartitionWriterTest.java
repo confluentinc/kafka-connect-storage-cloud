@@ -2596,7 +2596,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // as needed.
     List<String> actualFiles = new ArrayList<>();
     for (S3Object s3Object : paginatedResponses.contents()) {
-      System.out.println("  - Key: " + s3Object.key() + " | Size: " + s3Object.size() + " bytes");
+      log.info("  - Key: {} | Size: {} bytes", s3Object.key(), s3Object.size());
       actualFiles.add(URLDecoder.decode(s3Object.key(), StandardCharsets.UTF_8.toString()));
     }
 
