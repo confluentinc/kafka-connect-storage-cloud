@@ -268,23 +268,6 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
   }
 
   @Test
-  public void testUseExpectContinueDefault() throws Exception {
-    setUp();
-    S3Storage storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, null);
-    ClientOverrideConfiguration clientConfig = storage.newClientConfiguration(connectorConfig);
-    //assertEquals(true, clientConfig.isUseExpectContinue());
-  }
-
-  @Test
-  public void testUseExpectContinueFalse() throws Exception {
-    localProps.put(S3SinkConnectorConfig.HEADERS_USE_EXPECT_CONTINUE_CONFIG, "false");
-    setUp();
-    S3Storage storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, null);
-    ClientOverrideConfiguration clientConfig = storage.newClientConfiguration(connectorConfig);
-    //assertEquals(false, clientConfig.isUseExpectContinue());
-  }
-
-  @Test
   public void testConfigurableCredentialProviderMissingConfigs() {
     String configPrefix = S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
     properties.put(

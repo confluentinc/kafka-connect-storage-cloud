@@ -34,6 +34,7 @@ import software.amazon.awssdk.http.apache.ProxyConfiguration;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.retries.StandardRetryStrategy;
 import software.amazon.awssdk.retries.api.RetryStrategy;
+import software.amazon.awssdk.retries.api.BackoffStrategy;
 import software.amazon.awssdk.retries.api.internal.backoff.ExponentialDelayWithJitter;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
@@ -172,20 +173,16 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
   protected RetryStrategy newRetryStrategy(S3SinkConnectorConfig conf) {
     return StandardRetryStrategy.builder()
         .maxAttempts(conf.getS3PartRetries())
-        .backoffStrategy(
-            new ExponentialDelayWithJitter(
-                Random::new,
-                Duration.ofMillis(conf.getLong(S3_RETRY_BACKOFF_CONFIG).intValue()),
-                S3_RETRY_MAX_BACKOFF_TIME_MS))
-        .throttlingBackoffStrategy(
-            // EqualJitterBackoffStrategy.builder()
-            // .baseDelay(SdkDefaultRetrySetting.throttledBaseDelay(LEGACY))
-            // .maxBackoffTime(SdkDefaultRetrySetting.MAX_BACKOFF).build();
-            new ExponentialDelayWithJitter(
-                Random::new,
-                Duration.ofMillis(conf.getLong(S3_RETRY_BACKOFF_CONFIG).intValue()),
-                S3_RETRY_MAX_BACKOFF_TIME_MS))
+        .backoffStrategy(newExponentialBackoffStrategy())
+        .throttlingBackoffStrategy(newExponentialBackoffStrategy())
         .build();
+  }
+
+  private  BackoffStrategy newExponentialBackoffStrategy() {
+    return new ExponentialDelayWithJitter(
+        Random::new,
+        Duration.ofMillis(conf.getLong(S3_RETRY_BACKOFF_CONFIG).intValue()),
+        S3_RETRY_MAX_BACKOFF_TIME_MS);
   }
 
   protected AwsCredentialsProvider newCredentialsProvider(S3SinkConnectorConfig config) {
