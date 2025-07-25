@@ -62,55 +62,6 @@ public class S3StorageTest extends S3SinkConnectorTestBase {
   }
 
   @Test
-  public void testRetryPolicy() throws Exception {
-    setUp();
-    //assertTrue(retryPolicy.getRetryCondition() instanceof PredefinedRetryPolicies
-    //    .SDKDefaultRetryCondition);
-    //assertTrue(retryPolicy.getBackoffStrategy() instanceof PredefinedBackoffStrategies
-    //    .FullJitterBackoffStrategy);
-  }
-
-  @Test
-  public void testRetryPolicyNonRetriable() throws Exception {
-    setUp();
-    //SdkException e = new SdkException("Non-retriable exception");
-    //assertFalse(retryPolicy.getRetryCondition().shouldRetry(null, e, 1));
-  }
-
-  @Test
-  public void testRetryPolicyRetriableServiceException() throws Exception {
-    setUp();
-    //AwsServiceException e = new AwsServiceException("Retriable exception");
-    //e.setStatusCode(HttpStatus.SC_INTERNAL_SERVER_ERROR);
-   // assertTrue(retryPolicy.getRetryCondition().shouldRetry(null, e, 1));
-  }
-
-  @Test
-  public void testRetryPolicyNonRetriableServiceException() throws Exception {
-    setUp();
-    //AwsServiceException e = new AwsServiceException("Non-retriable exception");
-    //e.setStatusCode(HttpStatus.SC_METHOD_NOT_ALLOWED);
-    //assertFalse(retryPolicy.getRetryCondition().shouldRetry(null, e, 1));
-  }
-
-  @Test
-  public void testRetryPolicyRetriableThrottlingException() throws Exception {
-    setUp();
-    AwsServiceException e = AwsServiceException.builder().message("Retriable exception").build();
-
-    //e.setErrorCode("TooManyRequestsException");
-    //assertTrue(retryPolicy.getRetryCondition().shouldRetry(null, e, 1));
-  }
-
-  @Test
-  public void testRetryPolicyRetriableSkewException() throws Exception {
-    setUp();
-    AwsServiceException e = AwsServiceException.builder().message("Retriable exception").build();
-    //e.setErrorCode("RequestExpired");
-    //assertTrue(retryPolicy.getRetryCondition().shouldRetry(null, e, 1));
-  }
-
-  @Test
   public void testRetryPolicyDelayRanges() throws Exception {
     setUp();
     assertComputeRetryInRange(10, 10L);
