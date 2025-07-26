@@ -20,7 +20,7 @@ import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.storage.IORecordWriter;
-import io.confluent.connect.s3.format.RecordViewSetter;
+import io.confluent.connect.s3.format.RecordViewWrapper;
 import io.confluent.connect.s3.format.S3RetriableRecordWriter;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
@@ -35,7 +35,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
-public class ByteArrayRecordWriterProvider extends RecordViewSetter
+public class ByteArrayRecordWriterProvider extends RecordViewWrapper
     implements RecordWriterProvider<S3SinkConnectorConfig> {
 
   private static final Logger log = LoggerFactory.getLogger(ByteArrayRecordWriterProvider.class);

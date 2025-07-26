@@ -56,6 +56,7 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.AffixType;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.DECIMAL_FORMAT_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.DECIMAL_FORMAT_DEFAULT;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_KEYS_HEADERS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.HEADERS_FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.KEYS_FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.SCHEMA_PARTITION_AFFIX_TYPE_CONFIG;
@@ -687,9 +688,17 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     properties.put(STORE_KAFKA_HEADERS_CONFIG, "true");
     assertFalse(new S3SinkConnectorConfig(properties).shouldEnableConditionalWrites());
 
-    // Both scheduled rotation and conditional write enabled. But, returns false because store kafka keys is enabled
+    // Scheduled rotation, conditional write of values as well as headers enabled and store headers enabled
+    properties.put(ENABLE_CONDITIONAL_WRITES_KEYS_HEADERS_CONFIG, "true");
+    assertTrue(new S3SinkConnectorConfig(properties).shouldEnableConditionalWrites());
+
+    // Both scheduled rotation and conditional write enabled. returns true because store kafka keys is enabled along with conditional write of keys
     properties.put(STORE_KAFKA_HEADERS_CONFIG, "false");
     properties.put(STORE_KAFKA_KEYS_CONFIG, "true");
+    assertTrue(new S3SinkConnectorConfig(properties).shouldEnableConditionalWrites());
+
+    // Both scheduled rotation and conditional write enabled. returns false because store kafka keys is enabled but conditional write of keys disabled
+    properties.put(ENABLE_CONDITIONAL_WRITES_KEYS_HEADERS_CONFIG, "false");
     assertFalse(new S3SinkConnectorConfig(properties).shouldEnableConditionalWrites());
 
     // Conditional write disabled, but scheduled rotation enabled
