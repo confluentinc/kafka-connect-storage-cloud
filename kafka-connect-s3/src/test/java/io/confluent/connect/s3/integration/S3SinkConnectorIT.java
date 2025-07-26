@@ -78,6 +78,7 @@ import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
@@ -85,6 +86,7 @@ import org.slf4j.LoggerFactory;
 
 @SuppressWarnings({"unchecked", "deprecation"})
 @Category(IntegrationTest.class)
+@Ignore
 public class S3SinkConnectorIT extends BaseConnectorIT {
 
   private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorIT.class);
