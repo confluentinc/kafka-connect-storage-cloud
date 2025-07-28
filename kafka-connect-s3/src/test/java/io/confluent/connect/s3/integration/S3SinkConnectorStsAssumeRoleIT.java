@@ -126,7 +126,7 @@ public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
   @Test
   public void testBasicRecordsWritten() throws Throwable {
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
-    testBasicRecordsWritten(AVRO_EXTENSION, false);
+    testBasicRecordsWritten(JSON_EXTENSION, false);
   }
 
   private void testBasicRecordsWritten(String expectedFileExtension,
