@@ -126,16 +126,13 @@ public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
   @Test
   public void testBasicRecordsWritten() throws Throwable {
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
-    //   testBasicRecordsWritten(AVRO_EXTENSION, false);
-    // }
+    testBasicRecordsWritten(AVRO_EXTENSION, false);
+  }
 
-    // private void testBasicRecordsWritten(
-    //     String expectedFileExtension,
-    //     boolean addExtensionInTopic
-    // ) throws Throwable {
-    String expectedFileExtension = JSON_EXTENSION;
-    boolean addExtensionInTopic = false;
-    final String topicNameWithExt = "other." + expectedFileExtension + ".topic." + expectedFileExtension;
+  private void testBasicRecordsWritten(String expectedFileExtension,
+                                       boolean addExtensionInTopic) throws Throwable {
+    final String topicNameWithExt =
+        "other." + expectedFileExtension + ".topic." + expectedFileExtension;
 
     // Add an extra topic with this extension inside of the name
     // Use a TreeSet for test determinism
@@ -153,7 +150,8 @@ public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
     // start sink connector
     connect.configureConnector(CONNECTOR_NAME, props);
     // wait for tasks to spin up
-    EmbeddedConnectUtils.waitForConnectorToStart(connect, CONNECTOR_NAME, Math.min(topicNames.size(), MAX_TASKS));
+    EmbeddedConnectUtils.waitForConnectorToStart(connect, CONNECTOR_NAME,
+        Math.min(topicNames.size(), MAX_TASKS));
 
     Schema recordValueSchema = getSampleStructSchema();
     Struct recordValueStruct = getSampleStructVal(recordValueSchema);
@@ -161,7 +159,8 @@ public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
     for (String thisTopicName : topicNames) {
       // Create and send records to Kafka using the topic name in the current 'thisTopicName'
       SinkRecord sampleRecord = getSampleTopicRecord(thisTopicName, recordValueSchema, recordValueStruct);
-      S3SinkConnectorIT.produceRecords(sampleRecord.topic(), NUM_RECORDS_INSERT, sampleRecord, true, true, false, jsonConverter, producer);
+      S3SinkConnectorIT.produceRecords(sampleRecord.topic(), NUM_RECORDS_INSERT, sampleRecord,
+          true, true, false, jsonConverter, producer);
     }
 
     log.info("Waiting for files in S3...");
