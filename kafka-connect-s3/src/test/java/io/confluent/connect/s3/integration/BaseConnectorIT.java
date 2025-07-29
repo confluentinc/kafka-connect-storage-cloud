@@ -368,7 +368,7 @@ public abstract class BaseConnectorIT {
     return getSampleTopicRecord(topic, recordValueSchema, recordValueStruct);
   }
 
-  protected Iterable<Header> sampleHeaders() {
+  protected static Iterable<Header> sampleHeaders() {
     return Arrays.asList(
         new RecordHeader("first-header-key", "first-header-value".getBytes()),
         new RecordHeader("second-header-key", "second-header-value".getBytes())
