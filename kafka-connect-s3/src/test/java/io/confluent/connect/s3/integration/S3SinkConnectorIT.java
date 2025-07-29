@@ -22,8 +22,6 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.SEND_DIGEST_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.TOMBSTONE_ENCODED_PARTITION;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
@@ -75,6 +73,7 @@ import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.storage.StringConverter;
+import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
@@ -106,8 +105,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   @Before
   public void before() throws InterruptedException {
-    initializeJsonConverter();
-    initializeCustomProducer();
+    jsonConverter = initializeJsonConverter();
+    producer = initializeCustomProducer(connect);
     setupProperties();
     waitForSchemaRegistryToStart();
     //add class specific props
@@ -482,28 +481,30 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   private void produceRecordsNoHeaders(int recordCount, SinkRecord record)
       throws ExecutionException, InterruptedException {
-    produceRecords(record.topic(), recordCount, record, true, true, false);
+    produceRecords(record.topic(), recordCount, record, true, true, false, jsonConverter, producer);
   }
 
   private void produceRecordsWithHeaders(String topic, int recordCount, SinkRecord record) throws Exception {
-   produceRecords(topic, recordCount, record, true, true, true);
+   produceRecords(topic, recordCount, record, true, true, true, jsonConverter, producer);
   }
 
   private void produceRecordsWithHeadersNoKey(String topic, int recordCount, SinkRecord record) throws Exception {
-    produceRecords(topic, recordCount, record, false, true, true);
+    produceRecords(topic, recordCount, record, false, true, true, jsonConverter, producer);
   }
 
   private void produceRecordsWithHeadersNoValue(String topic, int recordCount, SinkRecord record) throws Exception{
-    produceRecords(topic, recordCount, record, true, false, true);
+    produceRecords(topic, recordCount, record, true, false, true, jsonConverter, producer);
   }
 
-  private void produceRecords(
+  protected static void produceRecords(
       String topic,
       int recordCount,
       SinkRecord record,
       boolean withKey,
       boolean withValue,
-      boolean withHeaders
+      boolean withHeaders,
+      JsonConverter jsonConverter,
+      Producer<byte[], byte[]> producer
   ) throws ExecutionException, InterruptedException {
     byte[] kafkaKey = null;
     byte[] kafkaValue = null;
@@ -524,22 +525,23 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     }
   }
 
-  private void initializeJsonConverter() {
+  protected static JsonConverter initializeJsonConverter() {
     Map<String, Object> jsonConverterProps = new HashMap<>();
     jsonConverterProps.put("schemas.enable", "true");
     jsonConverterProps.put("converter.type", "value");
-    jsonConverter = new JsonConverter();
+    JsonConverter jsonConverter = new JsonConverter();
     jsonConverter.configure(jsonConverterProps);
+    return jsonConverter;
   }
 
-  private void initializeCustomProducer() {
+  protected static Producer<byte[], byte[]> initializeCustomProducer(EmbeddedConnectCluster connect) {
     Map<String, Object> producerProps = new HashMap<>();
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, connect.kafka().bootstrapServers());
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
         org.apache.kafka.common.serialization.ByteArraySerializer.class.getName());
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
         org.apache.kafka.common.serialization.ByteArraySerializer.class.getName());
-    producer = new KafkaProducer<>(producerProps);
+    return new KafkaProducer<>(producerProps);
   }
 
   private void setupProperties() {
