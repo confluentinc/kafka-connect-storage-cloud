@@ -133,21 +133,23 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   public void testBasicRecordsWrittenAvro() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
-    testBasicRecordsWrittenToSink(AVRO_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME, jsonConverter, producer);
+    testBasicRecordsWrittenToSink(AVRO_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME, jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   @Test
   public void testBasicRecordsWrittenParquet() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
-    testBasicRecordsWrittenToSink(PARQUET_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME, jsonConverter, producer);
+    testBasicRecordsWrittenToSink(PARQUET_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME,
+        jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   @Test
   public void testBasicRecordsWrittenJson() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
-    testBasicRecordsWrittenToSink(JSON_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME, jsonConverter, producer);
+    testBasicRecordsWrittenToSink(JSON_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME,
+        jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   @Test
@@ -155,7 +157,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
     props.put(SEND_DIGEST_CONFIG, "true");
-    testBasicRecordsWrittenToSink(AVRO_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME, jsonConverter, producer);
+    testBasicRecordsWrittenToSink(AVRO_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME,
+        jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   @Test
@@ -163,7 +166,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
     props.put(SEND_DIGEST_CONFIG, "true");
-    testBasicRecordsWrittenToSink(PARQUET_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME, jsonConverter, producer);
+    testBasicRecordsWrittenToSink(PARQUET_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME,
+        jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   @Test
@@ -171,7 +175,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
     props.put(SEND_DIGEST_CONFIG, "true");
-    testBasicRecordsWrittenToSink(JSON_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME, jsonConverter, producer);
+    testBasicRecordsWrittenToSink(JSON_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME,
+        jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   @Test
@@ -189,14 +194,16 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   public void testFilesWrittenToBucketParquetWithExtInTopic() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
-    testBasicRecordsWrittenToSink(PARQUET_EXTENSION, true, KAFKA_TOPICS, CONNECTOR_NAME, jsonConverter, producer);
+    testBasicRecordsWrittenToSink(PARQUET_EXTENSION, true, KAFKA_TOPICS, CONNECTOR_NAME,
+        jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   @Test
   public void testFilesWrittenToBucketJsonWithExtInTopic() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
-    testBasicRecordsWrittenToSink(JSON_EXTENSION, true, KAFKA_TOPICS, CONNECTOR_NAME, jsonConverter, producer);
+    testBasicRecordsWrittenToSink(JSON_EXTENSION, true, KAFKA_TOPICS, CONNECTOR_NAME,
+        jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   @Test
@@ -379,8 +386,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   /**
    * Verify the error messages in the DLQ record headers.
    *
-   * @param expectedMessages    the expected list of error messages
-   * @param consumedDLQRecords  the records consumed from the DLQ topic
+   * @param expectedMessages   the expected list of error messages
+   * @param consumedDLQRecords the records consumed from the DLQ topic
    */
   private void assertDLQRecordMessages(
       List<String> expectedMessages,
@@ -409,14 +416,14 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   private void produceRecordsWithHeaders(String topic, int recordCount, SinkRecord record) throws Exception {
-   produceRecords(topic, recordCount, record, true, true, true, jsonConverter, producer);
+    produceRecords(topic, recordCount, record, true, true, true, jsonConverter, producer);
   }
 
   private void produceRecordsWithHeadersNoKey(String topic, int recordCount, SinkRecord record) throws Exception {
     produceRecords(topic, recordCount, record, false, true, true, jsonConverter, producer);
   }
 
-  private void produceRecordsWithHeadersNoValue(String topic, int recordCount, SinkRecord record) throws Exception{
+  private void produceRecordsWithHeadersNoValue(String topic, int recordCount, SinkRecord record) throws Exception {
     produceRecords(topic, recordCount, record, true, false, true, jsonConverter, producer);
   }
 
@@ -437,12 +444,12 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
       kafkaKey = jsonConverter.fromConnectData(topic, Schema.STRING_SCHEMA, record.key());
     }
     if (withValue) {
-     kafkaValue = jsonConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
+      kafkaValue = jsonConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
     }
     if (withHeaders) {
       headers = sampleHeaders();
     }
-    ProducerRecord<byte[],byte[]> producerRecord =
+    ProducerRecord<byte[], byte[]> producerRecord =
         new ProducerRecord<>(topic, TOPIC_PARTITION, kafkaKey, kafkaValue, headers);
     for (long i = 0; i < recordCount; i++) {
       producer.send(producerRecord).get();

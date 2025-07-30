@@ -127,7 +127,7 @@ public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
   public void testBasicRecordsWritten() throws Throwable {
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
     testBasicRecordsWrittenToSink(JSON_EXTENSION, false, KAFKA_TOPICS,
-        CONNECTOR_NAME, jsonConverter, producer);
+        CONNECTOR_NAME, jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   protected static AmazonS3 getS3Client() {

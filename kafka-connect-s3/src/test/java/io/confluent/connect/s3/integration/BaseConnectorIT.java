@@ -721,7 +721,8 @@ public abstract class BaseConnectorIT {
                                                List<String> kafkaTopics,
                                                String connectorName,
                                                JsonConverter jsonConverter,
-                                               Producer<byte[], byte[]> producer) throws Throwable {
+                                               Producer<byte[], byte[]> producer,
+                                               String bucketName) throws Throwable {
     final String topicNameWithExt =
         "other." + expectedFileExtension + ".topic." + expectedFileExtension;
 
@@ -757,7 +758,7 @@ public abstract class BaseConnectorIT {
     log.info("Waiting for files in S3...");
     int countPerTopic = NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
     int expectedTotalFileCount = countPerTopic * topicNames.size();
-    waitForFilesInBucket(TEST_BUCKET_NAME, expectedTotalFileCount);
+    waitForFilesInBucket(bucketName, expectedTotalFileCount);
 
     Set<String> expectedTopicFilenames = new TreeSet<>();
     for (String thisTopicName : topicNames) {
@@ -776,9 +777,9 @@ public abstract class BaseConnectorIT {
     assertEquals(expectedTopicFilenames.size(), expectedTotalFileCount);
     // The total number of files allowed in the bucket is number of topics * # produced for each
     // All topics should have produced the same number of files, so this check should hold.
-    assertFileNamesValid(TEST_BUCKET_NAME, new ArrayList<>(expectedTopicFilenames));
+    assertFileNamesValid(bucketName, new ArrayList<>(expectedTopicFilenames));
     // Now check that all files created by the sink have the contents that were sent
     // to the producer (they're all the same content)
-    assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
+    assertTrue(fileContentsAsExpected(bucketName, FLUSH_SIZE_STANDARD, recordValueStruct));
   }
 }
