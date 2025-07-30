@@ -9,14 +9,11 @@ import io.confluent.connect.s3.auth.AwsAssumeRoleCredentialsProvider;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.S3Storage;
-import io.confluent.connect.s3.util.EmbeddedConnectUtils;
+import io.confluent.connect.s3.util.HelperUtil;
 import org.apache.commons.io.FileUtils;
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
-import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -28,13 +25,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
@@ -52,15 +46,12 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_C
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
 
-@SuppressWarnings({"unchecked", "deprecation"})
 @Category(IntegrationTest.class)
 public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
   private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorStsAssumeRoleIT.class);
@@ -82,7 +73,6 @@ public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
   @BeforeClass
   public static void setupClient() {
     log.info("Starting ITs...");
-    System.out.println("Starting ITs...");
     S3Client = getS3Client();
     if (S3Client.doesBucketExistV2(TEST_BUCKET_NAME)) {
       clearBucket(TEST_BUCKET_NAME);
@@ -99,8 +89,8 @@ public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
 
   @Before
   public void before() throws InterruptedException {
-    jsonConverter = S3SinkConnectorIT.initializeJsonConverter();
-    producer = S3SinkConnectorIT.initializeCustomProducer(connect);
+    jsonConverter = HelperUtil.initializeJsonConverter();
+    producer = HelperUtil.initializeCustomProducer(connect);
     setupProperties();
     waitForSchemaRegistryToStart();
     //add class specific props
@@ -115,98 +105,29 @@ public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
 
   @After
   public void after() throws Exception {
-    // delete the downloaded test file folder
     FileUtils.deleteDirectory(new File(TEST_DOWNLOAD_PATH));
-    // clear for next test
     clearBucket(TEST_BUCKET_NAME);
-    // wait for bucket to clear
     waitForFilesInBucket(TEST_BUCKET_NAME, 0);
   }
 
   @Test
   public void testBasicRecordsWritten() throws Throwable {
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
-    testBasicRecordsWritten(JSON_EXTENSION, false);
-  }
-
-  private void testBasicRecordsWritten(String expectedFileExtension,
-                                       boolean addExtensionInTopic) throws Throwable {
-    final String topicNameWithExt =
-        "other." + expectedFileExtension + ".topic." + expectedFileExtension;
-
-    // Add an extra topic with this extension inside of the name
-    // Use a TreeSet for test determinism
-    Set<String> topicNames = new TreeSet<>(KAFKA_TOPICS);
-
-    if (addExtensionInTopic) {
-      topicNames.add(topicNameWithExt);
-      connect.kafka().createTopic(topicNameWithExt, 1);
-      props.replace(
-          "topics",
-          props.get("topics") + "," + topicNameWithExt
-      );
-    }
-
-    // start sink connector
-    connect.configureConnector(CONNECTOR_NAME, props);
-    // wait for tasks to spin up
-    EmbeddedConnectUtils.waitForConnectorToStart(connect, CONNECTOR_NAME,
-        Math.min(topicNames.size(), MAX_TASKS));
-
-    Schema recordValueSchema = getSampleStructSchema();
-    Struct recordValueStruct = getSampleStructVal(recordValueSchema);
-
-    for (String thisTopicName : topicNames) {
-      // Create and send records to Kafka using the topic name in the current 'thisTopicName'
-      SinkRecord sampleRecord = getSampleTopicRecord(thisTopicName, recordValueSchema, recordValueStruct);
-      S3SinkConnectorIT.produceRecords(sampleRecord.topic(), NUM_RECORDS_INSERT, sampleRecord,
-          true, true, false, jsonConverter, producer);
-    }
-
-    log.info("Waiting for files in S3...");
-    int countPerTopic = NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
-    int expectedTotalFileCount = countPerTopic * topicNames.size();
-    waitForFilesInBucket(TEST_BUCKET_NAME, expectedTotalFileCount);
-
-    Set<String> expectedTopicFilenames = new TreeSet<>();
-    for (String thisTopicName : topicNames) {
-      List<String> theseFiles = getExpectedFilenames(
-          thisTopicName,
-          TOPIC_PARTITION,
-          FLUSH_SIZE_STANDARD,
-          0,
-          NUM_RECORDS_INSERT,
-          expectedFileExtension
-      );
-      assertEquals(theseFiles.size(), countPerTopic);
-      expectedTopicFilenames.addAll(theseFiles);
-    }
-    // This check will catch any duplications
-    assertEquals(expectedTopicFilenames.size(), expectedTotalFileCount);
-    // The total number of files allowed in the bucket is number of topics * # produced for each
-    // All topics should have produced the same number of files, so this check should hold.
-    assertFileNamesValid(TEST_BUCKET_NAME, new ArrayList<>(expectedTopicFilenames));
-    // Now check that all files created by the sink have the contents that were sent
-    // to the producer (they're all the same content)
-    assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
+    testBasicRecordsWrittenToSink(JSON_EXTENSION, false, KAFKA_TOPICS,
+        CONNECTOR_NAME, jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   protected static AmazonS3 getS3Client() {
-    // Get AWS credentials from the helper method
     Map<String, String> awsCredentials = getAWSAssumeRoleCredentials();
     String accessKeyId = awsCredentials.get(AWS_ACCESS_KEY_ID_CONFIG);
     String secretAccessKey = awsCredentials.get(AWS_SECRET_ACCESS_KEY_CONFIG);
 
-    // Create basic AWS credentials
     BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretAccessKey);
-
-    // Create STS client with the basic credentials
     AWSSecurityTokenServiceClientBuilder stsClientBuilder = AWSSecurityTokenServiceClientBuilder
         .standard()
         .withCredentials(new AWSStaticCredentialsProvider(basicCredentials))
         .withRegion(TEST_REGION);
 
-    // Create STS assume role credentials provider
     STSAssumeRoleSessionCredentialsProvider stsCredentialsProvider =
         new STSAssumeRoleSessionCredentialsProvider
             .Builder(ROLE_ARN, SESSION_NAME)
@@ -214,7 +135,6 @@ public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
             .withExternalId(ROLE_EXTERNAL_ID)
             .build();
 
-    // Create S3 client with the STS assume role credentials
     return AmazonS3ClientBuilder.standard()
         .withCredentials(stsCredentialsProvider)
         .withRegion(TEST_REGION)
@@ -238,10 +158,8 @@ public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
     props = new HashMap<>();
     props.put(CONNECTOR_CLASS_CONFIG, S3SinkConnector.class.getName());
     props.put(TASKS_MAX_CONFIG, Integer.toString(MAX_TASKS));
-    // converters
     props.put(KEY_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
     props.put(VALUE_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
-    // aws credential if exists
     props.putAll(getAWSAssumeRoleCredentials());
   }
 }
