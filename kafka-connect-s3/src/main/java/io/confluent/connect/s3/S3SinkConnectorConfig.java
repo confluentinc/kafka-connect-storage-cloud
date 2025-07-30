@@ -1135,6 +1135,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return name;
   }
 
+  private static String oneOfValuesErrorMessage(Collection values) {
+    return "Value must be one of: " + values;
+  }
+
   @Override
   public Object get(String key) {
     ComposableConfig config = propertyToConfig.get(key);
@@ -1209,9 +1213,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         throw new ConfigException(
             name,
             region,
-            "Value must be one of: " + Region.regions().stream()
+            oneOfValuesErrorMessage(Region.regions().stream()
                 .map((Region::toString))
-                .collect(Collectors.joining(", "))
+                .collect(Collectors.toList()))
         );
       }
     }
@@ -1226,22 +1230,20 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   private static class CompressionTypeValidator implements ConfigDef.Validator {
     public static final Map<String, CompressionType> TYPES_BY_NAME = new HashMap<>();
-    public static final String ALLOWED_VALUES;
+    public static final List<String> ALLOWED_VALUES = new ArrayList<>();
 
     static {
-      List<String> names = new ArrayList<>();
       for (CompressionType compressionType : CompressionType.values()) {
         TYPES_BY_NAME.put(compressionType.name, compressionType);
-        names.add(compressionType.name);
+        ALLOWED_VALUES.add(compressionType.name);
       }
-      ALLOWED_VALUES = String.join(", ", names);
     }
 
     @Override
     public void ensureValid(String name, Object compressionType) {
       String compressionTypeString = ((String) compressionType).trim();
       if (!TYPES_BY_NAME.containsKey(compressionTypeString)) {
-        throw new ConfigException(name, compressionType, "Value must be one of: " + ALLOWED_VALUES);
+        throw new ConfigException(name, compressionType, oneOfValuesErrorMessage(ALLOWED_VALUES));
       }
     }
 
@@ -1304,7 +1306,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       String compressionCodecNameString = ((String) compressionCodecName).trim();
       if (!TYPES_BY_NAME.containsKey(compressionCodecNameString)) {
         throw new ConfigException(name, compressionCodecName,
-            "Value must be one of: " + ALLOWED_VALUES);
+            oneOfValuesErrorMessage(ALLOWED_VALUES));
       }
     }
 
@@ -1323,8 +1325,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       }
       String aclStr = ((String) cannedAcl).trim();
       if (ObjectCannedACL.UNKNOWN_TO_SDK_VERSION.equals(ObjectCannedACL.fromValue(aclStr))) {
-        throw new ConfigException(name, cannedAcl, "Value must be one of: "
-            + ObjectCannedACL.knownValues());
+        throw new ConfigException(name, cannedAcl,
+            oneOfValuesErrorMessage(ObjectCannedACL.knownValues()));
       }
     }
 

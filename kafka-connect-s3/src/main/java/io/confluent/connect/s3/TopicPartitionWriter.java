@@ -39,6 +39,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.http.HttpStatusCode;
 
 import org.apache.avro.SchemaParseException;
 import org.apache.parquet.schema.InvalidSchemaException;
@@ -850,7 +851,7 @@ public class TopicPartitionWriter {
         }
         log.debug("File {} already exists, checking for next available file", commitFile);
       } catch (S3Exception e) {
-        if (e.statusCode() == 403) {
+        if (e.statusCode() == HttpStatusCode.FORBIDDEN) {
           log.warn("Connector failed with 403 error. Incrementing offset by 1", e);
           return startOffset;
         }

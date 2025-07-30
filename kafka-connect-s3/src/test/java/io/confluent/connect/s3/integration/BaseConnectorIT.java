@@ -18,6 +18,8 @@ package io.confluent.connect.s3.integration;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
 import static io.confluent.kafka.schemaregistry.ClusterTestHarness.KAFKASTORE_TOPIC;
+
+import io.confluent.connect.s3.util.S3FileUtils;
 import org.apache.avro.generic.GenericData;
 import org.apache.commons.io.FileUtils;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -33,7 +35,6 @@ import software.amazon.awssdk.services.s3.model.DeleteBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
-import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadBucketResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
@@ -97,7 +98,6 @@ import org.junit.BeforeClass;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -154,23 +154,12 @@ public abstract class BaseConnectorIT {
   public static void setupClient() {
     log.info("Starting ITs...");
     s3Client = getS3Client();
-
-    if (bucketExists(TEST_BUCKET_NAME)) {
+    S3FileUtils fileUtils = new S3FileUtils(s3Client);
+    if (fileUtils.bucketExists(TEST_BUCKET_NAME)) {
       clearBucket(TEST_BUCKET_NAME);
     } else {
       s3Client.createBucket(CreateBucketRequest.builder().bucket(TEST_BUCKET_NAME)
           .build());
-    }
-  }
-
-  private static boolean bucketExists(String bucket) {
-    try {
-      log.info("Checking bucket exists");
-      s3Client.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
-      return true;
-    } catch (NoSuchBucketException e) {
-      log.info("No bucket found");
-      return false;
     }
   }
 

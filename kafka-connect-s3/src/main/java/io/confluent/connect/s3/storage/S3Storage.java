@@ -17,6 +17,7 @@ package io.confluent.connect.s3.storage;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
+import io.confluent.connect.s3.util.S3FileUtils;
 import io.confluent.connect.s3.util.S3ProxyConfig;
 import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.Storage;
@@ -39,14 +40,11 @@ import software.amazon.awssdk.retries.api.internal.backoff.ExponentialDelayWithJ
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
-import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
-import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectTaggingRequest;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.services.s3.model.S3Exception;
-import software.amazon.awssdk.http.HttpStatusCode;
 import software.amazon.awssdk.services.s3.model.Tag;
 import software.amazon.awssdk.services.s3.model.Tagging;
 
@@ -75,7 +73,8 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
 
   private final String url;
   private final String bucketName;
-  private final S3Client s3;
+  private final S3Client s3Client;
+  private final S3FileUtils s3FileUtils;
   private final S3SinkConnectorConfig conf;
   private static final String VERSION_FORMAT = "APN/1.0 Confluent/1.0 KafkaS3Connector/%s";
 
@@ -89,7 +88,8 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
     this.url = url;
     this.conf = conf;
     this.bucketName = conf.getBucketName();
-    this.s3 = newS3Client(conf);
+    this.s3Client = newS3Client(conf);
+    this.s3FileUtils = new S3FileUtils(s3Client);
   }
 
   /**
@@ -111,7 +111,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
 
     String region = config.getString(REGION_CONFIG);
     if (StringUtils.isBlank(url)) {
-      builder = "us-east-1".equals(region)
+      builder = Region.US_EAST_1.id().equals(region)
                 ? builder.region(Region.US_EAST_1)
                 : builder.region(Region.of(region));
     } else {
@@ -128,7 +128,8 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
     this.url = url;
     this.conf = conf;
     this.bucketName = bucketName;
-    this.s3 = s3;
+    this.s3Client = s3;
+    this.s3FileUtils = new S3FileUtils(s3Client);
   }
 
   /**
@@ -197,45 +198,11 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
       log.debug("Name can not be empty!");
       return false;
     }
-    try {
-      s3.headObject(HeadObjectRequest.builder().bucket(bucketName).key(name).build());
-      return true;
-    } catch (AwsServiceException ase) {
-      // A redirect error or an AccessDenied exception means the bucket exists but it's not in this
-      // region or we don't have permissions to it.
-      if ((ase.statusCode() == HttpStatusCode.MOVED_PERMANENTLY)
-          || "AccessDenied".equals(ase.awsErrorDetails().errorCode())) {
-        return true;
-      }
-      if (ase.statusCode() == HttpStatusCode.NOT_FOUND) {
-        return false;
-      }
-      throw ase;
-    }
+    return s3FileUtils.fileExists(bucketName, name);
   }
 
   public boolean bucketExists() {
-    if (StringUtils.isBlank(bucketName)) {
-      return false;
-    }
-    try {
-      s3.headBucket(HeadBucketRequest.builder().bucket(bucketName).build());
-      return true;
-    } catch (AwsServiceException ase) {
-      // A redirect error or an AccessDenied exception means the bucket exists but it's not in
-      // this region or we don't have permissions to it.
-      if ((ase.statusCode() == HttpStatusCode.MOVED_PERMANENTLY)
-          || "AccessDenied".equals(ase.awsErrorDetails().errorCode())) {
-        log.info("Bucket {} exists, but not in this region or we don't have permissions to it.",
-            bucketName);
-        return true;
-      }
-      if (ase.statusCode() == HttpStatusCode.NOT_FOUND) {
-        log.info("Bucket {} does not exist.", bucketName);
-        return false;
-      }
-      throw ase;
-    }
+    return s3FileUtils.bucketExists(bucketName);
   }
 
   @Override
@@ -265,10 +232,10 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
     if (ParquetFormat.class.isAssignableFrom(formatClass)) {
       log.info("Create S3ParquetOutputStream for bucket '{}' key '{}'",
               this.conf.getBucketName(), path);
-      return new S3ParquetOutputStream(path, this.conf, s3);
+      return new S3ParquetOutputStream(path, this.conf, s3Client);
     } else {
       // currently ignore what is passed as method argument.
-      return new S3OutputStream(path, this.conf, s3);
+      return new S3OutputStream(path, this.conf, s3Client);
     }
   }
 
@@ -284,7 +251,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
       // s3.deleteBucket(name);
       return;
     } else {
-      s3.deleteObject(DeleteObjectRequest.builder().bucket(bucketName).key(name).build());
+      s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucketName).key(name).build());
     }
   }
 
@@ -304,12 +271,12 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
             .key(fileName)
                 .tagging(Tagging.builder().tagSet(tagSet).build())
                     .build();
-    s3.putObjectTagging(request);
+    s3Client.putObjectTagging(request);
   }
 
   @Override
   public ListObjectsResponse list(String path) {
-    return s3.listObjects(ListObjectsRequest.builder().bucket(bucketName).prefix(path)
+    return s3Client.listObjects(ListObjectsRequest.builder().bucket(bucketName).prefix(path)
         .build());
   }
 

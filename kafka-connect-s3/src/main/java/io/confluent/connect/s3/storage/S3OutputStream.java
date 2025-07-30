@@ -15,6 +15,7 @@
 
 package io.confluent.connect.s3.storage;
 
+import io.confluent.connect.s3.util.S3FileUtils;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -27,9 +28,6 @@ import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.ServerSideEncryption;
 import software.amazon.awssdk.services.s3.model.UploadPartRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
-import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
-import software.amazon.awssdk.http.HttpStatusCode;
-
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.errors.FileExistsException;
@@ -57,7 +55,8 @@ import java.util.function.Supplier;
  */
 public class S3OutputStream extends PositionOutputStream {
   private static final Logger log = LoggerFactory.getLogger(S3OutputStream.class);
-  private final S3Client s3;
+  private final S3Client s3Client;
+  private final S3FileUtils s3FileUtils;
   private final String bucket;
   private final String key;
   private final String ssea;
@@ -77,9 +76,11 @@ public class S3OutputStream extends PositionOutputStream {
   private final boolean enableConditionalWrites;
 
   private static final String PRECONDITION_FAILED_ERROR = "PreconditionFailed";
+  private static final int PRECONDITION_FAILED_ERROR_CODE = 412;
 
   public S3OutputStream(String key, S3SinkConnectorConfig conf, S3Client s3) {
-    this.s3 = s3;
+    this.s3Client = s3;
+    this.s3FileUtils = new S3FileUtils(s3Client);
     this.bucket = conf.getBucketName();
     this.key = key;
     this.ssea = conf.getSsea();
@@ -233,11 +234,11 @@ public class S3OutputStream extends PositionOutputStream {
     } else if (sseCustomerKey != null) {
       log.debug("Using KMS Customer Key");
       initRequest.sseCustomerKey(sseCustomerKey);
-      initRequest.sseCustomerAlgorithm("AES256");
+      initRequest.sseCustomerAlgorithm(ServerSideEncryption.AES256.toString());
     }
 
     return handleAmazonExceptions(
-      () -> new MultipartUpload(s3.createMultipartUpload(initRequest.build()).uploadId())
+      () -> new MultipartUpload(s3Client.createMultipartUpload(initRequest.build()).uploadId())
     );
   }
 
@@ -291,7 +292,8 @@ public class S3OutputStream extends PositionOutputStream {
       }
 
       log.debug("Uploading part {} for id '{}'", currentPartNumber, uploadId);
-      UploadPartResponse uploadPartResponse = s3.uploadPart(requestBuilder.build(), requestBody);
+      UploadPartResponse uploadPartResponse =
+          s3Client.uploadPart(requestBuilder.build(), requestBody);
       completedParts.add(CompletedPart.builder()
           .eTag(uploadPartResponse.eTag())
           .partNumber(currentPartNumber)
@@ -304,7 +306,7 @@ public class S3OutputStream extends PositionOutputStream {
      * Resets the {@code inputStream} before returning digest.
      *
      * @param inputStream {@link ByteArrayInputStream} for upload part request payload
-     * @param partSize upload part size byte count
+     * @param partSize    upload part size byte count
      * @return MD5 digest of the provided input stream
      */
     private String computeDigest(ByteArrayInputStream inputStream, int partSize) {
@@ -334,16 +336,16 @@ public class S3OutputStream extends PositionOutputStream {
       handleAmazonExceptions(
           () -> {
             try {
-              return s3.completeMultipartUpload(completeRequestBuilder.build());
+              return s3Client.completeMultipartUpload(completeRequestBuilder.build());
             } catch (S3Exception e) {
               log.error("Failed to complete multipart upload of file {}", key, e);
               // There can be cases where the s3 api returns 200 status code, but the error code
               // is set to "PreconditionFailed". We include additional check on error code to
               // capture such cases.
-              if (e.statusCode() == 412
+              if (e.statusCode() == PRECONDITION_FAILED_ERROR_CODE
                   || PRECONDITION_FAILED_ERROR.equals(e.awsErrorDetails().errorCode())) {
                 // Sanity check to double-check file exists in S3 before skipping the offset
-                boolean exists = fileExists();
+                boolean exists = s3FileUtils.fileExists(bucket, key);
                 if (exists) {
                   throw new FileExistsException("File already exists");
                 }
@@ -356,35 +358,13 @@ public class S3OutputStream extends PositionOutputStream {
       );
     }
 
-
-
-    private boolean fileExists() {
-      try {
-        s3.headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build());
-        return true;
-      } catch (S3Exception e) {
-        if (e.statusCode() == HttpStatusCode.NOT_FOUND) {
-          return false;
-        }
-        if (e.statusCode() == HttpStatusCode.MOVED_PERMANENTLY
-            || "AccessDenied".equals(e.awsErrorDetails().errorCode())) {
-          log.warn("Connector failed with 403 error. Defaulting as file exists", e);
-          // To avoid failing connector due to missing ACL, we consider as file exists.
-          // We should be fine to assume file exists here since the call is being made only as an
-          // additional sanity check after file upload failed with 412
-          return true;
-        }
-        throw e;
-      }
-    }
-
     public void abort() {
       log.warn("Aborting multi-part upload with id '{}'", uploadId);
       try {
-        s3.abortMultipartUpload(AbortMultipartUploadRequest.builder()
-                .bucket(bucket)
-                .key(key)
-                .uploadId(uploadId)
+        s3Client.abortMultipartUpload(AbortMultipartUploadRequest.builder()
+            .bucket(bucket)
+            .key(key)
+            .uploadId(uploadId)
             .build());
       } catch (Exception e) {
         // ignoring failure on abort.
