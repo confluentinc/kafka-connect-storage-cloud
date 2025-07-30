@@ -126,69 +126,8 @@ public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
   @Test
   public void testBasicRecordsWritten() throws Throwable {
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
-    testBasicRecordsWritten(JSON_EXTENSION, false);
-  }
-
-  private void testBasicRecordsWritten(String expectedFileExtension,
-                                       boolean addExtensionInTopic) throws Throwable {
-    final String topicNameWithExt =
-        "other." + expectedFileExtension + ".topic." + expectedFileExtension;
-
-    // Add an extra topic with this extension inside of the name
-    // Use a TreeSet for test determinism
-    Set<String> topicNames = new TreeSet<>(KAFKA_TOPICS);
-
-    if (addExtensionInTopic) {
-      topicNames.add(topicNameWithExt);
-      connect.kafka().createTopic(topicNameWithExt, 1);
-      props.replace(
-          "topics",
-          props.get("topics") + "," + topicNameWithExt
-      );
-    }
-
-    // start sink connector
-    connect.configureConnector(CONNECTOR_NAME, props);
-    // wait for tasks to spin up
-    EmbeddedConnectUtils.waitForConnectorToStart(connect, CONNECTOR_NAME,
-        Math.min(topicNames.size(), MAX_TASKS));
-
-    Schema recordValueSchema = getSampleStructSchema();
-    Struct recordValueStruct = getSampleStructVal(recordValueSchema);
-
-    for (String thisTopicName : topicNames) {
-      // Create and send records to Kafka using the topic name in the current 'thisTopicName'
-      SinkRecord sampleRecord = getSampleTopicRecord(thisTopicName, recordValueSchema, recordValueStruct);
-      S3SinkConnectorIT.produceRecords(sampleRecord.topic(), NUM_RECORDS_INSERT, sampleRecord,
-          true, true, false, jsonConverter, producer);
-    }
-
-    log.info("Waiting for files in S3...");
-    int countPerTopic = NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
-    int expectedTotalFileCount = countPerTopic * topicNames.size();
-    waitForFilesInBucket(TEST_BUCKET_NAME, expectedTotalFileCount);
-
-    Set<String> expectedTopicFilenames = new TreeSet<>();
-    for (String thisTopicName : topicNames) {
-      List<String> theseFiles = getExpectedFilenames(
-          thisTopicName,
-          TOPIC_PARTITION,
-          FLUSH_SIZE_STANDARD,
-          0,
-          NUM_RECORDS_INSERT,
-          expectedFileExtension
-      );
-      assertEquals(theseFiles.size(), countPerTopic);
-      expectedTopicFilenames.addAll(theseFiles);
-    }
-    // This check will catch any duplications
-    assertEquals(expectedTopicFilenames.size(), expectedTotalFileCount);
-    // The total number of files allowed in the bucket is number of topics * # produced for each
-    // All topics should have produced the same number of files, so this check should hold.
-    assertFileNamesValid(TEST_BUCKET_NAME, new ArrayList<>(expectedTopicFilenames));
-    // Now check that all files created by the sink have the contents that were sent
-    // to the producer (they're all the same content)
-    assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
+    testBasicRecordsWrittenToSink(JSON_EXTENSION, false, KAFKA_TOPICS,
+        CONNECTOR_NAME, jsonConverter, producer);
   }
 
   protected static AmazonS3 getS3Client() {

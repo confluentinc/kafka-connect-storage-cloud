@@ -19,6 +19,7 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CO
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
 import static io.confluent.kafka.schemaregistry.ClusterTestHarness.KAFKASTORE_TOPIC;
 
+import io.confluent.connect.s3.util.EmbeddedConnectUtils;
 import org.apache.avro.generic.GenericData;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
@@ -34,6 +35,9 @@ import com.google.common.collect.ImmutableMap;
 import io.confluent.common.utils.IntegrationTest;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.RestApp;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.io.InputFile;
 
@@ -49,11 +53,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 
 import io.confluent.connect.s3.util.S3Utils;
+
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
@@ -83,6 +91,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 @Category(IntegrationTest.class)
 public abstract class BaseConnectorIT {
@@ -164,7 +174,7 @@ public abstract class BaseConnectorIT {
 
   protected void startConnect() {
     Map<String, String> workerProps = new HashMap<>();
-    workerProps.put("plugin.discovery","hybrid_warn");
+    workerProps.put("plugin.discovery", "hybrid_warn");
     connect = new EmbeddedConnectCluster.Builder()
         .name("s3-connect-cluster").workerProps(workerProps)
         .build();
@@ -229,12 +239,12 @@ public abstract class BaseConnectorIT {
    * <p>
    * Format: topics/s3_topic/tombstone/s3_topic+97+0000000001.keys.avro
    *
-   * @param topic      the test kafka topic
-   * @param partition  the expected partition for the tests
-   * @param flushSize  the flush size connector config
-   * @param numRecords the number of records produced in the test
-   * @param extension  the expected extensions of the files including compression (snappy.parquet)
-   * @param tombstonePartition  the expected directory for tombstone records
+   * @param topic              the test kafka topic
+   * @param partition          the expected partition for the tests
+   * @param flushSize          the flush size connector config
+   * @param numRecords         the number of records produced in the test
+   * @param extension          the expected extensions of the files including compression (snappy.parquet)
+   * @param tombstonePartition the expected directory for tombstone records
    * @return the list of expected filenames
    */
   protected List<String> getExpectedTombstoneFilenames(
@@ -296,7 +306,7 @@ public abstract class BaseConnectorIT {
       String token = result.getNextContinuationToken();
       // To get the next batch of files.
       request.setContinuationToken(token);
-    } while(result.isTruncated());
+    } while (result.isTruncated());
     return actualFiles;
   }
 
@@ -352,7 +362,7 @@ public abstract class BaseConnectorIT {
   }
 
   protected SinkRecord getSampleTopicRecord(String topicName, Schema recordValueSchema,
-      Struct recordValueStruct) {
+                                            Struct recordValueStruct) {
     return new SinkRecord(
         topicName,
         TOPIC_PARTITION,
@@ -410,7 +420,7 @@ public abstract class BaseConnectorIT {
   /**
    * Count total number of records stored in S3
    *
-   * @param bucketName          the name of the s3 test bucket
+   * @param bucketName the name of the s3 test bucket
    * @return number of records in S3
    */
   protected int countNumberOfRecords(
@@ -482,7 +492,7 @@ public abstract class BaseConnectorIT {
       S3Client.getObject(new GetObjectRequest(bucketName, fileName), downloadedFile);
       List<String> keyContent = new ArrayList<>();
       try (FileReader fileReader = new FileReader(destinationPath);
-          BufferedReader bufferedReader = new BufferedReader(fileReader)) {
+           BufferedReader bufferedReader = new BufferedReader(fileReader)) {
         String line;
         while ((line = bufferedReader.readLine()) != null) {
           keyContent.add(line);
@@ -495,7 +505,7 @@ public abstract class BaseConnectorIT {
             keyContent.size(), expectedRowsPerFile);
         return false;
       }
-      for (String actualKey: keyContent) {
+      for (String actualKey : keyContent) {
         if (!expectedKey.equals(actualKey)) {
           log.error("Key {} did not match the contents in the key file {}", expectedKey, actualKey);
           return false;
@@ -565,7 +575,7 @@ public abstract class BaseConnectorIT {
 
   // whether a filename contains any of the extensions
   private boolean filenameContainsExtensions(String filename, List<String> extensions) {
-    for (String extension : extensions){
+    for (String extension : extensions) {
       if (filename.endsWith(extension)) {
         return true;
       }
@@ -682,7 +692,7 @@ public abstract class BaseConnectorIT {
 
   protected static Map<String, String> getAWSCredentialFromPath() {
     Map<String, String> map = new HashMap<>();
-    if  (!System.getenv().containsKey(AWS_CREDENTIALS_PATH)) {
+    if (!System.getenv().containsKey(AWS_CREDENTIALS_PATH)) {
       return map;
     }
     String path = System.getenv().get(AWS_CREDENTIALS_PATH);
@@ -695,7 +705,7 @@ public abstract class BaseConnectorIT {
       }
       value = creds.get("aws_secret_access_key");
       if (value != null && !value.isEmpty()) {
-        map.put(AWS_SECRET_ACCESS_KEY_CONFIG,value);
+        map.put(AWS_SECRET_ACCESS_KEY_CONFIG, value);
       }
     } catch (Exception e) {
       e.printStackTrace();
@@ -704,5 +714,71 @@ public abstract class BaseConnectorIT {
       );
     }
     return map;
+  }
+
+  protected void testBasicRecordsWrittenToSink(String expectedFileExtension,
+                                               boolean addExtensionInTopic,
+                                               List<String> kafkaTopics,
+                                               String connectorName,
+                                               JsonConverter jsonConverter,
+                                               Producer<byte[], byte[]> producer) throws Throwable {
+    final String topicNameWithExt =
+        "other." + expectedFileExtension + ".topic." + expectedFileExtension;
+
+    // Add an extra topic with this extension inside of the name
+    // Use a TreeSet for test determinism
+    Set<String> topicNames = new TreeSet<>(kafkaTopics);
+
+    if (addExtensionInTopic) {
+      topicNames.add(topicNameWithExt);
+      connect.kafka().createTopic(topicNameWithExt, 1);
+      props.replace(
+          "topics",
+          props.get("topics") + "," + topicNameWithExt
+      );
+    }
+
+    // start sink connector
+    connect.configureConnector(connectorName, props);
+    // wait for tasks to spin up
+    EmbeddedConnectUtils.waitForConnectorToStart(connect, connectorName,
+        Math.min(topicNames.size(), MAX_TASKS));
+
+    Schema recordValueSchema = getSampleStructSchema();
+    Struct recordValueStruct = getSampleStructVal(recordValueSchema);
+
+    for (String thisTopicName : topicNames) {
+      // Create and send records to Kafka using the topic name in the current 'thisTopicName'
+      SinkRecord sampleRecord = getSampleTopicRecord(thisTopicName, recordValueSchema, recordValueStruct);
+      S3SinkConnectorIT.produceRecords(sampleRecord.topic(), NUM_RECORDS_INSERT, sampleRecord,
+          true, true, false, jsonConverter, producer);
+    }
+
+    log.info("Waiting for files in S3...");
+    int countPerTopic = NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
+    int expectedTotalFileCount = countPerTopic * topicNames.size();
+    waitForFilesInBucket(TEST_BUCKET_NAME, expectedTotalFileCount);
+
+    Set<String> expectedTopicFilenames = new TreeSet<>();
+    for (String thisTopicName : topicNames) {
+      List<String> theseFiles = getExpectedFilenames(
+          thisTopicName,
+          TOPIC_PARTITION,
+          FLUSH_SIZE_STANDARD,
+          0,
+          NUM_RECORDS_INSERT,
+          expectedFileExtension
+      );
+      assertEquals(theseFiles.size(), countPerTopic);
+      expectedTopicFilenames.addAll(theseFiles);
+    }
+    // This check will catch any duplications
+    assertEquals(expectedTopicFilenames.size(), expectedTotalFileCount);
+    // The total number of files allowed in the bucket is number of topics * # produced for each
+    // All topics should have produced the same number of files, so this check should hold.
+    assertFileNamesValid(TEST_BUCKET_NAME, new ArrayList<>(expectedTopicFilenames));
+    // Now check that all files created by the sink have the contents that were sent
+    // to the producer (they're all the same content)
+    assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
   }
 }
