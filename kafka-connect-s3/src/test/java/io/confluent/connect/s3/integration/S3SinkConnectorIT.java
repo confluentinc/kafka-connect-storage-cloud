@@ -22,8 +22,6 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.SEND_DIGEST_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.TOMBSTONE_ENCODED_PARTITION;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
@@ -75,6 +73,7 @@ import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.storage.StringConverter;
+import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
@@ -106,8 +105,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   @Before
   public void before() throws InterruptedException {
-    initializeJsonConverter();
-    initializeCustomProducer();
+    jsonConverter = initializeJsonConverter();
+    producer = initializeCustomProducer(connect);
     setupProperties();
     waitForSchemaRegistryToStart();
     //add class specific props
@@ -134,21 +133,23 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   public void testBasicRecordsWrittenAvro() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
-    testBasicRecordsWritten(AVRO_EXTENSION, false);
+    testBasicRecordsWrittenToSink(AVRO_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME, jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   @Test
   public void testBasicRecordsWrittenParquet() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
-    testBasicRecordsWritten(PARQUET_EXTENSION, false);
+    testBasicRecordsWrittenToSink(PARQUET_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME,
+        jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   @Test
   public void testBasicRecordsWrittenJson() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
-    testBasicRecordsWritten(JSON_EXTENSION, false);
+    testBasicRecordsWrittenToSink(JSON_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME,
+        jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   @Test
@@ -156,7 +157,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
     props.put(SEND_DIGEST_CONFIG, "true");
-    testBasicRecordsWritten(AVRO_EXTENSION, false);
+    testBasicRecordsWrittenToSink(AVRO_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME,
+        jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   @Test
@@ -164,7 +166,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
     props.put(SEND_DIGEST_CONFIG, "true");
-    testBasicRecordsWritten(PARQUET_EXTENSION, false);
+    testBasicRecordsWrittenToSink(PARQUET_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME,
+        jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   @Test
@@ -172,7 +175,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
     props.put(SEND_DIGEST_CONFIG, "true");
-    testBasicRecordsWritten(JSON_EXTENSION, false);
+    testBasicRecordsWrittenToSink(JSON_EXTENSION, false, KAFKA_TOPICS, CONNECTOR_NAME,
+        jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   @Test
@@ -186,25 +190,20 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     testTombstoneRecordsWritten(JSON_EXTENSION, false);
   }
 
-
-  public void testFilesWrittenToBucketAvroWithExtInTopic() throws Throwable {
-    //add test specific props
-    props.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
-    testBasicRecordsWritten(AVRO_EXTENSION, true);
-  }
-
   @Test
   public void testFilesWrittenToBucketParquetWithExtInTopic() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, ParquetFormat.class.getName());
-    testBasicRecordsWritten(PARQUET_EXTENSION, true);
+    testBasicRecordsWrittenToSink(PARQUET_EXTENSION, true, KAFKA_TOPICS, CONNECTOR_NAME,
+        jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   @Test
   public void testFilesWrittenToBucketJsonWithExtInTopic() throws Throwable {
     //add test specific props
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
-    testBasicRecordsWritten(JSON_EXTENSION, true);
+    testBasicRecordsWrittenToSink(JSON_EXTENSION, true, KAFKA_TOPICS, CONNECTOR_NAME,
+        jsonConverter, producer, TEST_BUCKET_NAME);
   }
 
   @Test
@@ -273,75 +272,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     assertFileNamesValid(TEST_BUCKET_NAME, new ArrayList<>(expectedTopicFilenames));
     // verify number of records written to S3
     assertEquals(NUM_RECORDS_INSERT + 1, countNumberOfRecords(TEST_BUCKET_NAME)); // 1 duplicate record will be present in the seed file
-  }
-
-  /**
-   * Test that the expected records are written for a given file extension
-   * Optionally, test that topics which have "*.{expectedFileExtension}*" in them are processed
-   * and written.
-   * @param expectedFileExtension The file extension to test against
-   * @param addExtensionInTopic Add a topic to to the test which contains the extension
-   * @throws Throwable
-   */
-  private void testBasicRecordsWritten(
-          String expectedFileExtension,
-          boolean addExtensionInTopic
-  ) throws Throwable {
-    final String topicNameWithExt = "other." + expectedFileExtension + ".topic." + expectedFileExtension;
-
-    // Add an extra topic with this extension inside of the name
-    // Use a TreeSet for test determinism
-    Set<String> topicNames = new TreeSet<>(KAFKA_TOPICS);
-
-    if (addExtensionInTopic) {
-      topicNames.add(topicNameWithExt);
-      connect.kafka().createTopic(topicNameWithExt, 1);
-      props.replace(
-              "topics",
-              props.get("topics") + "," + topicNameWithExt
-      );
-    }
-
-    // start sink connector
-    connect.configureConnector(CONNECTOR_NAME, props);
-    // wait for tasks to spin up
-    EmbeddedConnectUtils.waitForConnectorToStart(connect, CONNECTOR_NAME, Math.min(topicNames.size(), MAX_TASKS));
-
-    Schema recordValueSchema = getSampleStructSchema();
-    Struct recordValueStruct = getSampleStructVal(recordValueSchema);
-
-    for (String thisTopicName : topicNames) {
-      // Create and send records to Kafka using the topic name in the current 'thisTopicName'
-      SinkRecord sampleRecord = getSampleTopicRecord(thisTopicName, recordValueSchema, recordValueStruct);
-      produceRecordsNoHeaders(NUM_RECORDS_INSERT, sampleRecord);
-    }
-
-    log.info("Waiting for files in S3...");
-    int countPerTopic = NUM_RECORDS_INSERT / FLUSH_SIZE_STANDARD;
-    int expectedTotalFileCount = countPerTopic * topicNames.size();
-    waitForFilesInBucket(TEST_BUCKET_NAME, expectedTotalFileCount);
-
-    Set<String> expectedTopicFilenames = new TreeSet<>();
-    for (String thisTopicName : topicNames) {
-      List<String> theseFiles = getExpectedFilenames(
-              thisTopicName,
-              TOPIC_PARTITION,
-              FLUSH_SIZE_STANDARD,
-              0,
-              NUM_RECORDS_INSERT,
-              expectedFileExtension
-      );
-      assertEquals(theseFiles.size(), countPerTopic);
-      expectedTopicFilenames.addAll(theseFiles);
-    }
-    // This check will catch any duplications
-    assertEquals(expectedTopicFilenames.size(), expectedTotalFileCount);
-    // The total number of files allowed in the bucket is number of topics * # produced for each
-    // All topics should have produced the same number of files, so this check should hold.
-    assertFileNamesValid(TEST_BUCKET_NAME, new ArrayList<>(expectedTopicFilenames));
-    // Now check that all files created by the sink have the contents that were sent
-    // to the producer (they're all the same content)
-    assertTrue(fileContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD, recordValueStruct));
   }
 
   private void testTombstoneRecordsWritten(
@@ -456,8 +386,8 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   /**
    * Verify the error messages in the DLQ record headers.
    *
-   * @param expectedMessages    the expected list of error messages
-   * @param consumedDLQRecords  the records consumed from the DLQ topic
+   * @param expectedMessages   the expected list of error messages
+   * @param consumedDLQRecords the records consumed from the DLQ topic
    */
   private void assertDLQRecordMessages(
       List<String> expectedMessages,
@@ -482,28 +412,30 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   private void produceRecordsNoHeaders(int recordCount, SinkRecord record)
       throws ExecutionException, InterruptedException {
-    produceRecords(record.topic(), recordCount, record, true, true, false);
+    produceRecords(record.topic(), recordCount, record, true, true, false, jsonConverter, producer);
   }
 
   private void produceRecordsWithHeaders(String topic, int recordCount, SinkRecord record) throws Exception {
-   produceRecords(topic, recordCount, record, true, true, true);
+    produceRecords(topic, recordCount, record, true, true, true, jsonConverter, producer);
   }
 
   private void produceRecordsWithHeadersNoKey(String topic, int recordCount, SinkRecord record) throws Exception {
-    produceRecords(topic, recordCount, record, false, true, true);
+    produceRecords(topic, recordCount, record, false, true, true, jsonConverter, producer);
   }
 
-  private void produceRecordsWithHeadersNoValue(String topic, int recordCount, SinkRecord record) throws Exception{
-    produceRecords(topic, recordCount, record, true, false, true);
+  private void produceRecordsWithHeadersNoValue(String topic, int recordCount, SinkRecord record) throws Exception {
+    produceRecords(topic, recordCount, record, true, false, true, jsonConverter, producer);
   }
 
-  private void produceRecords(
+  protected static void produceRecords(
       String topic,
       int recordCount,
       SinkRecord record,
       boolean withKey,
       boolean withValue,
-      boolean withHeaders
+      boolean withHeaders,
+      JsonConverter jsonConverter,
+      Producer<byte[], byte[]> producer
   ) throws ExecutionException, InterruptedException {
     byte[] kafkaKey = null;
     byte[] kafkaValue = null;
@@ -512,34 +444,35 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
       kafkaKey = jsonConverter.fromConnectData(topic, Schema.STRING_SCHEMA, record.key());
     }
     if (withValue) {
-     kafkaValue = jsonConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
+      kafkaValue = jsonConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
     }
     if (withHeaders) {
       headers = sampleHeaders();
     }
-    ProducerRecord<byte[],byte[]> producerRecord =
+    ProducerRecord<byte[], byte[]> producerRecord =
         new ProducerRecord<>(topic, TOPIC_PARTITION, kafkaKey, kafkaValue, headers);
     for (long i = 0; i < recordCount; i++) {
       producer.send(producerRecord).get();
     }
   }
 
-  private void initializeJsonConverter() {
+  protected static JsonConverter initializeJsonConverter() {
     Map<String, Object> jsonConverterProps = new HashMap<>();
     jsonConverterProps.put("schemas.enable", "true");
     jsonConverterProps.put("converter.type", "value");
-    jsonConverter = new JsonConverter();
+    JsonConverter jsonConverter = new JsonConverter();
     jsonConverter.configure(jsonConverterProps);
+    return jsonConverter;
   }
 
-  private void initializeCustomProducer() {
+  protected static Producer<byte[], byte[]> initializeCustomProducer(EmbeddedConnectCluster connect) {
     Map<String, Object> producerProps = new HashMap<>();
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, connect.kafka().bootstrapServers());
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
         org.apache.kafka.common.serialization.ByteArraySerializer.class.getName());
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
         org.apache.kafka.common.serialization.ByteArraySerializer.class.getName());
-    producer = new KafkaProducer<>(producerProps);
+    return new KafkaProducer<>(producerProps);
   }
 
   private void setupProperties() {
