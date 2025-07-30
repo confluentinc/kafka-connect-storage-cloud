@@ -26,6 +26,7 @@ global_job_config:
       - checkout
       - . vault-setup
       - . vault-sem-get-secret connect_s3sink_it
+      - . vault-sem-get-secret CONNECT_S3_SINK_ASSUME_ROLE_IT
       - sem-version java 8
       - . cache-maven restore
 
