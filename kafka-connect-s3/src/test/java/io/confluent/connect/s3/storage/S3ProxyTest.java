@@ -15,10 +15,12 @@
 
 package io.confluent.connect.s3.storage;
 
-import com.amazonaws.ClientConfiguration;
 import com.amazonaws.Protocol;
-import com.amazonaws.services.s3.AmazonS3;
+import io.confluent.connect.s3.util.S3ProxyConfig;
 import org.apache.kafka.common.config.ConfigException;
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
+import software.amazon.awssdk.services.s3.S3Client;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -35,8 +37,8 @@ import static org.junit.Assert.assertThrows;
 public class S3ProxyTest extends S3SinkConnectorTestBase {
 
   protected S3Storage storage;
-  protected AmazonS3 s3;
-  protected ClientConfiguration clientConfig;
+  protected S3Client s3;
+  protected ClientOverrideConfiguration clientConfig;
   protected Map<String, String> localProps = new HashMap<>();
 
   @Override
@@ -62,146 +64,143 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
   @Test
   public void testNoProxy() throws Exception {
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
-    assertEquals(Protocol.HTTPS, clientConfig.getProtocol());
-    assertEquals(null, clientConfig.getProxyHost());
-    assertEquals(-1, clientConfig.getProxyPort());
-    assertEquals(null, clientConfig.getProxyUsername());
-    assertEquals(null, clientConfig.getProxyPassword());
+    assertThrows(ConfigException.class,
+        () -> new S3ProxyConfig(new S3SinkConnectorConfig(createProps())));
   }
 
   @Test
   public void testNoProtocolThrowsException() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "localhost");
     setUp();
-    assertThrows("no protocol: localhost", ConfigException.class, () -> storage.newClientConfiguration(connectorConfig));
+
+    assertThrows("no protocol: localhost", ConfigException.class,
+        () -> new S3ProxyConfig(new S3SinkConnectorConfig(createProps())));
   }
 
   @Test
   public void testUnknownProtocolThrowsException() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "unknown://localhost");
     setUp();
-    assertThrows("unknown protocol: localhost", ConfigException.class, () -> storage.newClientConfiguration(connectorConfig));
+    assertThrows("unknown protocol: localhost", ConfigException.class,
+        () -> new S3ProxyConfig(new S3SinkConnectorConfig(createProps())));
   }
 
   @Test
   public void testProtocolOnly() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
-    assertEquals(Protocol.HTTP, clientConfig.getProtocol());
-    assertEquals("", clientConfig.getProxyHost());
-    assertEquals(-1, clientConfig.getProxyPort());
-    assertEquals(null, clientConfig.getProxyUsername());
-    assertEquals(null, clientConfig.getProxyPassword());
+    assertThrows(ConfigException.class,
+        () -> new S3ProxyConfig(new S3SinkConnectorConfig(createProps())));
   }
 
   @Test
   public void testProtocolHostOnly() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://localhost");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
-    assertEquals(Protocol.HTTP, clientConfig.getProtocol());
-    assertEquals("localhost", clientConfig.getProxyHost());
-    assertEquals(-1, clientConfig.getProxyPort());
-    assertEquals(null, clientConfig.getProxyUsername());
-    assertEquals(null, clientConfig.getProxyPassword());
+    S3ProxyConfig proxyConfig = new S3ProxyConfig(new S3SinkConnectorConfig(createProps()));
+    assertEquals("HTTP", proxyConfig.protocol());
+    assertEquals("localhost", proxyConfig.host());
+    assertEquals(-1, proxyConfig.port());
+    assertEquals(null, proxyConfig.user());
+    assertEquals(null, proxyConfig.pass());
   }
 
   @Test
   public void testProtocolIpOnly() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://127.0.0.1");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
-    assertEquals(Protocol.HTTP, clientConfig.getProtocol());
-    assertEquals("127.0.0.1", clientConfig.getProxyHost());
-    assertEquals(-1, clientConfig.getProxyPort());
-    assertEquals(null, clientConfig.getProxyUsername());
-    assertEquals(null, clientConfig.getProxyPassword());
+
+    S3ProxyConfig proxyConfig = new S3ProxyConfig(new S3SinkConnectorConfig(createProps()));
+    assertEquals("HTTP", proxyConfig.protocol());
+    assertEquals("127.0.0.1", proxyConfig.host());
+    assertEquals(-1, proxyConfig.port());
+    assertEquals(null, proxyConfig.user());
+    assertEquals(null, proxyConfig.pass());
   }
 
   @Test
   public void testUnknownHostOnly() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://255.255.255.255");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
-    assertEquals(Protocol.HTTP, clientConfig.getProtocol());
-    assertEquals("255.255.255.255", clientConfig.getProxyHost());
-    assertEquals(-1, clientConfig.getProxyPort());
-    assertEquals(null, clientConfig.getProxyUsername());
-    assertEquals(null, clientConfig.getProxyPassword());
-  }
+    S3ProxyConfig proxyConfig = new S3ProxyConfig(new S3SinkConnectorConfig(createProps()));
 
+    assertEquals("HTTP", proxyConfig.protocol());
+    assertEquals("255.255.255.255", proxyConfig.host());
+    assertEquals(-1, proxyConfig.port());
+    assertEquals(null, proxyConfig.user());
+    assertEquals(null, proxyConfig.pass());
+  }
+  
   @Test
   public void testProtocolPort() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://:8080");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
-    assertEquals(Protocol.HTTP, clientConfig.getProtocol());
-    assertEquals("", clientConfig.getProxyHost());
-    assertEquals(8080, clientConfig.getProxyPort());
-    assertEquals(null, clientConfig.getProxyUsername());
-    assertEquals(null, clientConfig.getProxyPassword());
+    S3ProxyConfig proxyConfig = new S3ProxyConfig(new S3SinkConnectorConfig(createProps()));
+    assertEquals("HTTP", proxyConfig.protocol());
+    assertEquals("", proxyConfig.host());
+    assertEquals(8080, proxyConfig.port());
+    assertEquals(null, proxyConfig.user());
+    assertEquals(null, proxyConfig.pass());
   }
 
   @Test
   public void testProtocolHostPort() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://localhost:8080");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
-    assertEquals(Protocol.HTTP, clientConfig.getProtocol());
-    assertEquals("localhost", clientConfig.getProxyHost());
-    assertEquals(8080, clientConfig.getProxyPort());
-    assertEquals(null, clientConfig.getProxyUsername());
-    assertEquals(null, clientConfig.getProxyPassword());
+    S3ProxyConfig proxyConfig = new S3ProxyConfig(new S3SinkConnectorConfig(createProps()));
+    assertEquals("HTTP", proxyConfig.protocol());
+    assertEquals("localhost", proxyConfig.host());
+    assertEquals(8080, proxyConfig.port());
+    assertEquals(null, proxyConfig.user());
+    assertEquals(null, proxyConfig.pass());
   }
 
   @Test
   public void testProtocolHostPortAndPath() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://localhost:8080/current");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
-    assertEquals(Protocol.HTTP, clientConfig.getProtocol());
-    assertEquals("localhost", clientConfig.getProxyHost());
-    assertEquals(8080, clientConfig.getProxyPort());
-    assertEquals(null, clientConfig.getProxyUsername());
-    assertEquals(null, clientConfig.getProxyPassword());
+    S3ProxyConfig proxyConfig = new S3ProxyConfig(new S3SinkConnectorConfig(createProps()));
+    assertEquals("HTTP", proxyConfig.protocol());
+    assertEquals("localhost", proxyConfig.host());
+    assertEquals(8080, proxyConfig.port());
+    assertEquals(null, proxyConfig.user());
+    assertEquals(null, proxyConfig.pass());
   }
 
   @Test
   public void testProtocolHostPortUserOnUrlNoPass() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://user@localhost:8080");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
-    assertEquals(Protocol.HTTP, clientConfig.getProtocol());
-    assertEquals("localhost", clientConfig.getProxyHost());
-    assertEquals(8080, clientConfig.getProxyPort());
-    assertEquals("user", clientConfig.getProxyUsername());
-    assertEquals(null, clientConfig.getProxyPassword());
+    S3ProxyConfig proxyConfig = new S3ProxyConfig(new S3SinkConnectorConfig(createProps()));
+    assertEquals("HTTP", proxyConfig.protocol());
+    assertEquals("localhost", proxyConfig.host());
+    assertEquals(8080, proxyConfig.port());
+    assertEquals("user", proxyConfig.user());
+    assertEquals(null, proxyConfig.pass());
   }
 
   @Test
   public void testProtocolHostPortUserOnUrlEmptyPass() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://user:@localhost:8080");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
-    assertEquals(Protocol.HTTP, clientConfig.getProtocol());
-    assertEquals("localhost", clientConfig.getProxyHost());
-    assertEquals(8080, clientConfig.getProxyPort());
-    assertEquals("user", clientConfig.getProxyUsername());
-    assertEquals("", clientConfig.getProxyPassword());
+    S3ProxyConfig proxyConfig = new S3ProxyConfig(new S3SinkConnectorConfig(createProps()));
+    assertEquals("HTTP", proxyConfig.protocol());
+    assertEquals("localhost", proxyConfig.host());
+    assertEquals(8080, proxyConfig.port());
+    assertEquals("user", proxyConfig.user());
+    assertEquals("", proxyConfig.pass());
   }
 
   @Test
   public void testProtocolHostPortUserPassOnUrl() throws Exception {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG, "http://user:pass@localhost:8080");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
-    assertEquals(Protocol.HTTP, clientConfig.getProtocol());
-    assertEquals("localhost", clientConfig.getProxyHost());
-    assertEquals(8080, clientConfig.getProxyPort());
-    assertEquals("user", clientConfig.getProxyUsername());
-    assertEquals("pass", clientConfig.getProxyPassword());
+    S3ProxyConfig proxyConfig = new S3ProxyConfig(new S3SinkConnectorConfig(createProps()));
+    assertEquals("HTTP", proxyConfig.protocol());
+    assertEquals("localhost", proxyConfig.host());
+    assertEquals(8080, proxyConfig.port());
+    assertEquals("user", proxyConfig.user());
+    assertEquals("pass", proxyConfig.pass());
   }
 
   @Test
@@ -210,12 +209,12 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_USER_CONFIG, "realuser");
     localProps.put(S3SinkConnectorConfig.S3_PROXY_PASS_CONFIG, "realpass");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
-    assertEquals(Protocol.HTTP, clientConfig.getProtocol());
-    assertEquals("localhost", clientConfig.getProxyHost());
-    assertEquals(8080, clientConfig.getProxyPort());
-    assertEquals("realuser", clientConfig.getProxyUsername());
-    assertEquals("realpass", clientConfig.getProxyPassword());
+    S3ProxyConfig proxyConfig = new S3ProxyConfig(new S3SinkConnectorConfig(createProps()));
+    assertEquals("HTTP", proxyConfig.protocol());
+    assertEquals("localhost", proxyConfig.host());
+    assertEquals(8080, proxyConfig.port());
+    assertEquals("realuser", proxyConfig.user());
+    assertEquals("realpass", proxyConfig.pass());
   }
 
   @Test
@@ -224,12 +223,12 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_USER_CONFIG, "realuser");
     localProps.put(S3SinkConnectorConfig.S3_PROXY_PASS_CONFIG, "realpass");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
-    assertEquals(Protocol.HTTP, clientConfig.getProtocol());
-    assertEquals("localhost", clientConfig.getProxyHost());
-    assertEquals(8080, clientConfig.getProxyPort());
-    assertEquals("realuser", clientConfig.getProxyUsername());
-    assertEquals("realpass", clientConfig.getProxyPassword());
+    S3ProxyConfig proxyConfig = new S3ProxyConfig(new S3SinkConnectorConfig(createProps()));
+    assertEquals("HTTP", proxyConfig.protocol());
+    assertEquals("localhost", proxyConfig.host());
+    assertEquals(8080, proxyConfig.port());
+    assertEquals("realuser", proxyConfig.user());
+    assertEquals("realpass", proxyConfig.pass());
   }
 
   @Test
@@ -238,11 +237,12 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
     localProps.put(S3SinkConnectorConfig.S3_PROXY_USER_CONFIG, "realuser");
     localProps.put(S3SinkConnectorConfig.S3_PROXY_PASS_CONFIG, "realpass");
     setUp();
-    clientConfig = storage.newClientConfiguration(connectorConfig);
-    assertEquals(Protocol.HTTPS, clientConfig.getProtocol());
-    assertEquals("localhost", clientConfig.getProxyHost());
-    assertEquals(8080, clientConfig.getProxyPort());
-    assertEquals("realuser", clientConfig.getProxyUsername());
-    assertEquals("realpass", clientConfig.getProxyPassword());
+    S3ProxyConfig proxyConfig = new S3ProxyConfig(new S3SinkConnectorConfig(createProps()));
+    assertEquals("HTTPS", proxyConfig.protocol());
+    assertEquals("localhost", proxyConfig.host());
+    assertEquals(8080, proxyConfig.port());
+    assertEquals("realuser", proxyConfig.user());
+    assertEquals("realpass", proxyConfig.pass());
   }
+
 }

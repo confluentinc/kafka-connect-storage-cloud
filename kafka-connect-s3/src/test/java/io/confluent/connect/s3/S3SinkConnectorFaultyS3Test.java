@@ -1,6 +1,7 @@
 package io.confluent.connect.s3;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 
-import com.amazonaws.services.s3.AmazonS3;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -61,7 +62,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     protected static Admin kafkaAdmin;
     protected String connectorName;
     protected String topicName;
-    protected AmazonS3 s3;
+    protected S3Client s3;
 
     // test parameters
     private final Failure failure;
@@ -92,7 +93,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         props.put(SinkConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, converterClass.getName());
 
         props.put(StorageSinkConnectorConfig.PARQUET_CODEC_CONFIG, "none"); // disable compressor to lower CPU usage for parquet tests
-        props.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "0"); // disable AWS SDK retries
+        props.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "1"); // disable AWS SDK retries, try once and no retries
         props.put(StorageSinkConnectorConfig.RETRY_BACKOFF_CONFIG, "100"); // lower Connect Framework retry backoff
 
         // If flushSize > PART_SIZE, then first uploadPart() is called from S3OutputStream::write() method.
@@ -103,6 +104,8 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         // since S3 is mocked, credentials don't matter
         props.put(S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG, "12345");
         props.put(S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG, "12345");
+
+        props.put(S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG, "true");
 
         props.put(SinkConnectorConfig.TOPICS_CONFIG, topicName);
 
@@ -118,7 +121,8 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         super.setUp();
 
         s3 = newS3Client(connectorConfig);
-        s3.createBucket(S3_TEST_BUCKET_NAME);
+        s3.createBucket(CreateBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME)
+          .build());
 
         connectorName = CONNECTOR_NAME + UUID.randomUUID();
         connect.configureConnector(connectorName, properties);
