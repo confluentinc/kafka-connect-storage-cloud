@@ -36,7 +36,13 @@ import static org.hamcrest.core.StringStartsWith.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import com.amazonaws.services.s3.model.ObjectMetadata;
+import software.amazon.awssdk.services.s3.model.Tag;
+import software.amazon.awssdk.services.s3.model.Tagging;
+import software.amazon.awssdk.services.s3.model.GetObjectTaggingRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectTaggingResponse;
+import software.amazon.awssdk.core.sync.RequestBody;
+
+import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.S3SinkConnector;
 import io.confluent.connect.s3.S3SinkConnectorConfig.IgnoreOrFailBehavior;
 import io.confluent.connect.s3.S3SinkConnectorConfig.OutputWriteBehavior;
@@ -47,6 +53,8 @@ import io.confluent.connect.s3.storage.S3Storage;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -83,6 +91,9 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+
 
 @SuppressWarnings({"unchecked", "deprecation"})
 @Category(IntegrationTest.class)
@@ -209,6 +220,14 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   }
 
   @Test
+  public void testFilesWrittenToBucketWithTagsEnabled() throws Throwable {
+    //add test specific props
+    props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+    props.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
+    testBasicRecordsWritten(JSON_EXTENSION, true, true);
+  }
+
+  @Test
   public void testConnectorWithConditionalWrites() throws Throwable {
     props.put(ENABLE_CONDITIONAL_WRITES_CONFIG, "true");
     props.put(ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "60000");
@@ -224,10 +243,15 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
   private void writeDummyFile(String key) {
     String initialFileContents = "{\"ID\":1,\"myBool\":true,\"myInt32\":32,\"myFloat32\":3.2,\"myFloat64\":64.64,\"myString\":\"theStringVal\"}\n"
         + "{\"ID\":1,\"myBool\":true,\"myInt32\":32,\"myFloat32\":3.2,\"myFloat64\":64.64,\"myString\":\"theStringVal\"}";
-    S3Client.putObject(TEST_BUCKET_NAME, key, new ByteArrayInputStream(initialFileContents.getBytes()), new ObjectMetadata());
+    RequestBody requestBody = RequestBody.fromString(initialFileContents, Charset.defaultCharset());
+
+    s3Client.putObject(
+        PutObjectRequest.builder()
+            .bucket(TEST_BUCKET_NAME)
+            .key(key).build(), requestBody);
   }
 
-  private void testRecordsWrittenWithConditionalWrites(String expectedFileExtension) throws InterruptedException, ExecutionException {
+  private void testRecordsWrittenWithConditionalWrites(String expectedFileExtension) throws InterruptedException, ExecutionException, IOException {
 
     // Create some initial file - presumed to be created by another task instance. The file contains the first two records
     String key = String.format("topics/%s/partition=0/%s+0+0000000000.json", DEFAULT_TEST_TOPIC_NAME, DEFAULT_TEST_TOPIC_NAME);
@@ -274,6 +298,20 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     assertFileNamesValid(TEST_BUCKET_NAME, new ArrayList<>(expectedTopicFilenames));
     // verify number of records written to S3
     assertEquals(NUM_RECORDS_INSERT + 1, countNumberOfRecords(TEST_BUCKET_NAME)); // 1 duplicate record will be present in the seed file
+  }
+
+  private void validateTags(Map<String, Tagging> tags) {
+    for (Map.Entry<String, Tagging> entry : tags.entrySet()) {
+      GetObjectTaggingRequest getObjectTaggingRequest = GetObjectTaggingRequest.builder()
+          .bucket(TEST_BUCKET_NAME)
+          .key(entry.getKey())
+          .build();
+
+      GetObjectTaggingResponse getObjectTaggingResponse = s3Client.getObjectTagging(getObjectTaggingRequest);
+      List<Tag> actualTags = getObjectTaggingResponse.tagSet();
+      assertEquals(actualTags.size(), entry.getValue().tagSet().size());
+      assertTrue(actualTags.containsAll(entry.getValue().tagSet()));
+    }
   }
 
   private void testTombstoneRecordsWritten(
@@ -414,8 +452,14 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
 
   private void testBasicRecordsWritten(String expectedFileExtension,
                                        boolean addExtensionInTopic) throws Throwable {
+    testBasicRecordsWritten(expectedFileExtension, addExtensionInTopic, false);
+  }
+  
+  private void testBasicRecordsWritten(String expectedFileExtension,
+                                       boolean addExtensionInTopic,
+                                       boolean validateTagging) throws Throwable {
     testBasicRecordsWrittenToSink(expectedFileExtension, addExtensionInTopic, KAFKA_TOPICS,
-        CONNECTOR_NAME, jsonConverter, producer, TEST_BUCKET_NAME);
+        CONNECTOR_NAME, jsonConverter, producer, TEST_BUCKET_NAME, validateTagging);
   }
 
   private void produceRecordsNoHeaders(int recordCount, SinkRecord record)
