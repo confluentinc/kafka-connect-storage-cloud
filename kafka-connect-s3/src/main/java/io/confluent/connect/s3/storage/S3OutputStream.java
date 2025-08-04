@@ -78,9 +78,9 @@ public class S3OutputStream extends PositionOutputStream {
   private static final String PRECONDITION_FAILED_ERROR = "PreconditionFailed";
   private static final int PRECONDITION_FAILED_ERROR_CODE = 412;
 
-  public S3OutputStream(String key, S3SinkConnectorConfig conf, S3Client s3) {
-    this.s3Client = s3;
-    this.s3FileUtils = new S3FileUtils(s3Client);
+  public S3OutputStream(String key, S3SinkConnectorConfig conf, S3Client s3Client) {
+    this.s3Client = s3Client;
+    this.s3FileUtils = new S3FileUtils(this.s3Client);
     this.bucket = conf.getBucketName();
     this.key = key;
     this.ssea = conf.getSsea();

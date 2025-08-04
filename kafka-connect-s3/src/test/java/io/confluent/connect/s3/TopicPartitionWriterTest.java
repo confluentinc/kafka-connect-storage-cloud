@@ -21,7 +21,6 @@ import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectTaggingRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectTaggingResponse;
-import software.amazon.awssdk.services.s3.model.S3Object;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
 import software.amazon.awssdk.services.s3.model.GetObjectTaggingResponse;
@@ -149,7 +148,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   private AvroFormat format;
   private static String extension;
 
-  private S3Client s3;
+  private S3Client s3Client;
   Map<String, String> localProps = new HashMap<>();
 
   @Override
@@ -162,13 +161,13 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void setUp() throws Exception {
     super.setUp();
 
-    s3 = newS3Client(connectorConfig);
-    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+    s3Client = newS3Client(connectorConfig);
+    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client);
     format = new AvroFormat(storage);
 
-    s3.createBucket(CreateBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME)
+    s3Client.createBucket(CreateBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME)
         .build());
-    assertNotNull(s3.headBucket(HeadBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME).build()));
+    assertNotNull(s3Client.headBucket(HeadBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME).build()));
 
     Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
     writerProvider = format.getRecordWriterProvider();
@@ -178,13 +177,13 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void setUpWithCommitException() throws Exception {
     super.setUp();
 
-    s3 = newS3Client(connectorConfig);
-    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3) {
+    s3Client = newS3Client(connectorConfig);
+    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client) {
       private final AtomicInteger retries = new AtomicInteger(0);
 
       @Override
       public S3OutputStream create(String path, boolean overwrite, Class<?> formatClass) {
-        return new S3OutputStreamFlaky(path, this.conf(), s3, retries);
+        return new S3OutputStreamFlaky(path, this.conf(), s3Client, retries);
       }
     };
 
@@ -198,8 +197,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void setUpWithTaggingException(boolean mockSdkClientException) throws Exception {
     super.setUp();
 
-    s3 = newS3Client(connectorConfig);
-    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3) {
+    s3Client = newS3Client(connectorConfig);
+    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client) {
       @Override
       public void addTags(String fileName, Map<String, String> tags) throws SdkClientException {
         if (mockSdkClientException) {
@@ -211,9 +210,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     format = new AvroFormat(storage);
 
-    s3.createBucket(CreateBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME)
+    s3Client.createBucket(CreateBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME)
         .build());
-    assertTrue(s3.headBucket(HeadBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME).build()) != null);
+    assertTrue(s3Client.headBucket(HeadBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME).build()) != null);
 
     Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
     writerProvider = format.getRecordWriterProvider();
@@ -1825,13 +1824,13 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         "topics_test-topic_partition=12_test-topic#12#0000000002.avro");
     private boolean hasGetPermission = true;
 
-    public S3StorageWithConditionalWrite(S3SinkConnectorConfig conf, String url, String bucketName, S3Client s3) {
-      super(conf, url, bucketName, s3);
+    public S3StorageWithConditionalWrite(S3SinkConnectorConfig conf, String url, String bucketName, S3Client s3Client) {
+      super(conf, url, bucketName, s3Client);
     }
 
-    public S3StorageWithConditionalWrite(S3SinkConnectorConfig conf, String url, String bucketName, S3Client s3,
+    public S3StorageWithConditionalWrite(S3SinkConnectorConfig conf, String url, String bucketName, S3Client s3Client,
                                          boolean hasGetPermission) {
-      super(conf, url, bucketName, s3);
+      super(conf, url, bucketName, s3Client);
       this.hasGetPermission = hasGetPermission;
     }
 
@@ -1847,7 +1846,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     @Override
     public S3OutputStream create(String path, boolean overwrite, Class<?> formatClass) {
-      return new S3OutputStream(path, connectorConfig, s3) {
+      return new S3OutputStream(path, connectorConfig, s3Client) {
         @Override
         public void commit() {
           if (existingFiles.contains(path)) {
@@ -1866,7 +1865,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     localProps.put(FLUSH_SIZE_CONFIG, "10");
     setUp();
 
-    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3, true);
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client, true);
 
     Schema schema = createSchema();
     List<Struct> records = createRecordBatch(schema, 10);
@@ -1897,7 +1896,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     localProps.put(FLUSH_SIZE_CONFIG, "10");
     setUp();
 
-    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3, false);
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client, false);
 
     Schema schema = createSchema();
     List<Struct> records = createRecordBatch(schema, 10);
@@ -1935,7 +1934,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<Struct> records = createRecordBatch(schema, 200);
     List<SinkRecord> sinkRecords = createSinkRecordsWithHeaders(records, "key", schema);
 
-    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, getKeyHeaderValueProvider(),  partitioner,  connectorConfig, context, null);
@@ -1965,7 +1964,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     localProps.put(FLUSH_SIZE_CONFIG, "9");
     setUp();
 
-    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client);
 
     Schema schema = createSchema();
     List<Struct> records = createRecordBatch(schema, 10);
@@ -2008,7 +2007,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     localProps.put(FLUSH_SIZE_CONFIG, "3");
     setUp();
 
-    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client);
 
     Schema schema = createSchema();
     List<Struct> records = createRecordBatch(schema, 3);
@@ -2055,7 +2054,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     localProps.put(FLUSH_SIZE_CONFIG, "3");
     setUp();
 
-    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client);
 
     Schema schema = SchemaBuilder.struct().field("field", Schema.STRING_SCHEMA).build();
     List<Struct> records = new ArrayList<>();
@@ -2523,7 +2522,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   private void verify(List<String> expectedFileKeys, int expectedSize, Schema schema, List<Struct> records)
       throws IOException {
-    List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3Client);
     List<String> actualFiles = new ArrayList<>();
     for (S3Object summary : summaries) {
       String fileKey = summary.key();
@@ -2536,7 +2535,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     int index = 0;
     for (String fileKey : actualFiles) {
-      Collection<Object> actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3);
+      Collection<Object> actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3Client);
       assertEquals(expectedSize, actualRecords.size());
       for (Object avroRecord : actualRecords) {
         Object expectedRecord = format.getAvroData().fromConnectData(records.get(index).schema(), records.get(index++));
@@ -2549,7 +2548,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       List<String> expectedFileKeys, int expectedSize,
       List<SinkRecord> expectedRecords, CompressionType compressionType
   ) throws IOException {
-    List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3Client);
     List<String> actualFiles = new ArrayList<>();
     for (S3Object summary : summaries) {
       String fileKey = summary.key();
@@ -2564,7 +2563,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     for (String fileKey : actualFiles) {
       Collection<Object> actualRecords = readRecordsJson(
           S3_TEST_BUCKET_NAME, fileKey,
-          s3, compressionType
+          s3Client, compressionType
       );
       assertEquals(expectedSize, actualRecords.size());
       for (Object currentRecord : actualRecords) {
@@ -2589,7 +2588,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         .build();
 
     // Get the paginator from the S3 client
-    ListObjectsV2Iterable paginatedResponses = s3.listObjectsV2Paginator(listObjectsV2Request);
+    ListObjectsV2Iterable paginatedResponses = s3Client.listObjectsV2Paginator(listObjectsV2Request);
 
     // Use a for-each loop to iterate through all the S3Objects
     // The SDK handles the pagination behind the scenes, making more API calls
@@ -2607,7 +2606,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     int index = 0;
     int expectedSizeIndex = 0;
     for (String fileKey : actualFiles) {
-      Collection<Object> actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3);
+      Collection<Object> actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3Client);
       assertEquals((int)(expectedSizes.get(expectedSizeIndex++)), actualRecords.size());
       for (Object avroRecord : actualRecords) {
         Struct record = records.get(index++);
@@ -2626,7 +2625,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   private void verifyRecordElement(List<String> expectedFileKeys, int expectedSize, List<SinkRecord> records, RecordElement fileType)
       throws IOException {
 
-    List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3Client);
     List<String> actualFiles;
     switch (fileType) {
       case KEYS:
@@ -2648,9 +2647,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     for (String fileKey : actualFiles) {
       Collection<Object> actualRecords;
       if (fileKey.endsWith(".json")) {
-        actualRecords = readRecordsJson(S3_TEST_BUCKET_NAME, fileKey, s3, CompressionType.NONE);
+        actualRecords = readRecordsJson(S3_TEST_BUCKET_NAME, fileKey, s3Client, CompressionType.NONE);
       } else {
-        actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3);
+        actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3Client);
       }
       assertEquals(expectedSize, actualRecords.size());
       for (Object avroRecord : actualRecords) {

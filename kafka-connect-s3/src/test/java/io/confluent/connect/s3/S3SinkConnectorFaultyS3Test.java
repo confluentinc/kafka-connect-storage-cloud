@@ -62,7 +62,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
     protected static Admin kafkaAdmin;
     protected String connectorName;
     protected String topicName;
-    protected S3Client s3;
+    protected S3Client s3Client;
 
     // test parameters
     private final Failure failure;
@@ -120,8 +120,8 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
 
         super.setUp();
 
-        s3 = newS3Client(connectorConfig);
-        s3.createBucket(CreateBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME)
+        s3Client = newS3Client(connectorConfig);
+        s3Client.createBucket(CreateBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME)
           .build());
 
         connectorName = CONNECTOR_NAME + UUID.randomUUID();
@@ -268,7 +268,7 @@ public class S3SinkConnectorFaultyS3Test extends TestWithMockedFaultyS3 {
         }
 
         // check that the file is written to S3
-        S3Utils.waitForFilesInBucket(s3, S3_TEST_BUCKET_NAME, 1, S3_TIMEOUT_MS);
+        S3Utils.waitForFilesInBucket(s3Client, S3_TEST_BUCKET_NAME, 1, S3_TIMEOUT_MS);
     }
 
     interface Failure {

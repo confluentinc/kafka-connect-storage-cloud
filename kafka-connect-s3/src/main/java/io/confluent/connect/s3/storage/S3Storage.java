@@ -124,12 +124,12 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
   }
 
   // Visible for testing.
-  public S3Storage(S3SinkConnectorConfig conf, String url, String bucketName, S3Client s3) {
+  public S3Storage(S3SinkConnectorConfig conf, String url, String bucketName, S3Client s3Client) {
     this.url = url;
     this.conf = conf;
     this.bucketName = bucketName;
-    this.s3Client = s3;
-    this.s3FileUtils = new S3FileUtils(s3Client);
+    this.s3Client = s3Client;
+    this.s3FileUtils = new S3FileUtils(this.s3Client);
   }
 
   /**

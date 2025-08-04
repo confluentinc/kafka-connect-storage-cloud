@@ -41,7 +41,6 @@ import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -52,7 +51,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -111,12 +109,12 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
 
     // We'll replace 'storage' and 'format' here that were created by
     // the base class.
-    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3) {
+    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client) {
       private final AtomicInteger retries = new AtomicInteger(0);
 
       @Override
       public S3OutputStream create(String path, boolean overwrite, Class<?> formatClass) {
-        return new TopicPartitionWriterTest.S3OutputStreamFlaky(path, this.conf(), s3, retries);
+        return new TopicPartitionWriterTest.S3OutputStreamFlaky(path, this.conf(), s3Client, retries);
       }
     };
     format = new AvroFormat(storage);
@@ -202,11 +200,11 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     task.close(context.assignment());
     task.stop();
 
-    List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, "/", s3);
+    List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, "/", s3Client);
     for(S3Object summary: summaries){
 
       String key = URLDecoder.decode(summary.key(), StandardCharsets.UTF_8.toString());
-      ResponseInputStream<GetObjectResponse> in = s3.getObject(GetObjectRequest.builder().bucket(S3_TEST_BUCKET_NAME).key(key).build());
+      ResponseInputStream<GetObjectResponse> in = s3Client.getObject(GetObjectRequest.builder().bucket(S3_TEST_BUCKET_NAME).key(key).build());
       DatumReader<Object> reader = new GenericDatumReader<>();
       DataFileStream<Object> streamReader = new DataFileStream<>(in, reader);
       // make sure that produced Avro file has proper codec set
@@ -227,7 +225,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     List<SinkRecord> sinkRecords = createRecords(2);
     byte[] partialData = AvroUtils.putRecords(sinkRecords, format.getAvroData());
     String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, EXTENSION, ZERO_PAD_FMT);
-    s3.putObject(PutObjectRequest.builder().bucket(S3_TEST_BUCKET_NAME).key(fileKey).build(), RequestBody.fromInputStream(
+    s3Client.putObject(PutObjectRequest.builder().bucket(S3_TEST_BUCKET_NAME).key(fileKey).build(), RequestBody.fromInputStream(
     new ByteArrayInputStream(partialData), partialData.length));
 
     // Accumulate rest of the records.
@@ -989,7 +987,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
 
         FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset, EXTENSION, ZERO_PAD_FMT);
         Collection<Object> records = readRecords(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset,
-                                                 EXTENSION, ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
+                                                 EXTENSION, ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3Client);
         assertEquals(size, records.size());
         verifyContents(sinkRecords, j, records);
         j += size;

@@ -107,7 +107,7 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
     }
   }
 
-  public static List<S3Object> listObjects(String bucket, String prefix, S3Client s3) {
+  public static List<S3Object> listObjects(String bucket, String prefix, S3Client s3Client) {
     List<S3Object> objects = new ArrayList<>();
     ListObjectsResponse listing;
 
@@ -115,15 +115,15 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
     try {
       if (prefix == null) {
         builder = ListObjectsRequest.builder().bucket(bucket);
-        listing = s3.listObjects(builder.build());
+        listing = s3Client.listObjects(builder.build());
       } else {
         builder = ListObjectsRequest.builder().bucket(bucket).prefix(prefix);
-        listing = s3.listObjects(builder.build());
+        listing = s3Client.listObjects(builder.build());
       }
 
       objects.addAll(listing.contents());
       while (listing.isTruncated()) {
-        listing = s3.listObjects(builder.marker(listing.marker()).build());
+        listing = s3Client.listObjects(builder.marker(listing.marker()).build());
         objects.addAll(listing.contents());
       }
     } catch (S3Exception e) {
@@ -134,7 +134,7 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
   }
 
   public static Collection<Object> readRecords(String topicsDir, String directory, TopicPartition tp, long startOffset,
-                                               String extension, String zeroPadFormat, String bucketName, S3Client s3) throws IOException {
+                                               String extension, String zeroPadFormat, String bucketName, S3Client s3Client) throws IOException {
       String fileKey = FileUtils.fileKeyToCommit(topicsDir, directory, tp, startOffset,
           extension, zeroPadFormat);
       CompressionType compressionType = CompressionType.NONE;
@@ -142,48 +142,48 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
         compressionType = CompressionType.GZIP;
       }
       if (".avro".equals(extension)) {
-        return readRecordsAvro(bucketName, fileKey, s3);
+        return readRecordsAvro(bucketName, fileKey, s3Client);
       } else if (extension.startsWith(".json")) {
-        return readRecordsJson(bucketName, fileKey, s3, compressionType);
+        return readRecordsJson(bucketName, fileKey, s3Client, compressionType);
       } else if (extension.startsWith(".bin")) {
-        return readRecordsByteArray(bucketName, fileKey, s3, compressionType,
+        return readRecordsByteArray(bucketName, fileKey, s3Client, compressionType,
             S3SinkConnectorConfig.FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT.getBytes());
       } else if (extension.endsWith(".parquet")) {
-          return readRecordsParquet(bucketName, fileKey, s3);
+          return readRecordsParquet(bucketName, fileKey, s3Client);
       } else if (extension.startsWith(".customExtensionForTest")) {
-        return readRecordsByteArray(bucketName, fileKey, s3, compressionType,
+        return readRecordsByteArray(bucketName, fileKey, s3Client, compressionType,
             "SEPARATOR".getBytes());
       } else {
         throw new IllegalArgumentException("Unknown extension: " + extension);
       }
   }
 
-  public static Collection<Object> readRecordsAvro(String bucketName, String fileKey, S3Client s3) throws IOException {
+  public static Collection<Object> readRecordsAvro(String bucketName, String fileKey, S3Client s3Client) throws IOException {
       log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
-      InputStream in = s3.getObject(GetObjectRequest.builder().bucket(bucketName).key(fileKey).build());
+      InputStream in = s3Client.getObject(GetObjectRequest.builder().bucket(bucketName).key(fileKey).build());
 
       return AvroUtils.getRecords(in);
   }
 
-  public static Collection<Object> readRecordsJson(String bucketName, String fileKey, S3Client s3,
+  public static Collection<Object> readRecordsJson(String bucketName, String fileKey, S3Client s3Client,
                                                    CompressionType compressionType) throws IOException {
       log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
-      InputStream in = s3.getObject(GetObjectRequest.builder().bucket(bucketName).key(fileKey).build());
+      InputStream in = s3Client.getObject(GetObjectRequest.builder().bucket(bucketName).key(fileKey).build());
 
       return JsonUtils.getRecords(compressionType.wrapForInput(in));
   }
 
-  public static Collection<Object> readRecordsByteArray(String bucketName, String fileKey, S3Client s3,
+  public static Collection<Object> readRecordsByteArray(String bucketName, String fileKey, S3Client s3Client,
                                                         CompressionType compressionType, byte[] lineSeparatorBytes) throws IOException {
       log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
-      InputStream in = s3.getObject(GetObjectRequest.builder().bucket(bucketName).key(fileKey).build());
+      InputStream in = s3Client.getObject(GetObjectRequest.builder().bucket(bucketName).key(fileKey).build());
 
       return ByteArrayUtils.getRecords(compressionType.wrapForInput(in), lineSeparatorBytes);
   }
 
-  public static Collection<Object> readRecordsParquet(String bucketName, String fileKey, S3Client s3) throws IOException {
+  public static Collection<Object> readRecordsParquet(String bucketName, String fileKey, S3Client s3Client) throws IOException {
       log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
-      InputStream in = s3.getObject(GetObjectRequest.builder().bucket(bucketName).key(fileKey).build());
+      InputStream in = s3Client.getObject(GetObjectRequest.builder().bucket(bucketName).key(fileKey).build());
       return ParquetUtils.getRecords(in, fileKey);
   }
 
@@ -214,8 +214,8 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
   class S3OutputStreamFlaky extends S3OutputStream {
     private final AtomicInteger retries;
 
-    public S3OutputStreamFlaky(String key, S3SinkConnectorConfig conf, S3Client s3, AtomicInteger retries) {
-      super(key, conf, s3);
+    public S3OutputStreamFlaky(String key, S3SinkConnectorConfig conf, S3Client s3Client, AtomicInteger retries) {
+      super(key, conf, s3Client);
       this.retries = retries;
     }
 

@@ -22,10 +22,10 @@ public class S3Utils {
      * @return the time this method discovered the connector has written the files
      * @throws InterruptedException if this was interrupted
      */
-    public static long waitForFilesInBucket(S3Client s3, String bucketName, int numFiles, long timeoutMs)
+    public static long waitForFilesInBucket(S3Client s3Client, String bucketName, int numFiles, long timeoutMs)
             throws InterruptedException {
         TestUtils.waitForCondition(
-                () -> assertFileCountInBucket(s3, bucketName, numFiles).orElse(false),
+                () -> assertFileCountInBucket(s3Client, bucketName, numFiles).orElse(false),
                 timeoutMs,
                 "Files not written to S3 bucket in time."
         );
@@ -39,9 +39,9 @@ public class S3Utils {
      * @param expectedNumFiles the number of files expected
      * @return true if the number of files in the bucket match the expected number; false otherwise
      */
-    private static Optional<Boolean> assertFileCountInBucket(S3Client s3, String bucketName, int expectedNumFiles) {
+    private static Optional<Boolean> assertFileCountInBucket(S3Client s3Client, String bucketName, int expectedNumFiles) {
         try {
-            return Optional.of(getBucketFileCount(s3, bucketName) == expectedNumFiles);
+            return Optional.of(getBucketFileCount(s3Client, bucketName) == expectedNumFiles);
         } catch (Exception e) {
             log.warn("Could not check file count in bucket: {}", bucketName);
             return Optional.empty();
@@ -54,7 +54,7 @@ public class S3Utils {
      * @param bucketName the name of the bucket containing the files.
      * @return the number of files in the bucket
      */
-    private static int getBucketFileCount(S3Client s3, String bucketName) {
+    private static int getBucketFileCount(S3Client s3Client, String bucketName) {
         int totalFilesInBucket = 0;
         ListObjectsV2Request.Builder request = ListObjectsV2Request.builder().bucket(bucketName);
 
@@ -64,7 +64,7 @@ public class S3Utils {
             Need the result object to extract the continuation token from the request as each request
             to listObjectsV2() returns a maximum of 1000 files.
             */
-            result = s3.listObjectsV2(request.build());
+            result = s3Client.listObjectsV2(request.build());
             totalFilesInBucket += result.keyCount();
             String token = result.nextContinuationToken();
           // To get the next batch of files.

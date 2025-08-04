@@ -37,7 +37,7 @@ import static org.junit.Assert.assertThrows;
 public class S3ProxyTest extends S3SinkConnectorTestBase {
 
   protected S3Storage storage;
-  protected S3Client s3;
+  protected S3Client s3Client;
   protected ClientOverrideConfiguration clientConfig;
   protected Map<String, String> localProps = new HashMap<>();
 

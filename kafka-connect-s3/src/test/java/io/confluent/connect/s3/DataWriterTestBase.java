@@ -55,7 +55,7 @@ public abstract class DataWriterTestBase<
   protected static final String ZERO_PAD_FMT = "%010d";
 
   protected S3Storage storage;
-  protected S3Client s3;
+  protected S3Client s3Client;
   protected Partitioner<?> partitioner;
   protected S3SinkTask task;
   protected Map<String, String> localProps = new HashMap<>();
@@ -124,18 +124,18 @@ public abstract class DataWriterTestBase<
 
     super.setUp();
 
-    s3 = newS3Client(connectorConfig);
+    s3Client = newS3Client(connectorConfig);
 
-    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client);
 
     partitioner = new DefaultPartitioner<>();
     partitioner.configure(parsedConfig);
     format = clazz.getDeclaredConstructor(S3Storage.class).newInstance(storage);
     assertEquals(format.getClass().getName(), clazz.getName());
 
-    s3.createBucket(CreateBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME)
+    s3Client.createBucket(CreateBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME)
         .build());
-    assertTrue(s3.headBucket(HeadBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME).build()) != null);
+    assertTrue(s3Client.headBucket(HeadBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME).build()) != null);
   }
 
   protected List<String> getExpectedFiles(long[] validOffsets, TopicPartition tp, String extension) {
@@ -163,7 +163,7 @@ public abstract class DataWriterTestBase<
   }
 
   protected void verifyFileListing(List<String> expectedFiles) throws IOException {
-    List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3Client);
     List<String> actualFiles = new ArrayList<>();
     for (S3Object summary : summaries) {
       String fileKey = URLDecoder.decode(summary.key(), StandardCharsets.UTF_8.toString());

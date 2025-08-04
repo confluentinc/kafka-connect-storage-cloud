@@ -173,7 +173,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     List<SinkRecord> sinkRecords = createRecords(2);
     byte[] partialData = AvroUtils.putRecords(sinkRecords, format.getAvroData());
     String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, EXTENSION, ZERO_PAD_FMT);
-    s3.putObject(PutObjectRequest.builder().bucket( S3_TEST_BUCKET_NAME).key( fileKey).build(), RequestBody.fromInputStream(new ByteArrayInputStream(partialData), partialData.length));
+    s3Client.putObject(PutObjectRequest.builder().bucket( S3_TEST_BUCKET_NAME).key( fileKey).build(), RequestBody.fromInputStream(new ByteArrayInputStream(partialData), partialData.length));
 
     // Accumulate rest of the records.
     sinkRecords.addAll(createRecords(5, 2));
