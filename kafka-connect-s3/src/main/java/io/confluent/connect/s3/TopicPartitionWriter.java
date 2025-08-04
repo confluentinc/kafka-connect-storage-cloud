@@ -15,15 +15,15 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.SdkClientException;
-import com.amazonaws.services.s3.model.AmazonS3Exception;
-import io.confluent.connect.s3.errors.FileExistsException;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileRotationTracker;
 import io.confluent.connect.s3.util.RetryUtil;
 import io.confluent.connect.s3.util.TombstoneTimestampExtractor;
+import io.confluent.connect.s3.errors.FileExistsException;
+
 import io.confluent.connect.storage.errors.PartitionException;
 import io.confluent.connect.storage.schema.SchemaCompatibilityResult;
+
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -37,6 +37,10 @@ import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.http.HttpStatusCode;
+
 import org.apache.avro.SchemaParseException;
 import org.apache.parquet.schema.InvalidSchemaException;
 
@@ -846,8 +850,8 @@ public class TopicPartitionWriter {
           return startOffset;
         }
         log.debug("File {} already exists, checking for next available file", commitFile);
-      } catch (AmazonS3Exception e) {
-        if (e.getStatusCode() == 403) {
+      } catch (S3Exception e) {
+        if (e.statusCode() == HttpStatusCode.FORBIDDEN) {
           log.warn("Connector failed with 403 error. Incrementing offset by 1", e);
           return startOffset;
         }

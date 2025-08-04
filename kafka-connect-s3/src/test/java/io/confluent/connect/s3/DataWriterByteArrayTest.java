@@ -15,7 +15,6 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.s3.storage.S3OutputStream;
@@ -31,7 +30,6 @@ import org.powermock.api.mockito.PowerMockito;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -79,7 +77,7 @@ public class DataWriterByteArrayTest extends DataWriterTestBase<ByteArrayFormat>
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, ByteArrayFormat.class.getName());
     setUp();
     PowerMockito.doReturn(5).when(connectorConfig).getPartSize();
-    S3OutputStream out = new S3OutputStream(S3_TEST_BUCKET_NAME, connectorConfig, s3);
+    S3OutputStream out = new S3OutputStream(S3_TEST_BUCKET_NAME, connectorConfig, s3Client);
     out.write(new byte[]{65,66,67,68,69});
     out.write(70);
   }
@@ -261,7 +259,7 @@ public class DataWriterByteArrayTest extends DataWriterTestBase<ByteArrayFormat>
 
         FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset, extension, ZERO_PAD_FMT);
         Collection<Object> records = readRecords(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset,
-                                                 extension, ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
+                                                 extension, ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3Client);
         // assertEquals(size, records.size());
         verifyContents(sinkRecords, j, records);
         j += size;
