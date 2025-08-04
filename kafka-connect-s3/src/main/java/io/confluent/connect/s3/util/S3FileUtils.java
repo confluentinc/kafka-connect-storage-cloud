@@ -19,8 +19,8 @@ import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
-import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.http.HttpStatusCode;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import io.confluent.connect.storage.common.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,19 +63,9 @@ public class S3FileUtils {
     try {
       s3Client.headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build());
       return true;
-    } catch (S3Exception e) {
-      if (e.statusCode() == HttpStatusCode.NOT_FOUND) {
-        return false;
-      }
-      if (e.statusCode() == HttpStatusCode.MOVED_PERMANENTLY
-          || "AccessDenied".equals(e.awsErrorDetails().errorCode())) {
-        log.warn("Connector failed with 403 error. Defaulting as file exists", e);
-        // To avoid failing connector due to missing ACL, we consider as file exists.
-        // We should be fine to assume file exists here since the call is being made only as an
-        // additional sanity check after file upload failed with 412
-        return true;
-      }
-      throw e;
+    } catch (NoSuchKeyException e) {
+      log.debug("File {} does not exist in bucket {}", key, bucket);
+      return false;
     }
   }
 

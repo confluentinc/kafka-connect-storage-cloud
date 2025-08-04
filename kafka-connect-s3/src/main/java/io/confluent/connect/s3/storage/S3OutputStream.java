@@ -345,7 +345,7 @@ public class S3OutputStream extends PositionOutputStream {
               if (e.statusCode() == PRECONDITION_FAILED_ERROR_CODE
                   || PRECONDITION_FAILED_ERROR.equals(e.awsErrorDetails().errorCode())) {
                 // Sanity check to double-check file exists in S3 before skipping the offset
-                boolean exists = s3FileUtils.fileExists(bucket, key);
+                boolean exists = fileExists();
                 if (exists) {
                   throw new FileExistsException("File already exists");
                 }
@@ -356,6 +356,21 @@ public class S3OutputStream extends PositionOutputStream {
             }
           }
       );
+    }
+
+    private boolean fileExists() {
+      try {
+        return s3FileUtils.fileExists(bucket, key);
+      } catch (S3Exception e) {
+        if (e.statusCode() == 403) {
+          log.warn("Connector failed with 403 error. Defaulting as file exists", e);
+          // To avoid failing connector due to missing ACL, we consider as file exists.
+          // We should be fine to assume file exists here since the call is being made only as an
+          // additional sanity check after file upload failed with 412
+          return true;
+        }
+        throw e;
+      }
     }
 
     public void abort() {
