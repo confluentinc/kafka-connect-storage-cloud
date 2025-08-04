@@ -49,7 +49,7 @@ public class AwsAssumeRoleCredentialsProvider implements AwsCredentialsProvider,
   public static final String ROLE_EXTERNAL_ID_CONFIG = "sts.role.external.id";
   public static final String ROLE_ARN_CONFIG = "sts.role.arn";
   public static final String ROLE_SESSION_NAME_CONFIG = "sts.role.session.name";
-  public static final String REGION = "sts.region";
+  public static final String REGION_CONFIG = "sts.region";
   private static String REGION_PROVIDER_DOC_URL =
       "https://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/java-dg-region-selection.html"
           + "#automatically-determine-the-aws-region-from-the-environment";
@@ -75,7 +75,7 @@ public class AwsAssumeRoleCredentialsProvider implements AwsCredentialsProvider,
           ConfigDef.Importance.HIGH,
           "Role session name to use when starting a session"
       ).define(
-          REGION,
+          REGION_CONFIG,
           ConfigDef.Type.STRING,
           STS_REGION_DEFAULT,
           ConfigDef.Importance.MEDIUM,
@@ -101,7 +101,7 @@ public class AwsAssumeRoleCredentialsProvider implements AwsCredentialsProvider,
     roleArn = config.getString(ROLE_ARN_CONFIG);
     roleExternalId = config.getString(ROLE_EXTERNAL_ID_CONFIG);
     roleSessionName = config.getString(ROLE_SESSION_NAME_CONFIG);
-    region = config.getString(REGION);
+    region = config.getString(REGION_CONFIG);
     final String accessKeyId = (String) configs.get(AWS_ACCESS_KEY_ID_CONFIG);
     final String secretKey = (String) configs.get(AWS_SECRET_ACCESS_KEY_CONFIG);
 
