@@ -105,6 +105,12 @@ public class AwsAssumeRoleCredentialsProvider implements AwsCredentialsProvider,
     final String accessKeyId = (String) configs.get(AWS_ACCESS_KEY_ID_CONFIG);
     final String secretKey = (String) configs.get(AWS_SECRET_ACCESS_KEY_CONFIG);
 
+    AssumeRoleRequest assumeRoleRequest = AssumeRoleRequest.builder()
+        .roleArn(roleArn)
+        .roleSessionName(roleSessionName)
+        .externalId(roleExternalId)
+        .build();
+
     if (StringUtils.isNotBlank(accessKeyId) && StringUtils.isNotBlank(secretKey)) {
       AwsBasicCredentials basicCredentials = AwsBasicCredentials.create(accessKeyId, secretKey);
       StsClientBuilder clientBuilder = StsClient.builder()
@@ -117,23 +123,14 @@ public class AwsAssumeRoleCredentialsProvider implements AwsCredentialsProvider,
       stsCredentialProvider
           = StsAssumeRoleCredentialsProvider.builder()
           .stsClient(clientBuilder.build())
-          .refreshRequest(
-              AssumeRoleRequest.builder()
-                  .roleArn(roleArn)
-                  .roleSessionName(roleSessionName)
-                  .externalId(roleExternalId)
-                  .build())
+          .refreshRequest(assumeRoleRequest)
           .build();
 
     } else {
       basicCredentials = null;
       stsCredentialProvider = StsAssumeRoleCredentialsProvider.builder()
           .stsClient(StsClient.create())
-          .refreshRequest(AssumeRoleRequest.builder()
-              .roleArn(roleArn)
-              .roleSessionName(roleSessionName)
-              .externalId(roleExternalId)
-              .build())
+          .refreshRequest(assumeRoleRequest)
           // default sts client will internally use default credentials chain provider
           // https://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/credentials.html#credentials-default
           .build();
