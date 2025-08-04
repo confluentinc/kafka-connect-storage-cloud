@@ -36,10 +36,6 @@ import static org.hamcrest.core.StringStartsWith.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import software.amazon.awssdk.services.s3.model.Tag;
-import software.amazon.awssdk.services.s3.model.Tagging;
-import software.amazon.awssdk.services.s3.model.GetObjectTaggingRequest;
-import software.amazon.awssdk.services.s3.model.GetObjectTaggingResponse;
 import software.amazon.awssdk.core.sync.RequestBody;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
@@ -298,20 +294,6 @@ public class S3SinkConnectorIT extends BaseConnectorIT {
     assertFileNamesValid(TEST_BUCKET_NAME, new ArrayList<>(expectedTopicFilenames));
     // verify number of records written to S3
     assertEquals(NUM_RECORDS_INSERT + 1, countNumberOfRecords(TEST_BUCKET_NAME)); // 1 duplicate record will be present in the seed file
-  }
-
-  private void validateTags(Map<String, Tagging> tags) {
-    for (Map.Entry<String, Tagging> entry : tags.entrySet()) {
-      GetObjectTaggingRequest getObjectTaggingRequest = GetObjectTaggingRequest.builder()
-          .bucket(TEST_BUCKET_NAME)
-          .key(entry.getKey())
-          .build();
-
-      GetObjectTaggingResponse getObjectTaggingResponse = s3Client.getObjectTagging(getObjectTaggingRequest);
-      List<Tag> actualTags = getObjectTaggingResponse.tagSet();
-      assertEquals(actualTags.size(), entry.getValue().tagSet().size());
-      assertTrue(actualTags.containsAll(entry.getValue().tagSet()));
-    }
   }
 
   private void testTombstoneRecordsWritten(

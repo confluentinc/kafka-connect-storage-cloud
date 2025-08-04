@@ -44,6 +44,7 @@ import software.amazon.awssdk.services.s3.model.Tagging;
 import software.amazon.awssdk.services.s3.model.GetObjectTaggingRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectTaggingResponse;
 
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
@@ -851,7 +852,9 @@ public abstract class BaseConnectorIT {
     waitForFilesInBucket(bucketName, expectedTotalFileCount);
 
     Set<String> expectedTopicFilenames = new TreeSet<>();
+    Map<String, Tagging> tags = new HashMap<>();
     for (String thisTopicName : topicNames) {
+      tags.putAll(getExpectedTags(thisTopicName, TOPIC_PARTITION, FLUSH_SIZE_STANDARD, 0, NUM_RECORDS_INSERT, expectedFileExtension));
       List<String> theseFiles = getExpectedFilenames(
           thisTopicName,
           TOPIC_PARTITION,
@@ -874,45 +877,21 @@ public abstract class BaseConnectorIT {
     
     // Validate tags if requested
     if (validateTagging) {
-      validateTags(bucketName, expectedTopicFilenames, expectedFileExtension);
+      validateTags(tags);
     }
   }
 
-  protected void validateTags(String bucketName, Set<String> expectedFilenames, String extension) {
-    // Extract topic name from the first filename (format: topics/TOPIC_NAME/partition=0/...)
-    String topicName = null;
-    if (!expectedFilenames.isEmpty()) {
-      String firstFile = expectedFilenames.iterator().next();
-      String[] parts = firstFile.split("/");
-      if (parts.length >= 2) {
-        topicName = parts[1]; // topics/TOPIC_NAME/...
-      }
-    }
-    
-    if (topicName != null) {
-      Map<String, Tagging> expectedTags = getExpectedTags(
-          topicName,
-          TOPIC_PARTITION,
-          FLUSH_SIZE_STANDARD,
-          0,
-          NUM_RECORDS_INSERT,
-          extension
-      );
-      
-      for (String filename : expectedFilenames) {
-        if (expectedTags.containsKey(filename)) {
-          GetObjectTaggingRequest getObjectTaggingRequest = GetObjectTaggingRequest.builder()
-              .bucket(bucketName)
-              .key(filename)
-              .build();
+  private void validateTags(Map<String, Tagging> tags) {
+    for (Map.Entry<String, Tagging> entry : tags.entrySet()) {
+      GetObjectTaggingRequest getObjectTaggingRequest = GetObjectTaggingRequest.builder()
+          .bucket(TEST_BUCKET_NAME)
+          .key(entry.getKey())
+          .build();
 
-          GetObjectTaggingResponse getObjectTaggingResponse = s3Client.getObjectTagging(getObjectTaggingRequest);
-          List<Tag> actualTags = getObjectTaggingResponse.tagSet();
-          Tagging expectedTagging = expectedTags.get(filename);
-          assertEquals(actualTags.size(), expectedTagging.tagSet().size());
-          assertTrue(actualTags.containsAll(expectedTagging.tagSet()));
-        }
-      }
+      GetObjectTaggingResponse getObjectTaggingResponse = s3Client.getObjectTagging(getObjectTaggingRequest);
+      List<Tag> actualTags = getObjectTaggingResponse.tagSet();
+      assertEquals(actualTags.size(), entry.getValue().tagSet().size());
+      assertTrue(actualTags.containsAll(entry.getValue().tagSet()));
     }
   }
 
