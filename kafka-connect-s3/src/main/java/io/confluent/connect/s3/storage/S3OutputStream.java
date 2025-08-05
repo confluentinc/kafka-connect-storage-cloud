@@ -61,6 +61,7 @@ public class S3OutputStream extends PositionOutputStream {
   private final String key;
   private final String ssea;
   private String sseCustomerKey;
+  private String sseCustomerKeyMD5;
   private final String sseKmsKeyId;
 
   private final int partSize;
@@ -88,6 +89,8 @@ public class S3OutputStream extends PositionOutputStream {
     this.sseCustomerKey = (ServerSideEncryption.AES256.toString().equalsIgnoreCase(ssea)
         && StringUtils.isNotBlank(sseCustomerKeyConfig))
       ? sseCustomerKeyConfig : null;
+    this.sseCustomerKeyMD5 = this.sseCustomerKey != null 
+        ? calculateBase64EncodedMd5(this.sseCustomerKey) : null;
     this.sseKmsKeyId = conf.getSseKmsKeyId();
     this.partSize = conf.getPartSize();
     this.cannedAcl = conf.getCannedAcl();
@@ -229,17 +232,37 @@ public class S3OutputStream extends PositionOutputStream {
     } else if (ServerSideEncryption.AWS_KMS.toString().equalsIgnoreCase(ssea)
         && StringUtils.isNotBlank(sseKmsKeyId)) {
       log.debug("Using KMS Key ID: {}", sseKmsKeyId);
-      initRequest.ssekmsKeyId(sseKmsKeyId);
-      initRequest.serverSideEncryption(ServerSideEncryption.AWS_KMS);
+      initRequest
+          .ssekmsKeyId(sseKmsKeyId)
+          .serverSideEncryption(ServerSideEncryption.AWS_KMS);
     } else if (sseCustomerKey != null) {
       log.debug("Using KMS Customer Key");
-      initRequest.sseCustomerKey(sseCustomerKey);
-      initRequest.sseCustomerAlgorithm(ServerSideEncryption.AES256.toString());
+
+      initRequest
+          .sseCustomerKey(sseCustomerKey)
+          .sseCustomerKeyMD5(sseCustomerKeyMD5)
+          .sseCustomerAlgorithm(ServerSideEncryption.AES256.toString());
     }
 
     return handleAmazonExceptions(
       () -> new MultipartUpload(s3Client.createMultipartUpload(initRequest.build()).uploadId())
     );
+  }
+
+  private String calculateBase64EncodedMd5(String sseCustomerKey) {
+    if (sseCustomerKey == null || sseCustomerKey.isEmpty()) {
+      throw new IllegalArgumentException("sseCustomerKey cannot be null or empty");
+    }
+    try {
+      // The customer key should be a base64-encoded 32-byte key
+      // We need to decode it first, then calculate MD5 on the raw bytes
+      byte[] keyBytes = Base64.getDecoder().decode(sseCustomerKey);
+      byte[] md5HashBytes = DigestUtils.md5(keyBytes);
+      return Base64.getEncoder().encodeToString(md5HashBytes);
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException(
+          "sseCustomerKey must be a valid base64-encoded 32-byte key", e);
+    }
   }
 
   /**
@@ -281,9 +304,16 @@ public class S3OutputStream extends PositionOutputStream {
           .bucket(bucket)
           .key(key)
           .uploadId(uploadId)
-          .sseCustomerKey(sseCustomerKey)
           .partNumber(currentPartNumber)
           .contentLength((long) partSize);
+
+      // Add SSE-C headers if customer key is configured
+      if (sseCustomerKey != null) {
+        requestBuilder
+            .sseCustomerKey(sseCustomerKey)
+            .sseCustomerKeyMD5(sseCustomerKeyMD5)
+            .sseCustomerAlgorithm(ServerSideEncryption.AES256.toString());
+      }
 
       RequestBody requestBody = RequestBody.fromInputStream(inputStream, partSize);
 
