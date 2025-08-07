@@ -178,6 +178,8 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String BEHAVIOR_ON_NULL_VALUES_CONFIG = "behavior.on.null.values";
   public static final String BEHAVIOR_ON_NULL_VALUES_DEFAULT = OutputWriteBehavior.FAIL.toString();
+  public static final String ALLOW_NULL_AND_EMPTY_HEADERS_CONFIG = "allow.null.and.empty.headers";
+  public static final Boolean ALLOW_NULL_AND_EMPTY_HEADERS_DEFAULT = false;
 
   public static final String REPORT_NULL_RECORDS_TO_DLQ = "report.null.values.to.dlq";
   public static final boolean REPORT_NULL_RECORDS_TO_DLQ_DEFAULT = true;
@@ -722,6 +724,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.SHORT,
           "Behavior for null-valued records"
+      );
+
+      configDef.define(
+              ALLOW_NULL_AND_EMPTY_HEADERS_CONFIG,
+              Type.BOOLEAN,
+              ALLOW_NULL_AND_EMPTY_HEADERS_DEFAULT,
+              Importance.LOW,
+              "Whether to allow null and empty headers when writing headers is enabled.",
+              group,
+              ++orderInGroup,
+              Width.SHORT,
+              "Whether to allow null and empty headers when writing headers is enabled."
       );
 
       configDef.define(
@@ -1422,6 +1436,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public boolean shouldRotateOnPartitionChange() {
     return getBoolean(ROTATE_FILE_ON_PARTITION_CHANGE);
+  }
+
+  public Boolean allowNullAndEmptyHeaders() {
+    return getBoolean(ALLOW_NULL_AND_EMPTY_HEADERS_CONFIG);
   }
 
   public enum IgnoreOrFailBehavior {

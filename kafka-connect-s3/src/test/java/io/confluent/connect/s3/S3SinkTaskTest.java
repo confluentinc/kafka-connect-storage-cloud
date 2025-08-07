@@ -146,6 +146,33 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
   }
 
   @Test
+  public void testAllowNullAndEmptyHeaders() throws Exception {
+    setUp();
+    replayAll();
+    task = new S3SinkTask();
+    task.initialize(context);
+    properties.put(S3SinkConnectorConfig.ALLOW_NULL_AND_EMPTY_HEADERS_CONFIG, "true");
+    task.start(properties);
+    verifyAll();
+
+    List<SinkRecord> sinkRecords = createRecords(7);
+    SinkRecord recordWithNullHeaders = new SinkRecord(TOPIC, PARTITION, null, null, null, null, 1, null, null, Collections.emptyList());
+    SinkRecord recordWithEmptyHeaders = new SinkRecord(TOPIC, PARTITION, null, null, null, null, 1, null, null, null);
+
+    sinkRecords.add(recordWithNullHeaders);
+    sinkRecords.add(recordWithEmptyHeaders);
+
+    task.put(sinkRecords);
+
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 3, 6};
+
+    verify(sinkRecords, validOffsets);
+  }
+
+  @Test
   public void testWriteRecordWithPrimitives() throws Exception {
     setUp();
     replayAll();
