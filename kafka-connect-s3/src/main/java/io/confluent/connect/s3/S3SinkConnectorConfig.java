@@ -1443,7 +1443,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
     return getBoolean(ROTATE_FILE_ON_PARTITION_CHANGE);
   }
 
-  public boolean allowNullAndEmptyHeaders() {
+  public boolean ignoreNullOrEmptyHeaders() {
     return getBoolean(IGNORE_NULL_OR_EMPTY_HEADERS_CONFIG);
   }
 
