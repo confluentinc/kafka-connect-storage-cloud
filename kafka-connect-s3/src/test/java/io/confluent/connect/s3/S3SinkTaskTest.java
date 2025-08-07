@@ -146,7 +146,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
   }
 
   @Test
-  public void testIgnoreNullAndEmptyHeaders() throws Exception {
+  public void testIgnoreNullOrEmptyHeaders() throws Exception {
     setUp();
     replayAll();
     task = new S3SinkTask();
