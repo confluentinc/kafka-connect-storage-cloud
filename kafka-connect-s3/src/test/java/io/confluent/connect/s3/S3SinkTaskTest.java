@@ -16,8 +16,12 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.model.CannedAccessControlList;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -35,9 +39,8 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.io.ByteArrayInputStream;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.io.IOException;
+import java.util.*;
 
 import io.confluent.connect.s3.format.avro.AvroUtils;
 import io.confluent.connect.s3.storage.S3Storage;
@@ -46,6 +49,7 @@ import io.confluent.connect.storage.StorageFactory;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -143,6 +147,57 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
         Collections.singleton(new TopicPartition(TOPIC, PARTITION))));
     verify(expectedSinkRecords, validOffsets);
     Mockito.verify(reporter, times(2)).report(any(), any(DataException.class));
+  }
+
+  @Test
+  public void testAllowNullAndEmptyHeaders() throws Exception {
+    localProps.put(S3SinkConnectorConfig.ALLOW_NULL_AND_EMPTY_HEADERS_CONFIG, "true");
+    localProps.put(S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG, "true");
+    setUp();
+
+    replayAll();
+    task = new S3SinkTask();
+    task.initialize(context);
+    task.start(properties);
+    verifyAll();
+
+    String key = "key";
+    Schema schema = createSchema();
+    Struct record = createRecord(schema);
+
+    Headers headers = new ConnectHeaders()
+            .addString("string", "string")
+            .addInt("int", 12)
+            .addBoolean("boolean", false);
+
+    List<SinkRecord> sinkRecords = createRecords(4, 0);
+    SinkRecord recordWithHeaders = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, record, 0, null, null, headers);
+    SinkRecord recordWithNullHeaders = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, record, 1, null, null, null);
+    SinkRecord recordWithEmptyHeaders = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, record, 2, null, null, Collections.emptyList());
+
+    sinkRecords.add(recordWithHeaders);
+    sinkRecords.add(recordWithNullHeaders);
+    sinkRecords.add(recordWithEmptyHeaders);
+
+    task.put(sinkRecords);
+
+    task.close(context.assignment());
+    task.stop();
+
+    Set<TopicPartition> partitions = Collections.singleton(new TopicPartition(TOPIC, PARTITION));
+    String valueExtension = ".avro";
+    String headersExtension = ".headers.avro";
+
+    long[] validOffsets = {0, 3, 6};
+
+    List<String> expectedFiles = new ArrayList<>();
+    for (TopicPartition tp : partitions) {
+      expectedFiles.addAll(getExpectedFiles(validOffsets, tp, valueExtension));
+      expectedFiles.addAll(getExpectedFiles(validOffsets, tp, headersExtension));
+    }
+
+    verifyFileListing(expectedFiles);
+    verifyFileContents(partitions, validOffsets, sinkRecords);
   }
 
   @Test
@@ -260,6 +315,4 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     task.initialize(context);
     task.start(properties);
   }
-
 }
-
