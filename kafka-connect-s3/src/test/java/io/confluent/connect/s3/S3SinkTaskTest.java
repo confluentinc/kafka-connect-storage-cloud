@@ -39,10 +39,8 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.io.ByteArrayInputStream;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.io.IOException;
+import java.util.*;
 
 import io.confluent.connect.s3.format.avro.AvroUtils;
 import io.confluent.connect.s3.storage.S3Storage;
@@ -51,6 +49,7 @@ import io.confluent.connect.storage.StorageFactory;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -185,9 +184,20 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     task.close(context.assignment());
     task.stop();
 
+    Set<TopicPartition> partitions = Collections.singleton(new TopicPartition(TOPIC, PARTITION));
+    String valueExtension = ".avro";
+    String headersExtension = ".headers.avro";
+
     long[] validOffsets = {0, 3, 6};
 
-    verify(sinkRecords, validOffsets);
+    List<String> expectedFiles = new ArrayList<>();
+    for (TopicPartition tp : partitions) {
+      expectedFiles.addAll(getExpectedFiles(validOffsets, tp, valueExtension));
+      expectedFiles.addAll(getExpectedFiles(validOffsets, tp, headersExtension));
+    }
+
+    verifyFileListing(expectedFiles);
+    verifyFileContents(partitions, validOffsets, sinkRecords);
   }
 
   @Test

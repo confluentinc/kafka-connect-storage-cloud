@@ -972,19 +972,7 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
       verifyFileListing(validOffsets, partitions, EXTENSION);
     }
 
-    for (TopicPartition tp : partitions) {
-      for (int i = 1, j = 0; i < validOffsets.length; ++i) {
-        long startOffset = validOffsets[i - 1];
-        long size = validOffsets[i] - startOffset;
-
-        FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset, EXTENSION, ZERO_PAD_FMT);
-        Collection<Object> records = readRecords(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset,
-                                                 EXTENSION, ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
-        assertEquals(size, records.size());
-        verifyContents(sinkRecords, j, records);
-        j += size;
-      }
-    }
+    verifyFileContents(partitions, validOffsets, sinkRecords);
   }
 
   protected void verifyOffsets(
@@ -1020,5 +1008,20 @@ public class DataWriterAvroTest extends DataWriterTestBase<AvroFormat> {
     }
     assertEquals(actualOffsets, expectedOffsets);
   }
-}
 
+  protected void verifyFileContents(Set<TopicPartition> partitions, long[] validOffsets, List<SinkRecord> sinkRecords) throws IOException {
+    for (TopicPartition tp : partitions) {
+      for (int i = 1, j = 0; i < validOffsets.length; ++i) {
+        long startOffset = validOffsets[i - 1];
+        long size = validOffsets[i] - startOffset;
+
+        FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset, EXTENSION, ZERO_PAD_FMT);
+        Collection<Object> records = readRecords(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset,
+            EXTENSION, ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
+        assertEquals(size, records.size());
+        verifyContents(sinkRecords, j, records);
+        j += size;
+      }
+    }
+  }
+}
