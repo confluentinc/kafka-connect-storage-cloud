@@ -16,8 +16,12 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.model.CannedAccessControlList;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -35,6 +39,7 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.io.ByteArrayInputStream;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -146,19 +151,32 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
   }
 
   @Test
-  public void testIgnoreNullOrEmptyHeaders() throws Exception {
+  public void testAllowNullAndEmptyHeaders() throws Exception {
+    localProps.put(S3SinkConnectorConfig.ALLOW_NULL_AND_EMPTY_HEADERS_CONFIG, "true");
+    localProps.put(S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG, "true");
     setUp();
+
     replayAll();
     task = new S3SinkTask();
     task.initialize(context);
-    properties.put(S3SinkConnectorConfig.IGNORE_NULL_OR_EMPTY_HEADERS_CONFIG, "true");
     task.start(properties);
     verifyAll();
 
-    List<SinkRecord> sinkRecords = createRecords(7);
-    SinkRecord recordWithNullHeaders = new SinkRecord(TOPIC, PARTITION, null, null, null, null, 1, null, null, null);
-    SinkRecord recordWithEmptyHeaders = new SinkRecord(TOPIC, PARTITION, null, null, null, null, 1, null, null, Collections.emptyList());
+    String key = "key";
+    Schema schema = createSchema();
+    Struct record = createRecord(schema);
 
+    Headers headers = new ConnectHeaders()
+            .addString("string", "string")
+            .addInt("int", 12)
+            .addBoolean("boolean", false);
+
+    List<SinkRecord> sinkRecords = createRecords(4, 0);
+    SinkRecord recordWithHeaders = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, record, 0, null, null, headers);
+    SinkRecord recordWithNullHeaders = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, record, 1, null, null, null);
+    SinkRecord recordWithEmptyHeaders = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, record, 2, null, null, Collections.emptyList());
+
+    sinkRecords.add(recordWithHeaders);
     sinkRecords.add(recordWithNullHeaders);
     sinkRecords.add(recordWithEmptyHeaders);
 
@@ -287,5 +305,4 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     task.initialize(context);
     task.start(properties);
   }
-
 }
