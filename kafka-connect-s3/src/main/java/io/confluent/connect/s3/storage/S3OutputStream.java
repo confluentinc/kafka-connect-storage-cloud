@@ -28,6 +28,7 @@ import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.ServerSideEncryption;
 import software.amazon.awssdk.services.s3.model.UploadPartRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.http.HttpStatusCode;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.errors.FileExistsException;
@@ -392,7 +393,7 @@ public class S3OutputStream extends PositionOutputStream {
       try {
         return s3FileUtils.fileExists(bucket, key);
       } catch (S3Exception e) {
-        if (e.statusCode() == 403) {
+        if (e.statusCode() == HttpStatusCode.FORBIDDEN) {
           log.warn("Connector failed with 403 error. Defaulting as file exists", e);
           // To avoid failing connector due to missing ACL, we consider as file exists.
           // We should be fine to assume file exists here since the call is being made only as an
