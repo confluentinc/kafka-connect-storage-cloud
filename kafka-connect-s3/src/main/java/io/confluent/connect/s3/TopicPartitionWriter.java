@@ -252,7 +252,6 @@ public class TopicPartitionWriter {
 
     resetExpiredScheduledRotationIfNoPendingRecords(now);
 
-
     while (!buffer.isEmpty() && !isWriteDeadlineExceeded()) {
       try {
         executeState(now);
@@ -271,7 +270,6 @@ public class TopicPartitionWriter {
       commitOnTimeIfNoData(now);
     }
     pauseOrResumeOnBuffer();
-
   }
 
   private void pauseOrResumeOnBuffer() {
@@ -393,6 +391,13 @@ public class TopicPartitionWriter {
 
     if (shouldRotateForNullSchema) {
       fileRotationTracker.incrementRotationByNullSchemaCount(encodedPartition);
+      log.info(
+          "ROTATION TRIGGERED: Tombstone/non-tombstone schema change for topic-partition {}, "
+          + "encoded-partition: {}, records in file: {}",
+          tp,
+          encodedPartition,
+          recordCounts.getOrDefault(encodedPartition, 0L)
+      );
       nextState();
       return true;
     }
@@ -400,6 +405,16 @@ public class TopicPartitionWriter {
     // rotateOnTime is safe to go before writeRecord, because it is acceptable
     // even for a faulty record to trigger time-based rotation if it applies
     if (rotateOnTime(encodedPartition, currentTimestamp, now)) {
+      long timeDiff = currentTimestamp - baseRecordTimestamp;
+      log.info(
+          "ROTATION TRIGGERED: Time-based rotation for topic-partition {}, encoded-partition: {}, "
+          + "time elapsed: {}ms (limit: {}ms), records in file: {}",
+          tp,
+          encodedPartition,
+          timeDiff,
+          rotateIntervalMs,
+          recordCounts.getOrDefault(encodedPartition, 0L)
+      );
       setNextScheduledRotation();
       nextState();
       return true;
@@ -411,12 +426,13 @@ public class TopicPartitionWriter {
       fileRotationTracker.incrementRotationBySchemaChangeCount(encodedPartition,
           shouldChangeSchema.getSchemaIncompatibilityType());
       // This branch is never true for the first record read by this TopicPartitionWriter
-      log.trace(
-          "Incompatible change of schema detected for record '{}' with encoded partition "
-          + "'{}' and current offset: '{}'",
-          record,
+      log.info(
+          "ROTATION TRIGGERED: Schema incompatibility detected for topic-partition {}, "
+          + "encoded-partition: {}, incompatibility type: {}, records in file: {}",
+          tp,
           encodedPartition,
-          currentOffset
+          shouldChangeSchema.getSchemaIncompatibilityType(),
+          recordCounts.getOrDefault(encodedPartition, 0L)
       );
       currentSchemas.put(encodedPartition, valueSchema);
       nextState();
@@ -426,9 +442,13 @@ public class TopicPartitionWriter {
     if (rotateOnPartitionerMaxOpenFiles(encodedPartition)) {
       fileRotationTracker.incrementRotationByPartitionerMaxOpenFilesCount(encodedPartition);
       log.info(
-          "Starting commit and rotation for topic partition {} with start offset {}",
+          "ROTATION TRIGGERED: Max open files limit reached for topic-partition {}, "
+          + "encoded-partition: {}, open files: {} (limit: {}), records per file: {}",
           tp,
-          startOffsets
+          encodedPartition,
+          commitFiles.size(),
+          partitionerMaxOpenFiles,
+          formatRotationStatsForLogging()
       );
       nextState();
       return true;
@@ -445,9 +465,12 @@ public class TopicPartitionWriter {
     if (rotateOnSize()) {
       fileRotationTracker.incrementRotationByFlushSizeCount(encodedPartition);
       log.info(
-          "Starting commit and rotation for topic partition {} with start offset {}",
+          "ROTATION TRIGGERED: Flush size limit reached for topic-partition {}, "
+          + "encoded-partition: {}, records processed: {} (limit: {})",
           tp,
-          startOffsets
+          encodedPartition,
+          recordCount,
+          flushSize
       );
       nextState();
       return true;
@@ -475,8 +498,13 @@ public class TopicPartitionWriter {
       // records available
       if (recordCount > 0 && rotateOnTime(currentEncodedPartition, currentTimestamp, now)) {
         log.info(
-            "Committing files after waiting for rotateIntervalMs time but less than flush.size "
-            + "records available."
+            "ROTATION TRIGGERED: Time-based commit for topic-partition {}, encoded-partition: {}, "
+            + "time interval: {}ms, flush size limit: {}, records per file: {}",
+            tp,
+            currentEncodedPartition,
+            rotateIntervalMs,
+            flushSize,
+            formatRotationStatsForLogging()
         );
         setNextScheduledRotation();
 
@@ -630,6 +658,21 @@ public class TopicPartitionWriter {
     }
   }
 
+  /**
+   * Format rotation statistics in a single-line, meaningful format.
+   * Shows a clean summary of rotation activity.
+   */
+  private String formatRotationStatsForLogging() {
+    if (recordCounts.isEmpty()) {
+      return "no active partitions";
+    }
+    
+    // Show a simple summary: partition:recordCount format
+    return recordCounts.entrySet().stream()
+        .map(e -> e.getKey() + ":" + e.getValue() + " records")
+        .collect(java.util.stream.Collectors.joining(", "));
+  }
+
   private boolean rotateOnSize() {
     boolean messageSizeRotation = recordCount >= flushSize;
     log.trace("Should apply size-based rotation for topic-partition '{}':"
@@ -770,6 +813,9 @@ public class TopicPartitionWriter {
   }
 
   private void commitFiles() {
+    @SuppressWarnings("checkstyle:VariableDeclarationUsageDistance")
+    String rotationStats = formatRotationStatsForLogging();
+    
     for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
       String encodedPartition = entry.getKey();
       commitFile(encodedPartition);
@@ -797,7 +843,15 @@ public class TopicPartitionWriter {
 
     recordCount = 0;
     baseRecordTimestamp = null;
-    log.info("Files committed to S3. Target commit offset for {} is {}", tp, offsetToCommit);
+
+    log.info(
+        "FILES COMMITTED: Topic-partition {}, files: {}, target commit offset: {}, "
+        + "records per file: {}",
+        tp,
+        commitFiles.size(),
+        offsetToCommit,
+        rotationStats
+    );
   }
 
   private void commitFile(String encodedPartition) {
