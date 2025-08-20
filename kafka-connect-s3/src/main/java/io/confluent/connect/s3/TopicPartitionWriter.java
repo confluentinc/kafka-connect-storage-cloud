@@ -392,7 +392,8 @@ public class TopicPartitionWriter {
     if (shouldRotateForNullSchema) {
       fileRotationTracker.incrementRotationByNullSchemaCount(encodedPartition);
       log.info(
-          "ROTATION TRIGGERED: Tombstone/non-tombstone schema change for topic-partition {}, encoded-partition: {}, records in file: {}",
+          "ROTATION TRIGGERED: Tombstone/non-tombstone schema change for topic-partition {}, "
+          + "encoded-partition: {}, records in file: {}",
           tp,
           encodedPartition,
           recordCounts.getOrDefault(encodedPartition, 0L)
@@ -406,7 +407,8 @@ public class TopicPartitionWriter {
     if (rotateOnTime(encodedPartition, currentTimestamp, now)) {
       long timeDiff = currentTimestamp - baseRecordTimestamp;
       log.info(
-          "ROTATION TRIGGERED: Time-based rotation for topic-partition {}, encoded-partition: {}, time elapsed: {}ms (limit: {}ms), records in file: {}",
+          "ROTATION TRIGGERED: Time-based rotation for topic-partition {}, encoded-partition: {}, "
+          + "time elapsed: {}ms (limit: {}ms), records in file: {}",
           tp,
           encodedPartition,
           timeDiff,
@@ -425,7 +427,8 @@ public class TopicPartitionWriter {
           shouldChangeSchema.getSchemaIncompatibilityType());
       // This branch is never true for the first record read by this TopicPartitionWriter
       log.info(
-          "ROTATION TRIGGERED: Schema incompatibility detected for topic-partition {}, encoded-partition: {}, incompatibility type: {}, records in file: {}",
+          "ROTATION TRIGGERED: Schema incompatibility detected for topic-partition {}, "
+          + "encoded-partition: {}, incompatibility type: {}, records in file: {}",
           tp,
           encodedPartition,
           shouldChangeSchema.getSchemaIncompatibilityType(),
@@ -439,7 +442,8 @@ public class TopicPartitionWriter {
     if (rotateOnPartitionerMaxOpenFiles(encodedPartition)) {
       fileRotationTracker.incrementRotationByPartitionerMaxOpenFilesCount(encodedPartition);
       log.info(
-          "ROTATION TRIGGERED: Max open files limit reached for topic-partition {}, encoded-partition: {}, open files: {} (limit: {}), records per file: {}",
+          "ROTATION TRIGGERED: Max open files limit reached for topic-partition {}, "
+          + "encoded-partition: {}, open files: {} (limit: {}), records per file: {}",
           tp,
           encodedPartition,
           commitFiles.size(),
@@ -461,7 +465,8 @@ public class TopicPartitionWriter {
     if (rotateOnSize()) {
       fileRotationTracker.incrementRotationByFlushSizeCount(encodedPartition);
       log.info(
-          "ROTATION TRIGGERED: Flush size limit reached for topic-partition {}, encoded-partition: {}, records processed: {} (limit: {})",
+          "ROTATION TRIGGERED: Flush size limit reached for topic-partition {}, "
+          + "encoded-partition: {}, records processed: {} (limit: {})",
           tp,
           encodedPartition,
           recordCount,
@@ -493,7 +498,8 @@ public class TopicPartitionWriter {
       // records available
       if (recordCount > 0 && rotateOnTime(currentEncodedPartition, currentTimestamp, now)) {
         log.info(
-            "ROTATION TRIGGERED: Time-based commit for topic-partition {}, encoded-partition: {}, time interval: {}ms, flush size limit: {}, records per file: {}",
+            "ROTATION TRIGGERED: Time-based commit for topic-partition {}, encoded-partition: {}, "
+            + "time interval: {}ms, flush size limit: {}, records per file: {}",
             tp,
             currentEncodedPartition,
             rotateIntervalMs,
@@ -807,8 +813,9 @@ public class TopicPartitionWriter {
   }
 
   private void commitFiles() {
+    @SuppressWarnings("checkstyle:VariableDeclarationUsageDistance")
     String rotationStats = formatRotationStatsForLogging();
-
+    
     for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
       String encodedPartition = entry.getKey();
       commitFile(encodedPartition);
@@ -838,7 +845,8 @@ public class TopicPartitionWriter {
     baseRecordTimestamp = null;
 
     log.info(
-        "FILES COMMITTED: Topic-partition {}, files: {}, target commit offset: {}, records per file: {}",
+        "FILES COMMITTED: Topic-partition {}, files: {}, target commit offset: {}, "
+        + "records per file: {}",
         tp,
         commitFiles.size(),
         offsetToCommit,
