@@ -663,10 +663,10 @@ public class TopicPartitionWriter {
    * Shows a clean summary of rotation activity.
    */
   private String formatRotationStatsForLogging() {
-    if (recordCounts.isEmpty()) {
+    if (recordCounts == null || recordCounts.isEmpty()) {
       return "no active partitions";
     }
-    
+
     // Show a simple summary: partition:recordCount format
     return recordCounts.entrySet().stream()
         .map(e -> e.getKey() + ":" + e.getValue() + " records")
@@ -812,8 +812,9 @@ public class TopicPartitionWriter {
     return true;
   }
 
+  @SuppressWarnings("checkstyle:VariableDeclarationUsageDistance")
   private void commitFiles() {
-    @SuppressWarnings("checkstyle:VariableDeclarationUsageDistance")
+    int filesToCommit = commitFiles.size();
     String rotationStats = formatRotationStatsForLogging();
     
     for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
@@ -848,7 +849,7 @@ public class TopicPartitionWriter {
         "FILES COMMITTED: Topic-partition {}, files: {}, target commit offset: {}, "
         + "records per file: {}",
         tp,
-        commitFiles.size(),
+        filesToCommit,
         offsetToCommit,
         rotationStats
     );
