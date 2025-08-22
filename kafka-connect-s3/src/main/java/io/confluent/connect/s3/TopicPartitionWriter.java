@@ -406,9 +406,12 @@ public class TopicPartitionWriter {
     // even for a faulty record to trigger time-based rotation if it applies
     if (rotateOnTime(encodedPartition, currentTimestamp, now)) {
       long timeDiff = currentTimestamp - baseRecordTimestamp;
+      String rotationReason = determineTimeBasedRotationReason(encodedPartition, currentTimestamp, now);
+      
       log.info(
-          "ROTATION TRIGGERED: Time-based rotation for topic-partition {}, encoded-partition: {}, "
+          "ROTATION TRIGGERED: {} for topic-partition {}, encoded-partition: {}, "
           + "time elapsed: {}ms (limit: {}ms), records in file: {}",
+          rotationReason,
           tp,
           encodedPartition,
           timeDiff,
@@ -497,9 +500,12 @@ public class TopicPartitionWriter {
       // committing files after waiting for rotateIntervalMs time but less than flush.size
       // records available
       if (recordCount > 0 && rotateOnTime(currentEncodedPartition, currentTimestamp, now)) {
+        String rotationReason = determineTimeBasedRotationReason(currentEncodedPartition, currentTimestamp, now);
+        
         log.info(
-            "ROTATION TRIGGERED: Time-based commit for topic-partition {}, encoded-partition: {}, "
+            "ROTATION TRIGGERED: {} for topic-partition {}, encoded-partition: {}, "
             + "time interval: {}ms, flush size limit: {}, records per file: {}",
+            rotationReason,
             tp,
             currentEncodedPartition,
             rotateIntervalMs,
@@ -592,6 +598,9 @@ public class TopicPartitionWriter {
             || rotateOnPartitionChange(encodedPartition)
     );
 
+    // Check for scheduled rotation based on wall clock time
+    boolean scheduledRotation = shouldApplyScheduledRotation(now);
+    
     log.trace(
         "Checking rotation on time for topic-partition '{}' "
             + "with recordCount '{}' and encodedPartition '{}'",
@@ -602,22 +611,50 @@ public class TopicPartitionWriter {
 
     log.trace(
         "Should apply periodic time-based rotation for topic-partition '{}':"
-            + " (rotateIntervalMs: '{}', baseRecordTimestamp: "
-            + "'{}', timestamp: '{}', encodedPartition: '{}', currentEncodedPartition: '{}')? {}",
+            + " (rotateIntervalMs: '{}', baseRecordTimestamp: '{}', timestamp: '{}', "
+            + "encodedPartition: '{}', currentEncodedPartition: '{}', "
+            + "periodicRotation: {}, scheduledRotation: {})",
         tp,
         rotateIntervalMs,
         baseRecordTimestamp,
         recordTimestamp,
         encodedPartition,
         currentEncodedPartition,
-        periodicRotation
+        periodicRotation,
+        scheduledRotation
     );
     if (periodicRotation) {
       fileRotationTracker.incrementRotationByRotationIntervalCount(encodedPartition);
-    } else if (shouldApplyScheduledRotation(now)) {
+    } else if (scheduledRotation) {
       fileRotationTracker.incrementRotationByScheduledRotationIntervalCount(encodedPartition);
     }
-    return periodicRotation || shouldApplyScheduledRotation(now);
+    return periodicRotation || scheduledRotation;
+  }
+
+  /**
+   * Determine the specific reason for time-based rotation to provide better logging.
+   * <p>
+   * Time-based rotation can occur under multiple conditions:
+   * 1. Periodic rotation: Either time interval OR partition change (when rotateIntervalMs > 0 && timestampExtractor != null)
+   * 2. Scheduled rotation: When wall clock time reaches scheduled intervals (rotateScheduleIntervalMs > 0)
+   * <p>
+   * This method helps distinguish between these scenarios for better customer observability.
+   */
+  private String determineTimeBasedRotationReason(String encodedPartition, Long recordTimestamp, long now) {
+    if (rotateIntervalMs > 0 && timestampExtractor != null && rotateOnPartitionChange(encodedPartition)) {
+      return "Partition change rotation";
+    }
+
+    if (rotateIntervalMs > 0 && timestampExtractor != null
+        && recordTimestamp - baseRecordTimestamp >= rotateIntervalMs) {
+      return "Periodic time interval rotation";
+    }
+
+    if (shouldApplyScheduledRotation(now)) {
+      return "Scheduled time rotation";
+    }
+
+    return "Time-based rotation";
   }
 
   private boolean shouldApplyScheduledRotation(long now) {
