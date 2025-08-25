@@ -124,6 +124,10 @@ public class TopicPartitionWriter {
   boolean isPaused = false;
 
   private final FileRotationTracker fileRotationTracker;
+  
+  // Diagnostic logging variables
+  private static final long DIAGNOSTIC_LOG_INTERVAL_MS = 60000; // 60 seconds
+  private long lastDiagnosticLogTime = 0;
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
@@ -349,6 +353,9 @@ public class TopicPartitionWriter {
           currentValueSchema = valueSchema;
         }
 
+        // Periodic diagnostic logging to help customers understand why files aren't rotating
+        logDiagnosticInfoIfNeeded(now);
+        
         if (!checkRotationOrAppend(
             record,
             currentValueSchema,
@@ -406,7 +413,8 @@ public class TopicPartitionWriter {
     // even for a faulty record to trigger time-based rotation if it applies
     if (rotateOnTime(encodedPartition, currentTimestamp, now)) {
       long timeDiff = currentTimestamp - baseRecordTimestamp;
-      String rotationReason = determineTimeBasedRotationReason(encodedPartition, currentTimestamp, now);
+      String rotationReason = determineTimeBasedRotationReason(
+          encodedPartition, currentTimestamp, now);
       
       log.info(
           "ROTATION TRIGGERED: {} for topic-partition {}, encoded-partition: {}, "
@@ -426,8 +434,8 @@ public class TopicPartitionWriter {
     SchemaCompatibilityResult shouldChangeSchema =
         compatibility.shouldChangeSchema(record, null, currentValueSchema);
     if (shouldChangeSchema.isInCompatible() && recordCount > 0) {
-      fileRotationTracker.incrementRotationBySchemaChangeCount(encodedPartition,
-          shouldChangeSchema.getSchemaIncompatibilityType());
+      fileRotationTracker.incrementRotationBySchemaChangeCount(
+          encodedPartition, shouldChangeSchema.getSchemaIncompatibilityType());
       // This branch is never true for the first record read by this TopicPartitionWriter
       log.info(
           "ROTATION TRIGGERED: Schema incompatibility detected for topic-partition {}, "
@@ -500,7 +508,8 @@ public class TopicPartitionWriter {
       // committing files after waiting for rotateIntervalMs time but less than flush.size
       // records available
       if (recordCount > 0 && rotateOnTime(currentEncodedPartition, currentTimestamp, now)) {
-        String rotationReason = determineTimeBasedRotationReason(currentEncodedPartition, currentTimestamp, now);
+        String rotationReason = determineTimeBasedRotationReason(
+            currentEncodedPartition, currentTimestamp, now);
         
         log.info(
             "ROTATION TRIGGERED: {} for topic-partition {}, encoded-partition: {}, "
@@ -632,16 +641,41 @@ public class TopicPartitionWriter {
   }
 
   /**
-   * Determine the specific reason for time-based rotation to provide better logging.
-   * <p>
-   * Time-based rotation can occur under multiple conditions:
-   * 1. Periodic rotation: Either time interval OR partition change (when rotateIntervalMs > 0 && timestampExtractor != null)
-   * 2. Scheduled rotation: When wall clock time reaches scheduled intervals (rotateScheduleIntervalMs > 0)
-   * <p>
-   * This method helps distinguish between these scenarios for better customer observability.
+   * Log periodic diagnostic information to help customers understand why files aren't rotating.
+   * This provides visibility into the current state and helps troubleshoot small file issues.
    */
-  private String determineTimeBasedRotationReason(String encodedPartition, Long recordTimestamp, long now) {
-    if (rotateIntervalMs > 0 && timestampExtractor != null && rotateOnPartitionChange(encodedPartition)) {
+  private void logDiagnosticInfoIfNeeded(long now) {
+    // Only log diagnostic info periodically to avoid log spam
+    // Log every 60 seconds when there are buffered records
+    if (recordCount > 0 && (now - lastDiagnosticLogTime) >= DIAGNOSTIC_LOG_INTERVAL_MS) {
+      log.info(
+          "DIAGNOSTIC: Topic-partition {} has {} buffered records (flush size limit: {}), "
+          + "time-based rotation: {}, scheduled rotation: {}",
+          tp,
+          recordCount,
+          flushSize,
+          rotateIntervalMs > 0 ? "ENABLED" : "DISABLED",
+          rotateScheduleIntervalMs > 0 ? "ENABLED" : "DISABLED"
+      );
+      lastDiagnosticLogTime = now;
+    }
+  }
+
+  /**
+   * Determine the specific reason for time-based rotation to provide better logging.
+   *
+   * <p>Time-based rotation can occur under multiple conditions:
+   * 1. Periodic rotation: Either time interval OR partition change 
+   *    (when rotateIntervalMs > 0 && timestampExtractor != null)
+   * 2. Scheduled rotation: When wall clock time reaches scheduled intervals 
+   *    (rotateScheduleIntervalMs > 0)
+   *
+   * <p>This method helps distinguish between these scenarios for better customer observability.
+   */
+  private String determineTimeBasedRotationReason(
+      String encodedPartition, Long recordTimestamp, long now) {
+    if (rotateIntervalMs > 0 && timestampExtractor != null 
+        && rotateOnPartitionChange(encodedPartition)) {
       return "Partition change rotation";
     }
 
