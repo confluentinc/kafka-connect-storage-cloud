@@ -248,6 +248,10 @@ public class TopicPartitionWriter {
 
   public void write() {
     long now = time.milliseconds();
+    
+    // Periodic diagnostic logging to help customers understand why files aren't rotating
+    logDiagnosticInfoIfNeeded(now);
+    
     if (failureTime > 0 && now - failureTime < timeoutMs) {
       return;
     } else {
@@ -352,9 +356,6 @@ public class TopicPartitionWriter {
           currentSchemas.put(encodedPartition, valueSchema);
           currentValueSchema = valueSchema;
         }
-
-        // Periodic diagnostic logging to help customers understand why files aren't rotating
-        logDiagnosticInfoIfNeeded(now);
         
         if (!checkRotationOrAppend(
             record,
@@ -647,7 +648,7 @@ public class TopicPartitionWriter {
   private void logDiagnosticInfoIfNeeded(long now) {
     // Only log diagnostic info periodically to avoid log spam
     // Log every 60 seconds when there are buffered records
-    if (recordCount > 0 && (now - lastDiagnosticLogTime) >= DIAGNOSTIC_LOG_INTERVAL_MS) {
+    if (now - lastDiagnosticLogTime >= DIAGNOSTIC_LOG_INTERVAL_MS) {
       log.info(
           "DIAGNOSTIC: Topic-partition {} has {} buffered records (flush size limit: {}), "
           + "time-based rotation: {}, scheduled rotation: {}",
