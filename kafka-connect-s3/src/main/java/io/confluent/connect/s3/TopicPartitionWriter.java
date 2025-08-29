@@ -124,6 +124,10 @@ public class TopicPartitionWriter {
   boolean isPaused = false;
 
   private final FileRotationTracker fileRotationTracker;
+  
+  // Diagnostic logging variables
+  private static final long DIAGNOSTIC_LOG_INTERVAL_MS = 60000; // 60 seconds
+  private long lastDiagnosticLogTime = 0;
 
   public TopicPartitionWriter(TopicPartition tp,
                               S3Storage storage,
@@ -244,6 +248,10 @@ public class TopicPartitionWriter {
 
   public void write() {
     long now = time.milliseconds();
+    
+    // Periodic diagnostic logging to help customers understand why files aren't rotating
+    logDiagnosticInfoIfNeeded(now);
+    
     if (failureTime > 0 && now - failureTime < timeoutMs) {
       return;
     } else {
@@ -251,7 +259,6 @@ public class TopicPartitionWriter {
     }
 
     resetExpiredScheduledRotationIfNoPendingRecords(now);
-
 
     while (!buffer.isEmpty() && !isWriteDeadlineExceeded()) {
       try {
@@ -271,7 +278,6 @@ public class TopicPartitionWriter {
       commitOnTimeIfNoData(now);
     }
     pauseOrResumeOnBuffer();
-
   }
 
   private void pauseOrResumeOnBuffer() {
@@ -350,7 +356,7 @@ public class TopicPartitionWriter {
           currentSchemas.put(encodedPartition, valueSchema);
           currentValueSchema = valueSchema;
         }
-
+        
         if (!checkRotationOrAppend(
             record,
             currentValueSchema,
@@ -393,6 +399,13 @@ public class TopicPartitionWriter {
 
     if (shouldRotateForNullSchema) {
       fileRotationTracker.incrementRotationByNullSchemaCount(encodedPartition);
+      log.info(
+          "ROTATION TRIGGERED: Tombstone/non-tombstone schema change for topic-partition {}, "
+          + "encoded-partition: {}, records in file: {}",
+          tp,
+          encodedPartition,
+          recordCounts.getOrDefault(encodedPartition, 0L)
+      );
       nextState();
       return true;
     }
@@ -400,6 +413,20 @@ public class TopicPartitionWriter {
     // rotateOnTime is safe to go before writeRecord, because it is acceptable
     // even for a faulty record to trigger time-based rotation if it applies
     if (rotateOnTime(encodedPartition, currentTimestamp, now)) {
+      long timeDiff = currentTimestamp - baseRecordTimestamp;
+      String rotationReason = determineTimeBasedRotationReason(
+          encodedPartition, currentTimestamp, now);
+      
+      log.info(
+          "ROTATION TRIGGERED: {} for topic-partition {}, encoded-partition: {}, "
+          + "time elapsed: {}ms (limit: {}ms), records in file: {}",
+          rotationReason,
+          tp,
+          encodedPartition,
+          timeDiff,
+          rotateIntervalMs,
+          recordCounts.getOrDefault(encodedPartition, 0L)
+      );
       setNextScheduledRotation();
       nextState();
       return true;
@@ -408,15 +435,16 @@ public class TopicPartitionWriter {
     SchemaCompatibilityResult shouldChangeSchema =
         compatibility.shouldChangeSchema(record, null, currentValueSchema);
     if (shouldChangeSchema.isInCompatible() && recordCount > 0) {
-      fileRotationTracker.incrementRotationBySchemaChangeCount(encodedPartition,
-          shouldChangeSchema.getSchemaIncompatibilityType());
+      fileRotationTracker.incrementRotationBySchemaChangeCount(
+          encodedPartition, shouldChangeSchema.getSchemaIncompatibilityType());
       // This branch is never true for the first record read by this TopicPartitionWriter
-      log.trace(
-          "Incompatible change of schema detected for record '{}' with encoded partition "
-          + "'{}' and current offset: '{}'",
-          record,
+      log.info(
+          "ROTATION TRIGGERED: Schema incompatibility detected for topic-partition {}, "
+          + "encoded-partition: {}, incompatibility type: {}, records in file: {}",
+          tp,
           encodedPartition,
-          currentOffset
+          shouldChangeSchema.getSchemaIncompatibilityType(),
+          recordCounts.getOrDefault(encodedPartition, 0L)
       );
       currentSchemas.put(encodedPartition, valueSchema);
       nextState();
@@ -426,9 +454,13 @@ public class TopicPartitionWriter {
     if (rotateOnPartitionerMaxOpenFiles(encodedPartition)) {
       fileRotationTracker.incrementRotationByPartitionerMaxOpenFilesCount(encodedPartition);
       log.info(
-          "Starting commit and rotation for topic partition {} with start offset {}",
+          "ROTATION TRIGGERED: Max open files limit reached for topic-partition {}, "
+          + "encoded-partition: {}, open files: {} (limit: {}), records per file: {}",
           tp,
-          startOffsets
+          encodedPartition,
+          commitFiles.size(),
+          partitionerMaxOpenFiles,
+          formatRotationStatsForLogging()
       );
       nextState();
       return true;
@@ -445,9 +477,12 @@ public class TopicPartitionWriter {
     if (rotateOnSize()) {
       fileRotationTracker.incrementRotationByFlushSizeCount(encodedPartition);
       log.info(
-          "Starting commit and rotation for topic partition {} with start offset {}",
+          "ROTATION TRIGGERED: Flush size limit reached for topic-partition {}, "
+          + "encoded-partition: {}, records processed: {} (limit: {})",
           tp,
-          startOffsets
+          encodedPartition,
+          recordCount,
+          flushSize
       );
       nextState();
       return true;
@@ -474,9 +509,18 @@ public class TopicPartitionWriter {
       // committing files after waiting for rotateIntervalMs time but less than flush.size
       // records available
       if (recordCount > 0 && rotateOnTime(currentEncodedPartition, currentTimestamp, now)) {
+        String rotationReason = determineTimeBasedRotationReason(
+            currentEncodedPartition, currentTimestamp, now);
+        
         log.info(
-            "Committing files after waiting for rotateIntervalMs time but less than flush.size "
-            + "records available."
+            "ROTATION TRIGGERED: {} for topic-partition {}, encoded-partition: {}, "
+            + "time interval: {}ms, flush size limit: {}, records per file: {}",
+            rotationReason,
+            tp,
+            currentEncodedPartition,
+            rotateIntervalMs,
+            flushSize,
+            formatRotationStatsForLogging()
         );
         setNextScheduledRotation();
 
@@ -564,6 +608,9 @@ public class TopicPartitionWriter {
             || rotateOnPartitionChange(encodedPartition)
     );
 
+    // Check for scheduled rotation based on wall clock time
+    boolean scheduledRotation = shouldApplyScheduledRotation(now);
+    
     log.trace(
         "Checking rotation on time for topic-partition '{}' "
             + "with recordCount '{}' and encodedPartition '{}'",
@@ -574,22 +621,75 @@ public class TopicPartitionWriter {
 
     log.trace(
         "Should apply periodic time-based rotation for topic-partition '{}':"
-            + " (rotateIntervalMs: '{}', baseRecordTimestamp: "
-            + "'{}', timestamp: '{}', encodedPartition: '{}', currentEncodedPartition: '{}')? {}",
+            + " (rotateIntervalMs: '{}', baseRecordTimestamp: '{}', timestamp: '{}', "
+            + "encodedPartition: '{}', currentEncodedPartition: '{}', "
+            + "periodicRotation: {}, scheduledRotation: {})",
         tp,
         rotateIntervalMs,
         baseRecordTimestamp,
         recordTimestamp,
         encodedPartition,
         currentEncodedPartition,
-        periodicRotation
+        periodicRotation,
+        scheduledRotation
     );
     if (periodicRotation) {
       fileRotationTracker.incrementRotationByRotationIntervalCount(encodedPartition);
-    } else if (shouldApplyScheduledRotation(now)) {
+    } else if (scheduledRotation) {
       fileRotationTracker.incrementRotationByScheduledRotationIntervalCount(encodedPartition);
     }
-    return periodicRotation || shouldApplyScheduledRotation(now);
+    return periodicRotation || scheduledRotation;
+  }
+
+  /**
+   * Log periodic diagnostic information to help customers understand why files aren't rotating.
+   * This provides visibility into the current state and helps troubleshoot small file issues.
+   */
+  private void logDiagnosticInfoIfNeeded(long now) {
+    // Only log diagnostic info periodically to avoid log spam
+    // Log every 60 seconds when there are buffered records
+    if (now - lastDiagnosticLogTime >= DIAGNOSTIC_LOG_INTERVAL_MS) {
+      log.info(
+          "DIAGNOSTIC: Topic-partition {} has {} buffered records (flush size limit: {}), "
+          + "time-based rotation: {}, scheduled rotation: {}",
+          tp,
+          recordCount,
+          flushSize,
+          rotateIntervalMs > 0 ? "ENABLED" : "DISABLED",
+          rotateScheduleIntervalMs > 0 ? "ENABLED" : "DISABLED"
+      );
+      lastDiagnosticLogTime = now;
+    }
+  }
+
+  /**
+   * Determine the specific reason for time-based rotation to provide better logging.
+   *
+   * <p>Time-based rotation can occur under multiple conditions:
+   * 1. Periodic rotation: Either time interval OR partition change 
+   *    (when rotateIntervalMs > 0 && timestampExtractor != null)
+   * 2. Scheduled rotation: When wall clock time reaches scheduled intervals 
+   *    (rotateScheduleIntervalMs > 0)
+   *
+   * <p>This method helps distinguish between these scenarios for better customer observability.
+   */
+  private String determineTimeBasedRotationReason(
+      String encodedPartition, Long recordTimestamp, long now) {
+    if (rotateIntervalMs > 0 && timestampExtractor != null 
+        && rotateOnPartitionChange(encodedPartition)) {
+      return "Partition change rotation";
+    }
+
+    if (rotateIntervalMs > 0 && timestampExtractor != null
+        && recordTimestamp - baseRecordTimestamp >= rotateIntervalMs) {
+      return "Periodic time interval rotation";
+    }
+
+    if (shouldApplyScheduledRotation(now)) {
+      return "Scheduled time rotation";
+    }
+
+    return "Time-based rotation";
   }
 
   private boolean shouldApplyScheduledRotation(long now) {
@@ -628,6 +728,21 @@ public class TopicPartitionWriter {
         );
       }
     }
+  }
+
+  /**
+   * Format rotation statistics in a single-line, meaningful format.
+   * Shows a clean summary of rotation activity.
+   */
+  private String formatRotationStatsForLogging() {
+    if (recordCounts == null || recordCounts.isEmpty()) {
+      return "no active partitions";
+    }
+
+    // Show a simple summary: partition:recordCount format
+    return recordCounts.entrySet().stream()
+        .map(e -> e.getKey() + ":" + e.getValue() + " records")
+        .collect(java.util.stream.Collectors.joining(", "));
   }
 
   private boolean rotateOnSize() {
@@ -769,7 +884,11 @@ public class TopicPartitionWriter {
     return true;
   }
 
+  @SuppressWarnings("checkstyle:VariableDeclarationUsageDistance")
   private void commitFiles() {
+    int filesToCommit = commitFiles.size();
+    String rotationStats = formatRotationStatsForLogging();
+    
     for (Map.Entry<String, String> entry : commitFiles.entrySet()) {
       String encodedPartition = entry.getKey();
       commitFile(encodedPartition);
@@ -797,7 +916,15 @@ public class TopicPartitionWriter {
 
     recordCount = 0;
     baseRecordTimestamp = null;
-    log.info("Files committed to S3. Target commit offset for {} is {}", tp, offsetToCommit);
+
+    log.info(
+        "FILES COMMITTED: Topic-partition {}, files: {}, target commit offset: {}, "
+        + "records per file: {}",
+        tp,
+        filesToCommit,
+        offsetToCommit,
+        rotationStats
+    );
   }
 
   private void commitFile(String encodedPartition) {
