@@ -1,8 +1,5 @@
 package io.confluent.connect.s3.integration;
 
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import io.confluent.connect.s3.S3SinkConnector;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.auth.AwsAssumeRoleCredentialsProvider;
@@ -30,11 +27,27 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.services.sts.StsClient;
+import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
+import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
+import software.amazon.awssdk.services.sts.StsClientBuilder;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
+import software.amazon.awssdk.services.s3.model.DeleteBucketRequest;
+import io.confluent.connect.s3.util.S3FileUtils;
+
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KEY_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
 import static io.confluent.connect.s3.auth.AwsAssumeRoleCredentialsProvider.REGION_CONFIG;
 import static io.confluent.connect.s3.auth.AwsAssumeRoleCredentialsProvider.ROLE_ARN_CONFIG;
 import static io.confluent.connect.s3.auth.AwsAssumeRoleCredentialsProvider.ROLE_EXTERNAL_ID_CONFIG;
@@ -47,11 +60,6 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLA
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
-import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
-
 @Category(IntegrationTest.class)
 public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
   private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorStsAssumeRoleIT.class);
@@ -61,7 +69,7 @@ public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
   private static final String SESSION_NAME = "session-name";
   private static final String CONNECTOR_NAME = "s3-sink";
 
-  private static final String TEST_REGION = Regions.AP_SOUTH_1.getName();
+  private static final String TEST_REGION = Region.AP_SOUTH_1.id();
   private static final String TEST_BUCKET_NAME =
       "connect-s3-integration-testing-assume-role-" + System.currentTimeMillis();
   private static final String DEFAULT_TEST_TOPIC_NAME = "TestTopic";
@@ -73,17 +81,18 @@ public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
   @BeforeClass
   public static void setupClient() {
     log.info("Starting ITs...");
-    S3Client = getS3Client();
-    if (S3Client.doesBucketExistV2(TEST_BUCKET_NAME)) {
+    s3Client = getS3Client();
+    S3FileUtils fileUtils = new S3FileUtils(s3Client);
+    if (fileUtils.bucketExists(TEST_BUCKET_NAME)) {
       clearBucket(TEST_BUCKET_NAME);
     } else {
-      S3Client.createBucket(TEST_BUCKET_NAME);
+      s3Client.createBucket(CreateBucketRequest.builder().bucket(TEST_BUCKET_NAME).build());
     }
   }
 
   @AfterClass
   public static void deleteBucket() {
-    S3Client.deleteBucket(TEST_BUCKET_NAME);
+    s3Client.deleteBucket(DeleteBucketRequest.builder().bucket(TEST_BUCKET_NAME).build());
     log.info("Finished ITs, removed S3 bucket");
   }
 
@@ -114,30 +123,33 @@ public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
   public void testBasicRecordsWritten() throws Throwable {
     props.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
     testBasicRecordsWrittenToSink(JSON_EXTENSION, false, KAFKA_TOPICS,
-        CONNECTOR_NAME, jsonConverter, producer, TEST_BUCKET_NAME);
+        CONNECTOR_NAME, jsonConverter, producer, TEST_BUCKET_NAME, false);
   }
 
-  protected static AmazonS3 getS3Client() {
+  protected static S3Client getS3Client() {
     Map<String, String> awsCredentials = getAWSAssumeRoleCredentials();
     String accessKeyId = awsCredentials.get(AWS_ACCESS_KEY_ID_CONFIG);
     String secretAccessKey = awsCredentials.get(AWS_SECRET_ACCESS_KEY_CONFIG);
 
-    BasicAWSCredentials basicCredentials = new BasicAWSCredentials(accessKeyId, secretAccessKey);
-    AWSSecurityTokenServiceClientBuilder stsClientBuilder = AWSSecurityTokenServiceClientBuilder
-        .standard()
-        .withCredentials(new AWSStaticCredentialsProvider(basicCredentials))
-        .withRegion(TEST_REGION);
+    AwsBasicCredentials basicCredentials = AwsBasicCredentials.create(accessKeyId, secretAccessKey);
+    StsClientBuilder clientBuilder = StsClient.builder()
+        .credentialsProvider(StaticCredentialsProvider.create(basicCredentials))
+        .region(Region.of(TEST_REGION));
 
-    STSAssumeRoleSessionCredentialsProvider stsCredentialsProvider =
-        new STSAssumeRoleSessionCredentialsProvider
-            .Builder(ROLE_ARN, SESSION_NAME)
-            .withStsClient(stsClientBuilder.build())
-            .withExternalId(ROLE_EXTERNAL_ID)
-            .build();
+    StsAssumeRoleCredentialsProvider stsCredentialsProvider =
+        StsAssumeRoleCredentialsProvider.builder()
+        .stsClient(clientBuilder.build())
+        .refreshRequest(
+            AssumeRoleRequest.builder()
+                .roleArn(ROLE_ARN)
+                .roleSessionName(SESSION_NAME)
+                .externalId(ROLE_EXTERNAL_ID)
+                .build())
+        .build();
 
-    return AmazonS3ClientBuilder.standard()
-        .withCredentials(stsCredentialsProvider)
-        .withRegion(TEST_REGION)
+    return S3Client.builder()
+        .region(Region.of(TEST_REGION))
+        .credentialsProvider(stsCredentialsProvider)
         .build();
   }
 
