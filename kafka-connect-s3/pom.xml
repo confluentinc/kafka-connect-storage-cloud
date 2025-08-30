@@ -43,7 +43,7 @@
         <maven.failsafe.plugin.version>2.22.1</maven.failsafe.plugin.version>
         <skipIntegrationTests>false</skipIntegrationTests>
         <surefire-junit47.version>2.22.1</surefire-junit47.version>
-        <guava.version>32.1.2-jre</guava.version>
+        <guava.version>33.4.0-jre</guava.version>
         <wiremock.version>2.31.0</wiremock.version>
     </properties>
 
