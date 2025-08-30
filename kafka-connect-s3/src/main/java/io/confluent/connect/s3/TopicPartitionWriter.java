@@ -126,7 +126,7 @@ public class TopicPartitionWriter {
   private final FileRotationTracker fileRotationTracker;
   
   // Diagnostic logging variables
-  private static final long DIAGNOSTIC_LOG_INTERVAL_MS = 60000; // 60 seconds
+  private static final long DIAGNOSTIC_LOG_INTERVAL_MS = 300000; // 5 minutes
   private long lastDiagnosticLogTime = 0;
 
   public TopicPartitionWriter(TopicPartition tp,
