@@ -485,7 +485,7 @@ public class TopicPartitionWriter {
           + "encoded-partition: {}, records processed: {} (limit: {})",
           tp,
           encodedPartition,
-          recordCount,
+          recordCounts.getOrDefault(encodedPartition, 0L),
           flushSize
       );
       nextState();
@@ -651,16 +651,19 @@ public class TopicPartitionWriter {
    */
   private void logDiagnosticInfoIfNeeded(long now) {
     // Only log diagnostic info periodically to avoid log spam
-    // Log every 60 seconds when there are buffered records
+    // Log every 5 minutes when there are buffered records
     if (now - lastDiagnosticLogTime >= DIAGNOSTIC_LOG_INTERVAL_MS) {
       log.info(
-          "DIAGNOSTIC: Topic-partition {} has {} buffered records (flush size limit: {}), "
-          + "time-based rotation: {}, scheduled rotation: {}",
-          tp,
+          "DIAGNOSTIC: Connector has {} total buffered records for {} (flush size limit: {}, "
+          + "partitioner max open files limit: {}), time-based rotation: {}, "
+          + "scheduled rotation: {}, active partitions: {}",
           recordCount,
+          tp,
           flushSize,
+          partitionerMaxOpenFiles,
           rotateIntervalMs > 0 ? "ENABLED" : "DISABLED",
-          rotateScheduleIntervalMs > 0 ? "ENABLED" : "DISABLED"
+          rotateScheduleIntervalMs > 0 ? "ENABLED" : "DISABLED",
+          recordCounts.size()
       );
       lastDiagnosticLogTime = now;
     }
