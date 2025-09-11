@@ -47,7 +47,6 @@ public class S3FileUtils {
       // this region or we don't have permissions to it.
       if ((ase.statusCode() == HttpStatusCode.MOVED_PERMANENTLY)
           || ase.statusCode() == HttpStatusCode.FORBIDDEN) {
-          //|| "Forbidden".equals(ase.awsErrorDetails().errorCode())) {
         log.info("Bucket {} exists, but not in this region or we don't have permissions to it.",
             bucketName);
         return true;
