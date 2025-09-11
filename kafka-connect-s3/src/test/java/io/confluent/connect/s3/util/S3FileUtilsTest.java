@@ -115,8 +115,8 @@ public class S3FileUtilsTest {
     // Given
     String bucketName = "access-denied-bucket";
     AwsErrorDetails errorDetails = AwsErrorDetails.builder()
-        .errorCode("AccessDenied")
-        .errorMessage("Access Denied")
+        .errorCode("Forbidden")
+        .errorMessage("Forbidden")
         .build();
     AwsServiceException accessDeniedException = AwsServiceException.builder()
         .statusCode(HttpStatusCode.FORBIDDEN)
