@@ -100,6 +100,11 @@
                 <artifactId>jose4j</artifactId>
                 <version>0.9.4</version>
             </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-codec-http2</artifactId>
+                <version>4.1.124.Final</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
