@@ -46,7 +46,6 @@ public class S3FileUtils {
       // A redirect error or an AccessDenied exception means the bucket exists but it's not in
       // this region or we don't have permissions to it.
       if ((ase.statusCode() == HttpStatusCode.MOVED_PERMANENTLY)
-          || ase.statusCode() == HttpStatusCode.FORBIDDEN
           || "Forbidden".equals(ase.awsErrorDetails().errorCode())) {
         log.info("Bucket {} exists, but not in this region or we don't have permissions to it.",
             bucketName);
