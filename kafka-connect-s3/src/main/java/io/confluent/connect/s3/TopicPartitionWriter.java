@@ -417,7 +417,8 @@ public class TopicPartitionWriter {
     // rotateOnTime is safe to go before writeRecord, because it is acceptable
     // even for a faulty record to trigger time-based rotation if it applies
     if (rotateOnTime(encodedPartition, currentTimestamp, now)) {
-      long timeDiff = currentTimestamp - baseRecordTimestamp;
+      long timeDiff = (currentTimestamp != null && baseRecordTimestamp != null) 
+          ? currentTimestamp - baseRecordTimestamp : 0L;
       String rotationReason = determineTimeBasedRotationReason(
           encodedPartition, currentTimestamp, now);
       
@@ -485,7 +486,7 @@ public class TopicPartitionWriter {
           + "encoded-partition: {}, records processed: {} (limit: {})",
           tp,
           encodedPartition,
-          recordCount,
+          recordCounts.getOrDefault(encodedPartition, 0L),
           flushSize
       );
       nextState();
@@ -605,12 +606,12 @@ public class TopicPartitionWriter {
       return false;
     }
     // rotateIntervalMs > 0 implies timestampExtractor != null
+    boolean hasValidTimestamps = baseRecordTimestamp != null && recordTimestamp != null;
+    boolean hasTimeBasedRotation = hasValidTimestamps 
+        && recordTimestamp - baseRecordTimestamp >= rotateIntervalMs;
     boolean periodicRotation = rotateIntervalMs > 0
         && timestampExtractor != null
-        && (
-        recordTimestamp - baseRecordTimestamp >= rotateIntervalMs
-            || rotateOnPartitionChange(encodedPartition)
-    );
+        && (hasTimeBasedRotation || rotateOnPartitionChange(encodedPartition));
 
     // Check for scheduled rotation based on wall clock time
     boolean scheduledRotation = shouldApplyScheduledRotation(now);
@@ -651,16 +652,19 @@ public class TopicPartitionWriter {
    */
   private void logDiagnosticInfoIfNeeded(long now) {
     // Only log diagnostic info periodically to avoid log spam
-    // Log every 60 seconds when there are buffered records
+    // Log every 5 minutes when there are buffered records
     if (now - lastDiagnosticLogTime >= DIAGNOSTIC_LOG_INTERVAL_MS) {
       log.info(
-          "DIAGNOSTIC: Topic-partition {} has {} buffered records (flush size limit: {}), "
-          + "time-based rotation: {}, scheduled rotation: {}",
-          tp,
+          "DIAGNOSTIC: Connector has {} total buffered records for {} (flush size limit: {}, "
+          + "partitioner max open files limit: {}), time-based rotation: {}, "
+          + "scheduled rotation: {}, active partitions: {}",
           recordCount,
+          tp,
           flushSize,
+          partitionerMaxOpenFiles,
           rotateIntervalMs > 0 ? "ENABLED" : "DISABLED",
-          rotateScheduleIntervalMs > 0 ? "ENABLED" : "DISABLED"
+          rotateScheduleIntervalMs > 0 ? "ENABLED" : "DISABLED",
+          recordCounts.size()
       );
       lastDiagnosticLogTime = now;
     }
@@ -684,7 +688,9 @@ public class TopicPartitionWriter {
       return "Partition change rotation";
     }
 
+    boolean hasValidTimestamps = baseRecordTimestamp != null && recordTimestamp != null;
     if (rotateIntervalMs > 0 && timestampExtractor != null
+        && hasValidTimestamps
         && recordTimestamp - baseRecordTimestamp >= rotateIntervalMs) {
       return "Periodic time interval rotation";
     }
@@ -883,7 +889,8 @@ public class TopicPartitionWriter {
     }
     ++recordCount;
 
-    recordCounts.put(currentEncodedPartition, recordCounts.get(currentEncodedPartition) + 1);
+    recordCounts.put(currentEncodedPartition, 
+        recordCounts.getOrDefault(currentEncodedPartition, 0L) + 1);
     endOffsets.put(currentEncodedPartition, currentOffset);
     return true;
   }
