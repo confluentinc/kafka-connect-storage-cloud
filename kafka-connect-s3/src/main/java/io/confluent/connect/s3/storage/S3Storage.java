@@ -115,8 +115,12 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
                 ? builder.region(Region.US_EAST_1)
                 : builder.region(Region.of(region));
     } else {
+      URI endpoint = URI.create(url);
+      if (endpoint.getScheme() == null) {
+        endpoint = URI.create("https://" + url);
+      }
       builder = builder
-          .endpointOverride(URI.create(url))
+          .endpointOverride(endpoint)
           .region(Region.of(region));
     }
     log.info("S3 client created");
