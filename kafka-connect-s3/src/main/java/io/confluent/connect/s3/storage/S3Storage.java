@@ -78,6 +78,8 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
   private final S3SinkConnectorConfig conf;
   private static final String VERSION_FORMAT = "APN/1.0 Confluent/1.0 KafkaS3Connector/%s";
 
+  private static final String DEFAULT_URL_SCHEME = "https://";
+
   /**
    * Construct an S3 storage class given a configuration and an AWS S3 address.
    *
@@ -117,7 +119,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
     } else {
       URI endpoint = URI.create(url);
       if (endpoint.getScheme() == null) {
-        endpoint = URI.create("https://" + url);
+        endpoint = URI.create(DEFAULT_URL_SCHEME + url);
       }
       builder = builder
           .endpointOverride(endpoint)
