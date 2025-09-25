@@ -15,11 +15,11 @@
 
 package io.confluent.connect.s3.storage;
 
-import com.amazonaws.retry.PredefinedBackoffStrategies;
 import com.amazonaws.retry.RetryPolicy;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.services.s3.S3Client;
+
 
 import org.junit.Test;
 
@@ -34,6 +34,7 @@ import software.amazon.awssdk.retries.api.RetryStrategy;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_MAX_BACKOFF_TIME_MS;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class S3StorageTest extends S3SinkConnectorTestBase {
@@ -109,6 +110,79 @@ public class S3StorageTest extends S3SinkConnectorTestBase {
     setUp();
     AwsCredentialsProvider credentialsProvider = storage.newCredentialsProvider(connectorConfig);
     assertTrue(credentialsProvider instanceof StaticCredentialsProvider);
+  }
+
+  @Test
+  public void testS3ClientWithoutUriScheme() throws Exception {
+    String bucketName = "test-bucket";
+    String urlWithoutScheme = "s3.amazonaws.com";
+    localProps.put(S3SinkConnectorConfig.REGION_CONFIG, "us-east-1");
+    setUp();
+
+    S3Storage storage = new S3Storage(connectorConfig, urlWithoutScheme, bucketName, null);
+    try {
+      S3Client s3Client = storage.newS3Client(connectorConfig);
+
+      assertNotNull(s3Client);
+      // The client should be created successfully with default https scheme added
+    } finally {
+      storage.close();
+    }
+  }
+
+  @Test
+  public void testS3ClientWithUriScheme() throws Exception {
+    String bucketName = "test-bucket";
+    String urlWithScheme = "https://s3.amazonaws.com";
+    localProps.put(S3SinkConnectorConfig.REGION_CONFIG, "us-west-2");
+    setUp();
+
+    S3Storage storage = new S3Storage(connectorConfig, urlWithScheme, bucketName, null);
+    try {
+      S3Client s3Client = storage.newS3Client(connectorConfig);
+
+      // Assert
+      assertNotNull(s3Client);
+      // The client should be created successfully with the provided https scheme
+    } finally {
+      storage.close();
+    }
+  }
+
+  @Test
+  public void testS3ClientWithHttpScheme() throws Exception {
+    String bucketName = "test-bucket";
+    String urlWithHttpScheme = "http://localhost:9000";
+    localProps.put(S3SinkConnectorConfig.REGION_CONFIG, "us-east-1");
+    setUp();
+
+    S3Storage storage = new S3Storage(connectorConfig, urlWithHttpScheme, bucketName, null);
+    try {
+      S3Client s3Client = storage.newS3Client(connectorConfig);
+
+      assertNotNull(s3Client);
+      // The client should be created successfully with the provided http scheme
+    } finally {
+      storage.close();
+    }
+  }
+
+  @Test
+  public void testS3ClientWithS3Scheme() throws Exception {
+    String bucketName = "test-bucket";
+    String urlWithS3Scheme = "s3://s3bucket/object";
+    localProps.put(S3SinkConnectorConfig.REGION_CONFIG, "us-east-1");
+    setUp();
+
+    S3Storage storage = new S3Storage(connectorConfig, urlWithS3Scheme, bucketName, null);
+    try {
+      S3Client s3Client = storage.newS3Client(connectorConfig);
+
+      assertNotNull(s3Client);
+      // The client should be created successfully with the provided http scheme
+    } finally {
+      storage.close();
+    }
   }
 
   /**
