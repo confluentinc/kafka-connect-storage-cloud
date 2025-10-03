@@ -71,6 +71,7 @@
         <guava.version>32.1.2-jre</guava.version>
         <zookeeper.version>3.8.4</zookeeper.version>
         <dnsjava.version>3.6.1</dnsjava.version>
+        <commons.lang3.version>3.18.0</commons.lang3.version>
     </properties>
 
     <repositories>
@@ -83,6 +84,11 @@
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-lang3</artifactId>
+                <version>${commons.lang3.version}</version>
+            </dependency>
             <!-- band aid until connector catches up with the updated schema registry -->
             <dependency>
                 <groupId>org.yaml</groupId>
@@ -104,11 +110,6 @@
     </dependencyManagement>
 
     <dependencies>
-        <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-lang3</artifactId>
-            <version>3.18.0</version>
-        </dependency>
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>
