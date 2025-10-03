@@ -84,6 +84,11 @@
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-lang3</artifactId>
+                <version>${commons.lang3.version}</version>
+            </dependency>
             <!-- band aid until connector catches up with the updated schema registry -->
             <dependency>
                 <groupId>org.yaml</groupId>
