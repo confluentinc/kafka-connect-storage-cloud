@@ -239,7 +239,7 @@ public class S3SinkTask extends SinkTask {
         continue;
       }
       
-      TopicPartitionWriter writer = getTopicPartitionWriterOrThrow(tp, record);
+      TopicPartitionWriter writer = getTopicPartitionWriterOrThrow(tp);
       writer.buffer(record);
     }
     if (log.isDebugEnabled()) {
@@ -281,20 +281,17 @@ public class S3SinkTask extends SinkTask {
    * and the assigned partitions.
    *
    * @param tp the TopicPartition to get the writer for
-   * @param record the SinkRecord being processed (unused but kept for potential future use)
    * @return the TopicPartitionWriter
    * @throws ConnectException if no writer is found
    */
-  private TopicPartitionWriter getTopicPartitionWriterOrThrow(
-      TopicPartition tp,
-      SinkRecord record
-  ) throws ConnectException {
+  private TopicPartitionWriter getTopicPartitionWriterOrThrow(TopicPartition tp)
+      throws ConnectException {
     TopicPartitionWriter writer = topicPartitionWriters.get(tp);
     if (writer == null) {
       String errorMsg = String.format(
           "No writer found for topic partition %s. "
-          + "The record's topic-partition does not match any assigned partitions. "
-          + "Assigned partitions: %s",
+              + "The record's topic-partition does not match any assigned partitions. "
+              + "Assigned partitions: %s",
           tp,
           topicPartitionWriters.keySet()
       );
