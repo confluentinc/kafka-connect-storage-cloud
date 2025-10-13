@@ -240,9 +240,6 @@ public class S3SinkTask extends SinkTask {
       }
       
       TopicPartitionWriter writer = getTopicPartitionWriterOrThrow(tp, record);
-      if (writer == null) {
-        continue; // Record was reported to DLQ, continue with next record
-      }
       writer.buffer(record);
     }
     if (log.isDebugEnabled()) {
@@ -284,9 +281,9 @@ public class S3SinkTask extends SinkTask {
    * and the assigned partitions.
    *
    * @param tp the TopicPartition to get the writer for
-   * @param record the SinkRecord being processed
-   * @return the TopicPartitionWriter, or null if the record was reported to DLQ
-   * @throws ConnectException if no writer is found and no DLQ reporter is configured
+   * @param record the SinkRecord being processed (unused but kept for potential future use)
+   * @return the TopicPartitionWriter
+   * @throws ConnectException if no writer is found
    */
   private TopicPartitionWriter getTopicPartitionWriterOrThrow(
       TopicPartition tp,
@@ -302,12 +299,7 @@ public class S3SinkTask extends SinkTask {
           topicPartitionWriters.keySet()
       );
       log.error(errorMsg);
-      if (reporter != null) {
-        reporter.report(record, new ConnectException(errorMsg));
-        return null; // Signal that record was sent to DLQ
-      } else {
-        throw new ConnectException(errorMsg);
-      }
+      throw new ConnectException(errorMsg);
     }
     return writer;
   }

@@ -299,58 +299,6 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     }
   }
 
-  @Test
-  public void testPutRecordWithTransformedTopicNameReportsToDlq() throws Exception {
-    setUp();
-    replayAll();
-    task = new S3SinkTask();
-    SinkTaskContext mockContext = mock(SinkTaskContext.class);
-    ErrantRecordReporter reporter = mock(ErrantRecordReporter.class);
-    when(mockContext.errantRecordReporter()).thenReturn(reporter);
-    when(mockContext.assignment()).thenReturn(Collections.singleton(TOPIC_PARTITION));
-    task.initialize(mockContext);
-    task.start(properties);
-    verifyAll();
-
-    // Create a record with a different topic name (simulating what happens when a transform
-    // like RegexRouter modifies the topic name)
-    SinkRecord recordWithTransformedTopic = new SinkRecord(
-        "KAFKA_MAIN." + TOPIC,  // Transformed topic name
-        PARTITION,
-        Schema.STRING_SCHEMA,
-        "key",
-        Schema.STRING_SCHEMA,
-        "value",
-        0
-    );
-
-    // With DLQ reporter available, the record should be reported and processing should continue
-    // without throwing an exception
-    try {
-      task.put(Collections.singletonList(recordWithTransformedTopic));
-      // If we reach here, no exception was thrown - this is the expected behavior
-    } catch (Exception e) {
-      fail("Should not throw exception when DLQ reporter is configured, but got: " + e.getMessage());
-    }
-    
-    // Verify the error was reported to DLQ with the correct record and exception
-    ArgumentCaptor<SinkRecord> recordCaptor = ArgumentCaptor.forClass(SinkRecord.class);
-    ArgumentCaptor<ConnectException> exceptionCaptor = ArgumentCaptor.forClass(ConnectException.class);
-    Mockito.verify(reporter, times(1)).report(recordCaptor.capture(), exceptionCaptor.capture());
-    
-    // Verify the captured record is the one we sent
-    assertEquals("Captured record should match the original", recordWithTransformedTopic, recordCaptor.getValue());
-    
-    // Verify the captured exception has the complete expected error message
-    String expectedMessage = "No writer found for topic partition KAFKA_MAIN.test-topic-12. "
-        + "The record's topic-partition does not match any assigned partitions. "
-        + "Assigned partitions: [test-topic-12]";
-    assertEquals("Exception message should match expected format", 
-        expectedMessage, exceptionCaptor.getValue().getMessage());
-    
-    task.close(mockContext.assignment());
-    task.stop();
-  }
 
 }
 
