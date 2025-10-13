@@ -235,12 +235,15 @@ public class S3SinkTask extends SinkTask {
       TopicPartition tp = new TopicPartition(topic, partition);
 
       if (maybeSkipOnNullValue(record)) {
-        if (reporter != null && connectorConfig.reportNullRecordsToDlq()) {
-          reporter.report(record, new DataException("Skipping null value record."));
-        }
+        maybeReportNullRecordToDlq(record);
         continue;
       }
-      topicPartitionWriters.get(tp).buffer(record);
+      
+      TopicPartitionWriter writer = getTopicPartitionWriterOrThrow(tp, record);
+      if (writer == null) {
+        continue; // Record was reported to DLQ, continue with next record
+      }
+      writer.buffer(record);
     }
     if (log.isDebugEnabled()) {
       log.debug("Read {} records from Kafka", records.size());
@@ -272,6 +275,51 @@ public class S3SinkTask extends SinkTask {
         writer.failureTime(time.milliseconds());
         topicPartitionWriters.put(tp, writer);
       }
+    }
+  }
+
+  /**
+   * Retrieves the TopicPartitionWriter for the given TopicPartition.
+   * If no writer is found, it indicates a mismatch between the record's topic partition
+   * and the assigned partitions.
+   *
+   * @param tp the TopicPartition to get the writer for
+   * @param record the SinkRecord being processed
+   * @return the TopicPartitionWriter, or null if the record was reported to DLQ
+   * @throws ConnectException if no writer is found and no DLQ reporter is configured
+   */
+  private TopicPartitionWriter getTopicPartitionWriterOrThrow(
+      TopicPartition tp,
+      SinkRecord record
+  ) throws ConnectException {
+    TopicPartitionWriter writer = topicPartitionWriters.get(tp);
+    if (writer == null) {
+      String errorMsg = String.format(
+          "No writer found for topic partition %s. "
+          + "The record's topic-partition does not match any assigned partitions. "
+          + "Assigned partitions: %s",
+          tp,
+          topicPartitionWriters.keySet()
+      );
+      log.error(errorMsg);
+      if (reporter != null) {
+        reporter.report(record, new ConnectException(errorMsg));
+        return null; // Signal that record was sent to DLQ
+      } else {
+        throw new ConnectException(errorMsg);
+      }
+    }
+    return writer;
+  }
+
+  /**
+   * Reports a null-valued record to the Dead Letter Queue if configured.
+   *
+   * @param record the SinkRecord with null value to report
+   */
+  private void maybeReportNullRecordToDlq(SinkRecord record) {
+    if (reporter != null && connectorConfig.reportNullRecordsToDlq()) {
+      reporter.report(record, new DataException("Skipping null value record."));
     }
   }
 
