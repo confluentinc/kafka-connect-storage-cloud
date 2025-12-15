@@ -365,14 +365,14 @@ public class S3SinkTask extends SinkTask {
 
   @Override
   public void close(Collection<TopicPartition> partitions) {
-    for (TopicPartition tp : topicPartitionWriters.keySet()) {
+    for (TopicPartition tp : partitions) {
       try {
         topicPartitionWriters.get(tp).close();
       } catch (ConnectException e) {
         log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
       }
+      topicPartitionWriters.remove(tp);
     }
-    topicPartitionWriters.clear();
   }
 
   @Override
