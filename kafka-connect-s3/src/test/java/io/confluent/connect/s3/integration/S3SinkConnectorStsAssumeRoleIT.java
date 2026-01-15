@@ -28,8 +28,6 @@ import java.util.List;
 import java.util.Map;
 
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.AwsCredentials;
-import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
@@ -46,8 +44,6 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.AWS_SECRET_ACCESS_KE
 import static io.confluent.connect.s3.S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CLASS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.CREDENTIALS_PROVIDER_CONFIG_PREFIX;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_BUCKET_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
 import static io.confluent.connect.s3.auth.AwsAssumeRoleCredentialsProvider.REGION_CONFIG;
 import static io.confluent.connect.s3.auth.AwsAssumeRoleCredentialsProvider.ROLE_ARN_CONFIG;
 import static io.confluent.connect.s3.auth.AwsAssumeRoleCredentialsProvider.ROLE_EXTERNAL_ID_CONFIG;
@@ -69,7 +65,7 @@ public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
   private static final String SESSION_NAME = "session-name";
   private static final String CONNECTOR_NAME = "s3-sink";
 
-  private static final String TEST_REGION = Region.AP_SOUTH_1.id();
+  private static final String TEST_REGION = Region.US_EAST_1.id();
   private static final String TEST_BUCKET_NAME =
       "connect-s3-integration-testing-assume-role-" + System.currentTimeMillis();
   private static final String DEFAULT_TEST_TOPIC_NAME = "TestTopic";
