@@ -69,7 +69,7 @@ public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
   private static final String SESSION_NAME = "session-name";
   private static final String CONNECTOR_NAME = "s3-sink";
 
-  private static final String TEST_REGION = Region.AP_SOUTH_1.id();
+  private static final String TEST_REGION = Regions.US_EAST_1.getName();
   private static final String TEST_BUCKET_NAME =
       "connect-s3-integration-testing-assume-role-" + System.currentTimeMillis();
   private static final String DEFAULT_TEST_TOPIC_NAME = "TestTopic";
