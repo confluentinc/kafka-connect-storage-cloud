@@ -3,6 +3,8 @@ lang: java
 lang_version: 8
 git:
   enable: true
+  github_write_targets:
+    - confluentinc/docs-kafka-connect-s3-sink
 codeowners:
   enable: true
 semaphore:
