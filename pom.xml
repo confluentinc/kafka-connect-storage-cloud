@@ -72,6 +72,9 @@
         <zookeeper.version>3.8.4</zookeeper.version>
         <dnsjava.version>3.6.1</dnsjava.version>
         <commons.lang3.version>3.18.0</commons.lang3.version>
+        <!-- Netty version pinned to remediate CVE-2025-58056 and CVE-2025-58057.
+             All io.netty modules MUST be aligned to this version to prevent Jar Hell. -->
+        <netty.version>4.1.125.Final</netty.version>
     </properties>
 
     <repositories>
@@ -106,20 +109,21 @@
                 <artifactId>jose4j</artifactId>
                 <version>0.9.4</version>
             </dependency>
+            <!-- Netty BOM: Forces ALL io.netty artifacts to a single aligned version.
+                 This remediates CVE-2025-58056 (HTTP Request Smuggling in netty-codec-http)
+                 and CVE-2025-58057 (DoS in netty-codec) found in versions < 4.1.125.Final.
+                 Using the BOM prevents Jar Hell from mixed Netty versions on the classpath. -->
             <dependency>
                 <groupId>io.netty</groupId>
-                <artifactId>netty-codec-http2</artifactId>
-                <version>4.2.5.Final</version>
+                <artifactId>netty-bom</artifactId>
+                <version>${netty.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
 
     <dependencies>
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-codec-http2</artifactId>
-            <version>4.2.5.Final</version>
-        </dependency>
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>

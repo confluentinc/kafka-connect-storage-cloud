@@ -91,43 +91,15 @@
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>apache-client</artifactId>
         </dependency>
+        <!-- Netty version alignment is handled by io.netty:netty-bom in the root POM's
+             dependencyManagement. All transitive Netty modules from netty-nio-client
+             will resolve to ${netty.version} (4.1.125.Final), remediating:
+               - CVE-2025-58056 (HTTP Request Smuggling in netty-codec-http)
+               - CVE-2025-58057 (DoS in netty-codec)
+             No exclusions needed — the BOM governs all io.netty artifact versions. -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>netty-nio-client</artifactId>
-<!--            exclude netty dependecies as the latest version still has CVE-2025-55163, CVE-2025-58056,-->
-<!--            CVE-2025-58057-->
-            <exclusions>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-codec</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-codec-http</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-codec-http-2</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <!--    pin version to fix CVE-2025-58056-->
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-codec-http</artifactId>
-            <version>4.2.5.Final</version>
-        </dependency>
-        <!--        pin version to fix CVE-2025-5516-->
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-codec-http2</artifactId>
-            <version>4.2.5.Final</version>
-        </dependency>
-        <!--        pin version to fixCVE-2025-58057-->
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-codec</artifactId>
-            <version>4.2.5.Final</version>
         </dependency>
         <dependency>
             <groupId>io.findify</groupId>
