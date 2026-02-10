@@ -2296,7 +2296,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     String schemaName = schema.name() != null ? schema.name() : "null";
     String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC,
-        "schema_name=" + schemaName + dirDelim + encodedPartitionFirst);
+        "schema_name=" + schemaName + parsedConfig.get(DIRECTORY_DELIM_CONFIG) + encodedPartitionFirst);
     List<String> expectedFiles = new ArrayList<>();
     for (int i : new int[]{0, 3, 6}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
@@ -2304,7 +2304,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     }
 
     String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC,
-        "schema_name=" + schemaName + dirDelim + encodedPartitionLater);
+        "schema_name=" + schemaName + parsedConfig.get(DIRECTORY_DELIM_CONFIG) + encodedPartitionLater);
     // Records 15,16,17 won't be flushed until a record with a higher timestamp arrives.
     for (int i : new int[]{9, 12}) {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
