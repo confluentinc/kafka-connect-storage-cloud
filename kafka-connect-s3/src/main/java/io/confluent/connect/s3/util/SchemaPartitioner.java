@@ -77,4 +77,15 @@ public class SchemaPartitioner<T> implements Partitioner<T> {
   public List<T> partitionFields() {
     return delegatePartitioner.partitionFields();
   }
+
+  /**
+   * Get the delegate partitioner that this SchemaPartitioner wraps.
+   * This allows callers to check if the delegate is a TimeBasedPartitioner
+   * and extract timestamp extractors for time-based rotation.
+   *
+   * @return the delegate partitioner
+   */
+  public Partitioner<T> getDelegatePartitioner() {
+    return delegatePartitioner;
+  }
 }

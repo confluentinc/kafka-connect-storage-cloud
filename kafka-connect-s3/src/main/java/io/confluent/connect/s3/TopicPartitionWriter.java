@@ -18,6 +18,7 @@ package io.confluent.connect.s3;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileRotationTracker;
 import io.confluent.connect.s3.util.RetryUtil;
+import io.confluent.connect.s3.util.SchemaPartitioner;
 import io.confluent.connect.s3.util.TombstoneTimestampExtractor;
 import io.confluent.connect.s3.errors.FileExistsException;
 
@@ -163,8 +164,10 @@ public class TopicPartitionWriter {
     this.reporter = reporter;
     this.timestampExtractor = null;
 
-    if (partitioner instanceof TimeBasedPartitioner) {
-      this.timestampExtractor = ((TimeBasedPartitioner) partitioner).getTimestampExtractor();
+    // Extract timestamp extractor from the partitioner or its delegate if it's a SchemaPartitioner
+    TimeBasedPartitioner<?> timeBasedPartitioner = getTimeBasedPartitioner(partitioner);
+    if (timeBasedPartitioner != null) {
+      this.timestampExtractor = timeBasedPartitioner.getTimestampExtractor();
       if (connectorConfig.isTombstoneWriteEnabled()) {
         this.timestampExtractor = new TombstoneTimestampExtractor(timestampExtractor);
       }
@@ -225,6 +228,26 @@ public class TopicPartitionWriter {
 
     // Initialize scheduled rotation timer if applicable
     setNextScheduledRotation();
+  }
+
+  /**
+   * Extracts a TimeBasedPartitioner from the given partitioner.
+   * Handles both direct TimeBasedPartitioner instances and SchemaPartitioner
+   * wrapping a TimeBasedPartitioner.
+   *
+   * @param partitioner the partitioner to extract from
+   * @return TimeBasedPartitioner if found, null otherwise
+   */
+  private static TimeBasedPartitioner<?> getTimeBasedPartitioner(Partitioner<?> partitioner) {
+    if (partitioner instanceof TimeBasedPartitioner) {
+      return (TimeBasedPartitioner<?>) partitioner;
+    } else if (partitioner instanceof SchemaPartitioner) {
+      Partitioner<?> delegate = ((SchemaPartitioner<?>) partitioner).getDelegatePartitioner();
+      if (delegate instanceof TimeBasedPartitioner) {
+        return (TimeBasedPartitioner<?>) delegate;
+      }
+    }
+    return null;
   }
 
   private void getS3Tag() {
