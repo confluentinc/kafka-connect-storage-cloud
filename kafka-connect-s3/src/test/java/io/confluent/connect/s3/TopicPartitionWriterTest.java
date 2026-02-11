@@ -2317,7 +2317,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void testSchemaPartitionerWithTimeBasedPartitionerRotateOnPartitionChangeDisabled() throws Exception {
     // Test that disabling rotate on partition change allows multiple time partitions to remain open
     // without rotation, demonstrating the fix keeps multiple encoded partitions in memory
-    localProps.put(FLUSH_SIZE_CONFIG, "1000");
+    // Then verify that flush size still triggers commits
+    localProps.put(FLUSH_SIZE_CONFIG, "4");
     localProps.put(
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
         String.valueOf(TimeUnit.DAYS.toMillis(1))  // Large interval to prevent time-based rotation
@@ -2338,11 +2339,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     String key = "key";
     Schema schema = createSchema();
-    List<Struct> records = createRecordBatches(schema, 1, 3);
+    List<Struct> records = createRecordBatches(schema, 1, 4);
     DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
 
     // Records in different hours (3 different encoded partitions with SchemaPartitioner + HourlyPartitioner)
-    Collection<SinkRecord> sinkRecords = new ArrayList<>();
+    List<SinkRecord> sinkRecords = new ArrayList<>();
     sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(0),
         0, first.getMillis(), TimestampType.CREATE_TIME));
     sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(1),
@@ -2355,11 +2356,39 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     }
 
     topicPartitionWriter.write();
-    topicPartitionWriter.close();
 
     // VERIFY: No files should be committed since rotation is disabled and flush size not reached
     // This proves that multiple time partitions can remain open without rotation
-    verify(Collections.<String>emptyList(), -1, schema, records);
+    verify(Collections.<String>emptyList(), -1, schema, records.subList(0, 3));
+
+    // Now add a 4th record to reach flush size and trigger commits
+    SinkRecord fourthRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(3),
+        3, first.plusHours(3).getMillis(), TimestampType.CREATE_TIME);
+    topicPartitionWriter.buffer(fourthRecord);
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    // VERIFY: Now files should be committed since flush size (4) was reached
+    // Build expected files for the 3 different hour partitions
+    String encodedPartitionHour10 = partitioner.encodePartition(sinkRecords.get(0));
+    String encodedPartitionHour11 = partitioner.encodePartition(sinkRecords.get(1));
+    String encodedPartitionHour12 = partitioner.encodePartition(sinkRecords.get(2));
+    String dirPrefixHour10 = partitioner.generatePartitionedPath(TOPIC, encodedPartitionHour10);
+    String dirPrefixHour11 = partitioner.generatePartitionedPath(TOPIC, encodedPartitionHour11);
+    String dirPrefixHour12 = partitioner.generatePartitionedPath(TOPIC, encodedPartitionHour12);
+
+    List<String> expectedFiles = new ArrayList<>();
+    // File for hour 10 partition: contains record at offset 0
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixHour10, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    // File for hour 11 partition: contains record at offset 1
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixHour11, TOPIC_PARTITION, 1, extension, ZERO_PAD_FMT));
+    // File for hour 12 partition: contains record at offset 2
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixHour12, TOPIC_PARTITION, 2, extension, ZERO_PAD_FMT));
+
+    // Verify all 3 files exist
+    for (String expectedFile : expectedFiles) {
+      assertTrue("Expected file to be created: " + expectedFile, storage.exists(expectedFile));
+    }
   }
 
   @Test
