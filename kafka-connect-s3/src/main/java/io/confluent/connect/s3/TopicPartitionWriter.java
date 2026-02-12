@@ -16,9 +16,9 @@
 package io.confluent.connect.s3;
 
 import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.s3.util.DelegatingPartitioner;
 import io.confluent.connect.s3.util.FileRotationTracker;
 import io.confluent.connect.s3.util.RetryUtil;
-import io.confluent.connect.s3.util.SchemaPartitioner;
 import io.confluent.connect.s3.util.TombstoneTimestampExtractor;
 import io.confluent.connect.s3.errors.FileExistsException;
 
@@ -232,21 +232,33 @@ public class TopicPartitionWriter {
 
   /**
    * Extracts a TimeBasedPartitioner from the given partitioner.
-   * Handles both direct TimeBasedPartitioner instances and SchemaPartitioner
-   * wrapping a TimeBasedPartitioner.
+   * Recursively unwraps DelegatingPartitioner instances until a TimeBasedPartitioner
+   * is found or no more delegates exist.
    *
    * @param partitioner the partitioner to extract from
    * @return TimeBasedPartitioner if found, null otherwise
    */
   private static TimeBasedPartitioner<?> getTimeBasedPartitioner(Partitioner<?> partitioner) {
-    if (partitioner instanceof TimeBasedPartitioner) {
-      return (TimeBasedPartitioner<?>) partitioner;
-    } else if (partitioner instanceof SchemaPartitioner) {
-      Partitioner<?> delegate = ((SchemaPartitioner<?>) partitioner).getDelegatePartitioner();
-      if (delegate instanceof TimeBasedPartitioner) {
-        return (TimeBasedPartitioner<?>) delegate;
+    Partitioner<?> current = partitioner;
+
+    // Iteratively unwrap delegating partitioners
+    // Handles arbitrary depth of wrapping
+    // (e.g., TombstoneSupportedPartitioner -> SchemaPartitioner -> TimeBasedPartitioner)
+    while (current != null) {
+      // Check if current partitioner is the target
+      if (current instanceof TimeBasedPartitioner) {
+        return (TimeBasedPartitioner<?>) current;
+      }
+
+      // Unwrap if this is a delegating partitioner
+      if (current instanceof DelegatingPartitioner) {
+        current = ((DelegatingPartitioner<?>) current).getDelegatePartitioner();
+      } else {
+        // Not a delegating partitioner, cannot unwrap further
+        break;
       }
     }
+
     return null;
   }
 
@@ -624,17 +636,31 @@ public class TopicPartitionWriter {
         && !encodedPartition.equals(currentEncodedPartition);
   }
 
+  /**
+   * Determines whether partition-change rotation should be applied.
+   * Partition-change rotation is disabled when tombstone writing is enabled to prevent
+   * aggressive rotation on every tombstone/non-tombstone transition.
+   *
+   * @param encodedPartition the encoded partition to check
+   * @return true if partition-change rotation should be applied, false otherwise
+   */
+  private boolean shouldRotateOnPartitionChangeWithTombstoneCheck(String encodedPartition) {
+    return !connectorConfig.isTombstoneWriteEnabled()
+        && rotateOnPartitionChange(encodedPartition);
+  }
+
   private boolean rotateOnTime(String encodedPartition, Long recordTimestamp, long now) {
     if (recordCount <= 0) {
       return false;
     }
     // rotateIntervalMs > 0 implies timestampExtractor != null
     boolean hasValidTimestamps = baseRecordTimestamp != null && recordTimestamp != null;
-    boolean hasTimeBasedRotation = hasValidTimestamps 
+    boolean hasTimeBasedRotation = hasValidTimestamps
         && recordTimestamp - baseRecordTimestamp >= rotateIntervalMs;
     boolean periodicRotation = rotateIntervalMs > 0
         && timestampExtractor != null
-        && (hasTimeBasedRotation || rotateOnPartitionChange(encodedPartition));
+        && (hasTimeBasedRotation
+            || shouldRotateOnPartitionChangeWithTombstoneCheck(encodedPartition));
 
     // Check for scheduled rotation based on wall clock time
     boolean scheduledRotation = shouldApplyScheduledRotation(now);
@@ -706,8 +732,8 @@ public class TopicPartitionWriter {
    */
   private String determineTimeBasedRotationReason(
       String encodedPartition, Long recordTimestamp, long now) {
-    if (rotateIntervalMs > 0 && timestampExtractor != null 
-        && rotateOnPartitionChange(encodedPartition)) {
+    if (rotateIntervalMs > 0 && timestampExtractor != null
+        && shouldRotateOnPartitionChangeWithTombstoneCheck(encodedPartition)) {
       return "Partition change rotation";
     }
 

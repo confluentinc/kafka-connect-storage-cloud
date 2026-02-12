@@ -26,14 +26,13 @@ import org.apache.kafka.connect.sink.SinkRecord;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.SCHEMA_PARTITION_AFFIX_TYPE_CONFIG;
 
-public class SchemaPartitioner<T> implements Partitioner<T> {
+public class SchemaPartitioner<T> extends DelegatingPartitioner<T> {
 
-  private final Partitioner<T> delegatePartitioner;
   private S3SinkConnectorConfig.AffixType schemaAffixType;
   private String delim;
 
   public SchemaPartitioner(Partitioner<T> delegatePartitioner) {
-    this.delegatePartitioner = delegatePartitioner;
+    super(delegatePartitioner);
   }
 
   @Override
@@ -76,16 +75,5 @@ public class SchemaPartitioner<T> implements Partitioner<T> {
   @Override
   public List<T> partitionFields() {
     return delegatePartitioner.partitionFields();
-  }
-
-  /**
-   * Get the delegate partitioner that this SchemaPartitioner wraps.
-   * This allows callers to check if the delegate is a TimeBasedPartitioner
-   * and extract timestamp extractors for time-based rotation.
-   *
-   * @return the delegate partitioner
-   */
-  public Partitioner<T> getDelegatePartitioner() {
-    return delegatePartitioner;
   }
 }
