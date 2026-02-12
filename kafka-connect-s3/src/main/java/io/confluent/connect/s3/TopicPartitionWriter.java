@@ -242,19 +242,15 @@ public class TopicPartitionWriter {
     Partitioner<?> current = partitioner;
 
     // Iteratively unwrap delegating partitioners
-    // Handles arbitrary depth of wrapping
     // (e.g., TombstoneSupportedPartitioner -> SchemaPartitioner -> TimeBasedPartitioner)
     while (current != null) {
-      // Check if current partitioner is the target
       if (current instanceof TimeBasedPartitioner) {
         return (TimeBasedPartitioner<?>) current;
       }
 
-      // Unwrap if this is a delegating partitioner
       if (current instanceof DelegatingPartitioner) {
         current = ((DelegatingPartitioner<?>) current).getDelegatePartitioner();
       } else {
-        // Not a delegating partitioner, cannot unwrap further
         break;
       }
     }

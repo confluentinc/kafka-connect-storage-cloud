@@ -19,8 +19,6 @@ import io.confluent.connect.storage.partitioner.Partitioner;
 
 /**
  * Abstract base class for partitioners that wrap/delegate to another partitioner.
- * Provides common infrastructure for partitioner chains, allowing recursive unwrapping
- * to find specific partitioner types (e.g., TimeBasedPartitioner for timestamp extraction).
  *
  * <p>Subclasses are responsible for implementing all Partitioner methods and typically
  * delegate these calls to the wrapped partitioner.</p>
@@ -42,8 +40,6 @@ public abstract class DelegatingPartitioner<T> implements Partitioner<T> {
 
   /**
    * Returns the delegate partitioner that this partitioner wraps.
-   * This allows callers to recursively unwrap partitioner chains to find specific
-   * partitioner types.
    *
    * @return the delegate partitioner
    */

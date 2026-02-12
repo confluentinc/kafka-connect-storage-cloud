@@ -2463,7 +2463,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
                                                   ZERO_PAD_FMT));
     }
 
-    // Verify all expected files exist - time-based rotation still works
     verify(expectedFiles, 3, schema, records);
   }
 
@@ -2542,7 +2541,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       expectedRecords.add((Struct) sinkRecords.get(i * 2 + 1).value());  // offsets 1,3,5,7,9
     }
 
-    // verify() validates complete file set AND record content (both files have 5 records each)
     verify(expectedFiles, 5, schema1, expectedRecords);
   }
 
@@ -2622,7 +2620,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // File for hour 13 partition: contains record at offset 3
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixHour13, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
 
-    // Verify that ONLY the expected 4 files were created (one per hour partition)
     verify(expectedFiles, 1, schema, records);
   }
 
@@ -2702,7 +2699,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     expectedRecords.add((Struct) sinkRecords.get(1).value());  // schema2, offset 1
     expectedRecords.add((Struct) sinkRecords.get(3).value());  // schema2, offset 3
 
-    // verify() validates complete file set AND record content
     verify(expectedFiles, 1, schema1, expectedRecords);
 
     assertEquals("Expected 1 uncommitted files tracked for last record",
@@ -2801,7 +2797,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     expectedRecords.add((Struct) sinkRecords.get(3).value());  // schema2, offset 3
     expectedRecords.add((Struct) sixthRecord.value());         // schema2, offset 5
 
-    // verify() validates complete file set AND record content (both files have 3 records each)
     verify(expectedFiles, 3, schema1, expectedRecords);
   }
 
@@ -2873,7 +2868,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       expectedRecords.add((Struct) sinkRecords.get(i * 2 + 1).value());  // offsets 1,3,5,7,9
     }
 
-    // verify() validates complete file set AND record content (both files have 5 records each)
     verify(expectedFiles, 5, schema1, expectedRecords);
   }
 
