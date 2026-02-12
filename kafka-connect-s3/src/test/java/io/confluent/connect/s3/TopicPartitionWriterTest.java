@@ -2369,13 +2369,15 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     topicPartitionWriter.close();
 
     // VERIFY: Now files should be committed since flush size (4) was reached
-    // Build expected files for the 3 different hour partitions
+    // Build expected files for the 4 different hour partitions
     String encodedPartitionHour10 = partitioner.encodePartition(sinkRecords.get(0));
     String encodedPartitionHour11 = partitioner.encodePartition(sinkRecords.get(1));
     String encodedPartitionHour12 = partitioner.encodePartition(sinkRecords.get(2));
+    String encodedPartitionHour13 = partitioner.encodePartition(fourthRecord);
     String dirPrefixHour10 = partitioner.generatePartitionedPath(TOPIC, encodedPartitionHour10);
     String dirPrefixHour11 = partitioner.generatePartitionedPath(TOPIC, encodedPartitionHour11);
     String dirPrefixHour12 = partitioner.generatePartitionedPath(TOPIC, encodedPartitionHour12);
+    String dirPrefixHour13 = partitioner.generatePartitionedPath(TOPIC, encodedPartitionHour13);
 
     List<String> expectedFiles = new ArrayList<>();
     // File for hour 10 partition: contains record at offset 0
@@ -2384,11 +2386,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixHour11, TOPIC_PARTITION, 1, extension, ZERO_PAD_FMT));
     // File for hour 12 partition: contains record at offset 2
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixHour12, TOPIC_PARTITION, 2, extension, ZERO_PAD_FMT));
+    // File for hour 13 partition: contains record at offset 3
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixHour13, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
 
-    // Verify all 3 files exist
-    for (String expectedFile : expectedFiles) {
-      assertTrue("Expected file to be created: " + expectedFile, storage.exists(expectedFile));
-    }
+    // Verify that ONLY the expected 4 files were created (one per hour partition)
+    verify(expectedFiles, 1, schema, records);
   }
 
   @Test
@@ -2450,9 +2452,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     topicPartitionWriter.write();
     topicPartitionWriter.close();
 
-    // Verify that exactly 4 files were created (one per record)
+    // Verify that exactly 4 files were created (one per record, except last uncommitted)
     // Each schema change triggers rotation: schema1 -> schema2 -> schema1 -> schema2
-    // Files: [0, schema1], [1, schema2], [2, schema1], [3, schema2]
+    // Files sorted alphabetically: schema1 files first, then schema2 files
     List<String> expectedFiles = new ArrayList<>();
     for (int i = 0; i < sinkRecords.size() - 1; i++) {
       String encodedPartition = partitioner.encodePartition(sinkRecords.get(i));
@@ -2460,11 +2462,15 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
     }
 
-    // Verify all 4 files exist
-    for (int i = 0; i < expectedFiles.size(); i++) {
-      assertTrue("Expected file " + (i + 1) + " to be created: " + expectedFiles.get(i),
-          storage.exists(expectedFiles.get(i)));
-    }
+    // Build records list in sorted file key order: schema1 files (offsets 0,2), then schema2 files (offsets 1,3)
+    List<Struct> expectedRecords = new ArrayList<>();
+    expectedRecords.add((Struct) sinkRecords.get(0).value());  // schema1, offset 0
+    expectedRecords.add((Struct) sinkRecords.get(2).value());  // schema1, offset 2
+    expectedRecords.add((Struct) sinkRecords.get(1).value());  // schema2, offset 1
+    expectedRecords.add((Struct) sinkRecords.get(3).value());  // schema2, offset 3
+
+    // verify() validates complete file set AND record content
+    verify(expectedFiles, 1, schema1, expectedRecords);
 
     assertEquals("Expected 1 uncommitted files tracked for last record",
         1, topicPartitionWriter.offsetToFilenameMap.size());
@@ -2475,7 +2481,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Test that disabling rotate on partition change allows interleaved records with different schemas
     // in same time partition without rotation, even when using SchemaPartitioner
     // Then verify that flush size still triggers commits
-    localProps.put(FLUSH_SIZE_CONFIG, "5");
+    localProps.put(FLUSH_SIZE_CONFIG, "6");
     localProps.put(
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
         String.valueOf(TimeUnit.DAYS.toMillis(1))  // Large interval to prevent time-based rotation
@@ -2530,14 +2536,17 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // This proves that multiple schema partitions can remain open without rotation despite schema changes
     verify(Collections.<String>emptyList(), -1, schema1, new ArrayList<>());
 
-    // Now add a 5th record to reach flush size and trigger commits
+    // Now add 5th and 6th records to reach flush size and trigger commits
     SinkRecord fifthRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
         new Struct(schema1).put("field1", "value3"), 4, timestamp + 4000, TimestampType.CREATE_TIME);
+    SinkRecord sixthRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2,
+        new Struct(schema2).put("field2", 300), 5, timestamp + 5000, TimestampType.CREATE_TIME);
     topicPartitionWriter.buffer(fifthRecord);
+    topicPartitionWriter.buffer(sixthRecord);
     topicPartitionWriter.write();
     topicPartitionWriter.close();
 
-    // VERIFY: Now files should be committed since flush size (5) was reached
+    // VERIFY: Now files should be committed since flush size (6) was reached
     // Build expected files for both schema partitions
     String encodedPartitionSchema1 = partitioner.encodePartition(sinkRecords.get(0));
     String encodedPartitionSchema2 = partitioner.encodePartition(sinkRecords.get(1));
@@ -2547,19 +2556,26 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<String> expectedFiles = new ArrayList<>();
     // File for schema1: contains records at offsets 0, 2, 4 (3 records with schema1)
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixSchema1, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
-    // File for schema2: contains records at offsets 1, 3 (2 records with schema2)
+    // File for schema2: contains records at offsets 1, 3, 5 (3 records with schema2)
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixSchema2, TOPIC_PARTITION, 1, extension, ZERO_PAD_FMT));
 
-    // Verify both files exist
-    for (String expectedFile : expectedFiles) {
-      assertTrue("Expected file to be created: " + expectedFile, storage.exists(expectedFile));
-    }
+    // Build records list in sorted file key order: schema1 file (3 records), then schema2 file (3 records)
+    List<Struct> expectedRecords = new ArrayList<>();
+    expectedRecords.add((Struct) sinkRecords.get(0).value());  // schema1, offset 0
+    expectedRecords.add((Struct) sinkRecords.get(2).value());  // schema1, offset 2
+    expectedRecords.add((Struct) fifthRecord.value());         // schema1, offset 4
+    expectedRecords.add((Struct) sinkRecords.get(1).value());  // schema2, offset 1
+    expectedRecords.add((Struct) sinkRecords.get(3).value());  // schema2, offset 3
+    expectedRecords.add((Struct) sixthRecord.value());         // schema2, offset 5
+
+    // verify() validates complete file set AND record content (both files have 3 records each)
+    verify(expectedFiles, 3, schema1, expectedRecords);
   }
 
   @Test
   public void testSchemaPartitionerWithFieldPartitioner() throws Exception {
     // Test SchemaPartitioner wrapping FieldPartitioner with multiple schemas
-    localProps.put(FLUSH_SIZE_CONFIG, "9");
+    localProps.put(FLUSH_SIZE_CONFIG, "10");
     localProps.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.PREFIX.name());
     setUp();
 
@@ -2612,10 +2628,20 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
     expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix2, TOPIC_PARTITION, 1, extension, ZERO_PAD_FMT));
 
-    // Verify both files exist
-    for (String expectedFile : expectedFiles) {
-      assertTrue("Expected file to be created: " + expectedFile, storage.exists(expectedFile));
+    // Build records list in sorted file key order
+    // Flush size is 10, so first 10 records are committed: schema1 (offsets 0,2,4,6,8), schema2 (offsets 1,3,5,7,9)
+    List<Struct> expectedRecords = new ArrayList<>();
+    // Schema1 file: 5 records
+    for (int i = 0; i < 5; i++) {
+      expectedRecords.add((Struct) sinkRecords.get(i * 2).value());  // offsets 0,2,4,6,8
     }
+    // Schema2 file: 5 records
+    for (int i = 0; i < 5; i++) {
+      expectedRecords.add((Struct) sinkRecords.get(i * 2 + 1).value());  // offsets 1,3,5,7,9
+    }
+
+    // verify() validates complete file set AND record content (both files have 5 records each)
+    verify(expectedFiles, 5, schema1, expectedRecords);
   }
 
   @Test
