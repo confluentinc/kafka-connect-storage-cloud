@@ -164,7 +164,7 @@ public class TopicPartitionWriter {
     this.reporter = reporter;
     this.timestampExtractor = null;
 
-    // Extract timestamp extractor from the partitioner or its delegate if it's a SchemaPartitioner
+    // Extract timestamp extractor from any underlying TimeBasedPartitioner
     TimeBasedPartitioner<?> timeBasedPartitioner = getTimeBasedPartitioner(partitioner);
     if (timeBasedPartitioner != null) {
       this.timestampExtractor = timeBasedPartitioner.getTimestampExtractor();
@@ -634,15 +634,25 @@ public class TopicPartitionWriter {
 
   /**
    * Determines whether partition-change rotation should be applied.
-   * Partition-change rotation is disabled when tombstone writing is enabled to prevent
-   * aggressive rotation on every tombstone/non-tombstone transition.
+   * When tombstone writing is enabled, partition-change rotation is suppressed only for
+   * transitions to/from the tombstone partition to prevent excessive small files.
+   * Transitions between regular partitions still respect rotate.file.on.partition.change config.
    *
-   * @param encodedPartition the encoded partition to check
+   * @param encodedPartition the encoded partition for the current record
    * @return true if partition-change rotation should be applied, false otherwise
    */
   private boolean shouldRotateOnPartitionChangeWithTombstoneCheck(String encodedPartition) {
-    return !connectorConfig.isTombstoneWriteEnabled()
-        && rotateOnPartitionChange(encodedPartition);
+    // Check if this is a tombstone transition (regular ↔ tombstone)
+    // Only check when currentEncodedPartition is set (not first record)
+    // Use contains() because encoded partition may include wrapper prefixes
+    // (e.g., schema_name=null/tombstone when using SchemaPartitioner)
+    boolean isTombstoneTransition = connectorConfig.isTombstoneWriteEnabled()
+        && currentEncodedPartition != null
+        && (encodedPartition.contains(connectorConfig.getTombstoneEncodedPartition())
+            || currentEncodedPartition.contains(connectorConfig.getTombstoneEncodedPartition()));
+
+    // Suppress rotation only for tombstone transitions; respect config for regular transitions
+    return !isTombstoneTransition && rotateOnPartitionChange(encodedPartition);
   }
 
   private boolean rotateOnTime(String encodedPartition, Long recordTimestamp, long now) {

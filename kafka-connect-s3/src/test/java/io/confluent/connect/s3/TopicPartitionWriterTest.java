@@ -2318,16 +2318,19 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   @Test
   public void testTombstoneWritingConfigDisablesPartitionChangeRotation()
       throws Exception {
-    // Test that partition-change rotation is disabled when tombstone writing is enabled
-    // Use different schemas (which create different partitions) to verify no rotation on partition change
+    // Test that partition-change rotation respects surgical suppression with tombstone writing.
+    // With surgical suppression, schema changes (regular partition transitions) SHOULD rotate
+    // when rotate.file.on.partition.change=true (default), proving that partition-change
+    // rotation is NOT globally disabled when tombstone writing is enabled.
     localProps.put(FLUSH_SIZE_CONFIG, "1000");
     localProps.put(
         S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
-        String.valueOf(TimeUnit.HOURS.toMillis(1)) // 1 hour rotation
+        String.valueOf(TimeUnit.HOURS.toMillis(100)) // Very long interval to isolate partition-change rotation
     );
     localProps.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.PREFIX.name());
     localProps.put(BEHAVIOR_ON_NULL_VALUES_CONFIG, S3SinkConnectorConfig.OutputWriteBehavior.WRITE.toString());
     localProps.put(STORE_KAFKA_KEYS_CONFIG, "true"); // Required for tombstone writing
+    // Note: rotate.file.on.partition.change defaults to true
     setUp();
 
     // Create partitioner chain: TombstoneSupportedPartitioner -> SchemaPartitioner -> HourlyPartitioner
@@ -2367,7 +2370,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
           i, timestampMs + (i * 1000), TimestampType.CREATE_TIME));
     }
 
-    // Add 3 records with schema2 (different partition)
+    // Add 3 records with schema2 (different partition) - this SHOULD trigger rotation
+    // because schema1 -> schema2 is a regular partition transition, not a tombstone transition
     for (int i = 0; i < 3; i++) {
       Struct record2 = new Struct(schema2).put("field2", "value" + i);
       sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2, record2,
@@ -2380,12 +2384,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     topicPartitionWriter.write();
 
-    // Verify that NO rotation occurred due to partition changes (schema changes)
-    // All records should still be buffered since we haven't crossed time boundary
-    // and partition-change rotation is disabled when tombstone writing is enabled
+    // Verify that rotation occurred on schema change (schema1 -> schema2)
+    // This proves partition-change rotation is NOT globally disabled - only tombstone
+    // transitions are suppressed
     List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3Client);
-    assertEquals("No files should be committed yet - partition-change rotation is disabled",
-                 0, summaries.size());
+    assertEquals("File should be rotated on schema change (regular partition transition)",
+                 1, summaries.size());
 
     topicPartitionWriter.close();
   }
@@ -2464,6 +2468,88 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     }
 
     verify(expectedFiles, 3, schema, records);
+  }
+
+  @Test
+  public void testRegularPartitionTransitionsStillRotateWithTombstoneWriting()
+      throws Exception {
+    // Test that schema partition transitions still respect rotate.file.on.partition.change
+    // when tombstone writing is enabled. This proves surgical suppression - only tombstone
+    // transitions are suppressed, not all partition transitions.
+    localProps.put(FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.HOURS.toMillis(1))  // Large interval to avoid time-based rotation
+    );
+    localProps.put(S3SinkConnectorConfig.ROTATE_FILE_ON_PARTITION_CHANGE, "true");
+    localProps.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.PREFIX.name());
+    localProps.put(BEHAVIOR_ON_NULL_VALUES_CONFIG, S3SinkConnectorConfig.OutputWriteBehavior.WRITE.toString());
+    localProps.put(STORE_KAFKA_KEYS_CONFIG, "true");
+    setUp();
+
+    // Create partitioner chain: TombstoneSupportedPartitioner -> SchemaPartitioner -> HourlyPartitioner
+    Partitioner<?> basePartitioner = new HourlyPartitioner<>();
+    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
+    basePartitioner.configure(parsedConfig);
+
+    Partitioner<?> schemaPartitioner = new SchemaPartitioner<>(basePartitioner);
+    schemaPartitioner.configure(parsedConfig);
+
+    Partitioner<?> partitioner = new TombstoneSupportedPartitioner<>(schemaPartitioner, "tombstone");
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+    String key = "key";
+
+    // Create two different schemas to trigger schema partition transitions
+    Schema schema1 = SchemaBuilder.struct()
+        .name("schema1")
+        .field("field1", Schema.STRING_SCHEMA)
+        .build();
+    Schema schema2 = SchemaBuilder.struct()
+        .name("schema2")
+        .field("field2", Schema.INT32_SCHEMA)
+        .build();
+
+    DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
+    long timestamp = first.getMillis();
+
+    // Create records with different schemas within same hour - schema changes should trigger rotation
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
+        new Struct(schema1).put("field1", "value1"), 0, timestamp, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2,
+        new Struct(schema2).put("field2", 100), 1, timestamp + 1000, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
+        new Struct(schema1).put("field1", "value2"), 2, timestamp + 2000, TimestampType.CREATE_TIME));
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    // Verify that rotation occurred on schema changes (schema1 -> schema2 -> schema1)
+    // This proves partition-change rotation is NOT globally disabled by tombstone writing
+    List<String> expectedFiles = new ArrayList<>();
+    for (int i = 0; i < sinkRecords.size() - 1; i++) {
+      String encodedPartition = partitioner.encodePartition(sinkRecords.get(i));
+      String dirPrefix = partitioner.generatePartitionedPath(TOPIC, encodedPartition);
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
+    }
+
+    // Build records list in sorted file key order: schema1 files (offsets 0), then schema2 file (offset 1)
+    List<Struct> expectedRecords = new ArrayList<>();
+    expectedRecords.add((Struct) sinkRecords.get(0).value());  // schema1, offset 0
+    expectedRecords.add((Struct) sinkRecords.get(1).value());  // schema2, offset 1
+
+    verify(expectedFiles, 1, schema1, expectedRecords);
+
+    assertEquals("Expected 1 uncommitted file tracked for last record",
+        1, topicPartitionWriter.offsetToFilenameMap.size());
   }
 
   @Test
