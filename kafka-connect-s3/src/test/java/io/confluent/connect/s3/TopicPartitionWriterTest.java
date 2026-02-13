@@ -111,8 +111,10 @@ import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.PARTITIONER_MAX_OPEN_FILES_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.SCHEMA_PARTITION_AFFIX_TYPE_CONFIG;
+import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG;
 import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
@@ -2246,6 +2248,713 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     verifyWithJsonOutput(
         expectedFiles, expectedRecords.size() / expectedFiles.size(), expectedRecords, CompressionType.NONE
     );
+  }
+
+  @Test
+  public void testSchemaPartitionerWithTimeBasedPartitioner() throws Exception {
+    // Test that SchemaPartitioner properly delegates to TimeBasedPartitioner for rotation
+    localProps.put(FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.MINUTES.toMillis(1))
+    );
+    localProps.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.PREFIX.name());
+    setUp();
+
+    // Define the partitioner - SchemaPartitioner wrapping HourlyPartitioner
+    Partitioner<?> basePartitioner = new HourlyPartitioner<>();
+    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
+    basePartitioner.configure(parsedConfig);
+
+    Partitioner<?> partitioner = new SchemaPartitioner<>(basePartitioner);
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 6);
+    DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
+    // One record every 20 sec, puts 3 records every minute/rotate interval
+    long advanceMs = 20000;
+    long timestampFirst = first.getMillis();
+    Collection<SinkRecord> sinkRecords = createSinkRecordsWithTimestamp(records.subList(0, 9), key, schema, 0,
+                                                                        timestampFirst, advanceMs);
+    long timestampLater = first.plusHours(2).getMillis();
+    sinkRecords.addAll(
+        createSinkRecordsWithTimestamp(records.subList(9, 18), key, schema, 9, timestampLater, advanceMs));
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    // Verify that time-based rotation occurred
+    String encodedPartitionFirst = getTimebasedEncodedPartition(timestampFirst);
+    String encodedPartitionLater = getTimebasedEncodedPartition(timestampLater);
+
+    String schemaName = schema.name() != null ? schema.name() : "null";
+    String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC,
+        "schema_name=" + schemaName + parsedConfig.get(DIRECTORY_DELIM_CONFIG) + encodedPartitionFirst);
+    List<String> expectedFiles = new ArrayList<>();
+    for (int i : new int[]{0, 3, 6}) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
+                                                  ZERO_PAD_FMT));
+    }
+
+    String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC,
+        "schema_name=" + schemaName + parsedConfig.get(DIRECTORY_DELIM_CONFIG) + encodedPartitionLater);
+    // Records 15,16,17 won't be flushed until a record with a higher timestamp arrives.
+    for (int i : new int[]{9, 12}) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
+                                                  ZERO_PAD_FMT));
+    }
+    verify(expectedFiles, 3, schema, records);
+  }
+
+  @Test
+  public void testTombstoneWritingConfigDisablesPartitionChangeRotation()
+      throws Exception {
+    // Test that partition-change rotation respects surgical suppression with tombstone writing.
+    // With surgical suppression, schema changes (regular partition transitions) SHOULD rotate
+    // when rotate.file.on.partition.change=true (default), proving that partition-change
+    // rotation is NOT globally disabled when tombstone writing is enabled.
+    localProps.put(FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.HOURS.toMillis(100)) // Very long interval to isolate partition-change rotation
+    );
+    localProps.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.PREFIX.name());
+    localProps.put(BEHAVIOR_ON_NULL_VALUES_CONFIG, S3SinkConnectorConfig.OutputWriteBehavior.WRITE.toString());
+    localProps.put(STORE_KAFKA_KEYS_CONFIG, "true"); // Required for tombstone writing
+    // Note: rotate.file.on.partition.change defaults to true
+    setUp();
+
+    // Create partitioner chain: TombstoneSupportedPartitioner -> SchemaPartitioner -> HourlyPartitioner
+    Partitioner<?> basePartitioner = new HourlyPartitioner<>();
+    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
+    basePartitioner.configure(parsedConfig);
+
+    Partitioner<?> schemaPartitioner = new SchemaPartitioner<>(basePartitioner);
+    schemaPartitioner.configure(parsedConfig);
+
+    Partitioner<?> partitioner = new TombstoneSupportedPartitioner<>(schemaPartitioner, "tombstone");
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+    // Create records with different schemas within the same hour
+    // This creates different encoded partitions due to SchemaPartitioner
+    String key = "key";
+    Schema schema1 = SchemaBuilder.struct()
+        .name("schema1")
+        .field("field1", Schema.STRING_SCHEMA)
+        .build();
+    Schema schema2 = SchemaBuilder.struct()
+        .name("schema2")
+        .field("field2", Schema.STRING_SCHEMA)
+        .build();
+
+    DateTime timestamp = new DateTime(2017, 3, 2, 10, 30, DateTimeZone.forID("America/Los_Angeles"));
+    long timestampMs = timestamp.getMillis();
+
+    Collection<SinkRecord> sinkRecords = new ArrayList<>();
+    // Add 3 records with schema1
+    for (int i = 0; i < 3; i++) {
+      Struct record1 = new Struct(schema1).put("field1", "value" + i);
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1, record1,
+          i, timestampMs + (i * 1000), TimestampType.CREATE_TIME));
+    }
+
+    // Add 3 records with schema2 (different partition) - this SHOULD trigger rotation
+    // because schema1 -> schema2 is a regular partition transition, not a tombstone transition
+    for (int i = 0; i < 3; i++) {
+      Struct record2 = new Struct(schema2).put("field2", "value" + i);
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2, record2,
+          i + 3, timestampMs + ((i + 3) * 1000), TimestampType.CREATE_TIME));
+    }
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+
+    // Verify that rotation occurred on schema change (schema1 -> schema2)
+    // This proves partition-change rotation is NOT globally disabled - only tombstone
+    // transitions are suppressed
+    List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3Client);
+    assertEquals("File should be rotated on schema change (regular partition transition)",
+                 1, summaries.size());
+
+    topicPartitionWriter.close();
+  }
+
+  @Test
+  public void testTombstoneWritingConfigStillAllowsTimeBasedRotation()
+      throws Exception {
+    // Test that time-based rotation still works when tombstone writing config is enabled
+    // Files should rotate when crossing time boundaries
+    localProps.put(FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.MINUTES.toMillis(1))
+    );
+    localProps.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.PREFIX.name());
+    localProps.put(BEHAVIOR_ON_NULL_VALUES_CONFIG, S3SinkConnectorConfig.OutputWriteBehavior.WRITE.toString());
+    localProps.put(STORE_KAFKA_KEYS_CONFIG, "true"); // Required for tombstone writing
+    setUp();
+
+    // Create partitioner chain: TombstoneSupportedPartitioner -> SchemaPartitioner -> HourlyPartitioner
+    Partitioner<?> basePartitioner = new HourlyPartitioner<>();
+    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
+    basePartitioner.configure(parsedConfig);
+
+    Partitioner<?> schemaPartitioner = new SchemaPartitioner<>(basePartitioner);
+    schemaPartitioner.configure(parsedConfig);
+
+    Partitioner<?> partitioner = new TombstoneSupportedPartitioner<>(schemaPartitioner, "tombstone");
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 6);
+    DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
+    long advanceMs = 20000; // One record every 20 sec, puts 3 records every minute
+    long timestampFirst = first.getMillis();
+
+    // Create records spanning two different hours (time partitions)
+    Collection<SinkRecord> sinkRecords = createSinkRecordsWithTimestamp(records.subList(0, 9), key, schema, 0,
+                                                                        timestampFirst, advanceMs);
+    long timestampLater = first.plusHours(2).getMillis();
+    sinkRecords.addAll(
+        createSinkRecordsWithTimestamp(records.subList(9, 18), key, schema, 9, timestampLater, advanceMs));
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    // Verify that time-based rotation occurred (files created for different time partitions)
+    String encodedPartitionFirst = getTimebasedEncodedPartition(timestampFirst);
+    String encodedPartitionLater = getTimebasedEncodedPartition(timestampLater);
+
+    String schemaName = schema.name() != null ? schema.name() : "null";
+
+    // Verify files were created for first time partition
+    String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC,
+        "schema_name=" + schemaName + parsedConfig.get(DIRECTORY_DELIM_CONFIG) + encodedPartitionFirst);
+    List<String> expectedFiles = new ArrayList<>();
+    for (int i : new int[]{0, 3, 6}) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixFirst, TOPIC_PARTITION, i, extension,
+                                                  ZERO_PAD_FMT));
+    }
+
+    // Verify files were created for second time partition
+    String dirPrefixLater = partitioner.generatePartitionedPath(TOPIC,
+        "schema_name=" + schemaName + parsedConfig.get(DIRECTORY_DELIM_CONFIG) + encodedPartitionLater);
+    for (int i : new int[]{9, 12}) {
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixLater, TOPIC_PARTITION, i, extension,
+                                                  ZERO_PAD_FMT));
+    }
+
+    verify(expectedFiles, 3, schema, records);
+  }
+
+  @Test
+  public void testRegularPartitionTransitionsStillRotateWithTombstoneWriting()
+      throws Exception {
+    // Test that schema partition transitions still respect rotate.file.on.partition.change
+    // when tombstone writing is enabled. This proves surgical suppression - only tombstone
+    // transitions are suppressed, not all partition transitions.
+    localProps.put(FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.HOURS.toMillis(1))  // Large interval to avoid time-based rotation
+    );
+    localProps.put(S3SinkConnectorConfig.ROTATE_FILE_ON_PARTITION_CHANGE, "true");
+    localProps.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.PREFIX.name());
+    localProps.put(BEHAVIOR_ON_NULL_VALUES_CONFIG, S3SinkConnectorConfig.OutputWriteBehavior.WRITE.toString());
+    localProps.put(STORE_KAFKA_KEYS_CONFIG, "true");
+    setUp();
+
+    // Create partitioner chain: TombstoneSupportedPartitioner -> SchemaPartitioner -> HourlyPartitioner
+    Partitioner<?> basePartitioner = new HourlyPartitioner<>();
+    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
+    basePartitioner.configure(parsedConfig);
+
+    Partitioner<?> schemaPartitioner = new SchemaPartitioner<>(basePartitioner);
+    schemaPartitioner.configure(parsedConfig);
+
+    Partitioner<?> partitioner = new TombstoneSupportedPartitioner<>(schemaPartitioner, "tombstone");
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+    String key = "key";
+
+    // Create two different schemas to trigger schema partition transitions
+    Schema schema1 = SchemaBuilder.struct()
+        .name("schema1")
+        .field("field1", Schema.STRING_SCHEMA)
+        .build();
+    Schema schema2 = SchemaBuilder.struct()
+        .name("schema2")
+        .field("field2", Schema.INT32_SCHEMA)
+        .build();
+
+    DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
+    long timestamp = first.getMillis();
+
+    // Create records with different schemas within same hour - schema changes should trigger rotation
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
+        new Struct(schema1).put("field1", "value1"), 0, timestamp, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2,
+        new Struct(schema2).put("field2", 100), 1, timestamp + 1000, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
+        new Struct(schema1).put("field1", "value2"), 2, timestamp + 2000, TimestampType.CREATE_TIME));
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    // Verify that rotation occurred on schema changes (schema1 -> schema2 -> schema1)
+    // This proves partition-change rotation is NOT globally disabled by tombstone writing
+    List<String> expectedFiles = new ArrayList<>();
+    for (int i = 0; i < sinkRecords.size() - 1; i++) {
+      String encodedPartition = partitioner.encodePartition(sinkRecords.get(i));
+      String dirPrefix = partitioner.generatePartitionedPath(TOPIC, encodedPartition);
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
+    }
+
+    // Build records list in sorted file key order: schema1 files (offsets 0), then schema2 file (offset 1)
+    List<Struct> expectedRecords = new ArrayList<>();
+    expectedRecords.add((Struct) sinkRecords.get(0).value());  // schema1, offset 0
+    expectedRecords.add((Struct) sinkRecords.get(1).value());  // schema2, offset 1
+
+    verify(expectedFiles, 1, schema1, expectedRecords);
+
+    assertEquals("Expected 1 uncommitted file tracked for last record",
+        1, topicPartitionWriter.offsetToFilenameMap.size());
+  }
+
+  @Test
+  public void testTombstoneSupportedPartitionerWithSchemaPartitionerAndDefaultPartitioner()
+      throws Exception {
+    // Test that TombstoneSupportedPartitioner -> SchemaPartitioner -> DefaultPartitioner chain
+    // works correctly with non-time-based partitioners
+    localProps.put(FLUSH_SIZE_CONFIG, "10");
+    localProps.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.PREFIX.name());
+    localProps.put(BEHAVIOR_ON_NULL_VALUES_CONFIG, S3SinkConnectorConfig.OutputWriteBehavior.WRITE.toString());
+    localProps.put(STORE_KAFKA_KEYS_CONFIG, "true");
+    setUp();
+
+    // Create partitioner chain: TombstoneSupportedPartitioner -> SchemaPartitioner -> DefaultPartitioner
+    Partitioner<?> basePartitioner = new DefaultPartitioner<>();
+    basePartitioner.configure(parsedConfig);
+
+    Partitioner<?> schemaPartitioner = new SchemaPartitioner<>(basePartitioner);
+    schemaPartitioner.configure(parsedConfig);
+
+    Partitioner<?> partitioner = new TombstoneSupportedPartitioner<>(schemaPartitioner, "tombstone");
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+    String key = "key";
+
+    // Create two different schemas
+    Schema schema1 = SchemaBuilder.struct()
+        .name("schema1")
+        .field("field1", Schema.STRING_SCHEMA)
+        .build();
+    Schema schema2 = SchemaBuilder.struct()
+        .name("schema2")
+        .field("field2", Schema.STRING_SCHEMA)
+        .build();
+
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    // Interleave records with different schemas
+    for (int i = 0; i < 6; i++) {
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
+          new Struct(schema1).put("field1", "value" + i), i * 2, 0L, TimestampType.NO_TIMESTAMP_TYPE));
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2,
+          new Struct(schema2).put("field2", "value" + i), i * 2 + 1, 0L, TimestampType.NO_TIMESTAMP_TYPE));
+    }
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    // Verify files were created for both schemas
+    String encodedPartition1 = partitioner.encodePartition(sinkRecords.get(0));
+    String encodedPartition2 = partitioner.encodePartition(sinkRecords.get(1));
+
+    String dirPrefix1 = partitioner.generatePartitionedPath(TOPIC, encodedPartition1);
+    String dirPrefix2 = partitioner.generatePartitionedPath(TOPIC, encodedPartition2);
+
+    List<String> expectedFiles = new ArrayList<>();
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix2, TOPIC_PARTITION, 1, extension, ZERO_PAD_FMT));
+
+    // Build records list in sorted file key order
+    // Flush size is 10, so first 10 records are committed: schema1 (offsets 0,2,4,6,8), schema2 (offsets 1,3,5,7,9)
+    List<Struct> expectedRecords = new ArrayList<>();
+    // Schema1 file: 5 records
+    for (int i = 0; i < 5; i++) {
+      expectedRecords.add((Struct) sinkRecords.get(i * 2).value());  // offsets 0,2,4,6,8
+    }
+    // Schema2 file: 5 records
+    for (int i = 0; i < 5; i++) {
+      expectedRecords.add((Struct) sinkRecords.get(i * 2 + 1).value());  // offsets 1,3,5,7,9
+    }
+
+    verify(expectedFiles, 5, schema1, expectedRecords);
+  }
+
+  @Test
+  public void testSchemaPartitionerWithTimeBasedPartitionerRotateOnPartitionChangeDisabled() throws Exception {
+    // Test that disabling rotate on partition change allows multiple time partitions to remain open
+    // without rotation, demonstrating the fix keeps multiple encoded partitions in memory
+    // Then verify that flush size still triggers commits
+    localProps.put(FLUSH_SIZE_CONFIG, "4");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.DAYS.toMillis(1))  // Large interval to prevent time-based rotation
+    );
+    localProps.put(S3SinkConnectorConfig.ROTATE_FILE_ON_PARTITION_CHANGE, "false");
+    localProps.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.PREFIX.name());
+    setUp();
+
+    Partitioner<?> basePartitioner = new HourlyPartitioner<>();
+    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
+    basePartitioner.configure(parsedConfig);
+
+    Partitioner<?> partitioner = new SchemaPartitioner<>(basePartitioner);
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 1, 4);
+    DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
+
+    // Records in different hours (3 different encoded partitions with SchemaPartitioner + HourlyPartitioner)
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(0),
+        0, first.getMillis(), TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(1),
+        1, first.plusHours(1).getMillis(), TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(2),
+        2, first.plusHours(2).getMillis(), TimestampType.CREATE_TIME));
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+
+    // VERIFY: No files should be committed since rotation is disabled and flush size not reached
+    // This proves that multiple time partitions can remain open without rotation
+    verify(Collections.<String>emptyList(), -1, schema, records.subList(0, 3));
+
+    // Now add a 4th record to reach flush size and trigger commits
+    SinkRecord fourthRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, records.get(3),
+        3, first.plusHours(3).getMillis(), TimestampType.CREATE_TIME);
+    topicPartitionWriter.buffer(fourthRecord);
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    // VERIFY: Now files should be committed since flush size (4) was reached
+    // Build expected files for the 4 different hour partitions
+    String encodedPartitionHour10 = partitioner.encodePartition(sinkRecords.get(0));
+    String encodedPartitionHour11 = partitioner.encodePartition(sinkRecords.get(1));
+    String encodedPartitionHour12 = partitioner.encodePartition(sinkRecords.get(2));
+    String encodedPartitionHour13 = partitioner.encodePartition(fourthRecord);
+    String dirPrefixHour10 = partitioner.generatePartitionedPath(TOPIC, encodedPartitionHour10);
+    String dirPrefixHour11 = partitioner.generatePartitionedPath(TOPIC, encodedPartitionHour11);
+    String dirPrefixHour12 = partitioner.generatePartitionedPath(TOPIC, encodedPartitionHour12);
+    String dirPrefixHour13 = partitioner.generatePartitionedPath(TOPIC, encodedPartitionHour13);
+
+    List<String> expectedFiles = new ArrayList<>();
+    // File for hour 10 partition: contains record at offset 0
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixHour10, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    // File for hour 11 partition: contains record at offset 1
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixHour11, TOPIC_PARTITION, 1, extension, ZERO_PAD_FMT));
+    // File for hour 12 partition: contains record at offset 2
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixHour12, TOPIC_PARTITION, 2, extension, ZERO_PAD_FMT));
+    // File for hour 13 partition: contains record at offset 3
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixHour13, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT));
+
+    verify(expectedFiles, 1, schema, records);
+  }
+
+  @Test
+  public void testSchemaPartitionerWithMultipleSchemasRotateOnPartitionChange() throws Exception {
+    // Test multiple schema names with rotation on partition change enabled
+    // Each interleaved schema change triggers rotation, creating one file per record
+    localProps.put(FLUSH_SIZE_CONFIG, "1000");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.HOURS.toMillis(1))  // Large interval to avoid time-based rotation
+    );
+    localProps.put(S3SinkConnectorConfig.ROTATE_FILE_ON_PARTITION_CHANGE, "true");
+    localProps.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.PREFIX.name());
+    setUp();
+
+    Partitioner<?> basePartitioner = new HourlyPartitioner<>();
+    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
+    basePartitioner.configure(parsedConfig);
+
+    Partitioner<?> partitioner = new SchemaPartitioner<>(basePartitioner);
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+    String key = "key";
+
+    // Create two different schemas
+    Schema schema1 = SchemaBuilder.struct()
+        .name("schema1")
+        .field("field1", Schema.STRING_SCHEMA)
+        .build();
+    Schema schema2 = SchemaBuilder.struct()
+        .name("schema2")
+        .field("field2", Schema.INT32_SCHEMA)
+        .build();
+
+    DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
+    long timestamp = first.getMillis();
+
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    // Interleave records with different schemas - each schema change triggers rotation
+    // All records within same hour to keep them in same time partition
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
+        new Struct(schema1).put("field1", "value1"), 0, timestamp, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2,
+        new Struct(schema2).put("field2", 100), 1, timestamp + 1000, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
+        new Struct(schema1).put("field1", "value2"), 2, timestamp + 2000, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2,
+        new Struct(schema2).put("field2", 200), 3, timestamp + 3000, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
+            new Struct(schema1).put("field1", "value3"), 4, timestamp + 4000, TimestampType.CREATE_TIME));
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    // Verify that exactly 4 files were created (one per record, except last uncommitted)
+    // Each schema change triggers rotation: schema1 -> schema2 -> schema1 -> schema2
+    // Files sorted alphabetically: schema1 files first, then schema2 files
+    List<String> expectedFiles = new ArrayList<>();
+    for (int i = 0; i < sinkRecords.size() - 1; i++) {
+      String encodedPartition = partitioner.encodePartition(sinkRecords.get(i));
+      String dirPrefix = partitioner.generatePartitionedPath(TOPIC, encodedPartition);
+      expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
+    }
+
+    // Build records list in sorted file key order: schema1 files (offsets 0,2), then schema2 files (offsets 1,3)
+    List<Struct> expectedRecords = new ArrayList<>();
+    expectedRecords.add((Struct) sinkRecords.get(0).value());  // schema1, offset 0
+    expectedRecords.add((Struct) sinkRecords.get(2).value());  // schema1, offset 2
+    expectedRecords.add((Struct) sinkRecords.get(1).value());  // schema2, offset 1
+    expectedRecords.add((Struct) sinkRecords.get(3).value());  // schema2, offset 3
+
+    verify(expectedFiles, 1, schema1, expectedRecords);
+
+    assertEquals("Expected 1 uncommitted files tracked for last record",
+        1, topicPartitionWriter.offsetToFilenameMap.size());
+  }
+
+  @Test
+  public void testSchemaPartitionerWithMultipleSchemasRotateOnPartitionChangeDisabled() throws Exception {
+    // Test that disabling rotate on partition change allows interleaved records with different schemas
+    // in same time partition without rotation, even when using SchemaPartitioner
+    // Then verify that flush size still triggers commits
+    localProps.put(FLUSH_SIZE_CONFIG, "6");
+    localProps.put(
+        S3SinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+        String.valueOf(TimeUnit.DAYS.toMillis(1))  // Large interval to prevent time-based rotation
+    );
+    localProps.put(S3SinkConnectorConfig.ROTATE_FILE_ON_PARTITION_CHANGE, "false");
+    localProps.put(PARTITIONER_MAX_OPEN_FILES_CONFIG, "-1");  // Unlimited to avoid rotation on max open files
+    localProps.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.PREFIX.name());
+    setUp();
+
+    Partitioner<?> basePartitioner = new HourlyPartitioner<>();
+    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
+    basePartitioner.configure(parsedConfig);
+
+    Partitioner<?> partitioner = new SchemaPartitioner<>(basePartitioner);
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+    String key = "key";
+    Schema schema1 = SchemaBuilder.struct()
+        .name("schema1")
+        .field("field1", Schema.STRING_SCHEMA)
+        .build();
+    Schema schema2 = SchemaBuilder.struct()
+        .name("schema2")
+        .field("field2", Schema.INT32_SCHEMA)
+        .build();
+
+    DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
+    long timestamp = first.getMillis();
+
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    // Interleave records with different schemas - all in same time partition
+    // With rotation disabled, schema changes should NOT trigger rotation
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
+        new Struct(schema1).put("field1", "value1"), 0, timestamp, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2,
+        new Struct(schema2).put("field2", 100), 1, timestamp + 1000, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
+        new Struct(schema1).put("field1", "value2"), 2, timestamp + 2000, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2,
+        new Struct(schema2).put("field2", 200), 3, timestamp + 3000, TimestampType.CREATE_TIME));
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+
+    // VERIFY: No files should be committed since rotation is disabled and flush size not reached
+    // This proves that multiple schema partitions can remain open without rotation despite schema changes
+    verify(Collections.<String>emptyList(), -1, schema1, new ArrayList<>());
+
+    // Now add 5th and 6th records to reach flush size and trigger commits
+    SinkRecord fifthRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
+        new Struct(schema1).put("field1", "value3"), 4, timestamp + 4000, TimestampType.CREATE_TIME);
+    SinkRecord sixthRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2,
+        new Struct(schema2).put("field2", 300), 5, timestamp + 5000, TimestampType.CREATE_TIME);
+    topicPartitionWriter.buffer(fifthRecord);
+    topicPartitionWriter.buffer(sixthRecord);
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    // VERIFY: Now files should be committed since flush size (6) was reached
+    // Build expected files for both schema partitions
+    String encodedPartitionSchema1 = partitioner.encodePartition(sinkRecords.get(0));
+    String encodedPartitionSchema2 = partitioner.encodePartition(sinkRecords.get(1));
+    String dirPrefixSchema1 = partitioner.generatePartitionedPath(TOPIC, encodedPartitionSchema1);
+    String dirPrefixSchema2 = partitioner.generatePartitionedPath(TOPIC, encodedPartitionSchema2);
+
+    List<String> expectedFiles = new ArrayList<>();
+    // File for schema1: contains records at offsets 0, 2, 4 (3 records with schema1)
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixSchema1, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    // File for schema2: contains records at offsets 1, 3, 5 (3 records with schema2)
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefixSchema2, TOPIC_PARTITION, 1, extension, ZERO_PAD_FMT));
+
+    // Build records list in sorted file key order: schema1 file (3 records), then schema2 file (3 records)
+    List<Struct> expectedRecords = new ArrayList<>();
+    expectedRecords.add((Struct) sinkRecords.get(0).value());  // schema1, offset 0
+    expectedRecords.add((Struct) sinkRecords.get(2).value());  // schema1, offset 2
+    expectedRecords.add((Struct) fifthRecord.value());         // schema1, offset 4
+    expectedRecords.add((Struct) sinkRecords.get(1).value());  // schema2, offset 1
+    expectedRecords.add((Struct) sinkRecords.get(3).value());  // schema2, offset 3
+    expectedRecords.add((Struct) sixthRecord.value());         // schema2, offset 5
+
+    verify(expectedFiles, 3, schema1, expectedRecords);
+  }
+
+  @Test
+  public void testSchemaPartitionerWithFieldPartitioner() throws Exception {
+    // Test SchemaPartitioner wrapping FieldPartitioner with multiple schemas
+    localProps.put(FLUSH_SIZE_CONFIG, "10");
+    localProps.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.PREFIX.name());
+    setUp();
+
+    Partitioner<?> basePartitioner = new FieldPartitioner<>();
+    parsedConfig.put(PARTITION_FIELD_NAME_CONFIG, Arrays.asList("int"));
+    basePartitioner.configure(parsedConfig);
+
+    Partitioner<?> partitioner = new SchemaPartitioner<>(basePartitioner);
+    partitioner.configure(parsedConfig);
+
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+    String key = "key";
+
+    // Create two schemas with same field name
+    Schema schema1 = SchemaBuilder.struct()
+        .name("schema1")
+        .field("int", Schema.INT32_SCHEMA)
+        .build();
+    Schema schema2 = SchemaBuilder.struct()
+        .name("schema2")
+        .field("int", Schema.INT32_SCHEMA)
+        .build();
+
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    // Interleave records with different schemas but same field values
+    for (int i = 0; i < 6; i++) {
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
+          new Struct(schema1).put("int", 16), i * 2, 0L, TimestampType.NO_TIMESTAMP_TYPE));
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2,
+          new Struct(schema2).put("int", 16), i * 2 + 1, 0L, TimestampType.NO_TIMESTAMP_TYPE));
+    }
+
+    for (SinkRecord record : sinkRecords) {
+      topicPartitionWriter.buffer(record);
+    }
+
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    // Verify files were created for both schemas
+    String encodedPartition1 = partitioner.encodePartition(sinkRecords.get(0));
+    String encodedPartition2 = partitioner.encodePartition(sinkRecords.get(1));
+
+    String dirPrefix1 = partitioner.generatePartitionedPath(TOPIC, encodedPartition1);
+    String dirPrefix2 = partitioner.generatePartitionedPath(TOPIC, encodedPartition2);
+
+    List<String> expectedFiles = new ArrayList<>();
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT));
+    expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix2, TOPIC_PARTITION, 1, extension, ZERO_PAD_FMT));
+
+    // Build records list in sorted file key order
+    // Flush size is 10, so first 10 records are committed: schema1 (offsets 0,2,4,6,8), schema2 (offsets 1,3,5,7,9)
+    List<Struct> expectedRecords = new ArrayList<>();
+    // Schema1 file: 5 records
+    for (int i = 0; i < 5; i++) {
+      expectedRecords.add((Struct) sinkRecords.get(i * 2).value());  // offsets 0,2,4,6,8
+    }
+    // Schema2 file: 5 records
+    for (int i = 0; i < 5; i++) {
+      expectedRecords.add((Struct) sinkRecords.get(i * 2 + 1).value());  // offsets 1,3,5,7,9
+    }
+
+    verify(expectedFiles, 5, schema1, expectedRecords);
   }
 
   @Test
