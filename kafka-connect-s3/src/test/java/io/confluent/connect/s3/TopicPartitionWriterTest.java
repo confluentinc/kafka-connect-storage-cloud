@@ -80,6 +80,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.LinkedList;
 import java.util.Set;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -138,6 +139,17 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   private static final String KEYS_AVRO_EXT = ".keys.avro";
   private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriterTest.class);
   private static long timestamp = 1737543576000L;
+
+  // Test schemas for schema partition transition testing
+  private static final Schema TEST_SCHEMA_1 = SchemaBuilder.struct()
+      .name("schema1")
+      .field("field1", Schema.STRING_SCHEMA)
+      .build();
+
+  private static final Schema TEST_SCHEMA_2 = SchemaBuilder.struct()
+      .name("schema2")
+      .field("field2", Schema.INT32_SCHEMA)
+      .build();
 
   private enum RecordElement {
     KEYS,
@@ -2262,12 +2274,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Define the partitioner - SchemaPartitioner wrapping HourlyPartitioner
-    Partitioner<?> basePartitioner = new HourlyPartitioner<>();
-    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
-    basePartitioner.configure(parsedConfig);
-
-    Partitioner<?> partitioner = new SchemaPartitioner<>(basePartitioner);
-    partitioner.configure(parsedConfig);
+    Partitioner<?> partitioner = wrapWithSchemaPartitioner(createHourlyPartitioner());
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
@@ -2296,7 +2303,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     String encodedPartitionFirst = getTimebasedEncodedPartition(timestampFirst);
     String encodedPartitionLater = getTimebasedEncodedPartition(timestampLater);
 
-    String schemaName = schema.name() != null ? schema.name() : "null";
+    String schemaName = Objects.toString(schema.name(), "null");
     String dirPrefixFirst = partitioner.generatePartitionedPath(TOPIC,
         "schema_name=" + schemaName + parsedConfig.get(DIRECTORY_DELIM_CONFIG) + encodedPartitionFirst);
     List<String> expectedFiles = new ArrayList<>();
@@ -2334,15 +2341,10 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Create partitioner chain: TombstoneSupportedPartitioner -> SchemaPartitioner -> HourlyPartitioner
-    Partitioner<?> basePartitioner = new HourlyPartitioner<>();
-    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
-    basePartitioner.configure(parsedConfig);
-
-    Partitioner<?> schemaPartitioner = new SchemaPartitioner<>(basePartitioner);
-    schemaPartitioner.configure(parsedConfig);
-
-    Partitioner<?> partitioner = new TombstoneSupportedPartitioner<>(schemaPartitioner, "tombstone");
-    partitioner.configure(parsedConfig);
+    Partitioner<?> partitioner = wrapWithTombstonePartitioner(
+        wrapWithSchemaPartitioner(createHourlyPartitioner()),
+        "tombstone"
+    );
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
@@ -2410,15 +2412,10 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Create partitioner chain: TombstoneSupportedPartitioner -> SchemaPartitioner -> HourlyPartitioner
-    Partitioner<?> basePartitioner = new HourlyPartitioner<>();
-    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
-    basePartitioner.configure(parsedConfig);
-
-    Partitioner<?> schemaPartitioner = new SchemaPartitioner<>(basePartitioner);
-    schemaPartitioner.configure(parsedConfig);
-
-    Partitioner<?> partitioner = new TombstoneSupportedPartitioner<>(schemaPartitioner, "tombstone");
-    partitioner.configure(parsedConfig);
+    Partitioner<?> partitioner = wrapWithTombstonePartitioner(
+        wrapWithSchemaPartitioner(createHourlyPartitioner()),
+        "tombstone"
+    );
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
@@ -2488,42 +2485,27 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Create partitioner chain: TombstoneSupportedPartitioner -> SchemaPartitioner -> HourlyPartitioner
-    Partitioner<?> basePartitioner = new HourlyPartitioner<>();
-    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
-    basePartitioner.configure(parsedConfig);
-
-    Partitioner<?> schemaPartitioner = new SchemaPartitioner<>(basePartitioner);
-    schemaPartitioner.configure(parsedConfig);
-
-    Partitioner<?> partitioner = new TombstoneSupportedPartitioner<>(schemaPartitioner, "tombstone");
-    partitioner.configure(parsedConfig);
+    Partitioner<?> partitioner = wrapWithTombstonePartitioner(
+        wrapWithSchemaPartitioner(createHourlyPartitioner()),
+        "tombstone"
+    );
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
 
     String key = "key";
 
-    // Create two different schemas to trigger schema partition transitions
-    Schema schema1 = SchemaBuilder.struct()
-        .name("schema1")
-        .field("field1", Schema.STRING_SCHEMA)
-        .build();
-    Schema schema2 = SchemaBuilder.struct()
-        .name("schema2")
-        .field("field2", Schema.INT32_SCHEMA)
-        .build();
-
     DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
     long timestamp = first.getMillis();
 
     // Create records with different schemas within same hour - schema changes should trigger rotation
     List<SinkRecord> sinkRecords = new ArrayList<>();
-    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
-        new Struct(schema1).put("field1", "value1"), 0, timestamp, TimestampType.CREATE_TIME));
-    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2,
-        new Struct(schema2).put("field2", 100), 1, timestamp + 1000, TimestampType.CREATE_TIME));
-    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
-        new Struct(schema1).put("field1", "value2"), 2, timestamp + 2000, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, TEST_SCHEMA_1,
+        new Struct(TEST_SCHEMA_1).put("field1", "value1"), 0, timestamp, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, TEST_SCHEMA_2,
+        new Struct(TEST_SCHEMA_2).put("field2", 100), 1, timestamp + 1000, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, TEST_SCHEMA_1,
+        new Struct(TEST_SCHEMA_1).put("field1", "value2"), 2, timestamp + 2000, TimestampType.CREATE_TIME));
 
     for (SinkRecord record : sinkRecords) {
       topicPartitionWriter.buffer(record);
@@ -2546,7 +2528,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     expectedRecords.add((Struct) sinkRecords.get(0).value());  // schema1, offset 0
     expectedRecords.add((Struct) sinkRecords.get(1).value());  // schema2, offset 1
 
-    verify(expectedFiles, 1, schema1, expectedRecords);
+    verify(expectedFiles, 1, TEST_SCHEMA_1, expectedRecords);
 
     assertEquals("Expected 1 uncommitted file tracked for last record",
         1, topicPartitionWriter.offsetToFilenameMap.size());
@@ -2564,14 +2546,10 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     setUp();
 
     // Create partitioner chain: TombstoneSupportedPartitioner -> SchemaPartitioner -> DefaultPartitioner
-    Partitioner<?> basePartitioner = new DefaultPartitioner<>();
-    basePartitioner.configure(parsedConfig);
-
-    Partitioner<?> schemaPartitioner = new SchemaPartitioner<>(basePartitioner);
-    schemaPartitioner.configure(parsedConfig);
-
-    Partitioner<?> partitioner = new TombstoneSupportedPartitioner<>(schemaPartitioner, "tombstone");
-    partitioner.configure(parsedConfig);
+    Partitioner<?> partitioner = wrapWithTombstonePartitioner(
+        wrapWithSchemaPartitioner(createDefaultPartitioner()),
+        "tombstone"
+    );
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
@@ -2644,12 +2622,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     localProps.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.PREFIX.name());
     setUp();
 
-    Partitioner<?> basePartitioner = new HourlyPartitioner<>();
-    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
-    basePartitioner.configure(parsedConfig);
-
-    Partitioner<?> partitioner = new SchemaPartitioner<>(basePartitioner);
-    partitioner.configure(parsedConfig);
+    Partitioner<?> partitioner = wrapWithSchemaPartitioner(createHourlyPartitioner());
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
@@ -2722,27 +2695,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     localProps.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.PREFIX.name());
     setUp();
 
-    Partitioner<?> basePartitioner = new HourlyPartitioner<>();
-    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
-    basePartitioner.configure(parsedConfig);
-
-    Partitioner<?> partitioner = new SchemaPartitioner<>(basePartitioner);
-    partitioner.configure(parsedConfig);
+    Partitioner<?> partitioner = wrapWithSchemaPartitioner(createHourlyPartitioner());
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
 
     String key = "key";
-
-    // Create two different schemas
-    Schema schema1 = SchemaBuilder.struct()
-        .name("schema1")
-        .field("field1", Schema.STRING_SCHEMA)
-        .build();
-    Schema schema2 = SchemaBuilder.struct()
-        .name("schema2")
-        .field("field2", Schema.INT32_SCHEMA)
-        .build();
 
     DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
     long timestamp = first.getMillis();
@@ -2750,16 +2708,16 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<SinkRecord> sinkRecords = new ArrayList<>();
     // Interleave records with different schemas - each schema change triggers rotation
     // All records within same hour to keep them in same time partition
-    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
-        new Struct(schema1).put("field1", "value1"), 0, timestamp, TimestampType.CREATE_TIME));
-    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2,
-        new Struct(schema2).put("field2", 100), 1, timestamp + 1000, TimestampType.CREATE_TIME));
-    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
-        new Struct(schema1).put("field1", "value2"), 2, timestamp + 2000, TimestampType.CREATE_TIME));
-    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2,
-        new Struct(schema2).put("field2", 200), 3, timestamp + 3000, TimestampType.CREATE_TIME));
-    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
-            new Struct(schema1).put("field1", "value3"), 4, timestamp + 4000, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, TEST_SCHEMA_1,
+        new Struct(TEST_SCHEMA_1).put("field1", "value1"), 0, timestamp, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, TEST_SCHEMA_2,
+        new Struct(TEST_SCHEMA_2).put("field2", 100), 1, timestamp + 1000, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, TEST_SCHEMA_1,
+        new Struct(TEST_SCHEMA_1).put("field1", "value2"), 2, timestamp + 2000, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, TEST_SCHEMA_2,
+        new Struct(TEST_SCHEMA_2).put("field2", 200), 3, timestamp + 3000, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, TEST_SCHEMA_1,
+            new Struct(TEST_SCHEMA_1).put("field1", "value3"), 4, timestamp + 4000, TimestampType.CREATE_TIME));
 
     for (SinkRecord record : sinkRecords) {
       topicPartitionWriter.buffer(record);
@@ -2785,7 +2743,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     expectedRecords.add((Struct) sinkRecords.get(1).value());  // schema2, offset 1
     expectedRecords.add((Struct) sinkRecords.get(3).value());  // schema2, offset 3
 
-    verify(expectedFiles, 1, schema1, expectedRecords);
+    verify(expectedFiles, 1, TEST_SCHEMA_1, expectedRecords);
 
     assertEquals("Expected 1 uncommitted files tracked for last record",
         1, topicPartitionWriter.offsetToFilenameMap.size());
@@ -2806,25 +2764,12 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     localProps.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.PREFIX.name());
     setUp();
 
-    Partitioner<?> basePartitioner = new HourlyPartitioner<>();
-    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
-    basePartitioner.configure(parsedConfig);
-
-    Partitioner<?> partitioner = new SchemaPartitioner<>(basePartitioner);
-    partitioner.configure(parsedConfig);
+    Partitioner<?> partitioner = wrapWithSchemaPartitioner(createHourlyPartitioner());
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
 
     String key = "key";
-    Schema schema1 = SchemaBuilder.struct()
-        .name("schema1")
-        .field("field1", Schema.STRING_SCHEMA)
-        .build();
-    Schema schema2 = SchemaBuilder.struct()
-        .name("schema2")
-        .field("field2", Schema.INT32_SCHEMA)
-        .build();
 
     DateTime first = new DateTime(2017, 3, 2, 10, 0, DateTimeZone.forID("America/Los_Angeles"));
     long timestamp = first.getMillis();
@@ -2832,14 +2777,14 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<SinkRecord> sinkRecords = new ArrayList<>();
     // Interleave records with different schemas - all in same time partition
     // With rotation disabled, schema changes should NOT trigger rotation
-    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
-        new Struct(schema1).put("field1", "value1"), 0, timestamp, TimestampType.CREATE_TIME));
-    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2,
-        new Struct(schema2).put("field2", 100), 1, timestamp + 1000, TimestampType.CREATE_TIME));
-    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
-        new Struct(schema1).put("field1", "value2"), 2, timestamp + 2000, TimestampType.CREATE_TIME));
-    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2,
-        new Struct(schema2).put("field2", 200), 3, timestamp + 3000, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, TEST_SCHEMA_1,
+        new Struct(TEST_SCHEMA_1).put("field1", "value1"), 0, timestamp, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, TEST_SCHEMA_2,
+        new Struct(TEST_SCHEMA_2).put("field2", 100), 1, timestamp + 1000, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, TEST_SCHEMA_1,
+        new Struct(TEST_SCHEMA_1).put("field1", "value2"), 2, timestamp + 2000, TimestampType.CREATE_TIME));
+    sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, TEST_SCHEMA_2,
+        new Struct(TEST_SCHEMA_2).put("field2", 200), 3, timestamp + 3000, TimestampType.CREATE_TIME));
 
     for (SinkRecord record : sinkRecords) {
       topicPartitionWriter.buffer(record);
@@ -2849,13 +2794,13 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     // VERIFY: No files should be committed since rotation is disabled and flush size not reached
     // This proves that multiple schema partitions can remain open without rotation despite schema changes
-    verify(Collections.<String>emptyList(), -1, schema1, new ArrayList<>());
+    verify(Collections.<String>emptyList(), -1, TEST_SCHEMA_1, new ArrayList<>());
 
     // Now add 5th and 6th records to reach flush size and trigger commits
-    SinkRecord fifthRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema1,
-        new Struct(schema1).put("field1", "value3"), 4, timestamp + 4000, TimestampType.CREATE_TIME);
-    SinkRecord sixthRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema2,
-        new Struct(schema2).put("field2", 300), 5, timestamp + 5000, TimestampType.CREATE_TIME);
+    SinkRecord fifthRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, TEST_SCHEMA_1,
+        new Struct(TEST_SCHEMA_1).put("field1", "value3"), 4, timestamp + 4000, TimestampType.CREATE_TIME);
+    SinkRecord sixthRecord = new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, TEST_SCHEMA_2,
+        new Struct(TEST_SCHEMA_2).put("field2", 300), 5, timestamp + 5000, TimestampType.CREATE_TIME);
     topicPartitionWriter.buffer(fifthRecord);
     topicPartitionWriter.buffer(sixthRecord);
     topicPartitionWriter.write();
@@ -2883,7 +2828,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     expectedRecords.add((Struct) sinkRecords.get(3).value());  // schema2, offset 3
     expectedRecords.add((Struct) sixthRecord.value());         // schema2, offset 5
 
-    verify(expectedFiles, 3, schema1, expectedRecords);
+    verify(expectedFiles, 3, TEST_SCHEMA_1, expectedRecords);
   }
 
   @Test
@@ -2893,12 +2838,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     localProps.put(SCHEMA_PARTITION_AFFIX_TYPE_CONFIG, S3SinkConnectorConfig.AffixType.PREFIX.name());
     setUp();
 
-    Partitioner<?> basePartitioner = new FieldPartitioner<>();
-    parsedConfig.put(PARTITION_FIELD_NAME_CONFIG, Arrays.asList("int"));
-    basePartitioner.configure(parsedConfig);
-
-    Partitioner<?> partitioner = new SchemaPartitioner<>(basePartitioner);
-    partitioner.configure(parsedConfig);
+    Partitioner<?> partitioner = wrapWithSchemaPartitioner(
+        createFieldPartitioner(Arrays.asList("int"))
+    );
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
@@ -3304,6 +3246,53 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
                                      startTime + offset * timeStep, TimestampType.CREATE_TIME));
     }
     return sinkRecords;
+  }
+
+  /**
+   * Creates a configured HourlyPartitioner with Record timestamp extractor
+   */
+  private Partitioner<?> createHourlyPartitioner() {
+    Partitioner<?> partitioner = new HourlyPartitioner<>();
+    parsedConfig.put(PartitionerConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "Record");
+    partitioner.configure(parsedConfig);
+    return partitioner;
+  }
+
+  /**
+   * Creates a configured FieldPartitioner with specified field names
+   */
+  private Partitioner<?> createFieldPartitioner(List<String> fieldNames) {
+    Partitioner<?> partitioner = new FieldPartitioner<>();
+    parsedConfig.put(PARTITION_FIELD_NAME_CONFIG, fieldNames);
+    partitioner.configure(parsedConfig);
+    return partitioner;
+  }
+
+  /**
+   * Creates a configured DefaultPartitioner
+   */
+  private Partitioner<?> createDefaultPartitioner() {
+    Partitioner<?> partitioner = new DefaultPartitioner<>();
+    partitioner.configure(parsedConfig);
+    return partitioner;
+  }
+
+  /**
+   * Wraps a partitioner with SchemaPartitioner
+   */
+  private Partitioner<?> wrapWithSchemaPartitioner(Partitioner<?> basePartitioner) {
+    Partitioner<?> partitioner = new SchemaPartitioner<>(basePartitioner);
+    partitioner.configure(parsedConfig);
+    return partitioner;
+  }
+
+  /**
+   * Wraps a partitioner with TombstoneSupportedPartitioner
+   */
+  private Partitioner<?> wrapWithTombstonePartitioner(Partitioner<?> basePartitioner, String tombstonePartition) {
+    Partitioner<?> partitioner = new TombstoneSupportedPartitioner<>(basePartitioner, tombstonePartition);
+    partitioner.configure(parsedConfig);
+    return partitioner;
   }
 
   private void verify(List<String> expectedFileKeys, int expectedSize, Schema schema, List<Struct> records)
