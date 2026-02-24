@@ -26,14 +26,13 @@ import org.apache.kafka.connect.sink.SinkRecord;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.SCHEMA_PARTITION_AFFIX_TYPE_CONFIG;
 
-public class SchemaPartitioner<T> implements Partitioner<T> {
+public class SchemaPartitioner<T> extends DelegatingPartitioner<T> {
 
-  private final Partitioner<T> delegatePartitioner;
   private S3SinkConnectorConfig.AffixType schemaAffixType;
   private String delim;
 
   public SchemaPartitioner(Partitioner<T> delegatePartitioner) {
-    this.delegatePartitioner = delegatePartitioner;
+    super(delegatePartitioner);
   }
 
   @Override
