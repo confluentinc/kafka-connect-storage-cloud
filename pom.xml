@@ -111,6 +111,12 @@
                 <artifactId>netty-codec-http2</artifactId>
                 <version>4.2.5.Final</version>
             </dependency>
+            <!-- pin aircompressor to fix CVE-2025-67721 (CONMON-19884) -->
+            <dependency>
+                <groupId>io.airlift</groupId>
+                <artifactId>aircompressor</artifactId>
+                <version>2.0.3</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
