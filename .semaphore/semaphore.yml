@@ -24,7 +24,7 @@ global_job_config:
   prologue:
     commands:
       - checkout
-      - . vault-setup --version v3
+      - . vault-setup
       - . vault-get-secret connect/connect_s3sink_it
       - . vault-get-secret connect/CONNECT_S3_SINK_ASSUME_ROLE_IT
       - sem-version java 8
