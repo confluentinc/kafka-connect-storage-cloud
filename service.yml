@@ -9,7 +9,7 @@ semaphore:
   enable: true
   pipeline_type: cp
   trivy_scan: true
-  extra_secrets: ["connect_s3sink_it"]
+  # extra_secrets: ["connect_s3sink_it"]
   extra_deploy_args: "-Dcloud -Pjenkins"
   extra_build_args: "-Dcloud -Pjenkins"
   run_pint_merge: true
