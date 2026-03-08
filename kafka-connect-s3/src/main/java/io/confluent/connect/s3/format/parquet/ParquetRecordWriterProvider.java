@@ -25,6 +25,8 @@ import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.storage.IORecordWriter;
 import io.confluent.connect.s3.format.RecordViewSetter;
 import io.confluent.connect.s3.format.S3RetriableRecordWriter;
+import io.confluent.connect.s3.format.parquet.variant.JsonFieldDetector;
+import io.confluent.connect.s3.format.parquet.variant.VariantAwareWriteSupport;
 import io.confluent.connect.s3.storage.S3ParquetOutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.format.RecordWriter;
@@ -37,12 +39,14 @@ import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.io.OutputFile;
 import org.apache.parquet.io.PositionOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -66,12 +70,15 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
 
   @Override
   public RecordWriter getRecordWriter(final S3SinkConnectorConfig conf, final String filename) {
+    final boolean variantEnabled = conf.isParquetVariantEnabled();
+
     return new S3RetriableRecordWriter(
         new IORecordWriter() {
           final String adjustedFilename = getAdjustedFilename(recordView, filename, getExtension());
           Schema schema = null;
           ParquetWriter<GenericRecord> writer;
           S3ParquetOutputFile s3ParquetOutputFile;
+          Set<String> variantFieldPaths = Collections.emptySet();
 
           @Override
           public void write(SinkRecord record) throws IOException {
@@ -80,26 +87,49 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
               log.info("Opening record writer for: {}", adjustedFilename);
               org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
               s3ParquetOutputFile = new S3ParquetOutputFile(storage, adjustedFilename);
-              AvroParquetWriter.Builder<GenericRecord> builder =
-                  AvroParquetWriter.<GenericRecord>builder(s3ParquetOutputFile)
-                      .withSchema(avroSchema)
-                      .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
-                      .withDictionaryEncoding(true)
-                      .withCompressionCodec(storage.conf().parquetCompressionCodecName())
-                      .withPageSize(PAGE_SIZE);
-              if (schemaHasArrayOfOptionalItems(schema, /*seenSchemas=*/null)) {
-                // If the schema contains an array of optional items, then
-                // it is possible that the array may have null items during the
-                // writing process.  In this case, we set a flag so as not to
-                // incur a NullPointerException
+
+              boolean useOldListStructure = !schemaHasArrayOfOptionalItems(
+                  schema, /*seenSchemas=*/null
+              );
+              if (!useOldListStructure) {
                 log.debug(
                     "Setting \"" + AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE
                         + "\" to false because the schema contains an array "
                         + "with optional items"
                 );
-                builder.config(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false");
               }
-              writer = builder.build();
+
+              if (variantEnabled) {
+                variantFieldPaths = detectVariantFields(conf, schema);
+              }
+
+              if (variantEnabled && !variantFieldPaths.isEmpty()) {
+                log.info("Variant-aware Parquet writer enabled for fields: {}",
+                    variantFieldPaths);
+                VariantAwareWriteSupport writeSupport = new VariantAwareWriteSupport(
+                    avroSchema,
+                    variantFieldPaths,
+                    useOldListStructure
+                );
+                writer = new VariantParquetWriterBuilder(s3ParquetOutputFile, writeSupport)
+                    .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
+                    .withDictionaryEncoding(true)
+                    .withCompressionCodec(storage.conf().parquetCompressionCodecName())
+                    .withPageSize(PAGE_SIZE)
+                    .build();
+              } else {
+                AvroParquetWriter.Builder<GenericRecord> builder =
+                    AvroParquetWriter.<GenericRecord>builder(s3ParquetOutputFile)
+                        .withSchema(avroSchema)
+                        .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
+                        .withDictionaryEncoding(true)
+                        .withCompressionCodec(storage.conf().parquetCompressionCodecName())
+                        .withPageSize(PAGE_SIZE);
+                if (!useOldListStructure) {
+                  builder.config(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false");
+                }
+                writer = builder.build();
+              }
             }
             log.trace("Sink record with view {}: {}", recordView,
                 sinkRecordToLoggableString(record));
@@ -123,6 +153,14 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
           }
         }
     );
+  }
+
+  private static Set<String> detectVariantFields(S3SinkConnectorConfig conf, Schema schema) {
+    JsonFieldDetector detector = new JsonFieldDetector(
+        conf.getParquetVariantConnectNames(),
+        conf.getParquetVariantFieldNames()
+    );
+    return detector.detect(schema);
   }
 
   /**
@@ -154,6 +192,36 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
             || schemaHasArrayOfOptionalItems(schema.valueSchema(), seenSchemas);
       default:
         return false;
+    }
+  }
+
+  private static class VariantParquetWriterBuilder
+      extends ParquetWriter.Builder<GenericRecord, VariantParquetWriterBuilder> {
+
+    private final VariantAwareWriteSupport writeSupport;
+
+    VariantParquetWriterBuilder(OutputFile outputFile, VariantAwareWriteSupport writeSupport) {
+      super(outputFile);
+      this.writeSupport = writeSupport;
+    }
+
+    @Override
+    protected VariantParquetWriterBuilder self() {
+      return this;
+    }
+
+    @Override
+    protected WriteSupport<GenericRecord> getWriteSupport(
+        org.apache.hadoop.conf.Configuration conf
+    ) {
+      return writeSupport;
+    }
+
+    @Override
+    protected WriteSupport<GenericRecord> getWriteSupport(
+        org.apache.parquet.conf.ParquetConfiguration conf
+    ) {
+      return writeSupport;
     }
   }
 
