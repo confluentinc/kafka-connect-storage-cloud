@@ -238,6 +238,45 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String TOMBSTONE_ENCODED_PARTITION = "tombstone.encoded.partition";
   public static final String TOMBSTONE_ENCODED_PARTITION_DEFAULT = "tombstone";
 
+  // Parquet Variant configs
+  public static final String PARQUET_VARIANT_ENABLED_CONFIG = "parquet.variant.enabled";
+  public static final boolean PARQUET_VARIANT_ENABLED_DEFAULT = false;
+  public static final String PARQUET_VARIANT_ENABLED_DOC =
+      "When enabled, fields identified as carrying semi-structured "
+          + "data will be written as Parquet VARIANT columns. "
+          + "Fields with recursive schemas (e.g. Protobuf "
+          + "google.protobuf.Struct) are auto-detected and "
+          + "converted to VARIANT, preventing StackOverflowError "
+          + "in AvroSchemaConverter. Additionally supports STRING "
+          + "fields with JSON (Debezium io.debezium.data.Json), "
+          + "complex STRUCT/MAP fields, and ARRAY fields. "
+          + "Provides type-preserving binary encoding, efficient "
+          + "field access, and better query performance in "
+          + "downstream engines "
+          + "(Spark, DuckDB, Snowflake, Databricks, Trino).";
+
+  public static final String PARQUET_VARIANT_CONNECT_NAMES_CONFIG =
+      "parquet.variant.connect.names";
+  public static final String PARQUET_VARIANT_CONNECT_NAMES_DEFAULT =
+      "io.debezium.data.Json";
+  public static final String PARQUET_VARIANT_CONNECT_NAMES_DOC =
+      "Comma-separated list of Kafka Connect schema names whose "
+          + "fields should be written as Parquet VARIANT columns. "
+          + "Works for any field type (STRING, STRUCT, MAP, ARRAY).";
+
+  public static final String PARQUET_VARIANT_FIELD_NAMES_CONFIG =
+      "parquet.variant.field.names";
+  public static final String PARQUET_VARIANT_FIELD_NAMES_DEFAULT = "";
+  public static final String PARQUET_VARIANT_FIELD_NAMES_DOC =
+      "Comma-separated list of field names to explicitly write as "
+          + "Parquet VARIANT columns, regardless of their Connect "
+          + "schema name or type. Note: fields with recursive "
+          + "schemas (google.protobuf.Struct) are auto-detected "
+          + "and do NOT need to be listed here. Use this for "
+          + "STRING fields containing JSON (e.g. model inference "
+          + "logs) or custom Protobuf messages that you want "
+          + "stored as VARIANT.";
+
   /**
    * Append schema name in s3-path
    */
@@ -817,6 +856,47 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Type.INT,
           MAX_FILE_SCAN_LIMIT_DEFAULT,
           Importance.LOW
+      );
+    }
+
+    {
+      final String group = "Parquet Variant";
+      int orderInGroup = 0;
+
+      configDef.define(
+          PARQUET_VARIANT_ENABLED_CONFIG,
+          Type.BOOLEAN,
+          PARQUET_VARIANT_ENABLED_DEFAULT,
+          Importance.MEDIUM,
+          PARQUET_VARIANT_ENABLED_DOC,
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Enable Parquet Variant for JSON fields"
+      );
+
+      configDef.define(
+          PARQUET_VARIANT_CONNECT_NAMES_CONFIG,
+          Type.LIST,
+          PARQUET_VARIANT_CONNECT_NAMES_DEFAULT,
+          Importance.LOW,
+          PARQUET_VARIANT_CONNECT_NAMES_DOC,
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Connect schema names to treat as Variant"
+      );
+
+      configDef.define(
+          PARQUET_VARIANT_FIELD_NAMES_CONFIG,
+          Type.LIST,
+          PARQUET_VARIANT_FIELD_NAMES_DEFAULT,
+          Importance.LOW,
+          PARQUET_VARIANT_FIELD_NAMES_DOC,
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Explicit field names to write as Variant"
       );
     }
 
@@ -1416,6 +1496,28 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public boolean shouldRotateOnPartitionChange() {
     return getBoolean(ROTATE_FILE_ON_PARTITION_CHANGE);
+  }
+
+  public boolean isParquetVariantEnabled() {
+    return getBoolean(PARQUET_VARIANT_ENABLED_CONFIG);
+  }
+
+  public List<String> getParquetVariantConnectNames() {
+    return getList(PARQUET_VARIANT_CONNECT_NAMES_CONFIG);
+  }
+
+  public Set<String> getParquetVariantFieldNames() {
+    List<String> list = getList(PARQUET_VARIANT_FIELD_NAMES_CONFIG);
+    if (list == null) {
+      return Collections.emptySet();
+    }
+    Set<String> result = new HashSet<>();
+    for (String s : list) {
+      if (s != null && !s.trim().isEmpty()) {
+        result.add(s.trim());
+      }
+    }
+    return result;
   }
 
   public enum IgnoreOrFailBehavior {
