@@ -2248,6 +2248,83 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     );
   }
 
+  @Test
+  public void testNestedFieldPartitioner() {
+    try {
+      localProps.put(FLUSH_SIZE_CONFIG, "9");
+      setUp();
+      // Define the partitioner with nested field path
+      Partitioner<?> partitioner = new FieldPartitioner<>();
+      parsedConfig.put(PARTITION_FIELD_NAME_CONFIG, Arrays.asList("outer.inner"));
+      partitioner.configure(parsedConfig);
+
+      TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+          TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+      String key = "key";
+      // Create nested schema: { outer: { inner: INT32 } }
+      Schema innerSchema = SchemaBuilder.struct()
+          .field("inner", Schema.INT32_SCHEMA)
+          .build();
+      Schema schema = SchemaBuilder.struct()
+          .field("outer", innerSchema)
+          .build();
+
+      // Create 18 records cycling inner values 16,17,18
+      List<Struct> records = new ArrayList<>();
+      for (int i = 0; i < 6; ++i) {
+        Struct s16 = new Struct(schema)
+            .put("outer", new Struct(innerSchema).put("inner", 16));
+        records.add(s16);
+        Struct s17 = new Struct(schema)
+            .put("outer", new Struct(innerSchema).put("inner", 17));
+        records.add(s17);
+        Struct s18 = new Struct(schema)
+            .put("outer", new Struct(innerSchema).put("inner", 18));
+        records.add(s18);
+      }
+
+      Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
+      for (SinkRecord record : sinkRecords) {
+        topicPartitionWriter.buffer(record);
+      }
+
+      // Test actual write
+      topicPartitionWriter.write();
+      topicPartitionWriter.close();
+
+      @SuppressWarnings("unchecked")
+      List<String> partitionFields = (List<String>) parsedConfig.get(PARTITION_FIELD_NAME_CONFIG);
+      String partitionField = partitionFields.get(0);
+
+      String dirPrefix1 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(16));
+      String dirPrefix2 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(17));
+      String dirPrefix3 = partitioner.generatePartitionedPath(TOPIC, partitionField + "=" + String.valueOf(18));
+
+      // Build expected records in the order files will be verified (grouped by partition value)
+      List<Struct> expectedRecords = new ArrayList<>();
+      for (int i = 0; i < 3; ++i) {
+        int val = 16 + i;
+        for (int j = 0; j < 6; ++j) {
+          expectedRecords.add(
+              new Struct(schema).put("outer", new Struct(innerSchema).put("inner", val))
+          );
+        }
+      }
+
+      List<String> expectedFiles = new ArrayList<>();
+      for (int i = 0; i < 18; i += 9) {
+        expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix1, TOPIC_PARTITION, i, extension, ZERO_PAD_FMT));
+        expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix2, TOPIC_PARTITION, i + 1, extension, ZERO_PAD_FMT));
+        expectedFiles.add(FileUtils.fileKeyToCommit(topicsDir, dirPrefix3, TOPIC_PARTITION, i + 2, extension, ZERO_PAD_FMT));
+      }
+
+      verify(expectedFiles, 3, schema, expectedRecords);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   private List<Object> generateTestDataWithSchema(
       Partitioner<?> partitioner, S3SinkConnectorConfig.AffixType affixType
   ) {
