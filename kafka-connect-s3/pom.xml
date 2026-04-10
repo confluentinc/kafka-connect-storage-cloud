@@ -107,7 +107,7 @@
                 </exclusion>
                 <exclusion>
                     <groupId>io.netty</groupId>
-                    <artifactId>netty-codec-http-2</artifactId>
+                    <artifactId>netty-codec-http2</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -115,19 +115,19 @@
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-codec-http</artifactId>
-            <version>4.2.10.Final</version>
+            <version>${netty.version}</version>
         </dependency>
         <!--        pin version to fix CVE-2025-5516-->
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-codec-http2</artifactId>
-            <version>4.2.5.Final</version>
+            <version>${netty.version}</version>
         </dependency>
-        <!--        pin version to fixCVE-2025-58057-->
+        <!--        pin version to fix CVE-2025-58057-->
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-codec</artifactId>
-            <version>4.2.5.Final</version>
+            <version>${netty.version}</version>
         </dependency>
         <dependency>
             <groupId>io.findify</groupId>
