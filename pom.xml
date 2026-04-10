@@ -72,6 +72,7 @@
         <zookeeper.version>3.9.5</zookeeper.version>
         <dnsjava.version>3.6.1</dnsjava.version>
         <commons.lang3.version>3.18.0</commons.lang3.version>
+        <netty.version>4.2.11.Final</netty.version>
     </properties>
 
     <repositories>
@@ -109,7 +110,7 @@
             <dependency>
                 <groupId>io.netty</groupId>
                 <artifactId>netty-codec-http2</artifactId>
-                <version>4.2.5.Final</version>
+                <version>${netty.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -118,7 +119,7 @@
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-codec-http2</artifactId>
-            <version>4.2.5.Final</version>
+            <version>${netty.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
