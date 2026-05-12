@@ -21,7 +21,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>11.2.34</version>
+        <version>11.2.35</version>
     </parent>
 
     <groupId>io.confluent</groupId>
@@ -105,6 +105,13 @@
                 <groupId>org.bitbucket.b_c</groupId>
                 <artifactId>jose4j</artifactId>
                 <version>0.9.6</version>
+            </dependency>
+            <!-- CC-40908: pin bouncycastle to 1.84 to address CVE-2026-5598
+                 (Hadoop transitive brings in 1.82). -->
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>1.84</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
