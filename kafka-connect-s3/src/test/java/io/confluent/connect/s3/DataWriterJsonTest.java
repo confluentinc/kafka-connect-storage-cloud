@@ -285,7 +285,7 @@ public class DataWriterJsonTest extends DataWriterTestBase<JsonFormat> {
 
         FileUtils.fileKeyToCommit(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset, extension, ZERO_PAD_FMT);
         Collection<Object> records = readRecords(topicsDir, getDirectory(tp.topic(), tp.partition()), tp, startOffset,
-                                                 extension, ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3);
+                                                 extension, ZERO_PAD_FMT, S3_TEST_BUCKET_NAME, s3Client);
         // assertEquals(size, records.size());
         verifyContents(sinkRecords, j, records);
         j += size;
