@@ -72,7 +72,7 @@
         <zookeeper.version>3.9.5</zookeeper.version>
         <dnsjava.version>3.6.1</dnsjava.version>
         <commons.lang3.version>3.18.0</commons.lang3.version>
-        <netty.version>4.2.11.Final</netty.version>
+        <netty.version>4.2.13.Final</netty.version>
     </properties>
 
     <repositories>
@@ -106,6 +106,13 @@
                 <groupId>org.bitbucket.b_c</groupId>
                 <artifactId>jose4j</artifactId>
                 <version>0.9.6</version>
+            </dependency>
+            <!-- CC-40908: pin bouncycastle to 1.84 to address CVE-2026-5598
+                 (Hadoop transitive brings in 1.82). -->
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>1.84</version>
             </dependency>
             <dependency>
                 <groupId>io.netty</groupId>
