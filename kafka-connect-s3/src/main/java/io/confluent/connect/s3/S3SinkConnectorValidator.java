@@ -101,9 +101,27 @@ public class S3SinkConnectorValidator {
           s3SinkConnectorConfig.storeKafkaKeys());
 
       validateWanModeAndPathStyleCompatibility(s3SinkConnectorConfig);
+
+      validateBackupMode(s3SinkConnectorConfig);
     }
 
     return new Config(new ArrayList<>(this.valuesByKey.values()));
+  }
+
+  public void validateBackupMode(S3SinkConnectorConfig config) {
+    if (config.isBackupMode()) {
+      // ByteArrayFormat validation - fail at registration time
+      if (ByteArrayFormat.class.equals(config.formatClass())) {
+        recordErrors(
+            "format.class=ByteArrayFormat cannot be used with mode=BACKUP_FULL_RECORD. "
+                + "ByteArrayFormat does not support structured schema metadata required for "
+                + "envelope wrapping. Use AvroFormat, JsonFormat, or ParquetFormat instead.",
+            FORMAT_CLASS_CONFIG,
+            io.confluent.connect.storage.StorageSinkConnectorConfig.MODE_CONFIG);
+      }
+      // Note: Redundant config warnings (store.kafka.keys, store.kafka.headers) are logged
+      // at runtime in S3SinkTask.start() where they're more visible to users
+    }
   }
 
   public void validateCompression(CompressionType compressionType, Class formatClass,

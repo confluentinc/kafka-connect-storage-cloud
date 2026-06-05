@@ -41,7 +41,9 @@ import java.util.Map;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
+import io.confluent.connect.s3.backup.S3StorageWriter;
 import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
+import io.confluent.connect.storage.format.backup.BackupEnvelopeWriterFactory;
 import io.confluent.connect.s3.format.RecordViewSetter;
 import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
@@ -104,6 +106,8 @@ public class S3SinkTask extends SinkTask {
       url = connectorConfig.getString(StorageCommonConfig.STORE_URL_CONFIG);
       timeoutMs = connectorConfig.getLong(S3SinkConnectorConfig.RETRY_BACKOFF_CONFIG);
 
+      validateBackupMode();
+
       @SuppressWarnings("unchecked")
       Class<? extends S3Storage> storageClass =
           (Class<? extends S3Storage>)
@@ -146,6 +150,37 @@ public class S3SinkTask extends SinkTask {
     }
   }
 
+  private void validateBackupMode() {
+    if (!connectorConfig.isBackupMode()) {
+      return;
+    }
+    String formatClass = connectorConfig.getString(
+        S3SinkConnectorConfig.FORMAT_CLASS_CONFIG);
+    if (formatClass != null && formatClass.contains("ByteArrayFormat")) {
+      throw new org.apache.kafka.common.config.ConfigException(
+          "format.class=ByteArrayFormat cannot be used with "
+          + "mode=BACKUP_FULL_RECORD. ByteArrayFormat does not "
+          + "support structured schema metadata required for "
+          + "envelope wrapping. Use AvroFormat, JsonFormat, "
+          + "or ParquetFormat instead.");
+    }
+    log.info("S3 Sink: Envelope backup mode enabled "
+        + "(mode=BACKUP_FULL_RECORD). Schema files will be "
+        + "backed up to _metadata/schemas/");
+    if (connectorConfig.getBoolean(
+        S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG)) {
+      log.warn("store.kafka.keys=true is redundant with "
+          + "mode=BACKUP_FULL_RECORD. Keys are automatically "
+          + "embedded in the envelope. Config is ignored.");
+    }
+    if (connectorConfig.getBoolean(
+        S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG)) {
+      log.warn("store.kafka.headers=true is redundant with "
+          + "mode=BACKUP_FULL_RECORD. Headers are automatically "
+          + "embedded in the envelope. Config is ignored.");
+    }
+  }
+
   @Override
   public String version() {
     return Version.getVersion();
@@ -174,6 +209,20 @@ public class S3SinkTask extends SinkTask {
       S3SinkConnectorConfig config)
       throws ClassNotFoundException, InvocationTargetException, InstantiationException,
       NoSuchMethodException, IllegalAccessException {
+
+    if (config.isBackupMode()) {
+      log.info("Creating envelope backup record writer - format: {}, topics.dir: {}",
+          config.getString(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG),
+          config.getString(StorageCommonConfig.TOPICS_DIR_CONFIG));
+      RecordWriterProvider<S3SinkConnectorConfig> formatWriter =
+          newFormat(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG).getRecordWriterProvider();
+      return BackupEnvelopeWriterFactory.create(
+          formatWriter,
+          new S3StorageWriter(storage),
+          config.originalsStrings(),
+          config.getString(StorageCommonConfig.TOPICS_DIR_CONFIG),
+          config.getString(StorageCommonConfig.DIRECTORY_DELIM_CONFIG));
+    }
 
     RecordWriterProvider<S3SinkConnectorConfig> valueWriterProvider =
         newFormat(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG).getRecordWriterProvider();
@@ -217,7 +266,7 @@ public class S3SinkTask extends SinkTask {
     if (config.getSchemaPartitionAffixType() != S3SinkConnectorConfig.AffixType.NONE) {
       partitioner = new SchemaPartitioner<>(partitioner);
     }
-    if (config.isTombstoneWriteEnabled()) {
+    if (config.isTombstoneWriteEnabled() && !config.isBackupMode()) {
       String tomebstonePartition = config.getTombstoneEncodedPartition();
       partitioner = new TombstoneSupportedPartitioner<>(partitioner, tomebstonePartition);
     }
@@ -234,7 +283,7 @@ public class S3SinkTask extends SinkTask {
       int partition = record.kafkaPartition();
       TopicPartition tp = new TopicPartition(topic, partition);
 
-      if (maybeSkipOnNullValue(record)) {
+      if (!connectorConfig.isBackupMode() && maybeSkipOnNullValue(record)) {
         maybeReportNullRecordToDlq(record);
         continue;
       }
@@ -336,8 +385,8 @@ public class S3SinkTask extends SinkTask {
         return false;
       } else {
         // Fail
-        throw new ConnectException("Null valued records are not writeable with current "
-            + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " 'settings.");
+        throw new DataException("Null valued records are not writeable with current "
+            + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " settings.");
       }
     }
     return false;
