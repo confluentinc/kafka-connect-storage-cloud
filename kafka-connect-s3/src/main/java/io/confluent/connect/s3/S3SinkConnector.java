@@ -64,17 +64,21 @@ public class S3SinkConnector extends SinkConnector {
 
   @Override
   public Class<? extends Task> taskClass() {
-    return S3SinkTask.class;
+    if (config == null) {
+      return S3SinkTask.class;
+    }
+    switch (config.mode()) {
+      case BACKUP_FULL_RECORD:
+        return BackupS3SinkTask.class;
+      case GENERIC:
+      default:
+        return S3SinkTask.class;
+    }
   }
 
   @Override
   public List<Map<String, String>> taskConfigs(int maxTasks) {
     Map<String, String> taskProps = new HashMap<>(configProps);
-    if (config.isBackupMode()) {
-      taskProps.put("key.converter.backup.mode", "envelope");
-      taskProps.put("value.converter.backup.mode", "envelope");
-      log.info("Backup mode: propagated backup.mode=envelope to converters");
-    }
     List<Map<String, String>> taskConfigs = new ArrayList<>(maxTasks);
     for (int i = 0; i < maxTasks; ++i) {
       taskConfigs.add(taskProps);
