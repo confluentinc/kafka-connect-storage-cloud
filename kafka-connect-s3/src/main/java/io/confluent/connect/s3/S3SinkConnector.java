@@ -71,8 +71,10 @@ public class S3SinkConnector extends SinkConnector {
       case BACKUP_FULL_RECORD:
         return BackupS3SinkTask.class;
       case GENERIC:
-      default:
         return S3SinkTask.class;
+      default:
+        throw new org.apache.kafka.common.config.ConfigException(
+            "mode", config.mode().name(), "Unsupported mode");
     }
   }
 

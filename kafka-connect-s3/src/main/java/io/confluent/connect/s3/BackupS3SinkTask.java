@@ -16,12 +16,12 @@
 package io.confluent.connect.s3;
 
 import io.confluent.connect.s3.backup.S3StorageWriter;
+import io.confluent.connect.storage.backup.BackupEnvelope;
 import io.confluent.connect.storage.backup.ConverterTypeDetector;
 import io.confluent.connect.storage.backup.ObjectStoreSchemaBackupStore;
 import io.confluent.connect.storage.backup.SchemaBackupStore;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.backup.EnvelopeTransformer;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
@@ -55,7 +55,6 @@ public class BackupS3SinkTask extends S3SinkTask {
   @Override
   public void start(Map<String, String> props) {
     super.start(props);
-    validateBackupConfig();
 
     String topicsDir = connectorConfig.getString(
         StorageCommonConfig.TOPICS_DIR_CONFIG);
@@ -67,9 +66,11 @@ public class BackupS3SinkTask extends S3SinkTask {
 
     Map<String, String> originals = connectorConfig.originalsStrings();
     String keyType = ConverterTypeDetector.detectSchemaType(
-        originals.get("key.converter"), originals, "key.converter");
+        originals.get(BackupEnvelope.KEY_CONVERTER_CONFIG),
+        originals, BackupEnvelope.KEY_CONVERTER_CONFIG);
     String valueType = ConverterTypeDetector.detectSchemaType(
-        originals.get("value.converter"), originals, "value.converter");
+        originals.get(BackupEnvelope.VALUE_CONVERTER_CONFIG),
+        originals, BackupEnvelope.VALUE_CONVERTER_CONFIG);
 
     envelopeTransformer = new EnvelopeTransformer(
         backupStore, keyType, valueType);
@@ -89,15 +90,4 @@ public class BackupS3SinkTask extends S3SinkTask {
     super.stop();
   }
 
-  private void validateBackupConfig() {
-    Object formatVal = connectorConfig.originals().get(
-        S3SinkConnectorConfig.FORMAT_CLASS_CONFIG);
-    String formatName = formatVal != null ? formatVal.toString() : "";
-    if (formatName.contains("ByteArrayFormat")) {
-      throw new ConfigException(
-          "format.class=ByteArrayFormat cannot be used with "
-          + "mode=BACKUP_FULL_RECORD. Use AvroFormat, JsonFormat, "
-          + "or ParquetFormat instead.");
-    }
-  }
 }

@@ -581,12 +581,10 @@ public class BackupEnvelopeTestHarness {
   static SinkRecord writeEnvelope(
       SinkRecord record, String keyType, String valueType
   ) {
-    TestRecordWriter writer = new TestRecordWriter();
-    io.confluent.connect.storage.format.backup.EnvelopeRecordWriter ew =
-        new io.confluent.connect.storage.format.backup.EnvelopeRecordWriter(
-            writer, new NoOpBackupStore(), keyType, valueType);
-    ew.write(record);
-    return writer.lastRecord;
+    io.confluent.connect.storage.format.backup.EnvelopeTransformer transformer =
+        new io.confluent.connect.storage.format.backup.EnvelopeTransformer(
+            new NoOpBackupStore(), keyType, valueType);
+    return transformer.wrap(record);
   }
 
   static void assertWrapper(SinkRecord record, int expectedId,
@@ -658,8 +656,7 @@ public class BackupEnvelopeTestHarness {
       implements io.confluent.connect.storage.backup.SchemaBackupStore {
     public void backupIfNeeded(String t, int id, int version,
         String type, String subject, String raw,
-        java.util.List<io.confluent.connect.storage.backup.SchemaManifest.SchemaReferenceEntry> refs,
-        String compat) {
+        java.util.List<io.confluent.connect.storage.backup.SchemaManifest.SchemaReferenceEntry> refs) {
       System.out.println("  [Backup] id=" + id + " type=" + type
           + " subject=" + subject
           + " refs=" + (refs != null ? refs.size() : 0));
