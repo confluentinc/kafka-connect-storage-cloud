@@ -84,7 +84,7 @@ public class BackupEnvelopeTestHarness {
     // Verify wrapper
     System.out.println("  DEBUG record.valueSchema()=" + record.valueSchema());
     System.out.println("  DEBUG record.valueSchema().name()=" + record.valueSchema().name());
-    System.out.println("  DEBUG isWrapper=" + io.confluent.connect.schema.backup.BackupWrapper.isWrapper(record.valueSchema()));
+    System.out.println("  DEBUG isWrapper=" + io.confluent.connect.schema.backup.api.BackupWrapper.isWrapper(record.valueSchema()));
     assertWrapper(record, schemaId, "AVRO");
 
     // Verify envelope

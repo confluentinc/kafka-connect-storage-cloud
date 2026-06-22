@@ -21,6 +21,7 @@ import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.storage.backup.BackupEnvelope;
 import io.confluent.connect.storage.backup.ConverterTypeDetector;
 import io.confluent.connect.storage.format.Format;
+import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -124,6 +125,21 @@ public class S3SinkConnectorValidator {
     }
     validateSchemaBackupEnabled(BackupEnvelope.KEY_CONVERTER_CONFIG);
     validateSchemaBackupEnabled(BackupEnvelope.VALUE_CONVERTER_CONFIG);
+    rejectTransforms();
+  }
+
+  private void rejectTransforms() {
+    String transforms = connectorConfigs.get(ConnectorConfig.TRANSFORMS_CONFIG);
+    if (transforms != null && !transforms.trim().isEmpty()) {
+      recordErrors(
+          "Single Message Transforms (SMTs) cannot be used with "
+              + "mode=BACKUP_FULL_RECORD. SMTs modify data before envelope "
+              + "wrapping, which corrupts backup fidelity. "
+              + "Remove the '" + ConnectorConfig.TRANSFORMS_CONFIG
+              + "' config to use backup mode.",
+          ConnectorConfig.TRANSFORMS_CONFIG,
+          io.confluent.connect.storage.StorageSinkConnectorConfig.MODE_CONFIG);
+    }
   }
 
   private void validateSchemaBackupEnabled(String converterPrefix) {
