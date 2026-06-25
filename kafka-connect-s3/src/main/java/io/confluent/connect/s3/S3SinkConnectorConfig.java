@@ -218,6 +218,14 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       + " This value is case insensitive and can be either 'BASE64' (default) or 'NUMERIC'";
   private static final String DECIMAL_FORMAT_DISPLAY = "Decimal Format";
 
+  public static final String FORMAT_JSON_SCHEMA_ENABLE_CONFIG = "format.json.schema.enable";
+  public static final boolean FORMAT_JSON_SCHEMA_ENABLE_DEFAULT = false;
+  private static final String FORMAT_JSON_SCHEMA_ENABLE_DOC =
+      "Whether to embed the Connect schema in JSON output files. When true, each line "
+      + "is written as {\"schema\":...,\"payload\":...}. Required for BACKUP_FULL_RECORD "
+      + "mode with JsonFormat to enable full restore round-trip.";
+  private static final String FORMAT_JSON_SCHEMA_ENABLE_DISPLAY = "Enable Embedded JSON Schema";
+
   public static final String STORE_KAFKA_KEYS_CONFIG = "store.kafka.keys";
   public static final String STORE_KAFKA_HEADERS_CONFIG = "store.kafka.headers";
   public static final String KEYS_FORMAT_CLASS_CONFIG = "keys.format.class";
@@ -573,6 +581,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.MEDIUM,
           DECIMAL_FORMAT_DISPLAY
+      );
+
+      configDef.define(
+          FORMAT_JSON_SCHEMA_ENABLE_CONFIG,
+          ConfigDef.Type.BOOLEAN,
+          FORMAT_JSON_SCHEMA_ENABLE_DEFAULT,
+          Importance.LOW,
+          FORMAT_JSON_SCHEMA_ENABLE_DOC,
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          FORMAT_JSON_SCHEMA_ENABLE_DISPLAY
       );
 
       configDef.define(
@@ -1058,6 +1078,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public String getJsonDecimalFormat() {
     return getString(DECIMAL_FORMAT_CONFIG);
+  }
+
+  public boolean isJsonSchemaEmbedded() {
+    return getBoolean(FORMAT_JSON_SCHEMA_ENABLE_CONFIG);
   }
 
   public CompressionCodecName parquetCompressionCodecName() {
