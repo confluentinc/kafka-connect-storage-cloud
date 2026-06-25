@@ -72,7 +72,7 @@
         <zookeeper.version>3.9.5</zookeeper.version>
         <dnsjava.version>3.6.1</dnsjava.version>
         <commons.lang3.version>3.18.0</commons.lang3.version>
-        <netty.version>4.2.13.Final</netty.version>
+        <netty.version>4.2.15.Final</netty.version>
     </properties>
 
     <repositories>
