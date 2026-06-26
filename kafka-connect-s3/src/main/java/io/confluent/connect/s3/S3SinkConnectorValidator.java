@@ -18,7 +18,10 @@ package io.confluent.connect.s3;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.CompressionType;
+import io.confluent.connect.storage.backup.BackupEnvelope;
+import io.confluent.connect.storage.backup.ConverterTypeDetector;
 import io.confluent.connect.storage.format.Format;
+import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -101,9 +104,63 @@ public class S3SinkConnectorValidator {
           s3SinkConnectorConfig.storeKafkaKeys());
 
       validateWanModeAndPathStyleCompatibility(s3SinkConnectorConfig);
+
+      validateBackupMode(s3SinkConnectorConfig);
     }
 
     return new Config(new ArrayList<>(this.valuesByKey.values()));
+  }
+
+  public void validateBackupMode(S3SinkConnectorConfig config) {
+    if (!config.isBackupMode()) {
+      return;
+    }
+    if (ByteArrayFormat.class.equals(config.formatClass())) {
+      recordErrors(
+          "format.class=ByteArrayFormat cannot be used with mode=BACKUP_FULL_RECORD. "
+              + "ByteArrayFormat does not support structured schema metadata required for "
+              + "envelope wrapping. Use AvroFormat, JsonFormat, or ParquetFormat instead.",
+          FORMAT_CLASS_CONFIG,
+          io.confluent.connect.storage.StorageSinkConnectorConfig.MODE_CONFIG);
+    }
+    validateSchemaBackupEnabled(BackupEnvelope.KEY_CONVERTER_CONFIG);
+    validateSchemaBackupEnabled(BackupEnvelope.VALUE_CONVERTER_CONFIG);
+    rejectTransforms();
+  }
+
+  private void rejectTransforms() {
+    String transforms = connectorConfigs.get(ConnectorConfig.TRANSFORMS_CONFIG);
+    if (transforms != null && !transforms.trim().isEmpty()) {
+      recordErrors(
+          "Single Message Transforms (SMTs) cannot be used with "
+              + "mode=BACKUP_FULL_RECORD. SMTs modify data before envelope "
+              + "wrapping, which corrupts backup fidelity. "
+              + "Remove the '" + ConnectorConfig.TRANSFORMS_CONFIG
+              + "' config to use backup mode.",
+          ConnectorConfig.TRANSFORMS_CONFIG,
+          io.confluent.connect.storage.StorageSinkConnectorConfig.MODE_CONFIG);
+    }
+  }
+
+  private void validateSchemaBackupEnabled(String converterPrefix) {
+    String converterClass = connectorConfigs.get(converterPrefix);
+    String schemaType = ConverterTypeDetector.detectSchemaType(
+        converterClass, connectorConfigs, converterPrefix);
+    if (!BackupEnvelope.isSrBackedType(schemaType)) {
+      return;
+    }
+    String configKey = converterPrefix + "."
+        + BackupEnvelope.SCHEMA_BACKUP_ENABLED_CONFIG;
+    if (!"true".equalsIgnoreCase(connectorConfigs.get(configKey))) {
+      recordErrors(
+          converterPrefix + " uses SR-backed converter (" + converterClass
+              + ") but " + configKey + " is not set to true. "
+              + "Without this config, backup will NOT preserve schema metadata "
+              + "and restore will produce corrupted data. "
+              + "Set " + configKey + "=true.",
+          configKey,
+          io.confluent.connect.storage.StorageSinkConnectorConfig.MODE_CONFIG);
+    }
   }
 
   public void validateCompression(CompressionType compressionType, Class formatClass,
@@ -169,7 +226,7 @@ public class S3SinkConnectorValidator {
     Objects.requireNonNull(key);
     if (!key.equals("")) {
       ConfigValue value = valuesByKey.get(key);
-      if (!message.equals("")) {
+      if (value != null && !message.equals("")) {
         value.addErrorMessage(message);
       }
     }
