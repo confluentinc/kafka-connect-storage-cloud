@@ -21,7 +21,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>12.0.9</version>
+        <version>12.0.0-SNAPSHOT</version>
     </parent>
 
     <groupId>io.confluent</groupId>
@@ -447,19 +447,19 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-avro-converter</artifactId>
-            <version>${confluent.version.range}</version>
+            <version>${io.confluent.schema-registry.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-protobuf-converter</artifactId>
-            <version>${confluent.version.range}</version>
+            <version>${io.confluent.schema-registry.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-json-schema-converter</artifactId>
-            <version>${confluent.version.range}</version>
+            <version>${io.confluent.schema-registry.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
