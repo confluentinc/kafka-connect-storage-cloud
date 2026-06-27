@@ -92,8 +92,10 @@ public class AvroRecordWriterProvider extends RecordViewSetter
               writer.create(avroSchema, s3out);
               openWriter();
             }
-            log.trace("Sink record with view {}: {}", recordView,
-                sinkRecordToLoggableString(record));
+            if (log.isTraceEnabled()) {
+              log.trace("Sink record with view {}: {}", recordView,
+                  sinkRecordToLoggableString(record));
+            }
             Object value = avroData.fromConnectData(schema, recordView.getView(record, false));
             // AvroData wraps primitive types so their schema can be included. We need to unwrap
             // NonRecordContainers to just their value to properly handle these types
