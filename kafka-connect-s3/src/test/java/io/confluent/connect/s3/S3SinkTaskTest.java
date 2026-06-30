@@ -151,7 +151,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
 
   @Test
   public void testAllowNullAndEmptyHeaders() throws Exception {
-    localProps.put(S3SinkConnectorConfig.ALLOW_NULL_AND_EMPTY_HEADERS_CONFIG, "true");
+    localProps.put(S3SinkConnectorConfig.IGNORE_NULL_OR_EMPTY_HEADERS_CONFIG, "true");
     localProps.put(S3SinkConnectorConfig.STORE_KAFKA_HEADERS_CONFIG, "true");
     setUp();
 
