@@ -352,12 +352,46 @@ public class S3SinkTask extends SinkTask {
   public Map<TopicPartition, OffsetAndMetadata> preCommit(
       Map<TopicPartition, OffsetAndMetadata> offsets
   ) {
+    if (connectorConfig.isCommitFrontierOffsetEnabled()) {
+      return preCommitFrontier(offsets);
+    }
     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
     for (TopicPartition tp : topicPartitionWriters.keySet()) {
       Long offset = topicPartitionWriters.get(tp).getOffsetToCommitAndReset();
       if (offset != null) {
         log.trace("Forwarding to framework request to commit offset: {} for {}", offset, tp);
         offsetsToCommit.put(tp, new OffsetAndMetadata(offset));
+      }
+    }
+    return offsetsToCommit;
+  }
+
+  /**
+   * Computes the offset to commit per partition as the frontier rather than the offset of the last
+   * uploaded file. The frontier is the lowest Kafka offset of a record that is buffered but not
+   * yet uploaded to S3, or the consumed high-water mark from the {@code offsets} argument when
+   * nothing is buffered. Everything below the frontier is decided, so committing it clears the
+   * phantom lag that a partition otherwise carries when records are consumed but no file has
+   * rotated (idle partitions, runs of filtered or null-valued records, or buffers still under the
+   * flush size). Because S3 resumes from the committed Kafka offset on restart, committing the
+   * frontier never steps over an in-flight record.
+   */
+  private Map<TopicPartition, OffsetAndMetadata> preCommitFrontier(
+      Map<TopicPartition, OffsetAndMetadata> offsets
+  ) {
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
+    for (TopicPartition tp : topicPartitionWriters.keySet()) {
+      // The framework's consumed position includes offsets that never reached put(), such as
+      // SMT-filtered records, so it is the correct upper bound for a partition with nothing
+      // buffered. It may be absent for a partition the framework has not reported yet.
+      OffsetAndMetadata consumed = offsets.get(tp);
+      Long consumedHighWaterMark = consumed != null ? consumed.offset() : null;
+      Long frontier =
+          topicPartitionWriters.get(tp).getFrontierOffset(consumedHighWaterMark);
+      if (frontier != null) {
+        log.trace("Forwarding to framework request to commit frontier offset: {} for {}",
+            frontier, tp);
+        offsetsToCommit.put(tp, new OffsetAndMetadata(frontier));
       }
     }
     return offsetsToCommit;
