@@ -18,6 +18,7 @@ package io.confluent.connect.s3;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.CompressionType;
+import io.confluent.connect.storage.backup.BackupModeValidator;
 import io.confluent.connect.storage.format.Format;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
@@ -101,9 +102,26 @@ public class S3SinkConnectorValidator {
           s3SinkConnectorConfig.storeKafkaKeys());
 
       validateWanModeAndPathStyleCompatibility(s3SinkConnectorConfig);
+
+      validateBackupMode(s3SinkConnectorConfig);
     }
 
     return new Config(new ArrayList<>(this.valuesByKey.values()));
+  }
+
+  public void validateBackupMode(S3SinkConnectorConfig config) {
+    if (!config.isBackupMode()) {
+      return;
+    }
+    List<String> errors = BackupModeValidator.validateSinkConfigs(
+        connectorConfigs,
+        config.formatClass().getSimpleName(),
+        config.isJsonSchemaEmbedded());
+    for (String error : errors) {
+      recordErrors(error,
+          FORMAT_CLASS_CONFIG,
+          io.confluent.connect.storage.StorageSinkConnectorConfig.MODE_CONFIG);
+    }
   }
 
   public void validateCompression(CompressionType compressionType, Class formatClass,
@@ -169,7 +187,7 @@ public class S3SinkConnectorValidator {
     Objects.requireNonNull(key);
     if (!key.equals("")) {
       ConfigValue value = valuesByKey.get(key);
-      if (!message.equals("")) {
+      if (value != null && !message.equals("")) {
         value.addErrorMessage(message);
       }
     }
