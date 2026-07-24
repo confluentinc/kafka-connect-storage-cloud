@@ -23,7 +23,6 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -56,13 +55,19 @@ public class S3StorageWriter implements StorageWriter {
       } finally {
         s3out.close();
       }
-    } catch (IOException e) {
+      log.debug("Schema file written: {}", path);
+    } catch (Exception e) {
       S3ErrorUtils.throwConnectException(e);
     }
   }
 
   @Override
   public boolean exists(String path) {
-    return storage.exists(path);
+    try {
+      return storage.exists(path);
+    } catch (Exception e) {
+      S3ErrorUtils.throwConnectException(e);
+      return false;
+    }
   }
 }

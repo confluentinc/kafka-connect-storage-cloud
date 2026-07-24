@@ -17,6 +17,7 @@ package io.confluent.connect.s3;
 
 import io.confluent.connect.s3.backup.S3StorageWriter;
 import io.confluent.connect.storage.backup.BackupEnvelope;
+import io.confluent.connect.storage.backup.BackupModeValidator;
 import io.confluent.connect.storage.backup.ConverterTypeDetector;
 import io.confluent.connect.storage.backup.ObjectStoreSchemaBackupStore;
 import io.confluent.connect.storage.backup.SchemaBackupStore;
@@ -75,8 +76,9 @@ public class BackupS3SinkTask extends S3SinkTask {
     envelopeTransformer = new EnvelopeTransformer(
         backupStore, keyType, valueType);
 
-    log.info("BackupS3SinkTask started: topicsDir={}, keyType={}, valueType={}",
-        topicsDir, keyType, valueType);
+    BackupModeValidator.logSinkStartupSummary(
+        originals, connectorConfig.formatClass().getSimpleName(),
+        keyType, valueType);
   }
 
   @Override

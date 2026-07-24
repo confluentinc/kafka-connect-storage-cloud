@@ -105,7 +105,7 @@ public class BackupRestoreRoundTripTest {
   // Simple schema, no refs — baseline round-trip
 
   @Test
-  public void simpleAvro_roundTrip() throws Exception {
+  public void simpleAvroRoundTrip() throws Exception {
     SchemaRegistryClient sourceSR = new MockSchemaRegistryClient();
     org.apache.avro.Schema avro =
         new org.apache.avro.Schema.Parser().parse(USER_V1_SCHEMA);
@@ -116,13 +116,12 @@ public class BackupRestoreRoundTripTest {
     original.put("name", "Alice");
     original.put("age", 30);
 
-    byte[] restored = backupAndRestore(
+    RestoreResult rr = backupAndRestore(
         sourceSR, schemaId, avro, original);
 
-    SchemaRegistryClient targetSR = new MockSchemaRegistryClient();
-    AvroConverter verifier = createConverter(targetSR, false);
+    AvroConverter verifier = createConverter(rr.targetSR, false);
     SchemaAndValue result = verifier.toConnectData(
-        TOPIC, new RecordHeaders(), restored);
+        TOPIC, new RecordHeaders(), rr.bytes);
 
     Struct s = (Struct) result.value();
     assertEquals("Alice", s.getString("name"));
@@ -133,7 +132,7 @@ public class BackupRestoreRoundTripTest {
   // Schema with direct reference (User → Address)
 
   @Test
-  public void directReference_roundTrip() throws Exception {
+  public void directReferenceRoundTrip() throws Exception {
     SchemaRegistryClient sourceSR = new MockSchemaRegistryClient();
 
     AvroSchema addressSchema = new AvroSchema(ADDRESS_SCHEMA);
@@ -177,7 +176,7 @@ public class BackupRestoreRoundTripTest {
 
     // Restore to fresh SR
     SchemaRegistryClient targetSR = new MockSchemaRegistryClient();
-    AvroConverter restoreConv = createConverter(targetSR, false);
+    AvroConverter restoreConv = createConverter(targetSR, true);
     byte[] restored = restoreConv.fromConnectData(
         TOPIC, headers, backed.schema(), backed.value());
     assertNotNull("restored bytes", restored);
@@ -187,8 +186,9 @@ public class BackupRestoreRoundTripTest {
         "address-value", new AvroSchema(ADDRESS_SCHEMA));
     assertTrue("Address in target SR", targetAddrV > 0);
 
-    // Verify data
-    SchemaAndValue result = restoreConv.toConnectData(
+    // Verify data (verifier without backup.enabled to get raw struct)
+    AvroConverter verifier = createConverter(targetSR, false);
+    SchemaAndValue result = verifier.toConnectData(
         TOPIC, headers, restored);
     Struct s = (Struct) result.value();
     assertEquals("Alice", s.getString("name"));
@@ -200,7 +200,7 @@ public class BackupRestoreRoundTripTest {
   // Nested references (User → Address → Country) — the complex case
 
   @Test
-  public void nestedReferences_roundTrip() throws Exception {
+  public void nestedReferencesRoundTrip() throws Exception {
     SchemaRegistryClient sourceSR = new MockSchemaRegistryClient();
 
     // Register Country
@@ -267,7 +267,7 @@ public class BackupRestoreRoundTripTest {
 
     // Restore to fresh SR
     SchemaRegistryClient targetSR = new MockSchemaRegistryClient();
-    AvroConverter restoreConv = createConverter(targetSR, false);
+    AvroConverter restoreConv = createConverter(targetSR, true);
     byte[] restored = restoreConv.fromConnectData(
         TOPIC, headers, backed.schema(), backed.value());
     assertNotNull(restored);
@@ -277,8 +277,9 @@ public class BackupRestoreRoundTripTest {
         "country-value", new AvroSchema(COUNTRY_SCHEMA));
     assertTrue("Country in target", targetCountryV > 0);
 
-    // Verify nested data
-    SchemaAndValue result = restoreConv.toConnectData(
+    // Verify nested data (verifier without backup.enabled to get raw struct)
+    AvroConverter verifier = createConverter(targetSR, false);
+    SchemaAndValue result = verifier.toConnectData(
         TOPIC, headers, restored);
     Struct s = (Struct) result.value();
     assertEquals("Alice", s.getString("name"));
@@ -292,7 +293,7 @@ public class BackupRestoreRoundTripTest {
   // Schema evolution: V1 then V2, both restored correctly
 
   @Test
-  public void schemaEvolution_twoVersions_roundTrip()
+  public void schemaEvolutionTwoVersionsRoundTrip()
       throws Exception {
     SchemaRegistryClient sourceSR = new MockSchemaRegistryClient();
 
@@ -329,7 +330,8 @@ public class BackupRestoreRoundTripTest {
     // Backup + restore both
     AvroConverter backupConv = createConverter(sourceSR, true);
     SchemaRegistryClient targetSR = new MockSchemaRegistryClient();
-    AvroConverter restoreConv = createConverter(targetSR, false);
+    AvroConverter restoreConv = createConverter(targetSR, true);
+    AvroConverter verifier = createConverter(targetSR, false);
     RecordHeaders h = new RecordHeaders();
 
     // V1 round-trip
@@ -337,7 +339,7 @@ public class BackupRestoreRoundTripTest {
         TOPIC, h, serializeAvro(id1, v1, rec1));
     byte[] restored1 = restoreConv.fromConnectData(
         TOPIC, h, backed1.schema(), backed1.value());
-    SchemaAndValue result1 = restoreConv.toConnectData(
+    SchemaAndValue result1 = verifier.toConnectData(
         TOPIC, h, restored1);
     assertEquals("Alice",
         ((Struct) result1.value()).getString("name"));
@@ -349,7 +351,7 @@ public class BackupRestoreRoundTripTest {
         TOPIC, h, serializeAvro(id2, v2, rec2));
     byte[] restored2 = restoreConv.fromConnectData(
         TOPIC, h, backed2.schema(), backed2.value());
-    SchemaAndValue result2 = restoreConv.toConnectData(
+    SchemaAndValue result2 = verifier.toConnectData(
         TOPIC, h, restored2);
     Struct s2 = (Struct) result2.value();
     assertEquals("Bob", s2.getString("name"));
@@ -361,7 +363,7 @@ public class BackupRestoreRoundTripTest {
   // Tombstone round-trip
 
   @Test
-  public void tombstone_roundTrip() throws Exception {
+  public void tombstoneRoundTrip() throws Exception {
     SchemaRegistryClient sourceSR = new MockSchemaRegistryClient();
     AvroConverter backupConv = createConverter(sourceSR, true);
 
@@ -370,7 +372,7 @@ public class BackupRestoreRoundTripTest {
     assertEquals(SchemaAndValue.NULL, backed);
 
     SchemaRegistryClient targetSR = new MockSchemaRegistryClient();
-    AvroConverter restoreConv = createConverter(targetSR, false);
+    AvroConverter restoreConv = createConverter(targetSR, true);
     byte[] restored = restoreConv.fromConnectData(
         TOPIC, new RecordHeaders(), null, null);
     assertNull("Tombstone restores as null", restored);
@@ -380,7 +382,7 @@ public class BackupRestoreRoundTripTest {
   // Version mapping: same schema under multiple subjects
 
   @Test
-  public void multipleSubjects_versionMapping() throws Exception {
+  public void multipleSubjectsVersionMapping() throws Exception {
     SchemaRegistryClient sourceSR = new MockSchemaRegistryClient();
 
     org.apache.avro.Schema avro =
@@ -405,7 +407,7 @@ public class BackupRestoreRoundTripTest {
   // Wrapper field completeness verification
 
   @Test
-  public void wrapperFields_complete() throws Exception {
+  public void wrapperFieldsComplete() throws Exception {
     SchemaRegistryClient sourceSR = new MockSchemaRegistryClient();
     org.apache.avro.Schema avro =
         new org.apache.avro.Schema.Parser().parse(USER_V1_SCHEMA);
@@ -441,7 +443,7 @@ public class BackupRestoreRoundTripTest {
   // Pristine schema preservation — no connect.name injection
 
   @Test
-  public void pristineSchema_noConnectMetadata() throws Exception {
+  public void pristineSchemaNoConnectMetadata() throws Exception {
     SchemaRegistryClient sourceSR = new MockSchemaRegistryClient();
     org.apache.avro.Schema avro =
         new org.apache.avro.Schema.Parser().parse(USER_V1_SCHEMA);
@@ -485,7 +487,7 @@ public class BackupRestoreRoundTripTest {
       + "]}";
 
   @Test
-  public void pristineSchema_enumPreserved() throws Exception {
+  public void pristineSchemaEnumPreserved() throws Exception {
     SchemaRegistryClient sourceSR = new MockSchemaRegistryClient();
     org.apache.avro.Schema avro =
         new org.apache.avro.Schema.Parser().parse(ENUM_SCHEMA);
@@ -525,7 +527,7 @@ public class BackupRestoreRoundTripTest {
       + "}";
 
   @Test
-  public void protobuf_roundTrip() throws Exception {
+  public void protobufRoundTrip() throws Exception {
     SchemaRegistryClient sourceSR = new MockSchemaRegistryClient();
     ProtobufSchema protoSchema = new ProtobufSchema(PROTO_SCHEMA);
     int schemaId = sourceSR.register(
@@ -563,7 +565,11 @@ public class BackupRestoreRoundTripTest {
         TOPIC, headers, backed.schema(), backed.value());
     assertNotNull(restored);
 
-    SchemaAndValue result = restoreConv.toConnectData(
+    ProtobufConverter verifier = new ProtobufConverter(targetSR);
+    Map<String, Object> verifyCfg = new HashMap<>();
+    verifyCfg.put("schema.registry.url", "mock://");
+    verifier.configure(verifyCfg, false);
+    SchemaAndValue result = verifier.toConnectData(
         TOPIC, headers, restored);
     Struct s = (Struct) result.value();
     assertEquals(42, (int) s.getInt32("order_id"));
@@ -580,7 +586,7 @@ public class BackupRestoreRoundTripTest {
       + "\"required\":[\"id\",\"name\"]}";
 
   @Test
-  public void jsonSchema_roundTrip() throws Exception {
+  public void jsonSchemaRoundTrip() throws Exception {
     SchemaRegistryClient sourceSR = new MockSchemaRegistryClient();
     JsonSchema jsonSchema = new JsonSchema(JSON_SCHEMA_DEF);
     int schemaId = sourceSR.register(
@@ -614,16 +620,30 @@ public class BackupRestoreRoundTripTest {
         TOPIC, headers, backed.schema(), backed.value());
     assertNotNull(restored);
 
-    SchemaAndValue result = restoreConv.toConnectData(
+    JsonSchemaConverter verifier = new JsonSchemaConverter(targetSR);
+    Map<String, Object> verifyCfg = new HashMap<>();
+    verifyCfg.put("schema.registry.url", "mock://");
+    verifier.configure(verifyCfg, false);
+    SchemaAndValue result = verifier.toConnectData(
         TOPIC, headers, restored);
     Struct s = (Struct) result.value();
-    assertEquals(1, (int) s.getInt32("id"));
+    assertEquals(1L, (long) s.getInt64("id"));
     assertEquals("Alice", s.getString("name"));
   }
 
   // ========================== HELPERS ==========================
 
-  private byte[] backupAndRestore(
+  private static class RestoreResult {
+    final byte[] bytes;
+    final SchemaRegistryClient targetSR;
+
+    RestoreResult(byte[] bytes, SchemaRegistryClient targetSR) {
+      this.bytes = bytes;
+      this.targetSR = targetSR;
+    }
+  }
+
+  private RestoreResult backupAndRestore(
       SchemaRegistryClient sourceSR, int schemaId,
       org.apache.avro.Schema schema, GenericRecord record)
       throws Exception {
@@ -634,9 +654,10 @@ public class BackupRestoreRoundTripTest {
         serializeAvro(schemaId, schema, record));
 
     SchemaRegistryClient targetSR = new MockSchemaRegistryClient();
-    AvroConverter restoreConv = createConverter(targetSR, false);
-    return restoreConv.fromConnectData(
+    AvroConverter restoreConv = createConverter(targetSR, true);
+    byte[] restored = restoreConv.fromConnectData(
         TOPIC, headers, backed.schema(), backed.value());
+    return new RestoreResult(restored, targetSR);
   }
 
   private AvroConverter createConverter(
