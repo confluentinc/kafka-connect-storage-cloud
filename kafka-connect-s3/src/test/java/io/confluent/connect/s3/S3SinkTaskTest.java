@@ -37,8 +37,10 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.io.ByteArrayInputStream;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import io.confluent.connect.s3.format.avro.AvroUtils;
 import io.confluent.connect.s3.storage.S3Storage;
@@ -51,6 +53,7 @@ import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -301,6 +304,33 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     }
   }
 
+  @Test
+  public void testPutRecordForPartitionInAssignmentButNotYetOpenedCreatesWriter()
+      throws Exception {
+    setUp();
+    replayAll();
+    task = new S3SinkTask();
+    task.initialize(context);
+    task.start(properties);
+    verifyAll();
 
+    // Simulate the assignment already including a new partition before task.open() has run
+    // for it, without going through task.open() itself.
+    Set<TopicPartition> expandedAssignment = new HashSet<>(context.assignment());
+    expandedAssignment.add(TOPIC_PARTITION3);
+    context.setAssignment(expandedAssignment);
+
+    List<SinkRecord> sinkRecords =
+        createRecordsWithPrimitive(3, 0, Collections.singleton(TOPIC_PARTITION3));
+    task.put(sinkRecords);
+
+    assertNotNull(task.getTopicPartitionWriter(TOPIC_PARTITION3));
+
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 3};
+    verify(sinkRecords, validOffsets, Collections.singleton(TOPIC_PARTITION3), true);
+  }
 }
 
