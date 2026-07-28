@@ -69,8 +69,10 @@ public class ByteArrayRecordWriterProvider extends RecordViewSetter
 
           @Override
           public void write(SinkRecord record) throws IOException {
-            log.trace("Sink record with view {}: {}", recordView,
-                sinkRecordToLoggableString(record));
+            if (log.isTraceEnabled()) {
+              log.trace("Sink record with view {}: {}", recordView,
+                  sinkRecordToLoggableString(record));
+            }
             byte[] bytes = converter.fromConnectData(record.topic(),
                 recordView.getViewSchema(record, false), recordView.getView(record, false));
             s3outWrapper.write(bytes);
