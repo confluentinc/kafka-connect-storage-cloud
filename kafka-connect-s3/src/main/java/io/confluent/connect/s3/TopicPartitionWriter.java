@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.TreeSet;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
@@ -103,6 +104,13 @@ public class TopicPartitionWriter {
   private Long baseRecordTimestamp;
   private Long offsetToCommit;
   private final RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
+
+  // The set P of pending offsets: records that have been buffered for this partition but are not
+  // yet durable in S3. An offset is added when the record is buffered and removed once the file
+  // holding it has been committed. The frontier is min(P) when P is non-empty, so this stays
+  // ordered for a cheap first() lookup.
+  private final boolean commitFrontierOffset;
+  private final TreeSet<Long> pendingOffsets = new TreeSet<>();
 
   // VisibleForTesting
   Map<Long, String> offsetToFilenameMap;
@@ -204,6 +212,7 @@ public class TopicPartitionWriter {
         connectorConfig.getString(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG));
 
     buffer = new LinkedList<>();
+    commitFrontierOffset = connectorConfig.isCommitFrontierOffsetEnabled();
     commitFiles = new LinkedHashMap<>();
     writers = new HashMap<>();
     currentSchemas = new HashMap<>();
@@ -302,7 +311,9 @@ public class TopicPartitionWriter {
         throw new ConnectException(e);
       } catch (SchemaProjectorException e) {
         if (reporter != null) {
-          reporter.report(buffer.poll(), e);
+          SinkRecord errantRecord = buffer.poll();
+          markDecidedOffset(errantRecord);
+          reporter.report(errantRecord, e);
           log.warn("Errant record written to DLQ due to: {}", e.getMessage());
         } else {
           throw e;
@@ -366,7 +377,7 @@ public class TopicPartitionWriter {
         } catch (PartitionException e) {
           if (reporter != null) {
             reporter.report(record, e);
-            buffer.poll();
+            markDecidedOffset(buffer.poll());
             break;
           } else {
             throw e;
@@ -504,8 +515,11 @@ public class TopicPartitionWriter {
 
     SinkRecord projectedRecord = compatibility.project(record, null, currentValueSchema);
     boolean validRecord = writeRecord(projectedRecord, encodedPartition, record);
-    buffer.poll();
+    SinkRecord bufferedRecord = buffer.poll();
     if (!validRecord) {
+      // The record was faulty and went to the DLQ, so it is decided and leaves the pending set.
+      // It stays in the set on the valid path until the file holding it is committed.
+      markDecidedOffset(bufferedRecord);
       // skip the faulty record and don't rotate
       return false;
     }
@@ -585,12 +599,46 @@ public class TopicPartitionWriter {
 
   public void buffer(SinkRecord sinkRecord) {
     buffer.add(sinkRecord);
+    if (commitFrontierOffset) {
+      // Record the offset in the pending set the moment it is buffered, and before put() returns
+      // to the framework. This is the single place a record enters P, so no code path can accept a
+      // record without it becoming visible to the frontier computation.
+      pendingOffsets.add(sinkRecord.kafkaOffset());
+    }
+  }
+
+  /**
+   * Marks a buffered record as decided without uploading it, which happens when it is sent to the
+   * dead-letter queue or dropped by a partition error. The record will never be uploaded, so it
+   * leaves the pending set and stops holding the frontier back.
+   */
+  private void markDecidedOffset(SinkRecord sinkRecord) {
+    if (commitFrontierOffset && sinkRecord != null) {
+      pendingOffsets.remove(sinkRecord.kafkaOffset());
+    }
   }
 
   public Long getOffsetToCommitAndReset() {
     Long latest = offsetToCommit;
     offsetToCommit = null;
     return latest;
+  }
+
+  /**
+   * Returns the frontier offset to commit for this partition: the lowest offset of a record that
+   * is buffered but not yet uploaded, or the consumed high-water mark when nothing is buffered.
+   * Every offset below the frontier is decided, either already uploaded to S3, or dropped or
+   * filtered before it could be buffered, so committing it never steps over an in-flight record.
+   *
+   * @param consumedHighWaterMark the offset one past the last record the framework has handed to
+   *                              put() for this partition, as supplied by preCommit
+   * @return the frontier offset, or null when this partition has no consumed position to report
+   */
+  public Long getFrontierOffset(Long consumedHighWaterMark) {
+    if (!pendingOffsets.isEmpty()) {
+      return pendingOffsets.first();
+    }
+    return consumedHighWaterMark;
   }
 
   public Long currentStartOffset() {
@@ -976,6 +1024,12 @@ public class TopicPartitionWriter {
     }
 
     offsetToCommit = currentOffset + 1;
+    if (commitFrontierOffset) {
+      // Every offset at or below currentOffset has now been uploaded to S3 and is durable, so it
+      // leaves the pending set. The frontier then advances to the next record still in flight, or
+      // to the consumed high-water mark once nothing is left buffered.
+      pendingOffsets.headSet(currentOffset, true).clear();
+    }
     commitFiles.clear();
     currentSchemas.clear();
     offsetToFilenameMap.clear();
