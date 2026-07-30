@@ -11,12 +11,13 @@ import org.apache.commons.io.FileUtils;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
+import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.jupiter.api.Tag;
+import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,7 +56,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLA
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 
-@Tag("integration")
+@Category(IntegrationTest.class)
 public class S3SinkConnectorStsAssumeRoleIT extends BaseConnectorIT {
   private static final Logger log = LoggerFactory.getLogger(S3SinkConnectorStsAssumeRoleIT.class);
 

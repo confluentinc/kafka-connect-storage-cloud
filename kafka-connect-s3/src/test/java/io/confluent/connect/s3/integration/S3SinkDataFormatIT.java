@@ -53,10 +53,11 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.jupiter.api.Tag;
+import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
@@ -65,7 +66,7 @@ import org.slf4j.LoggerFactory;
 import org.testcontainers.shaded.com.google.common.collect.ImmutableMap;
 
 @RunWith(Parameterized.class)
-@Tag("integration")
+@Category(IntegrationTest.class)
 public class S3SinkDataFormatIT extends BaseConnectorIT {
 
   private static final Logger log = LoggerFactory.getLogger(S3SinkDataFormatIT.class);
