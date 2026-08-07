@@ -276,17 +276,23 @@ public class S3SinkTask extends SinkTask {
   }
 
   /**
-   * Retrieves the TopicPartitionWriter for the given TopicPartition.
-   * If no writer is found, it indicates a mismatch between the record's topic partition
-   * and the assigned partitions.
+   * Retrieves the TopicPartitionWriter for the given TopicPartition, lazily creating one if the
+   * partition is currently assigned to this task but its writer was not created yet.
    *
    * @param tp the TopicPartition to get the writer for
    * @return the TopicPartitionWriter
-   * @throws ConnectException if no writer is found
+   * @throws ConnectException if the partition is not currently assigned to this task
    */
   private TopicPartitionWriter getTopicPartitionWriterOrThrow(TopicPartition tp)
       throws ConnectException {
     TopicPartitionWriter writer = topicPartitionWriters.get(tp);
+    if (writer == null && context.assignment().contains(tp)) {
+      // Assignment can be applied before this task's writer map catches up; create the
+      // missing writer instead of failing on an otherwise valid, currently-assigned partition.
+      log.warn("No writer yet for newly assigned topic partition {}. Creating one now.", tp);
+      writer = newTopicPartitionWriter(tp);
+      topicPartitionWriters.put(tp, writer);
+    }
     if (writer == null) {
       String errorMsg = String.format(
           "No writer found for topic partition %s. "
@@ -365,14 +371,18 @@ public class S3SinkTask extends SinkTask {
 
   @Override
   public void close(Collection<TopicPartition> partitions) {
-    for (TopicPartition tp : topicPartitionWriters.keySet()) {
-      try {
-        topicPartitionWriters.get(tp).close();
-      } catch (ConnectException e) {
-        log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
+    // Only close writers for the partitions actually being revoked; revocation can be partial
+    // and the retained partitions keep receiving records without a fresh open().
+    for (TopicPartition tp : partitions) {
+      TopicPartitionWriter writer = topicPartitionWriters.remove(tp);
+      if (writer != null) {
+        try {
+          writer.close();
+        } catch (ConnectException e) {
+          log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
+        }
       }
     }
-    topicPartitionWriters.clear();
   }
 
   @Override
