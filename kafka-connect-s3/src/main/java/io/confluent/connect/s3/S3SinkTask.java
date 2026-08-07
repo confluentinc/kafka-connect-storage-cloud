@@ -371,14 +371,18 @@ public class S3SinkTask extends SinkTask {
 
   @Override
   public void close(Collection<TopicPartition> partitions) {
-    for (TopicPartition tp : topicPartitionWriters.keySet()) {
-      try {
-        topicPartitionWriters.get(tp).close();
-      } catch (ConnectException e) {
-        log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
+    // Only close writers for the partitions actually being revoked; revocation can be partial
+    // and the retained partitions keep receiving records without a fresh open().
+    for (TopicPartition tp : partitions) {
+      TopicPartitionWriter writer = topicPartitionWriters.remove(tp);
+      if (writer != null) {
+        try {
+          writer.close();
+        } catch (ConnectException e) {
+          log.error("Error closing writer for {}. Error: {}", tp, e.getMessage());
+        }
       }
     }
-    topicPartitionWriters.clear();
   }
 
   @Override
