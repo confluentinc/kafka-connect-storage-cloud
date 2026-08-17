@@ -18,6 +18,7 @@ package io.confluent.connect.s3;
 import io.confluent.connect.storage.partitioner.FieldPartitionerValidator;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.slf4j.Logger;
@@ -64,7 +65,18 @@ public class S3SinkConnector extends SinkConnector {
 
   @Override
   public Class<? extends Task> taskClass() {
-    return S3SinkTask.class;
+    if (config == null) {
+      return S3SinkTask.class;
+    }
+    switch (config.mode()) {
+      case BACKUP_FULL_RECORD:
+        return BackupS3SinkTask.class;
+      case GENERIC:
+        return S3SinkTask.class;
+      default:
+        throw new ConfigException(
+            "mode", config.mode().name(), "Unsupported mode");
+    }
   }
 
   @Override
