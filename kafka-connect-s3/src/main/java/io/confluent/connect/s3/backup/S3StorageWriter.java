@@ -46,15 +46,10 @@ public class S3StorageWriter implements StorageWriter {
     if (content == null) {
       throw new ConnectException("Cannot write null content to path: " + path);
     }
-    try {
-      S3OutputStream s3out =
-          (S3OutputStream) storage.create(path, storage.conf(), true);
-      try {
-        s3out.write(content.getBytes(StandardCharsets.UTF_8));
-        s3out.commit();
-      } finally {
-        s3out.close();
-      }
+    try (S3OutputStream s3out =
+        (S3OutputStream) storage.create(path, storage.conf(), true)) {
+      s3out.write(content.getBytes(StandardCharsets.UTF_8));
+      s3out.commit();
       log.debug("Schema file written: {}", path);
     } catch (Exception e) {
       log.error("Failed to write schema file to S3: path={}", path, e);
