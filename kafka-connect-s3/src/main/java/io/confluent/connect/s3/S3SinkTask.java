@@ -15,7 +15,7 @@
 
 package io.confluent.connect.s3;
 
-3import com.amazonaws.AmazonClientException;
+import com.amazonaws.AmazonClientException;
 import io.confluent.connect.s3.S3SinkConnectorConfig.OutputWriteBehavior;
 import io.confluent.connect.s3.util.TombstoneSupportedPartitioner;
 import io.confluent.connect.s3.util.SchemaPartitioner;
@@ -276,9 +276,8 @@ public class S3SinkTask extends SinkTask {
   }
 
   /**
-   * Retrieves the TopicPartitionWriter for the given TopicPartition.
-   * If no writer is found, it indicates a mismatch between the record's topic partition
-   * and the assigned partitions.
+   * Retrieves the TopicPartitionWriter for the given TopicPartition, lazily creating one if the
+   * partition is currently assigned to this task but its writer was not created yet.
    *
    * @param tp the TopicPartition to get the writer for
    * @return the TopicPartitionWriter
