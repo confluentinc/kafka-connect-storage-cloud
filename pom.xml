@@ -73,6 +73,8 @@
         <dnsjava.version>3.6.1</dnsjava.version>
         <commons.lang3.version>3.18.0</commons.lang3.version>
         <netty.version>4.2.16.Final</netty.version>
+        <!-- Override to consume locally-built storage-common with BACKUP_FULL_RECORD envelope classes -->
+        <kafka.connect.storage.common.version>12.1.0-SNAPSHOT</kafka.connect.storage.common.version>
     </properties>
 
     <repositories>
