@@ -219,9 +219,9 @@ public class S3SinkTask extends SinkTask {
     if (config.getSchemaPartitionAffixType() != S3SinkConnectorConfig.AffixType.NONE) {
       partitioner = new SchemaPartitioner<>(partitioner);
     }
-    if (config.isTombstoneWriteEnabled() && !config.isBackupMode()) {
-      String tomebstonePartition = config.getTombstoneEncodedPartition();
-      partitioner = new TombstoneSupportedPartitioner<>(partitioner, tomebstonePartition);
+    if (config.isTombstoneWriteEnabled()) {
+      String tombstonePartition = config.getTombstoneEncodedPartition();
+      partitioner = new TombstoneSupportedPartitioner<>(partitioner, tombstonePartition);
     }
     partitioner.configure(plainValues);
     return partitioner;
@@ -338,7 +338,7 @@ public class S3SinkTask extends SinkTask {
         return false;
       } else {
         // Fail
-        throw new DataException("Null valued records are not writeable with current "
+        throw new ConnectException("Null valued records are not writeable with current "
             + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " settings.");
       }
     }

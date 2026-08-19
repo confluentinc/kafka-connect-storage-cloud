@@ -187,7 +187,7 @@ public class S3SinkConnectorValidator {
     Objects.requireNonNull(key);
     if (!key.equals("")) {
       ConfigValue value = valuesByKey.get(key);
-      if (value != null && !message.equals("")) {
+      if (!message.equals("")) {
         value.addErrorMessage(message);
       }
     }

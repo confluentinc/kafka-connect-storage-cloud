@@ -42,7 +42,22 @@ import java.util.Map;
  * naturally handles every case without special-case logic.
  *
  * <p>Schema files (.entry.json + .avsc/.proto/.json) are backed up
- * as a side effect during wrapping (idempotent, with 3-level dedup).
+ * as a side effect during wrapping. Writes are <b>idempotent</b>:
+ * the S3 path is keyed by schema ID and the content (raw schema bytes,
+ * entry.json fields) is a pure function of that key, so two tasks
+ * writing the same schema always produce identical bytes and S3
+ * last-write-wins is a no-op.
+ *
+ * <p>To avoid redundant work, {@link ObjectStoreSchemaBackupStore}
+ * applies <b>3-level deduplication</b>:
+ * <ol>
+ *   <li>In-memory {@code ConcurrentHashMap}-backed set of already-backed-up
+ *       schema keys (blocks re-attempts within the same task JVM).</li>
+ *   <li>S3 {@code HEAD} on the entry.json path (blocks cross-task
+ *       double-writes when another task has already completed).</li>
+ *   <li>Byte-identical write if both prior levels miss (writes still
+ *       succeed; last-write-wins produces the same bytes).</li>
+ * </ol>
  *
  * <p>Follows the same pattern as the source side where
  * {@code RestoreS3SourceTask} extends the generic source task.
