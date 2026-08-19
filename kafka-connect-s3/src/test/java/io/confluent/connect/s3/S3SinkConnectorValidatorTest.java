@@ -6,6 +6,7 @@ import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
+import io.confluent.connect.storage.StorageSinkConnectorConfig.Mode;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.format.SchemaFileReader;
@@ -249,7 +250,7 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
 
   @Test
   public void testValidateBackupModeSkippedWhenGeneric() {
-    localProps.put(MODE_CONFIG, "GENERIC");
+    localProps.put(MODE_CONFIG, Mode.GENERIC.name());
     localProps.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
     s3SinkConnectorValidator = new S3SinkConnectorValidator(
         S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
@@ -267,7 +268,7 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
 
   @Test
   public void testValidateBackupModeSurfacesErrorsOnByteArrayFormat() {
-    localProps.put(MODE_CONFIG, "BACKUP_FULL_RECORD");
+    localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
     localProps.put(FORMAT_CLASS_CONFIG, ByteArrayFormat.class.getName());
     localProps.put("key.converter", "org.apache.kafka.connect.storage.StringConverter");
     localProps.put("value.converter", "io.confluent.connect.avro.AvroConverter");
@@ -287,7 +288,7 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
 
   @Test
   public void testValidateBackupModeSurfacesErrorsOnMissingConverter() {
-    localProps.put(MODE_CONFIG, "BACKUP_FULL_RECORD");
+    localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
     localProps.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
     // key.converter and value.converter deliberately not set
     s3SinkConnectorValidator = new S3SinkConnectorValidator(
@@ -301,7 +302,7 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
   }
 
   private boolean anyErrorMentionsBackupMode(Config configs, String field) {
-    return anyErrorContains(configs, field, "BACKUP_FULL_RECORD");
+    return anyErrorContains(configs, field, Mode.BACKUP_FULL_RECORD.name());
   }
 
   private boolean anyErrorContains(Config configs, String field, String needle) {
