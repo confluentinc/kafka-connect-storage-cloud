@@ -36,7 +36,7 @@ import java.util.Map;
  * before delegating to the parent {@link S3SinkTask}.
  *
  * <p>Records are transformed into envelope-shaped SinkRecords in
- * {@code put()} — before they reach {@code TopicPartitionWriter}.
+ * {@code put()}, before they reach {@code TopicPartitionWriter}.
  * This means all schema rotation decisions (key changes, value changes,
  * tombstone transitions) are based on the envelope schema, which
  * naturally handles every case without special-case logic.
@@ -58,9 +58,6 @@ import java.util.Map;
  *   <li>Byte-identical write if both prior levels miss (writes still
  *       succeed; last-write-wins produces the same bytes).</li>
  * </ol>
- *
- * <p>Follows the same pattern as the source side where
- * {@code RestoreS3SourceTask} extends the generic source task.
  */
 public class BackupS3SinkTask extends S3SinkTask {
 
@@ -94,6 +91,8 @@ public class BackupS3SinkTask extends S3SinkTask {
     BackupModeValidator.logSinkStartupSummary(
         originals, connectorConfig.formatClass().getSimpleName(),
         keyType, valueType);
+    log.info("Started backup-mode S3 sink task (keyType={}, valueType={}, format={})",
+        keyType, valueType, connectorConfig.formatClass().getSimpleName());
   }
 
   @Override

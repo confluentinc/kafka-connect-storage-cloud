@@ -28,7 +28,7 @@ import java.nio.charset.StandardCharsets;
 /**
  * S3 implementation of {@link StorageWriter}.
  * Handles S3's commit-before-close semantics.
- * All writes are idempotent — no CAS needed.
+ * All writes are idempotent, no CAS needed.
  */
 public class S3StorageWriter implements StorageWriter {
 
@@ -57,6 +57,7 @@ public class S3StorageWriter implements StorageWriter {
       }
       log.debug("Schema file written: {}", path);
     } catch (Exception e) {
+      log.error("Failed to write schema file to S3: path={}", path, e);
       S3ErrorUtils.throwConnectException(e);
     }
   }
@@ -66,6 +67,7 @@ public class S3StorageWriter implements StorageWriter {
     try {
       return storage.exists(path);
     } catch (Exception e) {
+      log.warn("S3 exists() check failed: path={}", path, e);
       S3ErrorUtils.throwConnectException(e);
       return false;
     }
