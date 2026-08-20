@@ -18,6 +18,7 @@ package io.confluent.connect.s3;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.CompressionType;
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.backup.BackupModeValidator;
 import io.confluent.connect.storage.format.Format;
 import org.apache.kafka.common.config.Config;
@@ -116,11 +117,12 @@ public class S3SinkConnectorValidator {
     List<String> errors = BackupModeValidator.validateSinkConfigs(
         connectorConfigs,
         config.formatClass().getSimpleName(),
-        config.isJsonSchemaEmbedded());
+        config.isJsonSchemaEmbedded(),
+        StorageSinkConnectorConfig.Mode.BACKUP_FULL_RECORD.name());
     for (String error : errors) {
       recordErrors(error,
           FORMAT_CLASS_CONFIG,
-          io.confluent.connect.storage.StorageSinkConnectorConfig.MODE_CONFIG);
+          StorageSinkConnectorConfig.MODE_CONFIG);
     }
   }
 
