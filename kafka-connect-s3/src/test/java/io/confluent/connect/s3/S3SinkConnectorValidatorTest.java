@@ -34,6 +34,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
+  private static final String STRING_CONVERTER =
+      "org.apache.kafka.connect.storage.StringConverter";
+  private static final String AVRO_CONVERTER = "io.confluent.connect.avro.AvroConverter";
+  private static final String KEY_CONVERTER_CONFIG = "key.converter";
+  private static final String VALUE_CONVERTER_CONFIG = "value.converter";
+
   protected Map<String, String> localProps = new HashMap<>();
   private S3SinkConnectorValidator s3SinkConnectorValidator;
 
@@ -270,8 +276,8 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
   public void testValidateBackupModeSurfacesErrorsOnByteArrayFormat() {
     localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
     localProps.put(FORMAT_CLASS_CONFIG, ByteArrayFormat.class.getName());
-    localProps.put("key.converter", "org.apache.kafka.connect.storage.StringConverter");
-    localProps.put("value.converter", "io.confluent.connect.avro.AvroConverter");
+    localProps.put(KEY_CONVERTER_CONFIG, STRING_CONVERTER);
+    localProps.put(VALUE_CONVERTER_CONFIG, AVRO_CONVERTER);
     localProps.put("value.converter.enhanced.avro.schema.support", "true");
     s3SinkConnectorValidator = new S3SinkConnectorValidator(
         S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
@@ -306,8 +312,8 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
     localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
     localProps.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
     // format.json.schema.enable deliberately not set → BackupModeValidator must reject
-    localProps.put("key.converter", "org.apache.kafka.connect.storage.StringConverter");
-    localProps.put("value.converter", "org.apache.kafka.connect.storage.StringConverter");
+    localProps.put(KEY_CONVERTER_CONFIG, STRING_CONVERTER);
+    localProps.put(VALUE_CONVERTER_CONFIG, STRING_CONVERTER);
     s3SinkConnectorValidator = new S3SinkConnectorValidator(
         S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
 
