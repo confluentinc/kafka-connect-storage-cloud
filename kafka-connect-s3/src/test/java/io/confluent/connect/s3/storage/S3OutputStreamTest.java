@@ -1,9 +1,13 @@
 package io.confluent.connect.s3.storage;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+
+import io.confluent.connect.s3.util.LogCaptureAppender;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -311,5 +315,17 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
 
     assertNotNull(completeMultipartRequestCaptor.getValue());
     assertNull(completeMultipartRequestCaptor.getValue().ifNoneMatch());
+  }
+
+  @Test
+  public void testCreateLogDoesNotContainObjectKey() throws Exception {
+    // The object key embeds the encoded-partition path (a record field value under a field-based
+    // partitioner), so the stream-creation INFO line must log only the bucket, not the key.
+    String canaryKey = "topics/t/field=CANARY_OBJECT_KEY/t+0+0";
+    try (LogCaptureAppender logs = LogCaptureAppender.attach(S3OutputStream.class)) {
+      new S3OutputStream(canaryKey, connectorConfig, s3Mock);
+      assertTrue(logs.anyMessageContains("Create S3OutputStream for bucket"));
+      assertFalse(logs.anyMessageContains("CANARY_OBJECT_KEY"));
+    }
   }
 }

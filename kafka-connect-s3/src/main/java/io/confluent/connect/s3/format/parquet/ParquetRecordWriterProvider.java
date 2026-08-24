@@ -77,7 +77,9 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
           public void write(SinkRecord record) throws IOException {
             if (schema == null || writer == null) {
               schema = recordView.getViewSchema(record, true);
-              log.info("Opening record writer for: {}", adjustedFilename);
+              // At DEBUG only: the filename embeds the encoded-partition path, which carries
+              // record field values under a field-based partitioner.
+              log.debug("Opening record writer for: {}", adjustedFilename);
               org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
               s3ParquetOutputFile = new S3ParquetOutputFile(storage, adjustedFilename);
               AvroParquetWriter.Builder<GenericRecord> builder =
