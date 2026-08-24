@@ -40,6 +40,8 @@ public class S3StorageWriterTest {
 
   private static final String TEST_PATH = "topics/foo/backup-metadata/schemas/42.entry.json";
   private static final String TEST_CONTENT = "{\"id\":\"42\",\"type\":\"AVRO\"}";
+  private static final String IO_FAILURE_MESSAGE = "s3 down";
+  private static final String STORAGE_FAILURE_MESSAGE = "storage down";
 
   private S3Storage storage;
   private S3SinkConnectorConfig config;
@@ -58,7 +60,7 @@ public class S3StorageWriterTest {
   }
 
   @Test
-  public void writeCommitsAndClosesStream() throws IOException {
+  public void testWriteCommitsAndClosesStream() throws IOException {
     writer.write(TEST_PATH, TEST_CONTENT);
 
     verify(out).write(TEST_CONTENT.getBytes());
@@ -67,12 +69,12 @@ public class S3StorageWriterTest {
   }
 
   @Test(expected = ConnectException.class)
-  public void writeRejectsNullContent() {
+  public void testWriteRejectsNullContent() {
     writer.write(TEST_PATH, null);
   }
 
   @Test
-  public void writeDoesNotOpenStreamWhenContentIsNull() {
+  public void testWriteDoesNotOpenStreamWhenContentIsNull() {
     try {
       writer.write(TEST_PATH, null);
       fail("expected ConnectException");
@@ -83,8 +85,8 @@ public class S3StorageWriterTest {
   }
 
   @Test
-  public void writeClosesStreamEvenWhenCommitFails() throws IOException {
-    doThrow(new IOException("commit failed")).when(out).commit();
+  public void testWriteClosesStreamEvenWhenCommitFails() throws IOException {
+    doThrow(new IOException(IO_FAILURE_MESSAGE)).when(out).commit();
 
     try {
       writer.write(TEST_PATH, TEST_CONTENT);
@@ -96,14 +98,22 @@ public class S3StorageWriterTest {
   }
 
   @Test(expected = ConnectException.class)
-  public void writeWrapsIoExceptionInConnectException() throws IOException {
-    doThrow(new IOException("s3 down")).when(out).commit();
+  public void testWriteWrapsIoExceptionInConnectException() throws IOException {
+    doThrow(new IOException(IO_FAILURE_MESSAGE)).when(out).commit();
+
+    writer.write(TEST_PATH, TEST_CONTENT);
+  }
+
+  @Test(expected = ConnectException.class)
+  public void testWriteWrapsCreateFailureInConnectException() {
+    when(storage.create(eq(TEST_PATH), any(S3SinkConnectorConfig.class), anyBoolean()))
+        .thenThrow(new RuntimeException(STORAGE_FAILURE_MESSAGE));
 
     writer.write(TEST_PATH, TEST_CONTENT);
   }
 
   @Test
-  public void existsDelegatesToStorageTrue() {
+  public void testExistsDelegatesToStorageTrue() {
     when(storage.exists(TEST_PATH)).thenReturn(true);
 
     assertTrue(writer.exists(TEST_PATH));
@@ -111,7 +121,7 @@ public class S3StorageWriterTest {
   }
 
   @Test
-  public void existsDelegatesToStorageFalse() {
+  public void testExistsDelegatesToStorageFalse() {
     when(storage.exists(TEST_PATH)).thenReturn(false);
 
     assertFalse(writer.exists(TEST_PATH));
@@ -119,8 +129,8 @@ public class S3StorageWriterTest {
   }
 
   @Test(expected = ConnectException.class)
-  public void existsWrapsExceptionInConnectException() {
-    when(storage.exists(TEST_PATH)).thenThrow(new RuntimeException("s3 down"));
+  public void testExistsWrapsExceptionInConnectException() {
+    when(storage.exists(TEST_PATH)).thenThrow(new RuntimeException(STORAGE_FAILURE_MESSAGE));
 
     writer.exists(TEST_PATH);
   }

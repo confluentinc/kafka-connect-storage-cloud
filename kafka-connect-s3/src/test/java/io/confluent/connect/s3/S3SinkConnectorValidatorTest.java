@@ -301,6 +301,26 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
         anyErrorContains(configs, MODE_CONFIG, "must be set explicitly"));
   }
 
+  @Test
+  public void testValidateBackupModeSurfacesErrorsOnJsonFormatMissingSchemasEmbedded() {
+    localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
+    localProps.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+    // format.json.schema.enable deliberately not set → BackupModeValidator must reject
+    localProps.put("key.converter", "org.apache.kafka.connect.storage.StringConverter");
+    localProps.put("value.converter", "org.apache.kafka.connect.storage.StringConverter");
+    s3SinkConnectorValidator = new S3SinkConnectorValidator(
+        S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
+
+    Config configs = s3SinkConnectorValidator.validate();
+
+    assertTrue(
+        "expected json-schema-enable error on format.class",
+        anyErrorContains(configs, FORMAT_CLASS_CONFIG, "format.json.schema.enable"));
+    assertTrue(
+        "expected json-schema-enable error on mode",
+        anyErrorContains(configs, MODE_CONFIG, "format.json.schema.enable"));
+  }
+
   private boolean anyErrorMentionsBackupMode(Config configs, String field) {
     return anyErrorContains(configs, field, Mode.BACKUP_FULL_RECORD.name());
   }
