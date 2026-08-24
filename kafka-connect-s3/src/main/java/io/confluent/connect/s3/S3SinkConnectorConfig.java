@@ -429,7 +429,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
       configDef.define(
           AWS_ACCESS_KEY_ID_CONFIG,
-          Type.STRING,
+          // PASSWORD (not STRING) so AbstractConfig.logAll() renders it [hidden]: an AWS access
+          // key ID is a long-lived credential identifier and must not be logged in the clear.
+          Type.PASSWORD,
           AWS_ACCESS_KEY_ID_DEFAULT,
           Importance.HIGH,
           "The AWS access key ID used to authenticate personal AWS credentials such as IAM "
@@ -995,7 +997,9 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   }
 
   public String awsAccessKeyId() {
-    return getString(AWS_ACCESS_KEY_ID_CONFIG);
+    // aws.access.key.id is now Type.PASSWORD; read it via getPassword so the parsed value
+    // resolves correctly (getString would ClassCastException on the Password object).
+    return getPassword(AWS_ACCESS_KEY_ID_CONFIG).value();
   }
 
   public Password awsSecretKeyId() {
