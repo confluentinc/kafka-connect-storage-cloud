@@ -521,5 +521,20 @@
                 </plugin>
             </plugins>
         </pluginManagement>
+        <plugins>
+            <!-- TEMP: override parent's -Werror + -Xlint config to also suppress obsolete-target
+                 warnings so Java 21+ javac (used by the CC dirty-jar pipeline) can compile
+                 for target 8 without failing. Revert before merging. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <compilerArgs combine.self="override">
+                        <arg>-Xlint:-processing,-options</arg>
+                        <arg>-Werror</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+        </plugins>
     </build>
 </project>
