@@ -77,7 +77,11 @@ public class ParquetRecordWriterProvider extends RecordViewSetter
           public void write(SinkRecord record) throws IOException {
             if (schema == null || writer == null) {
               schema = recordView.getViewSchema(record, true);
-              log.info("Opening record writer for: {}", adjustedFilename);
+              // Log the record coordinates, not adjustedFilename: the filename embeds the
+              // encoded-partition path, which carries record field values under a field-based
+              // partitioner. It must not be logged at any level.
+              log.debug("Opening record writer for topic {} partition {} offset {}",
+                  record.topic(), record.kafkaPartition(), record.kafkaOffset());
               org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
               s3ParquetOutputFile = new S3ParquetOutputFile(storage, adjustedFilename);
               AvroParquetWriter.Builder<GenericRecord> builder =
