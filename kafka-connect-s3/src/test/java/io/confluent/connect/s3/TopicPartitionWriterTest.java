@@ -88,7 +88,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import io.confluent.common.utils.MockTime;
 import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.avro.AvroFormat;
+import io.confluent.connect.s3.format.avro.AvroRecordWriterProvider;
 import io.confluent.connect.s3.storage.S3OutputStream;
+import io.confluent.connect.s3.util.LogCaptureAppender;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.s3.util.TimeUtils;
@@ -376,6 +378,43 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     }
 
     verify(expectedFiles, 3, schema, expectedRecords);
+  }
+
+  @Test
+  public void testFieldPartitionerDoesNotLogRecordFieldValues() throws Exception {
+    // Under a FieldPartitioner the encoded partition is "<field>=<record value>". That value must
+    // not reach the INFO/WARN customer-forwarded logs: neither the rotation lines (the
+    // "encoded-partition:" detail is dropped) nor the record-writer "Opening record writer" line
+    // (logs Kafka coordinates only) nor the S3 object key.
+    localProps.put(FLUSH_SIZE_CONFIG, "3");
+    setUp();
+
+    Partitioner<?> partitioner = new FieldPartitioner<>();
+    partitioner.configure(parsedConfig);
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, writerProvider, partitioner, connectorConfig, context, null);
+
+    String key = "key";
+    Schema schema = createSchema();
+    List<Struct> records = createRecordBatches(schema, 3, 6);
+    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
+
+    try (LogCaptureAppender logs = LogCaptureAppender.attach(
+        TopicPartitionWriter.class, AvroRecordWriterProvider.class, S3OutputStream.class)) {
+      for (SinkRecord record : sinkRecords) {
+        topicPartitionWriter.buffer(record);
+      }
+      topicPartitionWriter.write();
+      topicPartitionWriter.close();
+
+      // Positive control: rotations ran and were logged, so the appender did capture the path.
+      assertTrue(logs.anyMessageContains("ROTATION TRIGGERED"));
+      // The encoded-partition detail (which carried the record field value) is gone.
+      assertFalse(logs.anyMessageContains("encoded-partition:"));
+      // "Opening record writer" is logged at INFO but with Kafka coordinates only; the adjusted
+      // filename (encoded-partition path) is not.
+      assertTrue(logs.anyMessageContains("Opening record writer for topic"));
+    }
   }
 
   @Test
@@ -1622,7 +1661,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void testFailS3ObjectTaggingSdkClientException() throws Exception {
     ConnectException exception = assertThrows(ConnectException.class,
             () -> testS3ObjectTaggingErrorHelper(true, false));
-    assertEquals("Unable to tag S3 object topics_test-topic_partition=12_test-topic#12#0000000000.avro", exception.getMessage());
+    assertEquals("Unable to tag S3 object for topic-partition test-topic-12", exception.getMessage());
+    assertFalse(exception.getMessage().contains("partition=12"));
     assertEquals("Mock SdkClientException while tagging", exception.getCause().getMessage());
   }
 
@@ -1630,7 +1670,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void testFailS3ObjectTaggingRuntimeException() throws Exception {
     ConnectException exception = assertThrows(ConnectException.class, () ->
             testS3ObjectTaggingErrorHelper(false, false));
-    assertEquals("Unable to tag S3 object topics_test-topic_partition=12_test-topic#12#0000000000.avro", exception.getMessage());
+    assertEquals("Unable to tag S3 object for topic-partition test-topic-12", exception.getMessage());
+    assertFalse(exception.getMessage().contains("partition=12"));
     assertEquals("Mock RuntimeException while tagging", exception.getCause().getMessage());
   }
 

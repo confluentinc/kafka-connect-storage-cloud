@@ -59,9 +59,14 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import static org.apache.kafka.common.utils.Time.SYSTEM;
+import io.confluent.connect.s3.storage.S3OutputStream;
+import io.confluent.connect.s3.util.LogCaptureAppender;
+
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
 
@@ -989,5 +994,23 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
 
     long[] validOffsets = {0, 3, 6};
     verify(sinkRecords, validOffsets, extension);
+  }
+
+  @Test
+  public void testParquetRecordWriterDoesNotLogFilenameAtInfo() throws Exception {
+    setUp();
+    List<SinkRecord> sinkRecords = createRecords(7);
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+    try (LogCaptureAppender logs = LogCaptureAppender.attach(
+        ParquetRecordWriterProvider.class, S3OutputStream.class)) {
+      task.put(sinkRecords);
+      task.close(context.assignment());
+      task.stop();
+      // Positive control: writers were created, so the write path ran.
+      assertTrue(logs.anyMessageContains("Create S3OutputStream for bucket"));
+      // "Opening record writer" is logged at INFO but with Kafka coordinates only; the adjusted
+      // filename (encoded-partition path) is not.
+      assertTrue(logs.anyMessageContains("Opening record writer for topic"));
+    }
   }
 }
