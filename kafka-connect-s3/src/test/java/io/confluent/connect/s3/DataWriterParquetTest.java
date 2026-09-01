@@ -1008,8 +1008,9 @@ public class DataWriterParquetTest extends DataWriterTestBase<ParquetFormat> {
       task.stop();
       // Positive control: writers were created, so the write path ran.
       assertTrue(logs.anyMessageContains("Create S3OutputStream for bucket"));
-      // The adjusted filename embeds the encoded-partition path; it is now DEBUG, not INFO.
-      assertFalse(logs.anyMessageContains("Opening record writer"));
+      // "Opening record writer" is logged at INFO but with Kafka coordinates only; the adjusted
+      // filename (encoded-partition path) is not.
+      assertTrue(logs.anyMessageContains("Opening record writer for topic"));
     }
   }
 }

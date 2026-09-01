@@ -385,7 +385,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     // Under a FieldPartitioner the encoded partition is "<field>=<record value>". That value must
     // not reach the INFO/WARN customer-forwarded logs: neither the rotation lines (the
     // "encoded-partition:" detail is dropped) nor the record-writer "Opening record writer" line
-    // (now DEBUG) nor the S3 object key.
+    // (logs Kafka coordinates only) nor the S3 object key.
     localProps.put(FLUSH_SIZE_CONFIG, "3");
     setUp();
 
@@ -411,8 +411,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       assertTrue(logs.anyMessageContains("ROTATION TRIGGERED"));
       // The encoded-partition detail (which carried the record field value) is gone.
       assertFalse(logs.anyMessageContains("encoded-partition:"));
-      // The S3 object path / filename is no longer logged at INFO.
-      assertFalse(logs.anyMessageContains("Opening record writer"));
+      // "Opening record writer" is logged at INFO but with Kafka coordinates only; the adjusted
+      // filename (encoded-partition path) is not.
+      assertTrue(logs.anyMessageContains("Opening record writer for topic"));
     }
   }
 
