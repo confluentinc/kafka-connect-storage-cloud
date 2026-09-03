@@ -62,12 +62,24 @@ public class S3ProxyConfig {
       uri = extractURI();
       log.debug("Using proxy config {}", this);
     } catch (MalformedURLException | URISyntaxException e) {
+      // s3.proxy.url may embed user:password@ userinfo (extractUser/extractPass read it), so
+      // redact the userinfo before it reaches the ConfigException, which surfaces in the
+      // config-validation REST response and task-startup logs.
       throw new ConfigException(
           S3_PROXY_URL_CONFIG,
-          config.getString(S3_PROXY_URL_CONFIG),
+          redactUserInfo(config.getString(S3_PROXY_URL_CONFIG)),
           e.toString()
       );
     }
+  }
+
+  static String redactUserInfo(String url) {
+    if (url == null) {
+      return null;
+    }
+    // Replace any "user:password@" authority prefix with "<redacted>@"; leaves a URL with no
+    // userinfo untouched.
+    return url.replaceFirst("://[^@/]*@", "://<redacted>@");
   }
 
   private URI extractURI() throws URISyntaxException {
