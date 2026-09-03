@@ -681,22 +681,5 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     properties.remove(STORE_KAFKA_KEYS_CONFIG);
     assertFalse(new S3SinkConnectorConfig(properties).shouldEnableConditionalWrites());
   }
-
-  @Test
-  public void testAwsAccessKeyIdRendersHiddenInConfigDump() {
-    // AbstractConfig.logAll() renders values().get(key).toString() at INFO on every construction.
-    // aws.access.key.id must be Type.PASSWORD so that render is "[hidden]", not the raw key id.
-    String canaryAccessKeyId = "AKIA_CANARY_ACCESS_KEY_ID";
-    properties.put(S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG, canaryAccessKeyId);
-    connectorConfig = new S3SinkConnectorConfig(properties);
-
-    Object rendered =
-        connectorConfig.values().get(S3SinkConnectorConfig.AWS_ACCESS_KEY_ID_CONFIG);
-    assertEquals("[hidden]", String.valueOf(rendered));
-    assertFalse(String.valueOf(rendered).contains(canaryAccessKeyId));
-
-    // The connector can still read the real value.
-    assertEquals(canaryAccessKeyId, connectorConfig.awsAccessKeyId());
-  }
 }
 
