@@ -328,4 +328,32 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
       assertFalse(logs.anyMessageContains("CANARY_OBJECT_KEY"));
     }
   }
+
+  @Test
+  public void testCommitFailureLogsUploadIdNotObjectKey() throws Exception {
+    // On a commit failure the ERROR line must not echo the object key (it embeds record field
+    // values under a field-based partitioner); it should carry the opaque multipart upload id as
+    // the debugging correlator instead.
+    Map<String, String> props = super.createProps();
+    props.put(S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_CONFIG, "true");
+    props.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "100");
+
+    String canaryKey = "topics/t/field=CANARY_OBJECT_KEY/t+0+0";
+    stream = new S3OutputStream(canaryKey, new S3SinkConnectorConfig(props), s3Mock);
+
+    AwsServiceException exception = S3Exception.builder().statusCode(409).message("file conflict")
+        .awsErrorDetails(AwsErrorDetails.builder().errorCode("ConditionalRequestConflict").build())
+        .build();
+
+    when(s3Mock.completeMultipartUpload(any(CompleteMultipartUploadRequest.class))).thenThrow(exception);
+    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
+    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(mockUploadPartResponse);
+
+    try (LogCaptureAppender logs = LogCaptureAppender.attach(S3OutputStream.class)) {
+      assertThrows(IOException.class, () -> stream.commit());
+      assertTrue(logs.anyMessageContains("Multipart upload failed to complete"));
+      assertTrue(logs.anyMessageContains("upload-id-123"));
+      assertFalse(logs.anyMessageContains("CANARY_OBJECT_KEY"));
+    }
+  }
 }

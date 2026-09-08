@@ -192,9 +192,13 @@ public class S3OutputStream extends PositionOutputStream {
         log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
       }
     } catch (IOException e) {
+      // The S3 object key embeds the encoded-partition path (record field values under a
+      // field-based partitioner), so log the opaque multipart upload id as the correlator
+      // instead of the key.
       log.error(
-          "Multipart upload failed to complete for bucket '{}'. Reason: {}",
+          "Multipart upload failed to complete for bucket '{}' upload id '{}'. Reason: {}",
           bucket,
+          multiPartUpload != null ? multiPartUpload.getUploadId() : null,
           e.getMessage()
       );
       throw e;
@@ -287,6 +291,10 @@ public class S3OutputStream extends PositionOutputStream {
   private class MultipartUpload {
     private final String uploadId;
     private final List<CompletedPart> completedParts;
+
+    String getUploadId() {
+      return uploadId;
+    }
 
     public MultipartUpload(String uploadId) {
       this.uploadId = uploadId;
