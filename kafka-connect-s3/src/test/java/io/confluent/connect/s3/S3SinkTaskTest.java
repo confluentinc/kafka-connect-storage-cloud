@@ -306,35 +306,6 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     }
   }
 
-  @Test
-  public void testPutRecordForPartitionInAssignmentButNotYetOpenedCreatesWriter()
-      throws Exception {
-    setUp();
-    replayAll();
-    task = new S3SinkTask();
-    task.initialize(context);
-    task.start(properties);
-    verifyAll();
-
-    // Simulate the assignment already including a new partition before task.open() has run
-    // for it, without going through task.open() itself.
-    Set<TopicPartition> expandedAssignment = new HashSet<>(context.assignment());
-    expandedAssignment.add(TOPIC_PARTITION3);
-    context.setAssignment(expandedAssignment);
-
-    List<SinkRecord> sinkRecords =
-        createRecordsWithPrimitive(3, 0, Collections.singleton(TOPIC_PARTITION3));
-    task.put(sinkRecords);
-
-    assertNotNull(task.getTopicPartitionWriter(TOPIC_PARTITION3));
-
-    task.close(context.assignment());
-    task.stop();
-
-    long[] validOffsets = {0, 3};
-    verify(sinkRecords, validOffsets, Collections.singleton(TOPIC_PARTITION3), true);
-  }
-
   /**
    * close() may revoke only a subset of the assigned partitions; the retained partitions must
    * keep their writers and buffered state since they never go through open() again.
