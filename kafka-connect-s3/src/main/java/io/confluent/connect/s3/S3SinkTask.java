@@ -41,7 +41,9 @@ import java.util.Map;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
+
 import io.confluent.connect.s3.format.KeyValueHeaderRecordWriterProvider;
+
 import io.confluent.connect.s3.format.RecordViewSetter;
 import io.confluent.connect.s3.format.RecordViews.HeaderRecordView;
 import io.confluent.connect.s3.format.RecordViews.KeyRecordView;
@@ -57,10 +59,10 @@ import io.confluent.connect.storage.partitioner.PartitionerConfig;
 public class S3SinkTask extends SinkTask {
   private static final Logger log = LoggerFactory.getLogger(S3SinkTask.class);
 
-  private S3SinkConnectorConfig connectorConfig;
+  protected S3SinkConnectorConfig connectorConfig;
   private String url;
   private long timeoutMs;
-  private S3Storage storage;
+  protected S3Storage storage;
   private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
   private Partitioner<?> partitioner;
   private Format<S3SinkConnectorConfig, String> format;
@@ -218,8 +220,8 @@ public class S3SinkTask extends SinkTask {
       partitioner = new SchemaPartitioner<>(partitioner);
     }
     if (config.isTombstoneWriteEnabled()) {
-      String tomebstonePartition = config.getTombstoneEncodedPartition();
-      partitioner = new TombstoneSupportedPartitioner<>(partitioner, tomebstonePartition);
+      String tombstonePartition = config.getTombstoneEncodedPartition();
+      partitioner = new TombstoneSupportedPartitioner<>(partitioner, tombstonePartition);
     }
     partitioner.configure(plainValues);
     return partitioner;
@@ -337,7 +339,7 @@ public class S3SinkTask extends SinkTask {
       } else {
         // Fail
         throw new ConnectException("Null valued records are not writeable with current "
-            + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " 'settings.");
+            + S3SinkConnectorConfig.BEHAVIOR_ON_NULL_VALUES_CONFIG + " settings.");
       }
     }
     return false;

@@ -64,6 +64,9 @@ public class S3SinkConnector extends SinkConnector {
 
   @Override
   public Class<? extends Task> taskClass() {
+    if (config != null && config.isBackupMode()) {
+      return BackupS3SinkTask.class;
+    }
     return S3SinkTask.class;
   }
 

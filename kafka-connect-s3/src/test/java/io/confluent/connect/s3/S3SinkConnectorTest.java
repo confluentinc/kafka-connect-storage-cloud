@@ -16,12 +16,16 @@
 package io.confluent.connect.s3;
 
 import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.junit.Test;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNotNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class S3SinkConnectorTest {
 
@@ -36,6 +40,33 @@ public class S3SinkConnectorTest {
   public void connectorType() {
     Connector connector = new S3SinkConnector();
     assertTrue(SinkConnector.class.isAssignableFrom(connector.getClass()));
+  }
+
+  @Test
+  public void testTaskClassIsDefaultBeforeStart() {
+    // config is null until start(); the null-guard must fall through to S3SinkTask
+    Class<? extends Task> taskClass = new S3SinkConnector().taskClass();
+    assertEquals(S3SinkTask.class, taskClass);
+  }
+
+  @Test
+  public void testTaskClassIsDefaultInGenericMode() {
+    S3SinkConnectorConfig config = mock(S3SinkConnectorConfig.class);
+    when(config.isBackupMode()).thenReturn(false);
+
+    Class<? extends Task> taskClass = new S3SinkConnector(config).taskClass();
+
+    assertEquals(S3SinkTask.class, taskClass);
+  }
+
+  @Test
+  public void testTaskClassIsBackupTaskInBackupMode() {
+    S3SinkConnectorConfig config = mock(S3SinkConnectorConfig.class);
+    when(config.isBackupMode()).thenReturn(true);
+
+    Class<? extends Task> taskClass = new S3SinkConnector(config).taskClass();
+
+    assertEquals(BackupS3SinkTask.class, taskClass);
   }
 }
 
