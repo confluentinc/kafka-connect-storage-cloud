@@ -81,6 +81,11 @@ public class S3OutputStream extends PositionOutputStream {
   private static final int PRECONDITION_FAILED_ERROR_CODE = 412;
 
   public S3OutputStream(String key, S3SinkConnectorConfig conf, S3Client s3Client) {
+    this(key, conf, s3Client, conf.getCompressionType());
+  }
+
+  public S3OutputStream(String key, S3SinkConnectorConfig conf, S3Client s3Client,
+                        CompressionType compressionType) {
     this.s3Client = s3Client;
     this.s3FileUtils = new S3FileUtils(this.s3Client);
     this.bucket = conf.getBucketName();
@@ -107,7 +112,7 @@ public class S3OutputStream extends PositionOutputStream {
     }
 
     this.multiPartUpload = null;
-    this.compressionType = conf.getCompressionType();
+    this.compressionType = compressionType;
     this.compressionLevel = conf.getCompressionLevel();
     this.position = 0L;
 
