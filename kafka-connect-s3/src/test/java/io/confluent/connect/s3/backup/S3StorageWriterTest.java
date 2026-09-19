@@ -28,8 +28,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -54,8 +52,7 @@ public class S3StorageWriterTest {
     config = mock(S3SinkConnectorConfig.class);
     out = mock(S3OutputStream.class);
     when(storage.conf()).thenReturn(config);
-    when(storage.create(eq(TEST_PATH), any(S3SinkConnectorConfig.class), anyBoolean()))
-        .thenReturn(out);
+    when(storage.createUncompressed(TEST_PATH)).thenReturn(out);
     writer = new S3StorageWriter(storage);
   }
 
@@ -63,6 +60,7 @@ public class S3StorageWriterTest {
   public void testWriteCommitsAndClosesStream() throws IOException {
     writer.write(TEST_PATH, TEST_CONTENT);
 
+    verify(storage).createUncompressed(TEST_PATH);
     verify(out).write(TEST_CONTENT.getBytes());
     verify(out).commit();
     verify(out).close();
@@ -81,7 +79,7 @@ public class S3StorageWriterTest {
     } catch (ConnectException expected) {
       // expected
     }
-    verify(storage, never()).create(any(), any(S3SinkConnectorConfig.class), anyBoolean());
+    verify(storage, never()).createUncompressed(any());
   }
 
   @Test
@@ -106,7 +104,7 @@ public class S3StorageWriterTest {
 
   @Test(expected = ConnectException.class)
   public void testWriteWrapsCreateFailureInConnectException() {
-    when(storage.create(eq(TEST_PATH), any(S3SinkConnectorConfig.class), anyBoolean()))
+    when(storage.createUncompressed(TEST_PATH))
         .thenThrow(new RuntimeException(STORAGE_FAILURE_MESSAGE));
 
     writer.write(TEST_PATH, TEST_CONTENT);
