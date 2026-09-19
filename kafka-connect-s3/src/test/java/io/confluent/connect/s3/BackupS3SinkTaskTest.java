@@ -17,7 +17,9 @@ package io.confluent.connect.s3;
 
 import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.StorageSinkConnectorConfig.Mode;
+import io.confluent.connect.storage.backup.BackupEnvelope;
 import io.confluent.connect.storage.format.backup.EnvelopeTransformer;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.easymock.Capture;
@@ -31,11 +33,13 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.lang.reflect.Field;
-import java.util.Collections;
+import java.util.Collection;
+import java.util.List;
 
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.StorageFactory;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -111,7 +115,7 @@ public class BackupS3SinkTaskTest extends DataWriterAvroTest {
   }
 
   @Test
-  public void testPutForwardsWrappedRecordsToSuper() throws Exception {
+  public void testPutWrapsAndPersistsEnvelopeToS3() throws Exception {
     putBackupModeProps();
     setUp();
     replayAll();
@@ -120,10 +124,34 @@ public class BackupS3SinkTaskTest extends DataWriterAvroTest {
     task.start(properties);
     verifyAll();
 
-    // empty collection exercises wrap + super.put chain without SinkRecord setup
-    task.put(Collections.<SinkRecord>emptyList());
-
+    List<SinkRecord> sinkRecords = createRecords(3);
+    task.put(sinkRecords);
+    task.close(context.assignment());
     task.stop();
+
+    // Read the written Avro file back from mock S3 (same pattern as
+    // DataWriterAvroTest.verify), then assert each record carries the
+    // KafkaRecordEnvelope schema with metadata copied from the source
+    // SinkRecord. Proves wrap() ran AND its output reached storage.
+    Collection<Object> written = readRecords(topicsDir, getDirectory(),
+        TOPIC_PARTITION, 0, EXTENSION, ZERO_PAD_FMT,
+        S3_TEST_BUCKET_NAME, s3Client);
+    assertEquals(sinkRecords.size(), written.size());
+
+    long expectedOffset = 0;
+    for (Object rec : written) {
+      assertTrue("expected GenericRecord, got " + rec.getClass(),
+          rec instanceof GenericRecord);
+      GenericRecord g = (GenericRecord) rec;
+      assertEquals(BackupEnvelope.NAME, g.getSchema().getFullName());
+      assertNotNull(g.getSchema().getField(BackupEnvelope.FIELD_KEY));
+      assertNotNull(g.getSchema().getField(BackupEnvelope.FIELD_VALUE));
+      assertNotNull(g.getSchema().getField(BackupEnvelope.FIELD_HEADERS));
+      assertNotNull(g.getSchema().getField(BackupEnvelope.FIELD_FORMAT_VERSION));
+      assertEquals(TOPIC, g.get(BackupEnvelope.FIELD_TOPIC).toString());
+      assertEquals(PARTITION, g.get(BackupEnvelope.FIELD_PARTITION));
+      assertEquals(expectedOffset++, g.get(BackupEnvelope.FIELD_OFFSET));
+    }
   }
 
   @Test
