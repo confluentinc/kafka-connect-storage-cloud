@@ -216,6 +216,10 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
     throw new UnsupportedOperationException();
   }
 
+  public S3OutputStream createUncompressed(String path) {
+    return new S3OutputStream(path, this.conf, s3Client, CompressionType.NONE);
+  }
+
   @Override
   public OutputStream create(String path, S3SinkConnectorConfig conf, boolean overwrite) {
     return create(path, overwrite, this.conf.getClass(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG));
