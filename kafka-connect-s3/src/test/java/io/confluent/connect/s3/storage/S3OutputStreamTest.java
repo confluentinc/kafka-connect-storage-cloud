@@ -1,10 +1,12 @@
 package io.confluent.connect.s3.storage;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -340,5 +342,35 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
     stream = new S3OutputStream(S3_TEST_KEY_NAME, new S3SinkConnectorConfig(props), s3Mock);
 
     assertNotEquals(stream, stream.wrapForCompression());
+  }
+
+  @Test
+  public void testExplicitConditionalWritesOverridesGlobal() throws Exception {
+    Map<String, String> props = createProps();
+    props.put(S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_CONFIG, "true");
+    props.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "100");
+    S3SinkConnectorConfig config = new S3SinkConnectorConfig(props);
+    assertTrue(config.shouldEnableConditionalWrites());
+
+    stream = new S3OutputStream(S3_TEST_KEY_NAME, config, s3Mock, CompressionType.NONE, false);
+
+    assertFalse(readConditionalWritesField(stream));
+  }
+
+  @Test
+  public void testDefaultConstructorInheritsConditionalWritesFromConfig() throws Exception {
+    Map<String, String> props = createProps();
+    props.put(S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_CONFIG, "true");
+    props.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, "100");
+    S3SinkConnectorConfig config = new S3SinkConnectorConfig(props);
+    stream = new S3OutputStream(S3_TEST_KEY_NAME, config, s3Mock);
+
+    assertEquals(config.shouldEnableConditionalWrites(), readConditionalWritesField(stream));
+  }
+
+  private static boolean readConditionalWritesField(S3OutputStream out) throws Exception {
+    java.lang.reflect.Field f = S3OutputStream.class.getDeclaredField("enableConditionalWrites");
+    f.setAccessible(true);
+    return (boolean) f.get(out);
   }
 }
