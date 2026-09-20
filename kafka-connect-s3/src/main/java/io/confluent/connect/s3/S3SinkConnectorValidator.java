@@ -94,17 +94,20 @@ public class S3SinkConnectorValidator {
       log.error("Configuration not ready for cross validation.", exception);
     }
     if (s3SinkConnectorConfig != null) {
+      // Backup-mode rules first so backup-related errors surface before legacy checks.
+      validateBackupMode(s3SinkConnectorConfig);
       validateCompression(
           s3SinkConnectorConfig.getCompressionType(), s3SinkConnectorConfig.formatClass(),
           s3SinkConnectorConfig.storeKafkaKeys(), s3SinkConnectorConfig.keysFormatClass(),
           s3SinkConnectorConfig.storeKafkaHeaders(), s3SinkConnectorConfig.headersFormatClass()
       );
-      validateTombstoneWriter(s3SinkConnectorConfig.isTombstoneWriteEnabled(),
-          s3SinkConnectorConfig.storeKafkaKeys());
-
       validateWanModeAndPathStyleCompatibility(s3SinkConnectorConfig);
-
-      validateBackupMode(s3SinkConnectorConfig);
+      // Superseded by BackupModeValidator (which rejects behavior.on.null.values=WRITE
+      // and store.kafka.keys=true in backup mode).
+      if (!s3SinkConnectorConfig.isBackupMode()) {
+        validateTombstoneWriter(s3SinkConnectorConfig.isTombstoneWriteEnabled(),
+            s3SinkConnectorConfig.storeKafkaKeys());
+      }
     }
 
     return new Config(new ArrayList<>(this.valuesByKey.values()));
