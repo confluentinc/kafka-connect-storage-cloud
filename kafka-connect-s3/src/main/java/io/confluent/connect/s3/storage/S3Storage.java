@@ -245,6 +245,12 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
     }
   }
 
+  public S3OutputStream createUncompressed(String path) {
+    // Schema-metadata sidecars are byte-identical; unconditional write avoids
+    // 412 on concurrent duplicates.
+    return new S3OutputStream(path, this.conf, s3Client, CompressionType.NONE, false);
+  }
+
   @Override
   public OutputStream append(String filename) {
     throw new UnsupportedOperationException();
