@@ -37,7 +37,9 @@ public class JsonFormat implements Format<S3SinkConnectorConfig, String> {
     this.storage = storage;
     this.converter = new JsonConverter();
     Map<String, Object> converterConfig = new HashMap<>();
-    converterConfig.put("schemas.enable", "false");
+    boolean schemasEnable = storage.conf().isJsonSchemaEmbedded();
+    log.info("JsonFormat schemas.enable = {} (from config)", schemasEnable);
+    converterConfig.put("schemas.enable", schemasEnable);
     converterConfig.put(
         "schemas.cache.size",
         String.valueOf(storage.conf().get(S3SinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG))
