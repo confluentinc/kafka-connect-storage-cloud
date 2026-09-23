@@ -31,6 +31,7 @@ import static io.confluent.connect.s3.S3SinkConnectorValidator.FORMAT_CONFIG_ERR
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.MODE_CONFIG;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
@@ -39,6 +40,18 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
   private static final String AVRO_CONVERTER = "io.confluent.connect.avro.AvroConverter";
   private static final String KEY_CONVERTER_CONFIG = "key.converter";
   private static final String VALUE_CONVERTER_CONFIG = "value.converter";
+  private static final String KEY_ENHANCED_AVRO = "key.converter.enhanced.avro.schema.support";
+  private static final String KEY_SCHEMA_BACKUP_ENABLED = "key.converter.schema.backup.enabled";
+  private static final String VALUE_ENHANCED_AVRO = "value.converter.enhanced.avro.schema.support";
+  private static final String VALUE_SCHEMA_BACKUP_ENABLED =
+      "value.converter.schema.backup.enabled";
+  private static final String FORMAT_JSON_SCHEMA_ENABLE_CONFIG = "format.json.schema.enable";
+  private static final String BYTE_ARRAY_FORMAT_ERROR_SNIPPET =
+      "format.class=ByteArrayFormat cannot be used";
+  private static final String MUST_BE_SET_EXPLICITLY_SNIPPET =
+      "must be set explicitly at the connector";
+  private static final String STORE_KAFKA_KEYS_ERROR_SNIPPET =
+      "store.kafka.keys=true cannot be used";
 
   protected Map<String, String> localProps = new HashMap<>();
   private S3SinkConnectorValidator s3SinkConnectorValidator;
@@ -273,45 +286,43 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
   }
 
   @Test
-  public void testValidateBackupModeSurfacesErrorsOnByteArrayFormat() {
+  public void testValidateBackupModeAttachesByteArrayErrorToFormatClass() {
     localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
     localProps.put(FORMAT_CLASS_CONFIG, ByteArrayFormat.class.getName());
     localProps.put(KEY_CONVERTER_CONFIG, STRING_CONVERTER);
     localProps.put(VALUE_CONVERTER_CONFIG, AVRO_CONVERTER);
-    localProps.put("value.converter.enhanced.avro.schema.support", "true");
+    localProps.put(VALUE_ENHANCED_AVRO, "true");
+    localProps.put(VALUE_SCHEMA_BACKUP_ENABLED, "true");
     s3SinkConnectorValidator = new S3SinkConnectorValidator(
         S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
 
     Config configs = s3SinkConnectorValidator.validate();
 
     assertTrue(
-        "expected backup-mode error to surface on format.class",
-        anyErrorMentionsBackupMode(configs, FORMAT_CLASS_CONFIG));
-    assertTrue(
-        "expected backup-mode error to surface on mode",
-        anyErrorMentionsBackupMode(configs, MODE_CONFIG));
+        "expected ByteArrayFormat error to surface on format.class",
+        anyErrorContains(configs, FORMAT_CLASS_CONFIG, BYTE_ARRAY_FORMAT_ERROR_SNIPPET));
   }
 
   @Test
-  public void testValidateBackupModeSurfacesErrorsOnMissingConverter() {
+  public void testValidateBackupModeMissingConverterFallsBackToMode() {
     localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
     localProps.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
-    // key.converter and value.converter deliberately not set
+    // key.converter and value.converter are framework-level configs (not in
+    // the connector's ConfigDef). Errors attached to them fall back to mode.
     s3SinkConnectorValidator = new S3SinkConnectorValidator(
         S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
 
     Config configs = s3SinkConnectorValidator.validate();
 
     assertTrue(
-        "expected converter-must-be-set error to surface on mode",
-        anyErrorContains(configs, MODE_CONFIG, "must be set explicitly"));
+        "expected converter-must-be-set error to fall back to mode",
+        anyErrorContains(configs, MODE_CONFIG, MUST_BE_SET_EXPLICITLY_SNIPPET));
   }
 
   @Test
-  public void testValidateBackupModeSurfacesErrorsOnJsonFormatMissingSchemasEmbedded() {
+  public void testValidateBackupModeAttachesJsonSchemaEnableErrorToItsOwnKey() {
     localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
     localProps.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
-    // format.json.schema.enable deliberately not set → BackupModeValidator must reject
     localProps.put(KEY_CONVERTER_CONFIG, STRING_CONVERTER);
     localProps.put(VALUE_CONVERTER_CONFIG, STRING_CONVERTER);
     s3SinkConnectorValidator = new S3SinkConnectorValidator(
@@ -320,15 +331,50 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
     Config configs = s3SinkConnectorValidator.validate();
 
     assertTrue(
-        "expected json-schema-enable error on format.class",
-        anyErrorContains(configs, FORMAT_CLASS_CONFIG, "format.json.schema.enable"));
-    assertTrue(
-        "expected json-schema-enable error on mode",
-        anyErrorContains(configs, MODE_CONFIG, "format.json.schema.enable"));
+        "expected json-schema-enable error on its own key",
+        anyErrorContains(configs, FORMAT_JSON_SCHEMA_ENABLE_CONFIG,
+            FORMAT_JSON_SCHEMA_ENABLE_CONFIG));
   }
 
-  private boolean anyErrorMentionsBackupMode(Config configs, String field) {
-    return anyErrorContains(configs, field, Mode.BACKUP_FULL_RECORD.name());
+  @Test
+  public void testValidateBackupModeStoreKafkaKeysErrorAttachesToStoreKafkaKeys() {
+    localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
+    localProps.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
+    localProps.put(KEY_CONVERTER_CONFIG, STRING_CONVERTER);
+    localProps.put(VALUE_CONVERTER_CONFIG, AVRO_CONVERTER);
+    localProps.put(VALUE_ENHANCED_AVRO, "true");
+    localProps.put(VALUE_SCHEMA_BACKUP_ENABLED, "true");
+    localProps.put(STORE_KAFKA_KEYS_CONFIG, "true");
+    s3SinkConnectorValidator = new S3SinkConnectorValidator(
+        S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
+
+    Config configs = s3SinkConnectorValidator.validate();
+
+    assertTrue(
+        "expected store.kafka.keys error on store.kafka.keys",
+        anyErrorContains(configs, STORE_KAFKA_KEYS_CONFIG, STORE_KAFKA_KEYS_ERROR_SNIPPET));
+  }
+
+  @Test
+  public void testValidateBackupModeConverterSubKeysFallBackToMode() {
+    // key.converter.enhanced.avro.schema.support is umbrella-collapsed to
+    // key.converter, which is framework-level. Error falls back to mode.
+    localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
+    localProps.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
+    localProps.put(KEY_CONVERTER_CONFIG, AVRO_CONVERTER);
+    localProps.put(KEY_SCHEMA_BACKUP_ENABLED, "true");
+    localProps.put(VALUE_CONVERTER_CONFIG, AVRO_CONVERTER);
+    localProps.put(VALUE_ENHANCED_AVRO, "true");
+    localProps.put(VALUE_SCHEMA_BACKUP_ENABLED, "true");
+    // key.converter.enhanced.avro.schema.support deliberately not set
+    s3SinkConnectorValidator = new S3SinkConnectorValidator(
+        S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
+
+    Config configs = s3SinkConnectorValidator.validate();
+
+    assertTrue(
+        "expected key-converter enhanced-avro error to fall back to mode",
+        anyErrorContains(configs, MODE_CONFIG, KEY_ENHANCED_AVRO));
   }
 
   private boolean anyErrorContains(Config configs, String field, String needle) {
