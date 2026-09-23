@@ -37,9 +37,12 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.io.ByteArrayInputStream;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import io.confluent.connect.s3.format.avro.AvroUtils;
 import io.confluent.connect.s3.storage.S3Storage;
@@ -49,6 +52,8 @@ import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -299,6 +304,81 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     }
   }
 
+  @Test
+  public void testPutRecordForPartitionInAssignmentButNotYetOpenedCreatesWriter()
+      throws Exception {
+    setUp();
+    replayAll();
+    task = new S3SinkTask();
+    task.initialize(context);
+    task.start(properties);
+    verifyAll();
 
+    // Simulate the assignment already including a new partition before task.open() has run
+    // for it, without going through task.open() itself.
+    Set<TopicPartition> expandedAssignment = new HashSet<>(context.assignment());
+    expandedAssignment.add(TOPIC_PARTITION3);
+    context.setAssignment(expandedAssignment);
+
+    List<SinkRecord> sinkRecords =
+        createRecordsWithPrimitive(3, 0, Collections.singleton(TOPIC_PARTITION3));
+    task.put(sinkRecords);
+
+    assertNotNull(task.getTopicPartitionWriter(TOPIC_PARTITION3));
+
+    task.close(context.assignment());
+    task.stop();
+
+    long[] validOffsets = {0, 3};
+    verify(sinkRecords, validOffsets, Collections.singleton(TOPIC_PARTITION3), true);
+  }
+
+  /**
+   * close() may revoke only a subset of the assigned partitions; the retained partitions must
+   * keep their writers and buffered state since they never go through open() again.
+   */
+  @Test
+  public void testPartialRevocationPreservesRetainedPartitionState() throws Exception {
+    setUp();
+    task = new S3SinkTask(connectorConfig, context, storage, partitioner, format, SYSTEM_TIME);
+
+    // Default assignment (from the test harness) is {TOPIC_PARTITION, TOPIC_PARTITION2}.
+    Set<TopicPartition> originalAssignment = new HashSet<>(context.assignment());
+    assertTrue(originalAssignment.contains(TOPIC_PARTITION));
+    assertTrue(originalAssignment.contains(TOPIC_PARTITION2));
+
+    // Buffer 2 records into TOPIC_PARTITION2, one below its flush size (3), so its writer is
+    // left holding an open, uncommitted file.
+    List<SinkRecord> tp2RecordsPart1 =
+        createRecordsWithPrimitive(2, 0, Collections.singleton(TOPIC_PARTITION2));
+    task.put(tp2RecordsPart1);
+
+    TopicPartitionWriter tp2WriterBeforeClose = task.getTopicPartitionWriter(TOPIC_PARTITION2);
+    assertNotNull(tp2WriterBeforeClose);
+
+    // Partial revocation: only TOPIC_PARTITION is revoked, TOPIC_PARTITION2 stays assigned.
+    task.close(Collections.singleton(TOPIC_PARTITION));
+
+    // The retained partition's writer must survive a close() call that didn't name it.
+    assertSame(
+        "close() must not tear down writers for partitions that were not actually revoked",
+        tp2WriterBeforeClose,
+        task.getTopicPartitionWriter(TOPIC_PARTITION2)
+    );
+
+    // All 3 records must land in one file starting at offset 0; a wiped writer would have
+    // started a fresh file at offset 2 with only 1 record.
+    List<SinkRecord> tp2RecordsPart2 =
+        createRecordsWithPrimitive(1, 2, Collections.singleton(TOPIC_PARTITION2));
+    task.put(tp2RecordsPart2);
+
+    task.close(Collections.singleton(TOPIC_PARTITION2));
+    task.stop();
+
+    List<SinkRecord> tp2AllRecords = new ArrayList<>(tp2RecordsPart1);
+    tp2AllRecords.addAll(tp2RecordsPart2);
+    long[] validOffsets = {0, 3};
+    verify(tp2AllRecords, validOffsets, Collections.singleton(TOPIC_PARTITION2), true);
+  }
 }
 
