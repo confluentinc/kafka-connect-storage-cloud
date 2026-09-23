@@ -107,12 +107,12 @@
                 <artifactId>jose4j</artifactId>
                 <version>0.9.6</version>
             </dependency>
-            <!-- CC-40908: pin bouncycastle to 1.84 to address CVE-2026-5598
+            <!-- CC-44916: pin bouncycastle to 1.86 to address CVE in 1.84
                  (Hadoop transitive brings in 1.82). -->
             <dependency>
                 <groupId>org.bouncycastle</groupId>
                 <artifactId>bcprov-jdk18on</artifactId>
-                <version>1.84</version>
+                <version>1.86</version>
             </dependency>
             <dependency>
                 <groupId>io.netty</groupId>
