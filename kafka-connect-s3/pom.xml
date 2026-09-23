@@ -21,7 +21,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-cloud</artifactId>
-        <version>12.1.11-SNAPSHOT</version>
+        <version>12.1.12-SNAPSHOT</version>
     </parent>
 
     <artifactId>kafka-connect-s3</artifactId>
@@ -127,6 +127,12 @@
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-codec</artifactId>
+            <version>${netty.version}</version>
+        </dependency>
+        <!--        pin version to fix CVE-2026-75595, CVE-2026-75596-->
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-handler</artifactId>
             <version>${netty.version}</version>
         </dependency>
         <dependency>
