@@ -304,19 +304,20 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
   }
 
   @Test
-  public void testValidateBackupModeMissingConverterFallsBackToMode() {
+  public void testValidateBackupModeMissingConverterAttachesToConverterKey() {
     localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
     localProps.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
-    // key.converter and value.converter are framework-level configs (not in
-    // the connector's ConfigDef). Errors attached to them fall back to mode.
     s3SinkConnectorValidator = new S3SinkConnectorValidator(
         S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
 
     Config configs = s3SinkConnectorValidator.validate();
 
     assertTrue(
-        "expected converter-must-be-set error to fall back to mode",
-        anyErrorContains(configs, MODE_CONFIG, MUST_BE_SET_EXPLICITLY_SNIPPET));
+        "expected key.converter-must-be-set error on key.converter",
+        anyErrorContains(configs, KEY_CONVERTER_CONFIG, MUST_BE_SET_EXPLICITLY_SNIPPET));
+    assertTrue(
+        "expected value.converter-must-be-set error on value.converter",
+        anyErrorContains(configs, VALUE_CONVERTER_CONFIG, MUST_BE_SET_EXPLICITLY_SNIPPET));
   }
 
   @Test
@@ -356,9 +357,7 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
   }
 
   @Test
-  public void testValidateBackupModeConverterSubKeysFallBackToMode() {
-    // key.converter.enhanced.avro.schema.support is umbrella-collapsed to
-    // key.converter, which is framework-level. Error falls back to mode.
+  public void testValidateBackupModeConverterSubKeysAttachToConverterUmbrella() {
     localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
     localProps.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
     localProps.put(KEY_CONVERTER_CONFIG, AVRO_CONVERTER);
@@ -373,8 +372,8 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
     Config configs = s3SinkConnectorValidator.validate();
 
     assertTrue(
-        "expected key-converter enhanced-avro error to fall back to mode",
-        anyErrorContains(configs, MODE_CONFIG, KEY_ENHANCED_AVRO));
+        "expected key.converter.enhanced.avro.schema.support error on key.converter",
+        anyErrorContains(configs, KEY_CONVERTER_CONFIG, KEY_ENHANCED_AVRO));
   }
 
   private boolean anyErrorContains(Config configs, String field, String needle) {

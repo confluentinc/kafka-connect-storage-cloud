@@ -124,20 +124,7 @@ public class S3SinkConnectorValidator {
         StorageSinkConnectorConfig.Mode.BACKUP_FULL_RECORD.name());
     for (BackupModeValidator.Entry entry : errors) {
       log.error("Validation Failed with error: {}", entry.message);
-      recordErrorOnKnownConfig(entry.message, entry.configKey);
-    }
-  }
-
-  /**
-   * Attaches an error to {@code configKey} when it belongs to the connector's
-   * ConfigDef; otherwise falls back to {@code mode} so framework-level keys
-   * (e.g. key.converter / value.converter) still surface a visible error.
-   */
-  private void recordErrorOnKnownConfig(String message, String configKey) {
-    if (valuesByKey.containsKey(configKey)) {
-      recordError(message, configKey);
-    } else {
-      recordError(message, StorageSinkConnectorConfig.MODE_CONFIG);
+      recordError(entry.message, entry.configKey);
     }
   }
 
@@ -203,7 +190,8 @@ public class S3SinkConnectorValidator {
   private void recordError(String message, String key) {
     Objects.requireNonNull(key);
     if (!key.equals("")) {
-      ConfigValue value = valuesByKey.get(key);
+      ConfigValue value = valuesByKey.computeIfAbsent(key,
+          k -> new ConfigValue(k, null, new ArrayList<>(), new ArrayList<>()));
       if (!message.equals("")) {
         value.addErrorMessage(message);
       }
