@@ -129,6 +129,12 @@
             <artifactId>netty-codec</artifactId>
             <version>${netty.version}</version>
         </dependency>
+        <!--        pin version to fix CVE-2026-75595, CVE-2026-75596-->
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-handler</artifactId>
+            <version>${netty.version}</version>
+        </dependency>
         <dependency>
             <groupId>io.findify</groupId>
             <artifactId>s3mock_2.12</artifactId>
