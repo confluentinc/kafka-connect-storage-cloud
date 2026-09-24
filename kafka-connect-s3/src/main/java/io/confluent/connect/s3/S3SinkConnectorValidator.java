@@ -191,7 +191,8 @@ public class S3SinkConnectorValidator {
     Objects.requireNonNull(key);
     if (!key.equals("")) {
       ConfigValue value = valuesByKey.computeIfAbsent(key,
-          k -> new ConfigValue(k, null, new ArrayList<>(), new ArrayList<>()));
+          k -> new ConfigValue(k, connectorConfigs.get(k),
+              new ArrayList<>(), new ArrayList<>()));
       if (!message.equals("")) {
         value.addErrorMessage(message);
       }

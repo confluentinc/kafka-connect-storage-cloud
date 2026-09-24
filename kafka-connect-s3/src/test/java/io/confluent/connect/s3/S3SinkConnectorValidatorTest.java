@@ -52,6 +52,10 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
       "must be set explicitly at the connector";
   private static final String STORE_KAFKA_KEYS_ERROR_SNIPPET =
       "store.kafka.keys=true cannot be used";
+  private static final String TRANSFORMS_CONFIG = "transforms";
+  private static final String SMT_ALIAS = "Customer";
+  private static final String CAST_KEY_SMT_TYPE =
+      "org.apache.kafka.connect.transforms.Cast$Key";
 
   protected Map<String, String> localProps = new HashMap<>();
   private S3SinkConnectorValidator s3SinkConnectorValidator;
@@ -374,6 +378,30 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
     assertTrue(
         "expected key.converter.enhanced.avro.schema.support error on key.converter",
         anyErrorContains(configs, KEY_CONVERTER_CONFIG, KEY_ENHANCED_AVRO));
+  }
+
+  @Test
+  public void testValidateBackupModeErrorOnFrameworkKeyPreservesUserValue() {
+    localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
+    localProps.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
+    localProps.put(KEY_CONVERTER_CONFIG, STRING_CONVERTER);
+    localProps.put(VALUE_CONVERTER_CONFIG, AVRO_CONVERTER);
+    localProps.put(VALUE_ENHANCED_AVRO, "true");
+    localProps.put(VALUE_SCHEMA_BACKUP_ENABLED, "true");
+    localProps.put(TRANSFORMS_CONFIG, SMT_ALIAS);
+    localProps.put(TRANSFORMS_CONFIG + "." + SMT_ALIAS + ".type", CAST_KEY_SMT_TYPE);
+    s3SinkConnectorValidator = new S3SinkConnectorValidator(
+        S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
+
+    Config configs = s3SinkConnectorValidator.validate();
+
+    ConfigValue transforms = configs.configValues().stream()
+        .filter(cv -> TRANSFORMS_CONFIG.equals(cv.name()))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("no ConfigValue for transforms"));
+    assertEquals(SMT_ALIAS, transforms.value());
+    assertTrue("expected SMT rejection error on transforms",
+        transforms.errorMessages().stream().anyMatch(m -> m.contains("SMT")));
   }
 
   private boolean anyErrorContains(Config configs, String field, String needle) {
