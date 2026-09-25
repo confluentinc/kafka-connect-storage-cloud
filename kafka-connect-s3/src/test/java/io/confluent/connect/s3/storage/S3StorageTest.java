@@ -197,6 +197,44 @@ public class S3StorageTest extends S3SinkConnectorTestBase {
     }
   }
 
+  private static final String STRING_TRUE = "true";
+  private static final String ONE_MINUTE_MS = "60000";
+  private static final String CONDITIONAL_WRITES_FIELD = "enableConditionalWrites";
+  private static final String SIDECAR_PATH = "topics/t/_metadata/schemas/1.entry.json";
+  private static final String DATA_PATH = "topics/t/partition=0/data.avro";
+
+  @Test
+  public void testCreateUncompressedOptsOutOfConditionalWrites() throws Exception {
+    localProps.put(S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_CONFIG, STRING_TRUE);
+    localProps.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, ONE_MINUTE_MS);
+    setUp();
+    assertTrue(connectorConfig.shouldEnableConditionalWrites());
+
+    S3OutputStream stream = storage.createUncompressed(SIDECAR_PATH);
+
+    assertFalse(readConditionalWritesField(stream));
+  }
+
+  @Test
+  public void testCreateDataStreamStillHonorsConditionalWrites() throws Exception {
+    // Regression guard: data-path create(...) must still honor the config.
+    localProps.put(S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_CONFIG, STRING_TRUE);
+    localProps.put(S3SinkConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG, ONE_MINUTE_MS);
+    setUp();
+    assertTrue(connectorConfig.shouldEnableConditionalWrites());
+
+    S3OutputStream stream = storage.create(DATA_PATH, true,
+        io.confluent.connect.s3.format.avro.AvroFormat.class);
+
+    assertTrue(readConditionalWritesField(stream));
+  }
+
+  private static boolean readConditionalWritesField(S3OutputStream out) throws Exception {
+    java.lang.reflect.Field f = S3OutputStream.class.getDeclaredField(CONDITIONAL_WRITES_FIELD);
+    f.setAccessible(true);
+    return (boolean) f.get(out);
+  }
+
   @Test
   public void testCreateParquetStreamDoesNotLogObjectKey() throws Exception {
     setUp();

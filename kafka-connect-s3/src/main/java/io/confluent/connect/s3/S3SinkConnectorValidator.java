@@ -18,6 +18,8 @@ package io.confluent.connect.s3;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.storage.CompressionType;
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
+import io.confluent.connect.storage.backup.BackupModeValidator;
 import io.confluent.connect.storage.format.Format;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
@@ -92,18 +94,38 @@ public class S3SinkConnectorValidator {
       log.error("Configuration not ready for cross validation.", exception);
     }
     if (s3SinkConnectorConfig != null) {
+      // Backup-mode rules first so backup-related errors surface before legacy checks.
+      validateBackupMode(s3SinkConnectorConfig);
       validateCompression(
           s3SinkConnectorConfig.getCompressionType(), s3SinkConnectorConfig.formatClass(),
           s3SinkConnectorConfig.storeKafkaKeys(), s3SinkConnectorConfig.keysFormatClass(),
           s3SinkConnectorConfig.storeKafkaHeaders(), s3SinkConnectorConfig.headersFormatClass()
       );
-      validateTombstoneWriter(s3SinkConnectorConfig.isTombstoneWriteEnabled(),
-          s3SinkConnectorConfig.storeKafkaKeys());
-
       validateWanModeAndPathStyleCompatibility(s3SinkConnectorConfig);
+      // Superseded by BackupModeValidator (which rejects behavior.on.null.values=WRITE
+      // and store.kafka.keys=true in backup mode).
+      if (!s3SinkConnectorConfig.isBackupMode()) {
+        validateTombstoneWriter(s3SinkConnectorConfig.isTombstoneWriteEnabled(),
+            s3SinkConnectorConfig.storeKafkaKeys());
+      }
     }
 
     return new Config(new ArrayList<>(this.valuesByKey.values()));
+  }
+
+  public void validateBackupMode(S3SinkConnectorConfig config) {
+    if (!config.isBackupMode()) {
+      return;
+    }
+    List<BackupModeValidator.Entry> errors = BackupModeValidator.validateSinkConfigs(
+        connectorConfigs,
+        config.formatClass().getSimpleName(),
+        config.isJsonSchemaEmbedded(),
+        StorageSinkConnectorConfig.Mode.BACKUP_FULL_RECORD.name());
+    for (BackupModeValidator.Entry entry : errors) {
+      log.error("Validation Failed with error: {}", entry.message);
+      recordError(entry.message, entry.configKey);
+    }
   }
 
   public void validateCompression(CompressionType compressionType, Class formatClass,
@@ -168,7 +190,9 @@ public class S3SinkConnectorValidator {
   private void recordError(String message, String key) {
     Objects.requireNonNull(key);
     if (!key.equals("")) {
-      ConfigValue value = valuesByKey.get(key);
+      ConfigValue value = valuesByKey.computeIfAbsent(key,
+          k -> new ConfigValue(k, connectorConfigs.get(k),
+              new ArrayList<>(), new ArrayList<>()));
       if (!message.equals("")) {
         value.addErrorMessage(message);
       }

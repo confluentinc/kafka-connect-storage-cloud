@@ -56,7 +56,6 @@ import java.util.Queue;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
-import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
 import io.confluent.connect.storage.format.RecordWriter;
@@ -201,7 +200,7 @@ public class TopicPartitionWriter {
     }
     timeoutMs = connectorConfig.getLong(S3SinkConnectorConfig.RETRY_BACKOFF_CONFIG);
     compatibility = StorageSchemaCompatibility.getCompatibility(
-        connectorConfig.getString(StorageSinkConnectorConfig.SCHEMA_COMPATIBILITY_CONFIG));
+        connectorConfig.getEffectiveSchemaCompatibility());
 
     buffer = new LinkedList<>();
     commitFiles = new LinkedHashMap<>();
