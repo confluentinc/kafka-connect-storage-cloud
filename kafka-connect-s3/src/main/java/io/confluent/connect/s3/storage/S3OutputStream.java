@@ -122,7 +122,9 @@ public class S3OutputStream extends PositionOutputStream {
     this.position = 0L;
 
     this.enableConditionalWrites = enableConditionalWrites;
-    log.info("Create S3OutputStream for bucket '{}' key '{}'", bucket, key);
+    // Log only the bucket, not the full S3 object key: under a field-based partitioner the key
+    // embeds record field values. The key remains available at DEBUG.
+    log.info("Create S3OutputStream for bucket '{}'", bucket);
   }
 
   @Override
@@ -184,9 +186,8 @@ public class S3OutputStream extends PositionOutputStream {
   public void commit() throws IOException {
     if (closed) {
       log.warn(
-          "Tried to commit data for bucket '{}' key '{}' on a closed stream. Ignoring.",
-          bucket,
-          key
+          "Tried to commit data for bucket '{}' on a closed stream. Ignoring.",
+          bucket
       );
       return;
     }
@@ -201,10 +202,13 @@ public class S3OutputStream extends PositionOutputStream {
         log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
       }
     } catch (IOException e) {
+      // The S3 object key embeds the encoded-partition path (record field values under a
+      // field-based partitioner), so log the opaque multipart upload id as the correlator
+      // instead of the key.
       log.error(
-          "Multipart upload failed to complete for bucket '{}' key '{}'. Reason: {}",
+          "Multipart upload failed to complete for bucket '{}' upload id '{}'. Reason: {}",
           bucket,
-          key,
+          multiPartUpload != null ? multiPartUpload.getUploadId() : null,
           e.getMessage()
       );
       throw e;
@@ -298,6 +302,10 @@ public class S3OutputStream extends PositionOutputStream {
     private final String uploadId;
     private final List<CompletedPart> completedParts;
 
+    String getUploadId() {
+      return uploadId;
+    }
+
     public MultipartUpload(String uploadId) {
       this.uploadId = uploadId;
       this.completedParts = new ArrayList<>();
@@ -379,7 +387,7 @@ public class S3OutputStream extends PositionOutputStream {
             try {
               return s3Client.completeMultipartUpload(completeRequestBuilder.build());
             } catch (S3Exception e) {
-              log.error("Failed to complete multipart upload of file {}", key, e);
+              log.error("Failed to complete multipart upload of file for bucket '{}'", bucket, e);
               // There can be cases where the s3 api returns 200 status code, but the error code
               // is set to "PreconditionFailed". We include additional check on error code to
               // capture such cases.

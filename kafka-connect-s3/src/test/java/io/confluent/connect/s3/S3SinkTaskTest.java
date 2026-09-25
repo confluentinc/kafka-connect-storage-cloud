@@ -353,5 +353,6 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     long[] validOffsets = {0, 3};
     verify(tp2AllRecords, validOffsets, Collections.singleton(TOPIC_PARTITION2), true);
   }
+
 }
 

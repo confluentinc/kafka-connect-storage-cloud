@@ -33,6 +33,9 @@ import software.amazon.awssdk.retries.api.RetryStrategy;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_MAX_BACKOFF_TIME_MS;
+import io.confluent.connect.s3.format.parquet.ParquetFormat;
+import io.confluent.connect.s3.util.LogCaptureAppender;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -230,5 +233,19 @@ public class S3StorageTest extends S3SinkConnectorTestBase {
     java.lang.reflect.Field f = S3OutputStream.class.getDeclaredField(CONDITIONAL_WRITES_FIELD);
     f.setAccessible(true);
     return (boolean) f.get(out);
+  }
+
+  @Test
+  public void testCreateParquetStreamDoesNotLogObjectKey() throws Exception {
+    setUp();
+    // The object key embeds the encoded-partition path (a record field value under a field-based
+    // partitioner), so it must not be logged when creating the output stream.
+    String canaryKey = "topics/t/field=CANARY_FIELD_VALUE/t+0+0.parquet";
+    try (LogCaptureAppender logs =
+        LogCaptureAppender.attach(S3Storage.class, S3OutputStream.class)) {
+      storage.create(canaryKey, true, ParquetFormat.class);
+      assertTrue(logs.anyMessageContains("Create S3ParquetOutputStream for bucket"));
+      assertFalse(logs.anyMessageContains("CANARY_FIELD_VALUE"));
+    }
   }
 }
