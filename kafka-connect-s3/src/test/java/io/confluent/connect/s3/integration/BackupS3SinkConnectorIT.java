@@ -98,6 +98,32 @@ public class BackupS3SinkConnectorIT extends BaseConnectorIT {
   private static final String JSON_EMBEDDED_SCHEMA = "JSON_EMBEDDED_SCHEMA";
   private static final String TYPE_NONE = "NONE";
   private static final String TYPE_BYTES = "BYTES";
+  private static final String ENVELOPE_MISSING_PREFIX = "envelope missing ";
+
+  /**
+   * Expected envelope shape passed to {@link #fileMatchesEnvelope} /
+   * {@link #envelopeContentsAsExpected} / {@link #rowMatchesEnvelope}. Bundles
+   * the six per-row expectations so those helpers stay under the Sonar S107
+   * parameter limit.
+   */
+  private static final class ExpectedEnvelope {
+    final int rowsPerFile;
+    final String topic;
+    final Struct valueStruct;
+    final String keySchemaType;
+    final String valueSchemaType;
+    final int headerCount;
+
+    ExpectedEnvelope(int rowsPerFile, String topic, Struct valueStruct,
+                     String keySchemaType, String valueSchemaType, int headerCount) {
+      this.rowsPerFile = rowsPerFile;
+      this.topic = topic;
+      this.valueStruct = valueStruct;
+      this.keySchemaType = keySchemaType;
+      this.valueSchemaType = valueSchemaType;
+      this.headerCount = headerCount;
+    }
+  }
 
   private JsonConverter jsonConverter;
   private Producer<byte[], byte[]> producer;
@@ -169,11 +195,11 @@ public class BackupS3SinkConnectorIT extends BaseConnectorIT {
     assertEquals(2, files.size());
 
     assertTrue(fileMatchesEnvelope(files.get(0), AVRO_EXTENSION,
-        FLUSH_SIZE_STANDARD, DEFAULT_TEST_TOPIC_NAME, valueStruct,
-        JSON_EMBEDDED_SCHEMA, JSON_EMBEDDED_SCHEMA, 2));
+        new ExpectedEnvelope(FLUSH_SIZE_STANDARD, DEFAULT_TEST_TOPIC_NAME, valueStruct,
+            JSON_EMBEDDED_SCHEMA, JSON_EMBEDDED_SCHEMA, 2)));
     assertTrue(fileMatchesEnvelope(files.get(1), AVRO_EXTENSION,
-        FLUSH_SIZE_STANDARD, DEFAULT_TEST_TOPIC_NAME, null,
-        JSON_EMBEDDED_SCHEMA, TYPE_NONE, 2));
+        new ExpectedEnvelope(FLUSH_SIZE_STANDARD, DEFAULT_TEST_TOPIC_NAME, null,
+            JSON_EMBEDDED_SCHEMA, TYPE_NONE, 2)));
   }
 
   @Test
@@ -210,11 +236,11 @@ public class BackupS3SinkConnectorIT extends BaseConnectorIT {
     assertEquals(2, files.size());
 
     assertTrue(fileMatchesEnvelope(files.get(0), AVRO_EXTENSION,
-        FLUSH_SIZE_STANDARD, DEFAULT_TEST_TOPIC_NAME, value1,
-        JSON_EMBEDDED_SCHEMA, JSON_EMBEDDED_SCHEMA, 2));
+        new ExpectedEnvelope(FLUSH_SIZE_STANDARD, DEFAULT_TEST_TOPIC_NAME, value1,
+            JSON_EMBEDDED_SCHEMA, JSON_EMBEDDED_SCHEMA, 2)));
     assertTrue(fileMatchesEnvelope(files.get(1), AVRO_EXTENSION,
-        FLUSH_SIZE_STANDARD, DEFAULT_TEST_TOPIC_NAME, value2,
-        JSON_EMBEDDED_SCHEMA, JSON_EMBEDDED_SCHEMA, 2));
+        new ExpectedEnvelope(FLUSH_SIZE_STANDARD, DEFAULT_TEST_TOPIC_NAME, value2,
+            JSON_EMBEDDED_SCHEMA, JSON_EMBEDDED_SCHEMA, 2)));
   }
 
   @Test
@@ -273,32 +299,24 @@ public class BackupS3SinkConnectorIT extends BaseConnectorIT {
     assertEquals(expectedTopicFilenames.size(), expectedTotalFileCount);
     assertFileNamesValid(TEST_BUCKET_NAME, new ArrayList<>(expectedTopicFilenames));
 
-    assertTrue(envelopeContentsAsExpected(TEST_BUCKET_NAME, FLUSH_SIZE_STANDARD,
-        expectedFileExtension, DEFAULT_TEST_TOPIC_NAME, valueStruct,
-        JSON_EMBEDDED_SCHEMA, JSON_EMBEDDED_SCHEMA, 2));
+    assertTrue(envelopeContentsAsExpected(TEST_BUCKET_NAME, expectedFileExtension,
+        new ExpectedEnvelope(FLUSH_SIZE_STANDARD, DEFAULT_TEST_TOPIC_NAME, valueStruct,
+            JSON_EMBEDDED_SCHEMA, JSON_EMBEDDED_SCHEMA, 2)));
   }
 
-  private boolean envelopeContentsAsExpected(String bucketName, int expectedRowsPerFile,
-                                             String extension, String expectedTopic,
-                                             Struct expectedValueStruct,
-                                             String expectedKeySchemaType,
-                                             String expectedValueSchemaType,
-                                             int expectedHeaderCount) throws IOException {
+  private boolean envelopeContentsAsExpected(String bucketName, String extension,
+                                             ExpectedEnvelope expected) throws IOException {
     for (String fileName : getS3FileListValues(
         s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(bucketName).build()))) {
-      if (!fileMatchesEnvelope(fileName, extension, expectedRowsPerFile, expectedTopic,
-          expectedValueStruct, expectedKeySchemaType, expectedValueSchemaType,
-          expectedHeaderCount)) {
+      if (!fileMatchesEnvelope(fileName, extension, expected)) {
         return false;
       }
     }
     return true;
   }
 
-  private boolean fileMatchesEnvelope(String fileName, String extension, int expectedRowsPerFile,
-                                      String expectedTopic, Struct expectedValueStruct,
-                                      String expectedKeySchemaType, String expectedValueSchemaType,
-                                      int expectedHeaderCount) throws IOException {
+  private boolean fileMatchesEnvelope(String fileName, String extension,
+                                      ExpectedEnvelope expected) throws IOException {
     String destinationPath = TEST_DOWNLOAD_PATH + fileName;
     File downloadedFile = new File(destinationPath);
     log.info("Reading envelope file {}", destinationPath);
@@ -307,14 +325,13 @@ public class BackupS3SinkConnectorIT extends BaseConnectorIT {
     FileUtils.copyInputStreamToFile(is, downloadedFile);
     try {
       List<JsonNode> rows = getFileContents(destinationPath, extension);
-      if (rows.size() != expectedRowsPerFile) {
+      if (rows.size() != expected.rowsPerFile) {
         log.error("Row count {} != expected {} in {}",
-            rows.size(), expectedRowsPerFile, fileName);
+            rows.size(), expected.rowsPerFile, fileName);
         return false;
       }
       for (JsonNode row : rows) {
-        if (!rowMatchesEnvelope(row, expectedTopic, expectedValueStruct,
-            expectedKeySchemaType, expectedValueSchemaType, expectedHeaderCount)) {
+        if (!rowMatchesEnvelope(row, expected)) {
           return false;
         }
       }
@@ -324,11 +341,12 @@ public class BackupS3SinkConnectorIT extends BaseConnectorIT {
     }
   }
 
-  private boolean rowMatchesEnvelope(JsonNode row, String expectedTopic,
-                                     Struct expectedValueStruct,
-                                     String expectedKeySchemaType,
-                                     String expectedValueSchemaType,
-                                     int expectedHeaderCount) {
+  private boolean rowMatchesEnvelope(JsonNode row, ExpectedEnvelope expected) {
+    String expectedTopic = expected.topic;
+    Struct expectedValueStruct = expected.valueStruct;
+    String expectedKeySchemaType = expected.keySchemaType;
+    String expectedValueSchemaType = expected.valueSchemaType;
+    int expectedHeaderCount = expected.headerCount;
     // JsonFormat with format.json.schema.enable=true wraps rows as {schema,payload}.
     if (row.has("payload") && row.has("schema")) {
       row = row.get("payload");
@@ -341,13 +359,13 @@ public class BackupS3SinkConnectorIT extends BaseConnectorIT {
     JsonNode headersNode = row.get(BackupEnvelope.FIELD_HEADERS);
     JsonNode keySchemaTypeNode = row.get(BackupEnvelope.FIELD_KEY_SCHEMA_TYPE);
     JsonNode valueSchemaTypeNode = row.get(BackupEnvelope.FIELD_VALUE_SCHEMA_TYPE);
-    assertNotNull("envelope missing " + BackupEnvelope.FIELD_TOPIC, topicNode);
-    assertNotNull("envelope missing " + BackupEnvelope.FIELD_PARTITION, partitionNode);
-    assertNotNull("envelope missing " + BackupEnvelope.FIELD_OFFSET, offsetNode);
-    assertNotNull("envelope missing " + BackupEnvelope.FIELD_KEY, keyNode);
-    assertNotNull("envelope missing " + BackupEnvelope.FIELD_HEADERS, headersNode);
-    assertNotNull("envelope missing " + BackupEnvelope.FIELD_KEY_SCHEMA_TYPE, keySchemaTypeNode);
-    assertNotNull("envelope missing " + BackupEnvelope.FIELD_VALUE_SCHEMA_TYPE,
+    assertNotNull(ENVELOPE_MISSING_PREFIX +BackupEnvelope.FIELD_TOPIC, topicNode);
+    assertNotNull(ENVELOPE_MISSING_PREFIX +BackupEnvelope.FIELD_PARTITION, partitionNode);
+    assertNotNull(ENVELOPE_MISSING_PREFIX +BackupEnvelope.FIELD_OFFSET, offsetNode);
+    assertNotNull(ENVELOPE_MISSING_PREFIX +BackupEnvelope.FIELD_KEY, keyNode);
+    assertNotNull(ENVELOPE_MISSING_PREFIX +BackupEnvelope.FIELD_HEADERS, headersNode);
+    assertNotNull(ENVELOPE_MISSING_PREFIX +BackupEnvelope.FIELD_KEY_SCHEMA_TYPE, keySchemaTypeNode);
+    assertNotNull(ENVELOPE_MISSING_PREFIX +BackupEnvelope.FIELD_VALUE_SCHEMA_TYPE,
         valueSchemaTypeNode);
 
     if (!expectedTopic.equals(topicNode.asText())) {
@@ -393,15 +411,15 @@ public class BackupS3SinkConnectorIT extends BaseConnectorIT {
       return true;
     }
     for (Field f : expectedValueStruct.schema().fields()) {
-      String expected = expectedValueStruct.get(f).toString();
+      String expectedStr = expectedValueStruct.get(f).toString();
       JsonNode actualNode = valueNode.get(f.name());
       if (actualNode == null) {
         log.error("value.{} missing from envelope row", f.name());
         return false;
       }
       String actual = actualNode.asText();
-      if (!actual.equals(expected)) {
-        log.error("value.{} mismatch: got={}, expected={}", f.name(), actual, expected);
+      if (!actual.equals(expectedStr)) {
+        log.error("value.{} mismatch: got={}, expected={}", f.name(), actual, expectedStr);
         return false;
       }
     }
