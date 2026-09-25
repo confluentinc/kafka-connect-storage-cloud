@@ -200,6 +200,20 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
       + " is configured";
   public static final boolean ROTATE_FILE_ON_PARTITION_CHANGE_DEFAULT = true;
 
+  public static final String COMMIT_FRONTIER_OFFSET_CONFIG = "commit.frontier.offset.enable";
+  public static final boolean COMMIT_FRONTIER_OFFSET_DEFAULT = false;
+  public static final String COMMIT_FRONTIER_OFFSET_DOC =
+      "When enabled, preCommit reports the frontier offset per partition instead of only the offset"
+      + " of the last uploaded file. The frontier is the lowest Kafka offset of a record that is"
+      + " buffered but not yet uploaded to S3, or the consumed high-water mark when nothing is"
+      + " buffered. Everything below the frontier is decided (already uploaded, or dropped or"
+      + " filtered), so committing it clears the phantom lag that a partition otherwise shows when"
+      + " records are consumed but no file has rotated yet (idle partitions, runs of filtered or"
+      + " null-valued records, or buffers still under the flush size). Because S3 resumes from the"
+      + " committed Kafka offset on restart, committing the frontier never steps over a record that"
+      + " is still in flight. Defaults to false, which preserves the existing behavior.";
+  public static final String COMMIT_FRONTIER_OFFSET_DISPLAY = "Commit Frontier Offset";
+
   /**
    * Maximum back-off time when retrying failed requests.
    */
@@ -757,6 +771,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.SHORT,
           "Rotate files on partition change"
+      );
+
+      configDef.define(
+          COMMIT_FRONTIER_OFFSET_CONFIG,
+          Type.BOOLEAN,
+          COMMIT_FRONTIER_OFFSET_DEFAULT,
+          Importance.LOW,
+          COMMIT_FRONTIER_OFFSET_DOC,
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          COMMIT_FRONTIER_OFFSET_DISPLAY
       );
 
       // This is done to avoid aggressive schema based rotations resulting out of interleaving
@@ -1416,6 +1442,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public boolean shouldRotateOnPartitionChange() {
     return getBoolean(ROTATE_FILE_ON_PARTITION_CHANGE);
+  }
+
+  public boolean isCommitFrontierOffsetEnabled() {
+    return getBoolean(COMMIT_FRONTIER_OFFSET_CONFIG);
   }
 
   public enum IgnoreOrFailBehavior {
