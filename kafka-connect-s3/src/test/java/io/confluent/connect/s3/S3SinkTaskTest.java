@@ -16,6 +16,7 @@
 package io.confluent.connect.s3;
 
 import com.amazonaws.services.s3.model.CannedAccessControlList;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
@@ -38,6 +39,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.io.ByteArrayInputStream;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -212,6 +214,67 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
 
     long[] validOffsets = {0, 10000};
     verify(sinkRecords, validOffsets);
+  }
+
+  @Test
+  public void testPreCommitFallsBackToFrameworkOffsetWhenNoDataWritten() throws Exception {
+    // Simulates a partition where every record is tolerated (and DLQ'd) by the framework before
+    // ever reaching put(), e.g. errors.tolerance=all with a converter that always fails. No
+    // records are ever buffered, so no file is ever rotated and the writer's own tracked commit
+    // offset stays null forever.
+    setUp();
+    replayAll();
+    task = new S3SinkTask();
+    task.initialize(context);
+    task.start(properties);
+    verifyAll();
+
+    // Framework calls put() every cycle even when it filtered out all records for this batch.
+    task.put(Collections.emptyList());
+
+    Map<TopicPartition, OffsetAndMetadata> frameworkOffsets = new HashMap<>();
+    frameworkOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(5L));
+
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = task.preCommit(frameworkOffsets);
+
+    assertEquals(
+        "Nothing is buffered or pending for the partition, so it is safe to advance the "
+            + "commit offset to the framework's own consumed position instead of freezing it.",
+        new OffsetAndMetadata(5L),
+        offsetsToCommit.get(TOPIC_PARTITION)
+    );
+
+    task.close(context.assignment());
+    task.stop();
+  }
+
+  @Test
+  public void testPreCommitDoesNotAdvanceOffsetWhenDataIsPending() throws Exception {
+    // A partition with buffered-but-unrotated data must not have its offset advanced past what
+    // has actually been durably written, even if the framework's consumed position is ahead.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "1000");
+    setUp();
+    replayAll();
+    task = new S3SinkTask();
+    task.initialize(context);
+    task.start(properties);
+    verifyAll();
+
+    List<SinkRecord> sinkRecords = createRecords(3);
+    task.put(sinkRecords);
+
+    Map<TopicPartition, OffsetAndMetadata> frameworkOffsets = new HashMap<>();
+    frameworkOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(3L));
+
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = task.preCommit(frameworkOffsets);
+
+    assertTrue(
+        "No file has been rotated yet, so nothing should be committed for the partition.",
+        offsetsToCommit.isEmpty()
+    );
+
+    task.close(context.assignment());
+    task.stop();
   }
 
   @Test
