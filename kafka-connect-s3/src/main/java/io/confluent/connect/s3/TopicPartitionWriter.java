@@ -562,6 +562,15 @@ public class TopicPartitionWriter {
     return minStartOffset();
   }
 
+  /**
+   * @return true if nothing is buffered, written but unrotated, or pending rotation for this
+   *     partition, i.e. there is no data at risk of loss if the committed offset were advanced
+   *     to the framework's actual consumed position.
+   */
+  public boolean hasNoPendingData() {
+    return recordCount == 0 && commitFiles.isEmpty() && startOffsets.isEmpty();
+  }
+
   public void failureTime(long when) {
     this.failureTime = when;
   }
