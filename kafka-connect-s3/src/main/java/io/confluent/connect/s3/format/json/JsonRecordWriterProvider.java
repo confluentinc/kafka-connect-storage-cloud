@@ -79,8 +79,10 @@ public class JsonRecordWriterProvider extends RecordViewSetter
 
             @Override
             public void write(SinkRecord record) throws IOException {
-              log.trace("Sink record with view {}: {}", recordView,
-                  sinkRecordToLoggableString(record));
+              if (log.isTraceEnabled()) {
+                log.trace("Sink record with view {}: {}", recordView,
+                    sinkRecordToLoggableString(record));
+              }
               // headers need to be enveloped for json format
               boolean envelop = recordView instanceof HeaderRecordView;
               Object value = recordView.getView(record, envelop);
