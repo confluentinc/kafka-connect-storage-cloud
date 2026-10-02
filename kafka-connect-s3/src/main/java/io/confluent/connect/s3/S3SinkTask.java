@@ -354,10 +354,27 @@ public class S3SinkTask extends SinkTask {
   ) {
     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
     for (TopicPartition tp : topicPartitionWriters.keySet()) {
-      Long offset = topicPartitionWriters.get(tp).getOffsetToCommitAndReset();
+      TopicPartitionWriter writer = topicPartitionWriters.get(tp);
+      Long offset = writer.getOffsetToCommitAndReset();
       if (offset != null) {
         log.trace("Forwarding to framework request to commit offset: {} for {}", offset, tp);
         offsetsToCommit.put(tp, new OffsetAndMetadata(offset));
+      } else if (offsets != null && writer.hasNoPendingData() && offsets.containsKey(tp)) {
+        // Nothing is buffered, written, or pending rotation for this partition, so no data is
+        // at risk of loss. This is the case, for example, when every record for the partition
+        // is dropped by the framework before ever reaching put() (e.g. a converter error
+        // tolerated via errors.tolerance=all): no file is ever rotated, so our own tracked
+        // commit offset would otherwise stay frozen forever, causing the framework to keep
+        // replaying already-tolerated records after every task restart. Falling back to the
+        // framework's own consumed position is safe here and lets the offset advance.
+        OffsetAndMetadata frameworkOffset = offsets.get(tp);
+        log.trace(
+            "No storage progress for {}; falling back to framework consumed offset {} since "
+                + "nothing is buffered or pending for this partition.",
+            tp,
+            frameworkOffset
+        );
+        offsetsToCommit.put(tp, frameworkOffset);
       }
     }
     return offsetsToCommit;
