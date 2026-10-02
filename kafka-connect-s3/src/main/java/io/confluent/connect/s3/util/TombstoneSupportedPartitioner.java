@@ -15,20 +15,18 @@
 
 package io.confluent.connect.s3.util;
 
-import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.Partitioner;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.connect.sink.SinkRecord;
 
-public class TombstoneSupportedPartitioner<T> extends DefaultPartitioner<T> {
+public class TombstoneSupportedPartitioner<T> extends DelegatingPartitioner<T> {
 
-  private final Partitioner<T> delegatePartitioner;
   private final String tombstonePartition;
 
   public TombstoneSupportedPartitioner(Partitioner<T> delegatePartitioner,
       String tombstonePartition) {
-    this.delegatePartitioner = delegatePartitioner;
+    super(delegatePartitioner);
     this.tombstonePartition = tombstonePartition;
   }
 

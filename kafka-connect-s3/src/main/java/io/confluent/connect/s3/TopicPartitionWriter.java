@@ -16,6 +16,7 @@
 package io.confluent.connect.s3;
 
 import io.confluent.connect.s3.storage.S3Storage;
+import io.confluent.connect.s3.util.DelegatingPartitioner;
 import io.confluent.connect.s3.util.FileRotationTracker;
 import io.confluent.connect.s3.util.RetryUtil;
 import io.confluent.connect.s3.util.TombstoneTimestampExtractor;
@@ -163,8 +164,10 @@ public class TopicPartitionWriter {
     this.reporter = reporter;
     this.timestampExtractor = null;
 
-    if (partitioner instanceof TimeBasedPartitioner) {
-      this.timestampExtractor = ((TimeBasedPartitioner) partitioner).getTimestampExtractor();
+    // Extract timestamp extractor from any underlying TimeBasedPartitioner
+    TimeBasedPartitioner<?> timeBasedPartitioner = getTimeBasedPartitioner(partitioner);
+    if (timeBasedPartitioner != null) {
+      this.timestampExtractor = timeBasedPartitioner.getTimestampExtractor();
       if (connectorConfig.isTombstoneWriteEnabled()) {
         this.timestampExtractor = new TombstoneTimestampExtractor(timestampExtractor);
       }
@@ -225,6 +228,34 @@ public class TopicPartitionWriter {
 
     // Initialize scheduled rotation timer if applicable
     setNextScheduledRotation();
+  }
+
+  /**
+   * Extracts a TimeBasedPartitioner from the given partitioner.
+   * Recursively unwraps DelegatingPartitioner instances until a TimeBasedPartitioner
+   * is found or no more delegates exist.
+   *
+   * @param partitioner the partitioner to extract from
+   * @return TimeBasedPartitioner if found, null otherwise
+   */
+  private static TimeBasedPartitioner<?> getTimeBasedPartitioner(Partitioner<?> partitioner) {
+    Partitioner<?> current = partitioner;
+
+    // Iteratively unwrap delegating partitioners
+    // (e.g., TombstoneSupportedPartitioner -> SchemaPartitioner -> TimeBasedPartitioner)
+    while (current != null) {
+      if (current instanceof TimeBasedPartitioner) {
+        return (TimeBasedPartitioner<?>) current;
+      }
+
+      if (current instanceof DelegatingPartitioner) {
+        current = ((DelegatingPartitioner<?>) current).getDelegatePartitioner();
+      } else {
+        break;
+      }
+    }
+
+    return null;
   }
 
   private void getS3Tag() {
@@ -403,11 +434,11 @@ public class TopicPartitionWriter {
 
     if (shouldRotateForNullSchema) {
       fileRotationTracker.incrementRotationByNullSchemaCount(encodedPartition);
+      // Do not log encodedPartition: under a field-based partitioner it is a record field value.
       log.info(
           "ROTATION TRIGGERED: Tombstone/non-tombstone schema change for topic-partition {}, "
-          + "encoded-partition: {}, records in file: {}",
+          + "records in file: {}",
           tp,
-          encodedPartition,
           recordCounts.getOrDefault(encodedPartition, 0L)
       );
       nextState();
@@ -423,11 +454,10 @@ public class TopicPartitionWriter {
           encodedPartition, currentTimestamp, now);
       
       log.info(
-          "ROTATION TRIGGERED: {} for topic-partition {}, encoded-partition: {}, "
+          "ROTATION TRIGGERED: {} for topic-partition {}, "
           + "time elapsed: {}ms (limit: {}ms), records in file: {}",
           rotationReason,
           tp,
-          encodedPartition,
           timeDiff,
           rotateIntervalMs,
           recordCounts.getOrDefault(encodedPartition, 0L)
@@ -445,9 +475,8 @@ public class TopicPartitionWriter {
       // This branch is never true for the first record read by this TopicPartitionWriter
       log.info(
           "ROTATION TRIGGERED: Schema incompatibility detected for topic-partition {}, "
-          + "encoded-partition: {}, incompatibility type: {}, records in file: {}",
+          + "incompatibility type: {}, records in file: {}",
           tp,
-          encodedPartition,
           shouldChangeSchema.getSchemaIncompatibilityType(),
           recordCounts.getOrDefault(encodedPartition, 0L)
       );
@@ -460,9 +489,8 @@ public class TopicPartitionWriter {
       fileRotationTracker.incrementRotationByPartitionerMaxOpenFilesCount(encodedPartition);
       log.info(
           "ROTATION TRIGGERED: Max open files limit reached for topic-partition {}, "
-          + "encoded-partition: {}, open files: {} (limit: {}), records per file: {}",
+          + "open files: {} (limit: {}), records per file: {}",
           tp,
-          encodedPartition,
           commitFiles.size(),
           partitionerMaxOpenFiles,
           formatRotationStatsForLogging()
@@ -483,9 +511,8 @@ public class TopicPartitionWriter {
       fileRotationTracker.incrementRotationByFlushSizeCount(encodedPartition);
       log.info(
           "ROTATION TRIGGERED: Flush size limit reached for topic-partition {}, "
-          + "encoded-partition: {}, records processed: {} (limit: {})",
+          + "records processed: {} (limit: {})",
           tp,
-          encodedPartition,
           recordCounts.getOrDefault(encodedPartition, 0L),
           flushSize
       );
@@ -518,11 +545,10 @@ public class TopicPartitionWriter {
             currentEncodedPartition, currentTimestamp, now);
         
         log.info(
-            "ROTATION TRIGGERED: {} for topic-partition {}, encoded-partition: {}, "
+            "ROTATION TRIGGERED: {} for topic-partition {}, "
             + "time interval: {}ms, flush size limit: {}, records per file: {}",
             rotationReason,
             tp,
-            currentEncodedPartition,
             rotateIntervalMs,
             flushSize,
             formatRotationStatsForLogging()
@@ -610,17 +636,41 @@ public class TopicPartitionWriter {
         && !encodedPartition.equals(currentEncodedPartition);
   }
 
+  /**
+   * Determines whether partition-change rotation should be applied.
+   * When tombstone writing is enabled, partition-change rotation is suppressed only for
+   * transitions to/from the tombstone partition to prevent excessive small files.
+   * Transitions between regular partitions still respect rotate.file.on.partition.change config.
+   *
+   * @param encodedPartition the encoded partition for the current record
+   * @return true if partition-change rotation should be applied, false otherwise
+   */
+  private boolean shouldRotateOnPartitionChangeWithTombstoneCheck(String encodedPartition) {
+    // Check if this is a tombstone transition (regular ↔ tombstone)
+    // Only check when currentEncodedPartition is set (not first record)
+    // Use contains() because encoded partition may include wrapper prefixes
+    // (e.g., schema_name=null/tombstone when using SchemaPartitioner)
+    boolean isTombstoneTransition = connectorConfig.isTombstoneWriteEnabled()
+        && currentEncodedPartition != null
+        && (encodedPartition.contains(connectorConfig.getTombstoneEncodedPartition())
+            || currentEncodedPartition.contains(connectorConfig.getTombstoneEncodedPartition()));
+
+    // Suppress rotation only for tombstone transitions; respect config for regular transitions
+    return !isTombstoneTransition && rotateOnPartitionChange(encodedPartition);
+  }
+
   private boolean rotateOnTime(String encodedPartition, Long recordTimestamp, long now) {
     if (recordCount <= 0) {
       return false;
     }
     // rotateIntervalMs > 0 implies timestampExtractor != null
     boolean hasValidTimestamps = baseRecordTimestamp != null && recordTimestamp != null;
-    boolean hasTimeBasedRotation = hasValidTimestamps 
+    boolean hasTimeBasedRotation = hasValidTimestamps
         && recordTimestamp - baseRecordTimestamp >= rotateIntervalMs;
     boolean periodicRotation = rotateIntervalMs > 0
         && timestampExtractor != null
-        && (hasTimeBasedRotation || rotateOnPartitionChange(encodedPartition));
+        && (hasTimeBasedRotation
+            || shouldRotateOnPartitionChangeWithTombstoneCheck(encodedPartition));
 
     // Check for scheduled rotation based on wall clock time
     boolean scheduledRotation = shouldApplyScheduledRotation(now);
@@ -692,8 +742,8 @@ public class TopicPartitionWriter {
    */
   private String determineTimeBasedRotationReason(
       String encodedPartition, Long recordTimestamp, long now) {
-    if (rotateIntervalMs > 0 && timestampExtractor != null 
-        && rotateOnPartitionChange(encodedPartition)) {
+    if (rotateIntervalMs > 0 && timestampExtractor != null
+        && shouldRotateOnPartitionChangeWithTombstoneCheck(encodedPartition)) {
       return "Partition change rotation";
     }
 
@@ -967,8 +1017,9 @@ public class TopicPartitionWriter {
       writer.commit();
     } catch (FileExistsException e) {
       long nextStartOffset = findNextAvailableFile(encodedPartition);
-      log.info("Next available offset for encoded partition {} is {}",
-          encodedPartition, nextStartOffset);
+      // Log tp, not encodedPartition (a record field value under a field-based partitioner).
+      log.info("Next available offset for topic-partition {} is {}",
+          tp, nextStartOffset);
       startOffsets.put(encodedPartition, nextStartOffset);
       throw e;
     }
@@ -977,8 +1028,8 @@ public class TopicPartitionWriter {
   public long findNextAvailableFile(String encodedPartition) {
     long startOffset = startOffsets.get(encodedPartition) + 1;
     long targetEndOffset = startOffset + connectorConfig.getInt(MAX_FILE_SCAN_LIMIT_CONFIG);
-    log.info("Scanning for available files for start_offset:{} and file {}",
-        startOffset, commitFiles.get(encodedPartition));
+    log.info("Scanning for available files for topic-partition {} from start_offset:{}",
+        tp, startOffset);
     do {
       String commitFile = offsetToFilenameMap.get(startOffset);
       try {
@@ -988,8 +1039,8 @@ public class TopicPartitionWriter {
           return startOffset;
         }
         if (!storage.exists(offsetToFilenameMap.get(startOffset))) {
-          log.info("File {} does not exist in S3. Next target offset to reset to is {}",
-              offsetToFilenameMap.get(startOffset), startOffset);
+          log.info("File for topic-partition {} does not exist in S3. "
+              + "Next target offset to reset to is {}", tp, startOffset);
           return startOffset;
         }
         log.debug("File {} already exists, checking for next available file", commitFile);
@@ -1014,12 +1065,13 @@ public class TopicPartitionWriter {
     Long endOffset = endOffsets.get(encodedPartition);
     Long recordCount = recordCounts.get(encodedPartition);
     if (startOffset == null || endOffset == null || recordCount == null) {
+      // Log tp, not encodedPartition (a record field value under a field-based partitioner).
       log.warn(
-          "Missing tags when attempting to tag file {}. "
+          "Missing tags when attempting to tag file for topic-partition {}. "
               + "Starting offset tag: {}, "
               + "ending offset tag: {}, "
               + "record count tag: {}. Ignoring.",
-          encodedPartition,
+          tp,
           startOffset == null ? "missing" : startOffset,
           endOffset == null ? "missing" : endOffset,
           recordCount == null ? "missing" : recordCount
@@ -1037,20 +1089,23 @@ public class TopicPartitionWriter {
     }
     try {
       storage.addTags(s3ObjectPath, tags);
-      log.info("Tagged S3 object {} with starting offset {}, ending offset {}, record count {}",
-          s3ObjectPath, startOffset, endOffset, recordCount);
+      // Log tp, not the S3 object path (a record field value under a field-based partitioner).
+      log.info("Tagged S3 object for topic-partition {} with starting offset {}, "
+          + "ending offset {}, record count {}", tp, startOffset, endOffset, recordCount);
     } catch (SdkClientException e) {
       if (ignoreTaggingErrors) {
-        log.warn("Unable to tag S3 object {}. Ignoring.", s3ObjectPath, e);
+        log.warn("Unable to tag S3 object for topic-partition {}. Ignoring.", tp, e);
       } else {
-        throw new ConnectException(String.format("Unable to tag S3 object %s", s3ObjectPath), e);
+        throw new ConnectException(
+            String.format("Unable to tag S3 object for topic-partition %s", tp), e);
       }
     } catch (Exception e) {
       if (ignoreTaggingErrors) {
-        log.warn("Unrecoverable exception while attempting to tag S3 object {}. Ignoring.",
-                s3ObjectPath, e);
+        log.warn("Unrecoverable exception while attempting to tag S3 object "
+                + "for topic-partition {}. Ignoring.", tp, e);
       } else {
-        throw new ConnectException(String.format("Unable to tag S3 object %s", s3ObjectPath), e);
+        throw new ConnectException(
+            String.format("Unable to tag S3 object for topic-partition %s", tp), e);
       }
     }
   }
