@@ -20,8 +20,11 @@ import io.confluent.connect.storage.StorageSinkConnectorConfig.Mode;
 import io.confluent.connect.storage.backup.BackupEnvelope;
 import io.confluent.connect.storage.format.backup.EnvelopeTransformer;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.After;
@@ -34,15 +37,23 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.lang.reflect.Field;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.storage.StorageFactory;
 
+import org.mockito.Mockito;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.powermock.api.easymock.PowerMock.replayAll;
 import static org.powermock.api.easymock.PowerMock.verifyAll;
 
@@ -59,6 +70,8 @@ public class BackupS3SinkTaskTest extends DataWriterAvroTest {
   private static final String STRING_CONVERTER =
       "org.apache.kafka.connect.storage.StringConverter";
   private static final String ENVELOPE_TRANSFORMER_FIELD = "envelopeTransformer";
+  private static final String RETRY_BACKOFF_CONFIG = "retry.backoff.ms";
+  private static final long CUSTOM_RETRY_BACKOFF_MS = 250L;
 
   //@Before omitted so per-test localProps can be set before setUp().
   public void setUp() throws Exception {
@@ -170,9 +183,71 @@ public class BackupS3SinkTaskTest extends DataWriterAvroTest {
     assertNull("stop() must clear the envelope transformer", readTransformer(task));
   }
 
+  @Test
+  public void testPutAppliesConfiguredBackoffOnSchemaRetriable() throws Exception {
+    putBackupModeProps();
+    localProps.put(RETRY_BACKOFF_CONFIG, Long.toString(CUSTOM_RETRY_BACKOFF_MS));
+    setUp();
+    replayAll();
+    SinkTaskContext mockCtx = mock(SinkTaskContext.class);
+    when(mockCtx.assignment()).thenReturn(Collections.singleton(TOPIC_PARTITION));
+    BackupS3SinkTask task = new BackupS3SinkTask();
+    task.initialize(mockCtx);
+    task.start(properties);
+    verifyAll();
+
+    EnvelopeTransformer failing = mock(EnvelopeTransformer.class);
+    when(failing.wrapAll(any())).thenThrow(new RetriableException("transient"));
+    writeTransformer(task, failing);
+
+    try {
+      task.put(createRecords(1));
+      fail("expected RetriableException");
+    } catch (RetriableException expected) {
+      // expected
+    }
+    Mockito.verify(mockCtx).timeout(CUSTOM_RETRY_BACKOFF_MS);
+
+    task.stop();
+  }
+
+  @Test
+  public void testPutDoesNotApplyBackoffOnFatalSchemaException() throws Exception {
+    putBackupModeProps();
+    setUp();
+    replayAll();
+    SinkTaskContext mockCtx = mock(SinkTaskContext.class);
+    when(mockCtx.assignment()).thenReturn(Collections.singleton(TOPIC_PARTITION));
+    BackupS3SinkTask task = new BackupS3SinkTask();
+    task.initialize(mockCtx);
+    task.start(properties);
+    verifyAll();
+
+    EnvelopeTransformer failing = mock(EnvelopeTransformer.class);
+    when(failing.wrapAll(any())).thenThrow(new ConnectException("fatal"));
+    writeTransformer(task, failing);
+
+    try {
+      task.put(createRecords(1));
+      fail("expected ConnectException");
+    } catch (ConnectException expected) {
+      // expected
+    }
+    Mockito.verify(mockCtx, Mockito.never()).timeout(anyLong());
+
+    task.stop();
+  }
+
   private static Object readTransformer(BackupS3SinkTask task) throws Exception {
     Field f = BackupS3SinkTask.class.getDeclaredField(ENVELOPE_TRANSFORMER_FIELD);
     f.setAccessible(true);
     return f.get(task);
+  }
+
+  private static void writeTransformer(BackupS3SinkTask task, EnvelopeTransformer transformer)
+      throws Exception {
+    Field f = BackupS3SinkTask.class.getDeclaredField(ENVELOPE_TRANSFORMER_FIELD);
+    f.setAccessible(true);
+    f.set(task, transformer);
   }
 }

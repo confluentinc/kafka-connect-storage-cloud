@@ -16,6 +16,7 @@
 package io.confluent.connect.s3;
 
 import io.confluent.connect.s3.backup.S3StorageWriter;
+import io.confluent.connect.storage.StorageSinkConnectorConfig;
 import io.confluent.connect.storage.backup.BackupEnvelope;
 import io.confluent.connect.storage.backup.BackupModeValidator;
 import io.confluent.connect.storage.backup.ConverterTypeDetector;
@@ -24,6 +25,7 @@ import io.confluent.connect.storage.backup.SchemaBackupStore;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.format.backup.EnvelopeTransformer;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -97,7 +99,14 @@ public class BackupS3SinkTask extends S3SinkTask {
 
   @Override
   public void put(Collection<SinkRecord> records) throws ConnectException {
-    super.put(envelopeTransformer.wrapAll(records));
+    Collection<SinkRecord> wrapped;
+    try {
+      wrapped = envelopeTransformer.wrapAll(records);
+    } catch (RetriableException e) {
+      context.timeout(connectorConfig.getLong(StorageSinkConnectorConfig.RETRY_BACKOFF_CONFIG));
+      throw e;
+    }
+    super.put(wrapped);
   }
 
   @Override
