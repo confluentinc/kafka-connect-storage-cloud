@@ -674,12 +674,16 @@ public abstract class BaseConnectorIT {
   }
 
   // filter for values only.
-  private List<String> getS3FileListValues(ListObjectsV2Response summaries) {
+  protected List<String> getS3FileListValues(ListObjectsV2Response summaries) {
     List<String> excludeExtensions = Arrays.asList(".headers.avro", ".keys.avro");
     return summaries.contents().stream()
         .filter(summary -> !filenameContainsExtensions(summary.key(), excludeExtensions))
         .map(S3Object::key)
         .collect(Collectors.toList());
+  }
+
+  protected List<JsonNode> getFileContents(String filePath, String extension) {
+    return contentGetters.get(extension).apply(filePath);
   }
 
   /**
