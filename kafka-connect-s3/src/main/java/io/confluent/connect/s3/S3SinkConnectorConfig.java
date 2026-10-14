@@ -317,6 +317,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
         FORMAT_CLASS_RECOMMENDER,
         AVRO_COMPRESSION_RECOMMENDER
     );
+    StorageSinkConnectorConfig.addBackupModeConfigs(configDef);
 
     final String connectorGroup = "Connector";
     final int latestOrderInGroup = configDef.configKeys().values().stream()

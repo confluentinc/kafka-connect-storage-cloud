@@ -6,6 +6,7 @@ import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.json.JsonFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
+import io.confluent.connect.storage.StorageSinkConnectorConfig.Mode;
 import io.confluent.connect.storage.format.Format;
 import io.confluent.connect.storage.format.RecordWriterProvider;
 import io.confluent.connect.storage.format.SchemaFileReader;
@@ -28,9 +29,34 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_HEADERS_
 import static io.confluent.connect.s3.S3SinkConnectorConfig.STORE_KAFKA_KEYS_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorValidator.FORMAT_CONFIG_ERROR_MESSAGE;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FORMAT_CLASS_CONFIG;
+import static io.confluent.connect.storage.StorageSinkConnectorConfig.MODE_CONFIG;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
+  private static final String STRING_CONVERTER =
+      "org.apache.kafka.connect.storage.StringConverter";
+  private static final String AVRO_CONVERTER = "io.confluent.connect.avro.AvroConverter";
+  private static final String KEY_CONVERTER_CONFIG = "key.converter";
+  private static final String VALUE_CONVERTER_CONFIG = "value.converter";
+  private static final String KEY_ENHANCED_AVRO = "key.converter.enhanced.avro.schema.support";
+  private static final String KEY_SCHEMA_BACKUP_ENABLED = "key.converter.schema.backup.enabled";
+  private static final String VALUE_ENHANCED_AVRO = "value.converter.enhanced.avro.schema.support";
+  private static final String VALUE_SCHEMA_BACKUP_ENABLED =
+      "value.converter.schema.backup.enabled";
+  private static final String FORMAT_JSON_SCHEMA_ENABLE_CONFIG = "format.json.schema.enable";
+  private static final String BYTE_ARRAY_FORMAT_ERROR_SNIPPET =
+      "format.class=ByteArrayFormat cannot be used";
+  private static final String MUST_BE_SET_EXPLICITLY_SNIPPET =
+      "must be set explicitly at the connector";
+  private static final String STORE_KAFKA_KEYS_ERROR_SNIPPET =
+      "store.kafka.keys=true cannot be used";
+  private static final String TRANSFORMS_CONFIG = "transforms";
+  private static final String SMT_ALIAS = "Customer";
+  private static final String CAST_KEY_SMT_TYPE =
+      "org.apache.kafka.connect.transforms.Cast$Key";
+
   protected Map<String, String> localProps = new HashMap<>();
   private S3SinkConnectorValidator s3SinkConnectorValidator;
 
@@ -243,6 +269,146 @@ public class S3SinkConnectorValidatorTest extends S3SinkConnectorTestBase{
       }
 
     }
+  }
+
+  @Test
+  public void testValidateBackupModeSkippedWhenGeneric() {
+    localProps.put(MODE_CONFIG, Mode.GENERIC.name());
+    localProps.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
+    s3SinkConnectorValidator = new S3SinkConnectorValidator(
+        S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
+
+    Config configs = s3SinkConnectorValidator.validate();
+
+    for (ConfigValue cv : configs.configValues()) {
+      if (MODE_CONFIG.equals(cv.name()) || FORMAT_CLASS_CONFIG.equals(cv.name())) {
+        assertEquals(
+            "GENERIC mode should not surface backup-mode validation errors on " + cv.name(),
+            0, cv.errorMessages().size());
+      }
+    }
+  }
+
+  @Test
+  public void testValidateBackupModeAttachesByteArrayErrorToFormatClass() {
+    localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
+    localProps.put(FORMAT_CLASS_CONFIG, ByteArrayFormat.class.getName());
+    localProps.put(KEY_CONVERTER_CONFIG, STRING_CONVERTER);
+    localProps.put(VALUE_CONVERTER_CONFIG, AVRO_CONVERTER);
+    localProps.put(VALUE_ENHANCED_AVRO, "true");
+    localProps.put(VALUE_SCHEMA_BACKUP_ENABLED, "true");
+    s3SinkConnectorValidator = new S3SinkConnectorValidator(
+        S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
+
+    Config configs = s3SinkConnectorValidator.validate();
+
+    assertTrue(
+        "expected ByteArrayFormat error to surface on format.class",
+        anyErrorContains(configs, FORMAT_CLASS_CONFIG, BYTE_ARRAY_FORMAT_ERROR_SNIPPET));
+  }
+
+  @Test
+  public void testValidateBackupModeMissingConverterAttachesToConverterKey() {
+    localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
+    localProps.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
+    s3SinkConnectorValidator = new S3SinkConnectorValidator(
+        S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
+
+    Config configs = s3SinkConnectorValidator.validate();
+
+    assertTrue(
+        "expected key.converter-must-be-set error on key.converter",
+        anyErrorContains(configs, KEY_CONVERTER_CONFIG, MUST_BE_SET_EXPLICITLY_SNIPPET));
+    assertTrue(
+        "expected value.converter-must-be-set error on value.converter",
+        anyErrorContains(configs, VALUE_CONVERTER_CONFIG, MUST_BE_SET_EXPLICITLY_SNIPPET));
+  }
+
+  @Test
+  public void testValidateBackupModeAttachesJsonSchemaEnableErrorToItsOwnKey() {
+    localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
+    localProps.put(FORMAT_CLASS_CONFIG, JsonFormat.class.getName());
+    localProps.put(KEY_CONVERTER_CONFIG, STRING_CONVERTER);
+    localProps.put(VALUE_CONVERTER_CONFIG, STRING_CONVERTER);
+    s3SinkConnectorValidator = new S3SinkConnectorValidator(
+        S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
+
+    Config configs = s3SinkConnectorValidator.validate();
+
+    assertTrue(
+        "expected json-schema-enable error on its own key",
+        anyErrorContains(configs, FORMAT_JSON_SCHEMA_ENABLE_CONFIG,
+            FORMAT_JSON_SCHEMA_ENABLE_CONFIG));
+  }
+
+  @Test
+  public void testValidateBackupModeStoreKafkaKeysErrorAttachesToStoreKafkaKeys() {
+    localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
+    localProps.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
+    localProps.put(KEY_CONVERTER_CONFIG, STRING_CONVERTER);
+    localProps.put(VALUE_CONVERTER_CONFIG, AVRO_CONVERTER);
+    localProps.put(VALUE_ENHANCED_AVRO, "true");
+    localProps.put(VALUE_SCHEMA_BACKUP_ENABLED, "true");
+    localProps.put(STORE_KAFKA_KEYS_CONFIG, "true");
+    s3SinkConnectorValidator = new S3SinkConnectorValidator(
+        S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
+
+    Config configs = s3SinkConnectorValidator.validate();
+
+    assertTrue(
+        "expected store.kafka.keys error on store.kafka.keys",
+        anyErrorContains(configs, STORE_KAFKA_KEYS_CONFIG, STORE_KAFKA_KEYS_ERROR_SNIPPET));
+  }
+
+  @Test
+  public void testValidateBackupModeConverterSubKeysAttachToConverterUmbrella() {
+    localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
+    localProps.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
+    localProps.put(KEY_CONVERTER_CONFIG, AVRO_CONVERTER);
+    localProps.put(KEY_SCHEMA_BACKUP_ENABLED, "true");
+    localProps.put(VALUE_CONVERTER_CONFIG, AVRO_CONVERTER);
+    localProps.put(VALUE_ENHANCED_AVRO, "true");
+    localProps.put(VALUE_SCHEMA_BACKUP_ENABLED, "true");
+    // key.converter.enhanced.avro.schema.support deliberately not set
+    s3SinkConnectorValidator = new S3SinkConnectorValidator(
+        S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
+
+    Config configs = s3SinkConnectorValidator.validate();
+
+    assertTrue(
+        "expected key.converter.enhanced.avro.schema.support error on key.converter",
+        anyErrorContains(configs, KEY_CONVERTER_CONFIG, KEY_ENHANCED_AVRO));
+  }
+
+  @Test
+  public void testValidateBackupModeErrorOnFrameworkKeyPreservesUserValue() {
+    localProps.put(MODE_CONFIG, Mode.BACKUP_FULL_RECORD.name());
+    localProps.put(FORMAT_CLASS_CONFIG, AvroFormat.class.getName());
+    localProps.put(KEY_CONVERTER_CONFIG, STRING_CONVERTER);
+    localProps.put(VALUE_CONVERTER_CONFIG, AVRO_CONVERTER);
+    localProps.put(VALUE_ENHANCED_AVRO, "true");
+    localProps.put(VALUE_SCHEMA_BACKUP_ENABLED, "true");
+    localProps.put(TRANSFORMS_CONFIG, SMT_ALIAS);
+    localProps.put(TRANSFORMS_CONFIG + "." + SMT_ALIAS + ".type", CAST_KEY_SMT_TYPE);
+    s3SinkConnectorValidator = new S3SinkConnectorValidator(
+        S3SinkConnectorConfig.getConfig(), createProps(), createConfigValues());
+
+    Config configs = s3SinkConnectorValidator.validate();
+
+    ConfigValue transforms = configs.configValues().stream()
+        .filter(cv -> TRANSFORMS_CONFIG.equals(cv.name()))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("no ConfigValue for transforms"));
+    assertEquals(SMT_ALIAS, transforms.value());
+    assertTrue("expected SMT rejection error on transforms",
+        transforms.errorMessages().stream().anyMatch(m -> m.contains("SMT")));
+  }
+
+  private boolean anyErrorContains(Config configs, String field, String needle) {
+    return configs.configValues().stream()
+        .filter(cv -> field.equals(cv.name()))
+        .flatMap(cv -> cv.errorMessages().stream())
+        .anyMatch(msg -> msg.contains(needle));
   }
 
   private void assertContainError(String message, String field, List<ConfigValue> configValues) {

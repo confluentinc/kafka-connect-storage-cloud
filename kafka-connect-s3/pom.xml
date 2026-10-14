@@ -70,6 +70,27 @@
     </dependencyManagement>
 
     <dependencies>
+        <!-- Provided by the Connect platform. Overrides parent-pom defaults so the hub
+             bundle does not ship its own avro / avro-data / avro-serializer jars that
+             would shadow the Connect runtime copies and pull in stale avro-data. -->
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <version>${avro.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-connect-avro-data</artifactId>
+            <version>${confluent.version.range}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-avro-serializer</artifactId>
+            <version>${confluent.version.range}</version>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
