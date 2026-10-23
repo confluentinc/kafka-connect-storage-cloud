@@ -72,6 +72,8 @@ public class BackupS3SinkTaskTest extends DataWriterAvroTest {
   private static final String ENVELOPE_TRANSFORMER_FIELD = "envelopeTransformer";
   private static final String RETRY_BACKOFF_CONFIG = "retry.backoff.ms";
   private static final long CUSTOM_RETRY_BACKOFF_MS = 250L;
+  // Backup mode auto-promotes filename.offset.zero.pad.width to 20.
+  private static final String BACKUP_ZERO_PAD_FMT = "%020d";
 
   //@Before omitted so per-test localProps can be set before setUp().
   public void setUp() throws Exception {
@@ -147,7 +149,7 @@ public class BackupS3SinkTaskTest extends DataWriterAvroTest {
     // KafkaRecordEnvelope schema with metadata copied from the source
     // SinkRecord. Proves wrap() ran AND its output reached storage.
     Collection<Object> written = readRecords(topicsDir, getDirectory(),
-        TOPIC_PARTITION, 0, EXTENSION, ZERO_PAD_FMT,
+        TOPIC_PARTITION, 0, EXTENSION, BACKUP_ZERO_PAD_FMT,
         S3_TEST_BUCKET_NAME, s3Client);
     assertEquals(sinkRecords.size(), written.size());
 
@@ -165,6 +167,47 @@ public class BackupS3SinkTaskTest extends DataWriterAvroTest {
       assertEquals(PARTITION, g.get(BackupEnvelope.FIELD_PARTITION));
       assertEquals(expectedOffset++, g.get(BackupEnvelope.FIELD_OFFSET));
     }
+  }
+
+  @Test
+  public void testStartAutoAppliesPadWidth20ForBackupMode() throws Exception {
+    putBackupModeProps();
+    // Explicitly set pad=10 (default), replaced by backup-mode override to 20
+    // via the typed getter filenameOffsetZeroPadWidth().
+    localProps.put(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG, "10");
+    setUp();
+    replayAll();
+    BackupS3SinkTask task = new BackupS3SinkTask();
+    task.initialize(context);
+    task.start(properties);
+    verifyAll();
+
+    Field cf = S3SinkTask.class.getDeclaredField("connectorConfig");
+    cf.setAccessible(true);
+    S3SinkConnectorConfig cfg = (S3SinkConnectorConfig) cf.get(task);
+    assertEquals(20, cfg.filenameOffsetZeroPadWidth());
+
+    task.stop();
+  }
+
+  @Test
+  public void testStartOverridesUserPadWidth25ToBackupModeValueOf20() throws Exception {
+    putBackupModeProps();
+    // User override above the backup-mode value is still replaced with 20.
+    localProps.put(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG, "25");
+    setUp();
+    replayAll();
+    BackupS3SinkTask task = new BackupS3SinkTask();
+    task.initialize(context);
+    task.start(properties);
+    verifyAll();
+
+    Field cf = S3SinkTask.class.getDeclaredField("connectorConfig");
+    cf.setAccessible(true);
+    S3SinkConnectorConfig cfg = (S3SinkConnectorConfig) cf.get(task);
+    assertEquals(20, cfg.filenameOffsetZeroPadWidth());
+
+    task.stop();
   }
 
   @Test
