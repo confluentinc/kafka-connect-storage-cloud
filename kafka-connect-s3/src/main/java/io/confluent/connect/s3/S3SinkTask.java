@@ -268,6 +268,12 @@ public class S3SinkTask extends SinkTask {
           context.offset(tp, currentStartOffset);
         }
         context.timeout(timeoutMs);
+        // Close the replaced writer so its in-flight multipart uploads are aborted
+        try {
+          writer.close();
+        } catch (Exception closeException) {
+          log.warn("Failed to close writer for topic partition {}: ", tp, closeException);
+        }
         writer = newTopicPartitionWriter(tp);
         writer.failureTime(time.milliseconds());
         topicPartitionWriters.put(tp, writer);
