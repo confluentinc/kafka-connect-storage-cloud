@@ -6,6 +6,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,6 +15,7 @@ import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.AmazonServiceException.ErrorType;
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
 import com.amazonaws.services.s3.model.CompleteMultipartUploadResult;
@@ -286,5 +289,55 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
 
     assertNotNull(completeMultipartRequestCaptor.getValue());
     assertNull(completeMultipartRequestCaptor.getValue().getIfNoneMatch());
+  }
+
+  @Test
+  public void testCommitAbortsMultipartUploadWhenCompleteFails() {
+    AmazonS3Exception exception = new AmazonS3Exception("complete failed");
+    exception.setStatusCode(500);
+
+    when(s3Mock.completeMultipartUpload(any())).thenThrow(exception);
+    when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
+    when(s3Mock.uploadPart(any())).thenReturn(mock(UploadPartResult.class));
+
+    assertThrows(IOException.class, () -> stream.commit());
+    verify(s3Mock, times(1)).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
+  }
+
+  @Test
+  public void testCommitAbortsMultipartUploadWhenFileExists() {
+    Map<String, String> props = super.createProps();
+    props.put(S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_CONFIG, "true");
+    stream = new S3OutputStream(S3_TEST_KEY_NAME, new S3SinkConnectorConfig(props), s3Mock);
+
+    AmazonS3Exception exception = new AmazonS3Exception("file exists");
+    exception.setStatusCode(412);
+
+    when(s3Mock.completeMultipartUpload(any())).thenThrow(exception);
+    when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
+    when(s3Mock.uploadPart(any())).thenReturn(mock(UploadPartResult.class));
+    when(s3Mock.doesObjectExist(any(), any())).thenReturn(true);
+
+    assertThrows(FileExistsException.class, () -> stream.commit());
+    verify(s3Mock, times(1)).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
+  }
+
+  @Test
+  public void testCommitAbortsMultipartUploadOnceWhenUploadPartFails() {
+    when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
+    when(s3Mock.uploadPart(any())).thenThrow(new AmazonClientException("upload failed"));
+
+    assertThrows(IOException.class, () -> stream.commit());
+    verify(s3Mock, times(1)).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
+  }
+
+  @Test
+  public void testCommitDoesNotAbortMultipartUploadOnSuccess() throws IOException {
+    when(s3Mock.completeMultipartUpload(any())).thenReturn(mock(CompleteMultipartUploadResult.class));
+    when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
+    when(s3Mock.uploadPart(any())).thenReturn(mock(UploadPartResult.class));
+
+    stream.commit();
+    verify(s3Mock, never()).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
   }
 }

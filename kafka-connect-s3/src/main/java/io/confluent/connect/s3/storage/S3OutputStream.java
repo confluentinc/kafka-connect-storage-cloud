@@ -159,6 +159,7 @@ public class S3OutputStream extends PositionOutputStream {
     } catch (Exception e) {
       if (multiPartUpload != null) {
         multiPartUpload.abort();
+        multiPartUpload = null;
         log.debug("Multipart upload aborted for bucket '{}' key '{}'.", bucket, key);
       }
       throw new IOException("Part upload failed: ", e);
@@ -181,6 +182,8 @@ public class S3OutputStream extends PositionOutputStream {
         uploadPart(buffer.position());
       }
       multiPartUpload.complete();
+      // Only drop the reference on success, so internalClose() aborts a failed upload
+      multiPartUpload = null;
       log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
     } catch (IOException e) {
       log.error(
@@ -192,7 +195,6 @@ public class S3OutputStream extends PositionOutputStream {
       throw e;
     } finally {
       buffer.clear();
-      multiPartUpload = null;
       internalClose();
     }
   }
