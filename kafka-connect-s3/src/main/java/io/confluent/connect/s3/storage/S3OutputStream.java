@@ -159,7 +159,6 @@ public class S3OutputStream extends PositionOutputStream {
     } catch (Exception e) {
       if (multiPartUpload != null) {
         multiPartUpload.abort();
-        multiPartUpload = null;
         log.debug("Multipart upload aborted for bucket '{}' key '{}'.", bucket, key);
       }
       throw new IOException("Part upload failed: ", e);
