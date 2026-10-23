@@ -95,6 +95,22 @@ public class BackupS3SinkConnectorIT extends BaseConnectorIT {
   private static final List<String> KAFKA_TOPICS =
       Collections.singletonList(DEFAULT_TEST_TOPIC_NAME);
 
+  // BACKUP_FULL_RECORD mode auto-promotes filename.offset.zero.pad.width to 20
+  // via BackupModeConfigDefaults, so expected filenames use 20-digit zero-padded offsets.
+  @Override
+  protected List<String> getExpectedFilenames(
+      String topic, int partition, int flushSize, int startOffset,
+      long numRecords, String extension) {
+    int expectedFileCount = (int) numRecords / flushSize;
+    List<String> expectedFiles = new ArrayList<>();
+    for (int offset = startOffset; offset < expectedFileCount * flushSize; offset += flushSize) {
+      expectedFiles.add(String.format(
+          "topics/%s/partition=%d/%s+%d+%020d.%s",
+          topic, partition, topic, partition, offset, extension));
+    }
+    return expectedFiles;
+  }
+
   private static final String JSON_EMBEDDED_SCHEMA = "JSON_EMBEDDED_SCHEMA";
   private static final String TYPE_NONE = "NONE";
   private static final String TYPE_BYTES = "BYTES";
