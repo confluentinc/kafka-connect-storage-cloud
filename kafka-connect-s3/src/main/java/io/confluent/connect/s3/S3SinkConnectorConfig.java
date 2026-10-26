@@ -204,7 +204,13 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   /**
    * Maximum back-off time when retrying failed requests.
    */
-  public static final int S3_RETRY_MAX_BACKOFF_TIME_MS = (int) TimeUnit.HOURS.toMillis(24);
+  public static final int S3_RETRY_MAX_BACKOFF_TIME_MS = (int) TimeUnit.SECONDS.toMillis(20);
+
+  /**
+   * Maximum time for a single S3 call, including all retries and back-off. Left unset per attempt
+   * since a healthy upload of a large part (s3.part.size allows up to 2GB) can be slow.
+   */
+  public static final int S3_CLIENT_EXECUTION_TIMEOUT_MS = (int) TimeUnit.MINUTES.toMillis(10);
 
   public static final String S3_RETRY_BACKOFF_CONFIG = "s3.retry.backoff.ms";
   public static final int S3_RETRY_BACKOFF_DEFAULT = 200;
