@@ -1,7 +1,7 @@
 package io.confluent.connect.s3.storage;
 
-import org.apache.commons.lang.RandomStringUtils;
-import org.apache.commons.lang.math.RandomUtils;
+import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.lang3.RandomUtils;
 import org.junit.Test;
 import java.nio.BufferOverflowException;
 import static org.junit.Assert.assertEquals;
@@ -291,7 +291,7 @@ public class ElasticByteBufferTest {
     int cap = 5 * 1024 * 1024;
     ElasticByteBuffer buf = new ElasticByteBuffer(cap, INIT_CAP);
 
-    int testBytesLen1 = RandomUtils.nextInt(cap);
+    int testBytesLen1 = RandomUtils.nextInt(0, cap);
     String data1 = RandomStringUtils.randomAlphanumeric(testBytesLen1);
     byte[] randomBytes1 = data1.getBytes();
     for (byte randomByte : randomBytes1) {
@@ -315,7 +315,7 @@ public class ElasticByteBufferTest {
     int cap = 5 * 1024 * 1024;
     ElasticByteBuffer buf = new ElasticByteBuffer(cap, INIT_CAP);
 
-    int testBytesLen1 = RandomUtils.nextInt(cap);
+    int testBytesLen1 = RandomUtils.nextInt(0, cap);
     String data1 = RandomStringUtils.randomAlphanumeric(testBytesLen1);
     byte[] randomBytes1 = data1.getBytes();
     buf.put(randomBytes1, 0, randomBytes1.length);
