@@ -398,8 +398,9 @@ public class S3OutputStream extends PositionOutputStream {
                 + "uploaded parts: ", uploadId, e);
             return;
           }
-          long sleepMs = backoffMs
-              + (long) (backoffMs * ABORT_JITTER * ThreadLocalRandom.current().nextDouble());
+          // Jitter only spreads retries out; it is not security-sensitive.
+          long sleepMs = backoffMs + ThreadLocalRandom.current()
+              .nextLong((long) (backoffMs * ABORT_JITTER) + 1); // NOSONAR java:S2245
           log.warn("Attempt {} of {} to abort multi-part upload with id '{}' failed, retrying in "
               + "{} ms: {}", attempt, ABORT_MAX_ATTEMPTS, uploadId, sleepMs, e.getMessage());
           try {
