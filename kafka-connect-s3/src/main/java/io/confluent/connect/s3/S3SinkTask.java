@@ -272,7 +272,7 @@ public class S3SinkTask extends SinkTask {
         try {
           writer.close();
         } catch (Exception closeException) {
-          log.warn("Failed to close writer for topic partition {}: ", tp, closeException);
+          log.warn("Failed to close writer for {}. Error: {}", tp, closeException.getMessage());
         }
         writer = newTopicPartitionWriter(tp);
         writer.failureTime(time.milliseconds());
