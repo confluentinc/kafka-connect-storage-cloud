@@ -32,6 +32,7 @@ import io.confluent.connect.s3.DummyAssertiveCredentialsProvider;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.S3SinkConnectorTestBase;
 
+import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_CLIENT_EXECUTION_TIMEOUT_MS;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_MAX_BACKOFF_TIME_MS;
 import static org.junit.Assert.assertEquals;
@@ -61,6 +62,13 @@ public class S3StorageTest extends S3SinkConnectorTestBase {
     super.setUp();
     storage = new S3Storage(connectorConfig, url);
     retryPolicy = storage.newFullJitterRetryPolicy(connectorConfig);
+  }
+
+  @Test
+  public void testClientExecutionTimeout() throws Exception {
+    setUp();
+    assertEquals(S3_CLIENT_EXECUTION_TIMEOUT_MS,
+        storage.newClientConfiguration(connectorConfig).getClientExecutionTimeout());
   }
 
   @Test
