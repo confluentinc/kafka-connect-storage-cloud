@@ -202,7 +202,7 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final boolean ROTATE_FILE_ON_PARTITION_CHANGE_DEFAULT = true;
 
   /**
-   * Maximum back-off time when retrying failed requests.
+   * Maximum back-off time when retrying failed requests, unless s3.retry.backoff.ms is larger.
    */
   public static final int S3_RETRY_MAX_BACKOFF_TIME_MS = (int) TimeUnit.SECONDS.toMillis(20);
 
@@ -1085,6 +1085,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public int getS3PartRetries() {
     return getInt(S3_PART_RETRIES_CONFIG);
+  }
+
+  public long getS3RetryMaxBackoffMs() {
+    return Math.max(getLong(S3_RETRY_BACKOFF_CONFIG), S3_RETRY_MAX_BACKOFF_TIME_MS);
   }
 
   public String getByteArrayExtension() {
