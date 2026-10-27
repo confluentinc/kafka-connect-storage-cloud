@@ -33,6 +33,7 @@ import com.amazonaws.services.s3.model.SSECustomerKey;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.errors.FileExistsException;
+import io.confluent.connect.s3.util.RetryUtil;
 import io.confluent.connect.storage.common.util.StringUtils;
 
 import org.apache.commons.codec.digest.DigestUtils;
@@ -47,8 +48,6 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /**
@@ -59,7 +58,7 @@ import java.util.function.Supplier;
 public class S3OutputStream extends PositionOutputStream {
   private static final Logger log = LoggerFactory.getLogger(S3OutputStream.class);
   // Abort retry: 1s initial backoff, x1.6, +20% jitter (Well-Architected Client guidance).
-  // 4 attempts keeps the task thread blocked ~5-6s at most, enough to ride out a short outage.
+  // 4 attempts add ~5-6s of waits on top of the SDK retries, enough to ride out a short outage.
   private static final int ABORT_MAX_ATTEMPTS = 4;
   private static final long ABORT_INITIAL_BACKOFF_MS = 1000;
   private static final double ABORT_BACKOFF_MULTIPLIER = 1.6;
@@ -383,35 +382,20 @@ public class S3OutputStream extends PositionOutputStream {
       }
       aborted = true;
       log.warn("Aborting multi-part upload with id '{}'", uploadId);
-      long backoffMs = ABORT_INITIAL_BACKOFF_MS;
-      for (int attempt = 1; ; attempt++) {
-        try {
-          s3.abortMultipartUpload(new AbortMultipartUploadRequest(bucket, key, uploadId));
-          return;
-        } catch (Exception e) {
-          // 4xx won't succeed on retry (404 means the upload is already gone)
-          boolean clientError = e instanceof AmazonServiceException
-              && ((AmazonServiceException) e).getStatusCode() / 100 == 4;
-          if (clientError || attempt >= ABORT_MAX_ATTEMPTS) {
-            // ignoring failure on abort.
-            log.warn("Unable to abort multipart upload with id '{}', you may need to purge "
-                + "uploaded parts: ", uploadId, e);
-            return;
-          }
-          long sleepMs = backoffMs
-              + (long) (backoffMs * ABORT_JITTER * ThreadLocalRandom.current().nextDouble());
-          log.warn("Attempt {} of {} to abort multi-part upload with id '{}' failed, retrying in "
-              + "{} ms: {}", attempt, ABORT_MAX_ATTEMPTS, uploadId, sleepMs, e.getMessage());
-          try {
-            TimeUnit.MILLISECONDS.sleep(sleepMs);
-          } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-            log.warn("Interrupted while retrying abort of multi-part upload with id '{}'",
-                uploadId);
-            return;
-          }
-          backoffMs = (long) (backoffMs * ABORT_BACKOFF_MULTIPLIER);
-        }
+      try {
+        RetryUtil.retry(
+            () -> s3.abortMultipartUpload(new AbortMultipartUploadRequest(bucket, key, uploadId)),
+            // 4xx won't succeed on retry (404 means the upload is already gone)
+            e -> !(e instanceof AmazonServiceException
+                && ((AmazonServiceException) e).getStatusCode() / 100 == 4),
+            String.format("abort multi-part upload with id '%s'", uploadId),
+            ABORT_MAX_ATTEMPTS, ABORT_INITIAL_BACKOFF_MS, ABORT_BACKOFF_MULTIPLIER,
+            Long.MAX_VALUE, ABORT_JITTER
+        );
+      } catch (RuntimeException e) {
+        // ignoring failure on abort.
+        log.warn("Unable to abort multipart upload with id '{}', you may need to purge "
+            + "uploaded parts: ", uploadId, e);
       }
     }
   }
