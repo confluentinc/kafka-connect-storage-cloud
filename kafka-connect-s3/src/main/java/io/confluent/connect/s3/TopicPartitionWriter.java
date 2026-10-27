@@ -21,6 +21,7 @@ import io.confluent.connect.s3.errors.FileExistsException;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileRotationTracker;
 import io.confluent.connect.s3.util.RetryUtil;
+import io.confluent.connect.s3.util.S3ErrorUtils;
 import io.confluent.connect.s3.util.TombstoneTimestampExtractor;
 import io.confluent.connect.storage.errors.PartitionException;
 import io.confluent.connect.storage.schema.SchemaCompatibilityResult;
@@ -29,6 +30,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.errors.SchemaProjectorException;
 import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -909,16 +911,24 @@ public class TopicPartitionWriter {
       String encodedPartition = entry.getKey();
       commitFile(encodedPartition);
       if (isTaggingEnabled) {
-        RetryUtil.exponentialBackoffRetry(() -> tagFile(
-                    encodedPartition,
-                    entry.getValue(),
-                    hashMapTag
-                ),
-                ConnectException.class,
-                connectorConfig.getInt(S3_PART_RETRIES_CONFIG),
-                connectorConfig.getLong(S3_RETRY_BACKOFF_CONFIG),
-                connectorConfig.getS3RetryMaxBackoffMs()
-        );
+        try {
+          RetryUtil.exponentialBackoffRetry(() -> tagFile(
+                      encodedPartition,
+                      entry.getValue(),
+                      hashMapTag
+                  ),
+                  ConnectException.class,
+                  connectorConfig.getInt(S3_PART_RETRIES_CONFIG),
+                  connectorConfig.getLong(S3_RETRY_BACKOFF_CONFIG),
+                  connectorConfig.getS3RetryMaxBackoffMs()
+          );
+        } catch (ConnectException e) {
+          // Let Connect retry transient failures instead of failing the task
+          if (S3ErrorUtils.isRetriableException(e.getCause())) {
+            throw new RetriableException(e.getMessage(), e.getCause());
+          }
+          throw e;
+        }
       }
       startOffsets.remove(encodedPartition);
       endOffsets.remove(encodedPartition);
