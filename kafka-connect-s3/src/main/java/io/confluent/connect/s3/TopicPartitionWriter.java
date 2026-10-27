@@ -72,6 +72,8 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CON
 public class TopicPartitionWriter {
 
   private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriter.class);
+  private static final double TAGGING_BACKOFF_MULTIPLIER = 2.0;
+  private static final double TAGGING_JITTER = 0.2;
 
   private final Map<String, String> commitFiles;
   private final Map<String, RecordWriter> writers;
@@ -912,15 +914,15 @@ public class TopicPartitionWriter {
       commitFile(encodedPartition);
       if (isTaggingEnabled) {
         try {
-          RetryUtil.exponentialBackoffRetry(() -> tagFile(
-                      encodedPartition,
-                      entry.getValue(),
-                      hashMapTag
-                  ),
-                  ConnectException.class,
-                  connectorConfig.getInt(S3_PART_RETRIES_CONFIG),
-                  connectorConfig.getLong(S3_RETRY_BACKOFF_CONFIG),
-                  connectorConfig.getS3RetryMaxBackoffMs()
+          RetryUtil.retry(
+              () -> tagFile(encodedPartition, entry.getValue(), hashMapTag),
+              e -> S3ErrorUtils.isRetriableException(e.getCause()),
+              "tag S3 object " + entry.getValue(),
+              connectorConfig.getInt(S3_PART_RETRIES_CONFIG),
+              connectorConfig.getLong(S3_RETRY_BACKOFF_CONFIG),
+              TAGGING_BACKOFF_MULTIPLIER,
+              connectorConfig.getS3RetryMaxBackoffMs(),
+              TAGGING_JITTER
           );
         } catch (ConnectException e) {
           // Let Connect retry transient failures instead of failing the task
