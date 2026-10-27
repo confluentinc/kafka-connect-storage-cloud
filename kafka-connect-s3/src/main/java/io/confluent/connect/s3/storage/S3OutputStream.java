@@ -16,6 +16,7 @@
 package io.confluent.connect.s3.storage;
 
 import com.amazonaws.AmazonClientException;
+import com.amazonaws.AmazonServiceException;
 import com.amazonaws.event.ProgressEvent;
 import com.amazonaws.event.ProgressListener;
 import com.amazonaws.services.s3.AmazonS3;
@@ -32,6 +33,7 @@ import com.amazonaws.services.s3.model.SSECustomerKey;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.errors.FileExistsException;
+import io.confluent.connect.s3.util.RetryUtil;
 import io.confluent.connect.storage.common.util.StringUtils;
 
 import org.apache.commons.codec.digest.DigestUtils;
@@ -55,6 +57,12 @@ import java.util.function.Supplier;
  */
 public class S3OutputStream extends PositionOutputStream {
   private static final Logger log = LoggerFactory.getLogger(S3OutputStream.class);
+  // Abort retry: 1s initial backoff, x1.6, +20% jitter (Well-Architected Client guidance).
+  // 4 attempts add ~5-6s of waits on top of the SDK retries, enough to ride out a short outage.
+  private static final int ABORT_MAX_ATTEMPTS = 4;
+  private static final long ABORT_INITIAL_BACKOFF_MS = 1000;
+  private static final double ABORT_BACKOFF_MULTIPLIER = 1.6;
+  private static final double ABORT_JITTER = 0.2;
   private final AmazonS3 s3;
   private final String bucket;
   private final String key;
@@ -181,6 +189,8 @@ public class S3OutputStream extends PositionOutputStream {
         uploadPart(buffer.position());
       }
       multiPartUpload.complete();
+      // Only drop the reference on success, so internalClose() aborts a failed upload
+      multiPartUpload = null;
       log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
     } catch (IOException e) {
       log.error(
@@ -192,7 +202,6 @@ public class S3OutputStream extends PositionOutputStream {
       throw e;
     } finally {
       buffer.clear();
-      multiPartUpload = null;
       internalClose();
     }
   }
@@ -267,6 +276,8 @@ public class S3OutputStream extends PositionOutputStream {
   private class MultipartUpload {
     private final String uploadId;
     private final List<PartETag> partETags;
+    // uploadPart() failure aborts, then internalClose() aborts again; don't retry twice
+    private boolean aborted;
 
     public MultipartUpload(String uploadId) {
       this.uploadId = uploadId;
@@ -366,12 +377,25 @@ public class S3OutputStream extends PositionOutputStream {
     }
 
     public void abort() {
+      if (aborted) {
+        return;
+      }
+      aborted = true;
       log.warn("Aborting multi-part upload with id '{}'", uploadId);
       try {
-        s3.abortMultipartUpload(new AbortMultipartUploadRequest(bucket, key, uploadId));
-      } catch (Exception e) {
+        RetryUtil.retry(
+            () -> s3.abortMultipartUpload(new AbortMultipartUploadRequest(bucket, key, uploadId)),
+            // 4xx won't succeed on retry (404 means the upload is already gone)
+            e -> !(e instanceof AmazonServiceException
+                && ((AmazonServiceException) e).getStatusCode() / 100 == 4),
+            String.format("abort multi-part upload with id '%s'", uploadId),
+            ABORT_MAX_ATTEMPTS, ABORT_INITIAL_BACKOFF_MS, ABORT_BACKOFF_MULTIPLIER,
+            Long.MAX_VALUE, ABORT_JITTER
+        );
+      } catch (RuntimeException e) {
         // ignoring failure on abort.
-        log.warn("Unable to abort multipart upload, you may need to purge uploaded parts: ", e);
+        log.warn("Unable to abort multipart upload with id '{}', you may need to purge "
+            + "uploaded parts: ", uploadId, e);
       }
     }
   }
