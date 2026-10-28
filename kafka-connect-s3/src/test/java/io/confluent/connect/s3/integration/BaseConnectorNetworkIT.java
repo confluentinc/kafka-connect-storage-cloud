@@ -4,15 +4,15 @@
 
 package io.confluent.connect.s3.integration;
 
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-
 import io.confluent.common.utils.IntegrationTest;
 import io.confluent.connect.s3.util.S3Utils;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
 
 import java.util.concurrent.TimeUnit;
 
@@ -31,13 +31,11 @@ public abstract class BaseConnectorNetworkIT extends BaseConnectorIT {
    */
   protected void createS3RootClient() {
     log.info("Creating root S3 Client.");
-    S3Client = AmazonS3ClientBuilder.standard()
-        .withCredentials(
-            new AWSStaticCredentialsProvider(
-                new BasicAWSCredentials(
-                    System.getenv("ROOT_USER_ACCESS_KEY_ID"),
-                    System.getenv("ROOT_USER_SECRET_ACCESS_KEY"))))
-        .withRegion("ap-south-1")
+    s3Client = S3Client.builder()
+        .credentialsProvider(
+            StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(System.getenv("ROOT_USER_ACCESS_KEY_ID"), System.getenv("ROOT_USER_SECRET_ACCESS_KEY"))))
+        .region(Region.of("ap-south-1"))
         .build();
   }
 
@@ -50,7 +48,7 @@ public abstract class BaseConnectorNetworkIT extends BaseConnectorIT {
       String bucketName,
       int numFiles)
       throws InterruptedException {
-    return S3Utils.waitForFilesInBucket(S3Client, bucketName, numFiles, CONSUME_MAX_DURATION_MS);
+    return S3Utils.waitForFilesInBucket(s3Client, bucketName, numFiles, CONSUME_MAX_DURATION_MS);
   }
 
   protected void startPumbaPauseContainer() {

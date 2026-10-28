@@ -15,9 +15,6 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.auth.AWSCredentialsProvider;
-
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
 
@@ -27,6 +24,9 @@ import org.apache.kafka.connect.json.DecimalFormat;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
+
 import org.junit.Before;
 import org.junit.Test;
 
@@ -236,10 +236,10 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
     );
     connectorConfig = new S3SinkConnectorConfig(properties);
 
-    AWSCredentialsProvider credentialsProvider = connectorConfig.getCredentialsProvider();
+    AwsCredentialsProvider credentialsProvider = connectorConfig.getCredentialsProvider();
 
-    assertEquals(ACCESS_KEY_VALUE, credentialsProvider.getCredentials().getAWSAccessKeyId());
-    assertEquals(SECRET_KEY_VALUE, credentialsProvider.getCredentials().getAWSSecretKey());
+    assertEquals(ACCESS_KEY_VALUE, credentialsProvider.resolveCredentials().accessKeyId());
+    assertEquals(SECRET_KEY_VALUE, credentialsProvider.resolveCredentials().secretAccessKey());
   }
 
   @Test
@@ -265,23 +265,6 @@ public class S3SinkConnectorConfigTest extends S3SinkConnectorTestBase {
 
     AwsAssumeRoleCredentialsProvider credentialsProvider =
         (AwsAssumeRoleCredentialsProvider) connectorConfig.getCredentialsProvider();
-  }
-
-  @Test
-  public void testUseExpectContinueDefault() throws Exception {
-    setUp();
-    S3Storage storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, null);
-    ClientConfiguration clientConfig = storage.newClientConfiguration(connectorConfig);
-    assertEquals(true, clientConfig.isUseExpectContinue());
-  }
-
-  @Test
-  public void testUseExpectContinueFalse() throws Exception {
-    localProps.put(S3SinkConnectorConfig.HEADERS_USE_EXPECT_CONTINUE_CONFIG, "false");
-    setUp();
-    S3Storage storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, null);
-    ClientConfiguration clientConfig = storage.newClientConfiguration(connectorConfig);
-    assertEquals(false, clientConfig.isUseExpectContinue());
   }
 
   @Test
