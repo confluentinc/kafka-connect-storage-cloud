@@ -916,7 +916,8 @@ public class TopicPartitionWriter {
                 ),
                 ConnectException.class,
                 connectorConfig.getInt(S3_PART_RETRIES_CONFIG),
-                connectorConfig.getLong(S3_RETRY_BACKOFF_CONFIG)
+                connectorConfig.getLong(S3_RETRY_BACKOFF_CONFIG),
+                connectorConfig.getS3RetryMaxBackoffMs()
         );
       }
       startOffsets.remove(encodedPartition);
