@@ -9,7 +9,11 @@ import static org.junit.Assert.assertTrue;
 
 import io.confluent.connect.s3.util.LogCaptureAppender;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -32,6 +36,7 @@ import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.s3.S3Client;
 import org.junit.Test;
+import software.amazon.awssdk.services.s3.model.AbortMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadResponse;
 import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
@@ -355,5 +360,70 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
       assertTrue(logs.anyMessageContains("upload-id-123"));
       assertFalse(logs.anyMessageContains("CANARY_OBJECT_KEY"));
     }
+  }
+
+  @Test
+  public void testCommitAbortsMultipartUploadWhenCompleteFails() {
+    AwsServiceException exception = S3Exception.builder().message("complete failed")
+        .statusCode(500)
+        .awsErrorDetails(AwsErrorDetails.builder().errorCode("InternalError").build())
+        .build();
+
+    when(s3Mock.completeMultipartUpload(any(CompleteMultipartUploadRequest.class))).thenThrow(exception);
+    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
+    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(mockUploadPartResponse);
+
+    assertThrows(IOException.class, () -> stream.commit());
+    verify(s3Mock, times(1)).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
+  }
+
+  @Test
+  public void testCommitAbortsMultipartUploadWhenFileExists() {
+    Map<String, String> props = super.createProps();
+    props.put(S3SinkConnectorConfig.ENABLE_CONDITIONAL_WRITES_CONFIG, "true");
+    stream = new S3OutputStream(S3_TEST_KEY_NAME, new S3SinkConnectorConfig(props), s3Mock);
+
+    AwsServiceException exception = S3Exception.builder().message("file exists")
+        .statusCode(412).build();
+
+    when(s3Mock.completeMultipartUpload(any(CompleteMultipartUploadRequest.class))).thenThrow(exception);
+    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
+    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(mockUploadPartResponse);
+    when(s3Mock.headObject(any(HeadObjectRequest.class))).thenReturn(mockHeadObjectResponse);
+
+    assertThrows(FileExistsException.class, () -> stream.commit());
+    verify(s3Mock, times(1)).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
+  }
+
+  @Test
+  public void testCommitAbortsMultipartUploadWhenUploadPartFails() {
+    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
+    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class)))
+        .thenThrow(SdkClientException.create("upload failed"));
+
+    assertThrows(IOException.class, () -> stream.commit());
+    verify(s3Mock, atLeastOnce()).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
+  }
+
+  @Test
+  public void testCommitDoesNotAbortMultipartUploadOnSuccess() throws IOException {
+    when(s3Mock.completeMultipartUpload(any(CompleteMultipartUploadRequest.class))).thenReturn(mockCompleteMultipartResponse);
+    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
+    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(mockUploadPartResponse);
+
+    stream.commit();
+    verify(s3Mock, never()).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
+  }
+
+  @Test
+  public void testFailedAbortIsNotRepeatedOnClose() {
+    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
+    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class)))
+        .thenThrow(SdkClientException.create("upload failed"));
+    doThrow(SdkClientException.create("connection refused"))
+        .when(s3Mock).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
+
+    assertThrows(IOException.class, () -> stream.commit());
+    verify(s3Mock, times(1)).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
   }
 }
