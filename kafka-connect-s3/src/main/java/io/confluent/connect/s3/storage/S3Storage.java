@@ -49,7 +49,6 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_MAX_BACKOFF_TIME_MS;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
 
 /**
@@ -158,7 +157,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     PredefinedBackoffStrategies.FullJitterBackoffStrategy backoffStrategy =
         new PredefinedBackoffStrategies.FullJitterBackoffStrategy(
             config.getLong(S3_RETRY_BACKOFF_CONFIG).intValue(),
-            S3_RETRY_MAX_BACKOFF_TIME_MS
+            (int) config.getS3RetryMaxBackoffMs()
         );
 
     RetryPolicy retryPolicy = new RetryPolicy(
