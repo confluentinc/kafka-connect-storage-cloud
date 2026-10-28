@@ -67,4 +67,13 @@ public class RetryUtil {
       }
     }
   }
+
+  private static void await(long millis) {
+    try {
+      TimeUnit.MILLISECONDS.sleep(millis);
+    } catch (InterruptedException e) {
+      // Restore the interrupted status
+      Thread.currentThread().interrupt();
+    }
+  }
 }
