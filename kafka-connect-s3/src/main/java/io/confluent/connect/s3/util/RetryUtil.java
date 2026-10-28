@@ -96,10 +96,8 @@ public class RetryUtil {
             .nextLong((long) (delayMs * jitter) + 1); // NOSONAR java:S2245
         log.warn("Attempt {} of {} to {} failed, retrying in {} ms: {}",
             attempt, maxAttempts, description, sleepMs, e.getMessage());
-        try {
-          TimeUnit.MILLISECONDS.sleep(sleepMs);
-        } catch (InterruptedException ie) {
-          Thread.currentThread().interrupt();
+        await(sleepMs);
+        if (Thread.currentThread().isInterrupted()) {
           throw e;
         }
         delayMs = Math.min((long) (delayMs * multiplier), maxDelayMs);
