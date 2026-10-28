@@ -90,7 +90,7 @@ public class S3OutputStream extends PositionOutputStream {
     this.sseCustomerKey = (ServerSideEncryption.AES256.toString().equalsIgnoreCase(ssea)
         && StringUtils.isNotBlank(sseCustomerKeyConfig))
       ? sseCustomerKeyConfig : null;
-    this.sseCustomerKeyMD5 = this.sseCustomerKey != null 
+    this.sseCustomerKeyMD5 = this.sseCustomerKey != null
         ? calculateBase64EncodedMd5(this.sseCustomerKey) : null;
     this.sseKmsKeyId = conf.getSseKmsKeyId();
     this.partSize = conf.getPartSize();
@@ -188,6 +188,8 @@ public class S3OutputStream extends PositionOutputStream {
       }
       if (multiPartUpload != null) {
         multiPartUpload.complete();
+        // Only drop the reference on success, so internalClose() aborts a failed upload
+        multiPartUpload = null;
         log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
       }
     } catch (IOException e) {
@@ -200,7 +202,6 @@ public class S3OutputStream extends PositionOutputStream {
       throw e;
     } finally {
       buffer.clear();
-      multiPartUpload = null;
       internalClose();
     }
   }
@@ -287,6 +288,8 @@ public class S3OutputStream extends PositionOutputStream {
   private class MultipartUpload {
     private final String uploadId;
     private final List<CompletedPart> completedParts;
+    // uploadPart() failure aborts, then internalClose() aborts again; only the first one runs
+    private boolean aborted;
 
     public MultipartUpload(String uploadId) {
       this.uploadId = uploadId;
@@ -405,6 +408,10 @@ public class S3OutputStream extends PositionOutputStream {
     }
 
     public void abort() {
+      if (aborted) {
+        return;
+      }
+      aborted = true;
       log.warn("Aborting multi-part upload with id '{}'", uploadId);
       try {
         s3Client.abortMultipartUpload(AbortMultipartUploadRequest.builder()
@@ -414,7 +421,8 @@ public class S3OutputStream extends PositionOutputStream {
             .build());
       } catch (Exception e) {
         // ignoring failure on abort.
-        log.warn("Unable to abort multipart upload, you may need to purge uploaded parts: ", e);
+        log.warn("Unable to abort multipart upload with id '{}', you may need to purge "
+            + "uploaded parts: ", uploadId, e);
       }
     }
   }
