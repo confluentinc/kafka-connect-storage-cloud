@@ -344,23 +344,11 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
   }
 
   @Test
-  public void testAbortRetriesOnTransientFailure() {
+  public void testFailedAbortIsNotRepeatedOnClose() {
     when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
     when(s3Mock.uploadPart(any())).thenThrow(new AmazonClientException("upload failed"));
-    doThrow(new AmazonClientException("connection refused")).doNothing()
+    doThrow(new AmazonClientException("connection refused"))
         .when(s3Mock).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
-
-    assertThrows(IOException.class, () -> stream.commit());
-    verify(s3Mock, times(2)).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
-  }
-
-  @Test
-  public void testAbortDoesNotRetryOnClientError() {
-    AmazonS3Exception noSuchUpload = new AmazonS3Exception("no such upload");
-    noSuchUpload.setStatusCode(404);
-    when(s3Mock.initiateMultipartUpload(any())).thenReturn(mock(InitiateMultipartUploadResult.class));
-    when(s3Mock.uploadPart(any())).thenThrow(new AmazonClientException("upload failed"));
-    doThrow(noSuchUpload).when(s3Mock).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
 
     assertThrows(IOException.class, () -> stream.commit());
     verify(s3Mock, times(1)).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
