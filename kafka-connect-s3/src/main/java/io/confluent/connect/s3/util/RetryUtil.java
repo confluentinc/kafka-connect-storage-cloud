@@ -15,7 +15,6 @@
 
 package io.confluent.connect.s3.util;
 
-import org.apache.kafka.connect.errors.ConnectException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,45 +24,6 @@ import java.util.function.Predicate;
 
 public class RetryUtil {
   private static final Logger log = LoggerFactory.getLogger(RetryUtil.class);
-
-  /**
-   * @param runnable
-   *     An executable piece of code which will be retried in case an expected exception occurred.
-   * @param exceptionClass
-   *     The function will be retried only if it throws an instance of exceptionClass.
-   * @param totalNumIterations
-   *     This is the overall execution count e.g. if 3 then it'd be retried a max of twice.
-   * @param delayInMillis
-   *     Delay between 2 retries, each time it'd be doubled.
-   * @param maxDelayInMillis
-   *     Upper bound for the doubled delay.
-   */
-  public static void exponentialBackoffRetry(final Runnable runnable,
-                         final Class<? extends Exception> exceptionClass,
-                         final int totalNumIterations,
-                         final long delayInMillis,
-                         final long maxDelayInMillis) throws ConnectException {
-    long expDelayInMillis = delayInMillis;
-    for (int i = 1; i <= totalNumIterations; i++) {
-      try {
-        runnable.run();
-        break;
-      } catch (Exception e) {
-        if (e.getClass().equals(exceptionClass)) {
-          log.warn("Attempt {} of {} failed.", i, totalNumIterations, e);
-          if (i == totalNumIterations) {
-            wrapAndThrowAsConnectException(e);
-          } else {
-            log.warn("Awaiting {} milliseconds before retrying.", expDelayInMillis);
-            await(expDelayInMillis);
-            expDelayInMillis = Math.min(expDelayInMillis * 2, maxDelayInMillis);
-          }
-        } else {
-          wrapAndThrowAsConnectException(e);
-        }
-      }
-    }
-  }
 
   /**
    * Runs {@code runnable}, retrying failures accepted by {@code isRetriable} with exponential
@@ -106,13 +66,6 @@ public class RetryUtil {
         delayMs = Math.min((long) (delayMs * multiplier), maxDelayMs);
       }
     }
-  }
-
-  private static void wrapAndThrowAsConnectException(Exception e) throws ConnectException {
-    if (e instanceof ConnectException) {
-      throw (ConnectException) e;
-    }
-    throw new ConnectException(e);
   }
 
   private static void await(long millis) {
