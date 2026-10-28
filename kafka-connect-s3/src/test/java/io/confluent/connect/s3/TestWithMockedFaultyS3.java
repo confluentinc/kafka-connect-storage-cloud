@@ -9,6 +9,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.any;
 import static com.github.tomakehurst.wiremock.client.WireMock.anyUrl;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
+import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static com.github.tomakehurst.wiremock.stubbing.Scenario.STARTED;
 
 public class TestWithMockedFaultyS3 extends TestWithMockedS3 {
@@ -19,8 +20,10 @@ public class TestWithMockedFaultyS3 extends TestWithMockedS3 {
     // replace original S3 mock port by a WireMock proxy
     protected final static int PROXIED_S3_PORT = Integer.parseInt(S3_TEST_URL.substring(S3_TEST_URL.lastIndexOf(":") + 1));
 
+    // Don't fail on unmatched requests: a task from the previous test can still be shutting down
+    // and send a late request (e.g. a multipart abort) before setUp() registers the proxy stub.
     @Rule
-    public WireMockRule wireMockRule = new WireMockRule(PROXIED_S3_PORT);
+    public WireMockRule wireMockRule = new WireMockRule(wireMockConfig().port(PROXIED_S3_PORT), false);
 
     //@Before
     @Override
