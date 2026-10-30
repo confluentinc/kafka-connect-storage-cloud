@@ -15,6 +15,9 @@
 
 package io.confluent.connect.s3.storage;
 
+import com.amazonaws.AmazonClientException;
+import com.amazonaws.AmazonServiceException;
+import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.PredefinedClientConfigurations;
 import com.amazonaws.SdkClientException;
@@ -49,7 +52,6 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_MAX_BACKOFF_TIME_MS;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
 
 /**
@@ -155,20 +157,45 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
    * @see PredefinedBackoffStrategies.FullJitterBackoffStrategy
    */
   protected RetryPolicy newFullJitterRetryPolicy(S3SinkConnectorConfig config) {
+    int maxRetries = conf.getS3PartRetries();
+    // Only called when the retry condition allows another attempt.
     PredefinedBackoffStrategies.FullJitterBackoffStrategy backoffStrategy =
         new PredefinedBackoffStrategies.FullJitterBackoffStrategy(
             config.getLong(S3_RETRY_BACKOFF_CONFIG).intValue(),
-            S3_RETRY_MAX_BACKOFF_TIME_MS
-        );
+            (int) config.getS3RetryMaxBackoffMs()
+        ) {
+          @Override
+          public long delayBeforeNextRetry(AmazonWebServiceRequest request,
+              AmazonClientException exception, int retriesAttempted) {
+            long delayMs = super.delayBeforeNextRetry(request, exception, retriesAttempted);
+            log.debug("S3 request failed (retry {} of {}, status {}, error code {}), "
+                + "retrying in {} ms", retriesAttempted + 1, maxRetries, statusCode(exception),
+                errorCode(exception), delayMs);
+            return delayMs;
+          }
+        };
 
     RetryPolicy retryPolicy = new RetryPolicy(
         PredefinedRetryPolicies.DEFAULT_RETRY_CONDITION,
         backoffStrategy,
-        conf.getS3PartRetries(),
+        maxRetries,
         false
     );
     log.info("Created a retry policy for the connector");
     return retryPolicy;
+  }
+
+  private static Object statusCode(AmazonClientException e) {
+    return e instanceof AmazonServiceException
+        ? ((AmazonServiceException) e).getStatusCode() : "none";
+  }
+
+  private static Object errorCode(AmazonClientException e) {
+    if (e == null) {
+      return "none";
+    }
+    return e instanceof AmazonServiceException
+        ? ((AmazonServiceException) e).getErrorCode() : e.getClass().getSimpleName();
   }
 
   protected AWSCredentialsProvider newCredentialsProvider(S3SinkConnectorConfig config) {
