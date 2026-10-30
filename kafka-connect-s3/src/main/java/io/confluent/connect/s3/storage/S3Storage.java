@@ -20,9 +20,13 @@ import com.amazonaws.AmazonServiceException;
 import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.PredefinedClientConfigurations;
+import com.amazonaws.Request;
+import com.amazonaws.Response;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.client.builder.AwsClientBuilder;
+import com.amazonaws.handlers.HandlerContextKey;
+import com.amazonaws.handlers.RequestHandler2;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.retry.PredefinedBackoffStrategies;
 import com.amazonaws.retry.PredefinedRetryPolicies;
@@ -94,7 +98,8 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
         .withAccelerateModeEnabled(config.getBoolean(WAN_MODE_CONFIG))
         .withPathStyleAccessEnabled(config.getBoolean(S3_PATH_STYLE_ACCESS_ENABLED_CONFIG))
         .withCredentials(newCredentialsProvider(config))
-        .withClientConfiguration(clientConfiguration);
+        .withClientConfiguration(clientConfiguration)
+        .withRequestHandlers(new RetrySummaryHandler());
 
     String region = config.getString(REGION_CONFIG);
     if (StringUtils.isBlank(url)) {
@@ -168,6 +173,12 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
           public long delayBeforeNextRetry(AmazonWebServiceRequest request,
               AmazonClientException exception, int retriesAttempted) {
             long delayMs = super.delayBeforeNextRetry(request, exception, retriesAttempted);
+            if (request != null) {
+              Long totalDelayMs = request.getHandlerContext(RETRY_DELAY_MS);
+              request.addHandlerContext(RETRY_COUNT, retriesAttempted + 1);
+              request.addHandlerContext(RETRY_DELAY_MS,
+                  (totalDelayMs == null ? 0L : totalDelayMs) + delayMs);
+            }
             log.debug("S3 request failed (retry {} of {}, status {}, error code {}), "
                 + "retrying in {} ms", retriesAttempted + 1, maxRetries, statusCode(exception),
                 errorCode(exception), delayMs);
@@ -183,6 +194,28 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     );
     log.info("Created a retry policy for the connector");
     return retryPolicy;
+  }
+
+  private static final HandlerContextKey<Integer> RETRY_COUNT =
+      new HandlerContextKey<>("S3RetryCount");
+  private static final HandlerContextKey<Long> RETRY_DELAY_MS =
+      new HandlerContextKey<>("S3RetryDelayMs");
+
+  /**
+   * Logs once per S3 call that succeeded only after SDK retries. Calls that run out of
+   * retries are already reported through the exception thrown to the connector.
+   */
+  private static class RetrySummaryHandler extends RequestHandler2 {
+    @Override
+    public void afterResponse(Request<?> request, Response<?> response) {
+      AmazonWebServiceRequest original = request.getOriginalRequest();
+      Integer retries = original == null ? null : original.getHandlerContext(RETRY_COUNT);
+      if (retries != null) {
+        log.info("S3 {} succeeded after {} retries ({} ms spent in backoff)",
+            original.getClass().getSimpleName(), retries,
+            original.getHandlerContext(RETRY_DELAY_MS));
+      }
+    }
   }
 
   private static Object statusCode(AmazonClientException e) {
