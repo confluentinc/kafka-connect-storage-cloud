@@ -34,7 +34,7 @@ public class S3ErrorUtils {
    * @param exception The exception to analyze
    * @return true if the exception is retryable
    */
-  private static boolean isRetriableException(Throwable exception) {
+  public static boolean isRetriableException(Throwable exception) {
     if (exception == null) {
       return false;
     }
