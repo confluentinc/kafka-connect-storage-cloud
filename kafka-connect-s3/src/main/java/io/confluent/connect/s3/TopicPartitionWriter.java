@@ -216,7 +216,7 @@ public class TopicPartitionWriter {
     fileDelim = connectorConfig.getString(StorageCommonConfig.FILE_DELIM_CONFIG);
     extension = writerProvider.getExtension();
     zeroPadOffsetFormat = "%0"
-        + connectorConfig.getInt(S3SinkConnectorConfig.FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG)
+        + connectorConfig.filenameOffsetZeroPadWidth()
         + "d";
     fileRotationTracker = new FileRotationTracker();
 
