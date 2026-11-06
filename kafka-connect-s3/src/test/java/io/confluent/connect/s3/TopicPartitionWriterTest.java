@@ -195,16 +195,19 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   public void setUpWithTaggingException(boolean mockSdkClientException) throws Exception {
+    setUpWithTaggingException(mockSdkClientException
+        ? SdkClientException.builder().message("Mock SdkClientException while tagging").build()
+        : new RuntimeException("Mock RuntimeException while tagging"));
+  }
+
+  public void setUpWithTaggingException(RuntimeException taggingException) throws Exception {
     super.setUp();
 
     s3Client = newS3Client(connectorConfig);
     storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client) {
       @Override
       public void addTags(String fileName, Map<String, String> tags) throws SdkClientException {
-        if (mockSdkClientException) {
-          throw SdkClientException.builder().message ("Mock SdkClientException while tagging").build();
-        }
-        throw new RuntimeException("Mock RuntimeException while tagging");
+        throw taggingException;
       }
     };
 
@@ -1590,6 +1593,18 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
+  public void testRetriableS3ObjectTaggingException() throws Exception {
+    // A transient tagging failure surfaces as RetriableException so Connect retries put()
+    SdkClientException transientError =
+        SdkClientException.builder()
+            .message("Mock transient error while tagging").cause(new IOException("reset")).build();
+    RetriableException exception = assertThrows(RetriableException.class,
+            () -> testS3ObjectTaggingErrorHelper(transientError, false));
+    assertEquals("Unable to tag S3 object topics_test-topic_partition=12_test-topic#12#0000000000.avro", exception.getMessage());
+    assertEquals(transientError, exception.getCause());
+  }
+
+  @Test
   public void testFailS3ObjectTaggingRuntimeException() throws Exception {
     ConnectException exception = assertThrows(ConnectException.class, () ->
             testS3ObjectTaggingErrorHelper(false, false));
@@ -2812,12 +2827,18 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   private void testS3ObjectTaggingErrorHelper(boolean mockSdkClientException, boolean ignoreTaggingError) throws Exception {
+    testS3ObjectTaggingErrorHelper(mockSdkClientException
+        ? SdkClientException.builder().message("Mock SdkClientException while tagging").build()
+        : new RuntimeException("Mock RuntimeException while tagging"), ignoreTaggingError);
+  }
+
+  private void testS3ObjectTaggingErrorHelper(RuntimeException taggingException, boolean ignoreTaggingError) throws Exception {
     // Enabling tagging and setting behavior for tagging error.
     localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
     localProps.put(S3SinkConnectorConfig.S3_OBJECT_BEHAVIOR_ON_TAGGING_ERROR_CONFIG, ignoreTaggingError ? "ignore" : "fail");
 
     // Setup mock exception while tagging
-    setUpWithTaggingException(mockSdkClientException);
+    setUpWithTaggingException(taggingException);
 
     // Define the partitioner
     Partitioner<?> partitioner = new DefaultPartitioner<>();
