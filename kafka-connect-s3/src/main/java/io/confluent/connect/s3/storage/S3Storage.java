@@ -29,6 +29,10 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.core.client.config.SdkAdvancedClientOption;
 import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.interceptor.Context;
+import software.amazon.awssdk.core.interceptor.ExecutionAttribute;
+import software.amazon.awssdk.core.interceptor.ExecutionAttributes;
+import software.amazon.awssdk.core.interceptor.ExecutionInterceptor;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.http.apache.ProxyConfiguration;
@@ -55,13 +59,13 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PROXY_URL_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_BACKOFF_CONFIG;
-import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_RETRY_MAX_BACKOFF_TIME_MS;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
 
 /**
@@ -151,6 +155,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
 
     ClientOverrideConfiguration clientConfiguration = ClientOverrideConfiguration.builder()
         .retryStrategy(newRetryStrategy(conf))
+        .addExecutionInterceptor(new RetrySummaryInterceptor())
         .advancedOptions(
             Collections.singletonMap(SdkAdvancedClientOption.USER_AGENT_PREFIX, version))
         .build();
@@ -186,10 +191,57 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResp
   }
 
   private BackoffStrategy newExponentialBackoffStrategy() {
-    return new ExponentialDelayWithJitter(
+    BackoffStrategy backoffStrategy = new ExponentialDelayWithJitter(
         Random::new,
         Duration.ofMillis(conf.getLong(S3_RETRY_BACKOFF_CONFIG).intValue()),
-        S3_RETRY_MAX_BACKOFF_TIME_MS);
+        Duration.ofMillis(conf.getS3RetryMaxBackoffMs()));
+    int maxRetries = conf.getS3PartRetries() - 1;
+    // Only called when the retry strategy allows another attempt; attempt is the
+    // number of the upcoming attempt, so the first retry is attempt 2.
+    return attempt -> {
+      Duration delay = backoffStrategy.computeDelay(attempt);
+      log.debug("S3 request failed (retry {} of {}), retrying in {} ms",
+          attempt - 1, maxRetries, delay.toMillis());
+      return delay;
+    };
+  }
+
+  /**
+   * Logs once per S3 call that succeeded only after SDK retries. Calls that run out of
+   * retries are already reported through the exception thrown to the connector.
+   */
+  private static class RetrySummaryInterceptor implements ExecutionInterceptor {
+    private static final ExecutionAttribute<Long> START_NANOS =
+        new ExecutionAttribute<>("S3RetrySummaryStartNanos");
+    private static final ExecutionAttribute<Integer> ATTEMPTS =
+        new ExecutionAttribute<>("S3RetrySummaryAttempts");
+
+    @Override
+    public void beforeExecution(Context.BeforeExecution context,
+        ExecutionAttributes executionAttributes) {
+      executionAttributes.putAttribute(START_NANOS, System.nanoTime());
+      executionAttributes.putAttribute(ATTEMPTS, 0);
+    }
+
+    // Called once per HTTP attempt, including retries.
+    @Override
+    public void beforeTransmission(Context.BeforeTransmission context,
+        ExecutionAttributes executionAttributes) {
+      executionAttributes.putAttribute(ATTEMPTS,
+          executionAttributes.getAttribute(ATTEMPTS) + 1);
+    }
+
+    @Override
+    public void afterExecution(Context.AfterExecution context,
+        ExecutionAttributes executionAttributes) {
+      int retries = executionAttributes.getAttribute(ATTEMPTS) - 1;
+      if (retries > 0) {
+        log.info("S3 {} succeeded after {} retries ({} ms total)",
+            context.request().getClass().getSimpleName(), retries,
+            TimeUnit.NANOSECONDS.toMillis(
+                System.nanoTime() - executionAttributes.getAttribute(START_NANOS)));
+      }
+    }
   }
 
   protected AwsCredentialsProvider newCredentialsProvider(S3SinkConnectorConfig config) {
