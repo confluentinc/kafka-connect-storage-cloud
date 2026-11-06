@@ -78,6 +78,15 @@ public class S3StorageTest extends S3SinkConnectorTestBase {
   }
 
   @Test
+  public void testMaxBackoffIsAtLeastBaseBackoff() throws Exception {
+    setUp();
+    assertEquals(S3_RETRY_MAX_BACKOFF_TIME_MS.toMillis(), connectorConfig.getS3RetryMaxBackoffMs());
+    localProps.put(S3_RETRY_BACKOFF_CONFIG, "60000");
+    setUp();
+    assertEquals(60000L, connectorConfig.getS3RetryMaxBackoffMs());
+  }
+
+  @Test
   public void testDefaultCredentialsProvider() throws Exception {
     // default values
     setUp();
@@ -158,9 +167,8 @@ public class S3StorageTest extends S3SinkConnectorTestBase {
 
   /**
    * Calculates exponential delay, capped by
-   * {@link com.amazonaws.retry.PredefinedBackoffStrategies#} number of retries
-   * and {@link io.confluent.connect.s3.S3SinkConnectorConfig#S3_RETRY_MAX_BACKOFF_TIME_MS} total delay time
-   * in ms
+   * {@link #MAX_RETRIES} number of retries
+   * and {@link S3SinkConnectorConfig#getS3RetryMaxBackoffMs()} total delay time in ms
    *
    * @param retriesAttempted
    * @param baseDelay
@@ -171,7 +179,7 @@ public class S3StorageTest extends S3SinkConnectorTestBase {
       int retriesAttempted, long baseDelay
   ) {
     int retries = Math.min(retriesAttempted, MAX_RETRIES);
-    return (int) Math.min((1L << retries) * baseDelay, S3_RETRY_MAX_BACKOFF_TIME_MS.toMillis());
+    return (int) Math.min((1L << retries) * baseDelay, connectorConfig.getS3RetryMaxBackoffMs());
   }
 
   private void assertComputeRetryInRange(
