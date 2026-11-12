@@ -21,7 +21,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-connect-storage-common-parent</artifactId>
-        <version>11.2.41</version>
+        <version>11.2.42</version>
     </parent>
 
     <groupId>io.confluent</groupId>
@@ -58,7 +58,7 @@
     </modules>
 
     <properties>
-        <snappy.java>1.1.10.4</snappy.java>
+        <snappy.java>1.1.10.9</snappy.java>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <maven.release.plugin.version>2.5.3</maven.release.plugin.version>
         <!-- temporary fix by pinning the version until we upgrade to a version of common that contains this or newer version.
@@ -68,7 +68,7 @@
         <jettison.version>1.5.4</jettison.version>
         <snakeyaml.version>2.0</snakeyaml.version>
         <woodstox.version>5.4.0</woodstox.version>
-        <guava.version>32.1.2-jre</guava.version>
+        <guava.version>33.7.2-jre</guava.version>
         <zookeeper.version>3.9.5</zookeeper.version>
         <dnsjava.version>3.6.1</dnsjava.version>
         <commons.lang3.version>3.18.0</commons.lang3.version>
