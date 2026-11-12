@@ -15,6 +15,7 @@
 
 package io.confluent.connect.s3;
 
+import io.confluent.connect.storage.partitioner.FieldPartitionerValidator;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
@@ -89,6 +90,7 @@ public class S3SinkConnector extends SinkConnector {
   @Override
   public Config validate(Map<String, String> connectorConfigs) {
     Config configs = super.validate(connectorConfigs);
+    configs = new FieldPartitionerValidator(connectorConfigs, configs).validate();
     return new S3SinkConnectorValidator(
         config(), connectorConfigs, configs.configValues()).validate();
   }
