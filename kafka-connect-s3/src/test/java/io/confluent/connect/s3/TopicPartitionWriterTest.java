@@ -1677,7 +1677,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
             .message("Mock transient error while tagging").cause(new IOException("reset")).build();
     RetriableException exception = assertThrows(RetriableException.class,
             () -> testS3ObjectTaggingErrorHelper(transientError, false));
-    assertEquals("Unable to tag S3 object topics_test-topic_partition=12_test-topic#12#0000000000.avro", exception.getMessage());
+    assertEquals("Unable to tag S3 object for topic-partition test-topic-12", exception.getMessage());
+    assertFalse(exception.getMessage().contains("partition=12"));
     assertEquals(transientError, exception.getCause());
   }
 
