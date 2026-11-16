@@ -36,6 +36,7 @@ import io.confluent.connect.storage.common.util.StringUtils;
 
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.parquet.io.PositionOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,6 +79,7 @@ public class S3OutputStream extends PositionOutputStream {
   private final boolean enableConditionalWrites;
 
   private static final String PRECONDITION_FAILED_ERROR = "PreconditionFailed";
+  private static final String NO_SUCH_UPLOAD_ERROR = "NoSuchUpload";
   private static final int PRECONDITION_FAILED_ERROR_CODE = 412;
 
   public S3OutputStream(String key, S3SinkConnectorConfig conf, S3Client s3Client) {
@@ -393,6 +395,11 @@ public class S3OutputStream extends PositionOutputStream {
                 }
                 throw new ConnectException("Unexpected state - Contradicting response from "
                     + "conditional upload and file exists call in S3");
+              }
+              // S3 can answer 200 with an InternalError body when it may have completed the
+              // upload; the SDK retry then gets NoSuchUpload. Rewind and rewrite the file.
+              if (NO_SUCH_UPLOAD_ERROR.equals(e.awsErrorDetails().errorCode())) {
+                throw new RetriableException("Multipart upload no longer exists", e);
               }
               throw e;
             }

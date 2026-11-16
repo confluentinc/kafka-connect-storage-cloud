@@ -27,6 +27,7 @@ import io.confluent.connect.s3.S3SinkConnectorTestBase;
 import io.confluent.connect.s3.errors.FileExistsException;
 import io.findify.s3mock.S3Mock;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.junit.Before;
 import software.amazon.awssdk.services.s3.model.ServerSideEncryption;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -272,6 +273,35 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
 
     assertNotNull(completeMultipartRequestCaptor.getValue());
     assertNull(completeMultipartRequestCaptor.getValue().ifNoneMatch());
+  }
+
+  private void commitWithNoSuchUpload(int statusCode) throws IOException {
+    stream = new S3OutputStream(S3_TEST_KEY_NAME, new S3SinkConnectorConfig(super.createProps()), s3Mock);
+
+    AwsServiceException exception = S3Exception.builder().statusCode(statusCode)
+        .awsErrorDetails(AwsErrorDetails.builder().errorCode("NoSuchUpload").build())
+        .build();
+
+    when(s3Mock.completeMultipartUpload(any(CompleteMultipartUploadRequest.class))).thenThrow(exception);
+    when(s3Mock.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(mockCreateMultipartResponse);
+    when(s3Mock.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(mockUploadPartResponse);
+
+    stream.commit();
+  }
+
+  // FileExistsException extends RetriableException, so check the exact class.
+  @Test
+  public void testCompleteMultipartUploadThrowsRetriableWhenNoSuchUpload404() {
+    RetriableException e = assertThrows(RetriableException.class, () -> commitWithNoSuchUpload(404));
+    assertEquals(RetriableException.class, e.getClass());
+    verify(s3Mock, never()).headObject(any(HeadObjectRequest.class));
+    verify(s3Mock, times(1)).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
+  }
+
+  @Test
+  public void testCompleteMultipartUploadThrowsRetriableWhenNoSuchUpload200() {
+    RetriableException e = assertThrows(RetriableException.class, () -> commitWithNoSuchUpload(200));
+    assertEquals(RetriableException.class, e.getClass());
   }
 
   @Test(expected = IOException.class)
