@@ -24,7 +24,6 @@ global_job_config:
   prologue:
     commands:
       - checkout
-      - . vault-setup
       - . vault-get-secret connect/connect_s3sink_it --secret-key AWS_CREDENTIALS_PATH --save-as /tmp/AWS_CREDENTIALS_PATH.json
       - export AWS_CREDENTIALS_PATH=/tmp/AWS_CREDENTIALS_PATH.json
       - . vault-get-secret connect/CONNECT_S3_SINK_ASSUME_ROLE_IT
