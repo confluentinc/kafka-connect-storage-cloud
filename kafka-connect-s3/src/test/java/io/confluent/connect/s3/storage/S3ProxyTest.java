@@ -32,7 +32,9 @@ import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.S3SinkConnectorTestBase;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 public class S3ProxyTest extends S3SinkConnectorTestBase {
 
@@ -243,6 +245,20 @@ public class S3ProxyTest extends S3SinkConnectorTestBase {
     assertEquals(8080, proxyConfig.port());
     assertEquals("realuser", proxyConfig.user());
     assertEquals("realpass", proxyConfig.pass());
+  }
+
+  @Test
+  public void testProxyUrlUserInfoRedactedInConfigException() throws Exception {
+    // A malformed s3.proxy.url that embeds credentials (user:password@) must not have its
+    // userinfo echoed into the ConfigException (surfaced in the config-validation response/logs).
+    localProps.put(S3SinkConnectorConfig.S3_PROXY_URL_CONFIG,
+        "http://user:CANARY_PROXY_SECRET@proxy.example.com:notaport");
+    setUp();
+
+    ConfigException e = assertThrows(ConfigException.class,
+        () -> new S3ProxyConfig(new S3SinkConnectorConfig(createProps())));
+    assertFalse(e.getMessage().contains("CANARY_PROXY_SECRET"));
+    assertTrue(e.getMessage().contains("<redacted>"));
   }
 
 }

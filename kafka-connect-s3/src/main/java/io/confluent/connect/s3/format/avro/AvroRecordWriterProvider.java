@@ -85,7 +85,10 @@ public class AvroRecordWriterProvider extends RecordViewSetter
           public void write(SinkRecord record) throws IOException {
             if (!isWriterOpen()) {
               schema = recordView.getViewSchema(record, false);
-              log.info("Opening record writer for: {}", adjustedFilename);
+              // Log Kafka coordinates, not adjustedFilename: its encoded-partition path can carry
+              // record field values under a field-based partitioner.
+              log.info("Opening record writer for topic {} partition {} offset {}",
+                  record.topic(), record.kafkaPartition(), record.kafkaOffset());
               s3out = storage.create(adjustedFilename, true, AvroFormat.class);
               org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
               writer.setCodec(CodecFactory.fromString(conf.getAvroCodec()));
