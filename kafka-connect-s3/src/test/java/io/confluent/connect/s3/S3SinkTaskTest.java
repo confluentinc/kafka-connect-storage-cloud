@@ -29,14 +29,17 @@ import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.AdditionalAnswers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.powermock.api.easymock.PowerMock;
+import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -48,7 +51,10 @@ import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.StorageFactory;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
@@ -79,6 +85,20 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
                                                  EasyMock.capture(capturedStorageConf),
                                                  EasyMock.capture(capturedConf),
                                                  EasyMock.capture(capturedUrl))).andReturn(storage);
+  }
+
+  // When set before setUp(), the S3 client is a delegating mock so a test can make individual S3
+  // calls fail and later recover. Left off for other tests: PowerMock cannot transform some
+  // helper classes (e.g. S3OutputStreamFlaky) when they are handed the mock.
+  private boolean faultInjectableS3 = false;
+  private S3Client realS3Client;
+
+  @Override
+  public S3Client newS3Client(S3SinkConnectorConfig config) {
+    realS3Client = super.newS3Client(config);
+    return faultInjectableS3
+        ? Mockito.mock(S3Client.class, AdditionalAnswers.delegatesTo(realS3Client))
+        : realS3Client;
   }
 
   @After
@@ -273,6 +293,140 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     assertTrue(
         "No file has been rotated yet, so nothing should be committed for the partition.",
         offsetsToCommit.isEmpty()
+    );
+
+    task.close(context.assignment());
+    task.stop();
+  }
+
+  @Test
+  public void testPreCommitDoesNotAdvancePastUnwrittenRecordsAfterRetriableFailure()
+      throws Exception {
+    // CC-46195: when S3 is down and the writer's commit throws RetriableException, put() replaces
+    // the writer with an empty one and rewinds the consumer. The empty writer has no pending data,
+    // so preCommit() falls back to the framework's consumed offset, committing offsets for
+    // records that were never written to S3.
+    //
+    // Why the framework offset is ahead of S3 at that point: put() swallows the RetriableException,
+    // so WorkerSinkTask.deliverMessages() treats the batch as delivered and advances currentOffsets
+    // to the end of the batch. The rewind requested via context.offset() is only applied at the
+    // start of the next poll(), and WorkerSinkTask.iteration() runs the commit check BEFORE poll().
+    // When the failed put() blocked longer than offset.flush.interval.ms (SDK retries), a commit is
+    // due right away, so preCommit() sees the advanced offset together with the empty writer.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "3");
+    localProps.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "1");
+    faultInjectableS3 = true;
+    setUp();
+    replayAll();
+    task = new S3SinkTask();
+    task.initialize(context);
+    task.start(properties);
+    verifyAll();
+
+    // Simulate an S3 outage: completing the multipart upload fails with a retriable IO error.
+    PowerMockito.doThrow(SdkClientException.builder().message("Connect timed out").cause(new IOException("timeout")).build())
+        .when(s3Client).completeMultipartUpload(any(CompleteMultipartUploadRequest.class));
+
+    // 3 records reach flush.size, so rotation (and the failing S3 commit) happens inside put().
+    // The task swallows the RetriableException and asks the framework to rewind.
+    task.put(createRecords(3));
+
+    // The framework has consumed offsets 0..2 so its position is 3, but nothing is in S3.
+    Map<TopicPartition, OffsetAndMetadata> frameworkOffsets = new HashMap<>();
+    frameworkOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(3L));
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = task.preCommit(frameworkOffsets);
+
+    OffsetAndMetadata committed = offsetsToCommit.get(TOPIC_PARTITION);
+    assertTrue(
+        "Committed offset " + committed + " must not pass what was durably written to S3 (nothing "
+            + "was written, so it must be absent or <= 0).",
+        committed == null || committed.offset() <= 0L
+    );
+
+    task.close(context.assignment());
+    task.stop();
+  }
+
+  @Test
+  public void testPreCommitStaysBlockedWhileS3KeepsFailing() throws Exception {
+    // CC-46195: every retry of the failed batch fails again and replaces the writer again. The
+    // partition must stay protected for the whole outage, not just after the first failure.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "3");
+    localProps.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "1");
+    faultInjectableS3 = true;
+    localProps.put("retry.backoff.ms", "1");
+    setUp();
+    replayAll();
+    task = new S3SinkTask();
+    task.initialize(context);
+    task.start(properties);
+    verifyAll();
+
+    PowerMockito.doThrow(SdkClientException.builder().message("Connect timed out").cause(new IOException("timeout")).build())
+        .when(s3Client).completeMultipartUpload(any(CompleteMultipartUploadRequest.class));
+
+    Map<TopicPartition, OffsetAndMetadata> frameworkOffsets = new HashMap<>();
+    frameworkOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(3L));
+    for (int attempt = 0; attempt < 3; attempt++) {
+      // The framework redelivers the rewound batch on every attempt.
+      task.put(createRecords(3));
+      Thread.sleep(20); // let the 1 ms failure back-off expire so the next put() retries S3
+      assertTrue(
+          "Attempt " + attempt + ": nothing is in S3, so no offset may be committed.",
+          task.preCommit(frameworkOffsets).isEmpty()
+      );
+    }
+
+    task.close(context.assignment());
+    task.stop();
+  }
+
+  @Test
+  public void testPreCommitResumesNormallyAfterS3Recovers() throws Exception {
+    // CC-46195: once S3 is back and the redelivered records are written, the partition commits the
+    // real offset through the normal path, and the CC-43920 framework-offset fallback is available
+    // again for later empty cycles.
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "3");
+    localProps.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "1");
+    faultInjectableS3 = true;
+    localProps.put("retry.backoff.ms", "1");
+    setUp();
+    replayAll();
+    task = new S3SinkTask();
+    task.initialize(context);
+    task.start(properties);
+    verifyAll();
+
+    PowerMockito.doThrow(SdkClientException.builder().message("Connect timed out").cause(new IOException("timeout")).build())
+        .when(s3Client).completeMultipartUpload(any(CompleteMultipartUploadRequest.class));
+    task.put(createRecords(3));
+
+    Map<TopicPartition, OffsetAndMetadata> frameworkOffsets = new HashMap<>();
+    frameworkOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(3L));
+    assertTrue(
+        "During the outage nothing may be committed.",
+        task.preCommit(frameworkOffsets).isEmpty()
+    );
+
+    // S3 recovers. The framework redelivers offsets 0..2 after the rewind.
+    PowerMockito.doAnswer(AdditionalAnswers.delegatesTo(realS3Client)).when(s3Client)
+        .completeMultipartUpload(any(CompleteMultipartUploadRequest.class));
+    Thread.sleep(20);
+    task.put(createRecords(3));
+
+    assertEquals(
+        "The records are in S3 now, so the real offset is committed through the normal path.",
+        new OffsetAndMetadata(3L),
+        task.preCommit(frameworkOffsets).get(TOPIC_PARTITION)
+    );
+
+    // Nothing is pending any more, so the CC-43920 fallback applies again.
+    task.put(Collections.emptyList());
+    frameworkOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(5L));
+    assertEquals(
+        "After recovery the framework-offset fallback must work again (CC-43920).",
+        new OffsetAndMetadata(5L),
+        task.preCommit(frameworkOffsets).get(TOPIC_PARTITION)
     );
 
     task.close(context.assignment());
