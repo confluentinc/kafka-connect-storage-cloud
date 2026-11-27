@@ -36,8 +36,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
@@ -64,6 +66,11 @@ public class S3SinkTask extends SinkTask {
   private long timeoutMs;
   protected S3Storage storage;
   private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
+  // Partitions whose writer was replaced after a failed write. The replacement writer is empty, so
+  // it looks like "nothing pending", but the framework's consumed offset is already past records
+  // that never reached storage. The framework-offset fallback in preCommit() must not be used for
+  // these partitions until they make durable progress again.
+  private final Set<TopicPartition> partitionsRecoveringFromFailure = new HashSet<>();
   private Partitioner<?> partitioner;
   private Format<S3SinkConnectorConfig, String> format;
   private RecordWriterProvider<S3SinkConnectorConfig> writerProvider;
@@ -279,6 +286,7 @@ public class S3SinkTask extends SinkTask {
         writer = newTopicPartitionWriter(tp);
         writer.failureTime(time.milliseconds());
         topicPartitionWriters.put(tp, writer);
+        partitionsRecoveringFromFailure.add(tp);
       }
     }
   }
@@ -367,7 +375,10 @@ public class S3SinkTask extends SinkTask {
       if (offset != null) {
         log.trace("Forwarding to framework request to commit offset: {} for {}", offset, tp);
         offsetsToCommit.put(tp, new OffsetAndMetadata(offset));
-      } else if (offsets != null && writer.hasNoPendingData() && offsets.containsKey(tp)) {
+        // Durable progress was made, so the partition is no longer recovering from a failure.
+        partitionsRecoveringFromFailure.remove(tp);
+      } else if (offsets != null && writer.hasNoPendingData() && offsets.containsKey(tp)
+          && !partitionsRecoveringFromFailure.contains(tp)) {
         // Nothing is buffered, written, or pending rotation for this partition, so no data is
         // at risk of loss. This is the case, for example, when every record for the partition
         // is dropped by the framework before ever reaching put() (e.g. a converter error
@@ -394,6 +405,7 @@ public class S3SinkTask extends SinkTask {
     // and the retained partitions keep receiving records without a fresh open().
     for (TopicPartition tp : partitions) {
       TopicPartitionWriter writer = topicPartitionWriters.remove(tp);
+      partitionsRecoveringFromFailure.remove(tp);
       if (writer != null) {
         try {
           writer.close();
