@@ -15,36 +15,24 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigException;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
-public final class DummyAssertiveCredentialsProvider implements AWSCredentialsProvider,
+public final class DummyAssertiveCredentialsProvider implements AwsCredentialsProvider,
     Configurable {
 
   public static final String ACCESS_KEY_NAME = "access.key";
   public static final String SECRET_KEY_NAME = "secret.key";
   public static final String CONFIGS_NUM_KEY_NAME = "configs.num";
 
-  private AWSCredentials credentials;
-
-  @Override
-  public AWSCredentials getCredentials() {
-    return credentials;
-  }
-
-  @Override
-  public void refresh() {
-    throw new UnsupportedOperationException(
-        "Refresh is not supported for this credentials provider"
-    );
-  }
+  private AwsCredentials credentials;
 
   @Override
   public void configure(final Map<String, ?> configs) {
@@ -57,7 +45,7 @@ public final class DummyAssertiveCredentialsProvider implements AWSCredentialsPr
 
     assertEquals(configsNum.intValue(), configs.size());
 
-    credentials = new BasicAWSCredentials(accessKeyId, secretKey);
+    credentials = AwsBasicCredentials.create(accessKeyId, secretKey);
   }
 
   private void validateConfigs(Map<String, ?> configs) {
@@ -68,5 +56,14 @@ public final class DummyAssertiveCredentialsProvider implements AWSCredentialsPr
           ACCESS_KEY_NAME, SECRET_KEY_NAME
       ));
     }
+  }
+
+  @Override
+  public AwsCredentials resolveCredentials() {
+    return credentials;
+  }
+
+  public static DummyAssertiveCredentialsProvider create() {
+    return new DummyAssertiveCredentialsProvider();
   }
 }

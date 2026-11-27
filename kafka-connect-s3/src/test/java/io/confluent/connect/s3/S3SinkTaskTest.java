@@ -15,9 +15,6 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.SdkClientException;
-import com.amazonaws.services.s3.model.CannedAccessControlList;
-import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -32,6 +29,7 @@ import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.AdditionalAnswers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.powermock.api.easymock.PowerMock;
@@ -53,6 +51,12 @@ import io.confluent.connect.s3.util.FileUtils;
 import io.confluent.connect.storage.StorageFactory;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -81,6 +85,20 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
                                                  EasyMock.capture(capturedStorageConf),
                                                  EasyMock.capture(capturedConf),
                                                  EasyMock.capture(capturedUrl))).andReturn(storage);
+  }
+
+  // When set before setUp(), the S3 client is a delegating mock so a test can make individual S3
+  // calls fail and later recover. Left off for other tests: PowerMock cannot transform some
+  // helper classes (e.g. S3OutputStreamFlaky) when they are handed the mock.
+  private boolean faultInjectableS3 = false;
+  private S3Client realS3Client;
+
+  @Override
+  public S3Client newS3Client(S3SinkConnectorConfig config) {
+    realS3Client = super.newS3Client(config);
+    return faultInjectableS3
+        ? Mockito.mock(S3Client.class, AdditionalAnswers.delegatesTo(realS3Client))
+        : realS3Client;
   }
 
   @After
@@ -181,7 +199,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     List<SinkRecord> sinkRecords = createRecords(2);
     byte[] partialData = AvroUtils.putRecords(sinkRecords, format.getAvroData());
     String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, EXTENSION, ZERO_PAD_FMT);
-    s3.putObject(S3_TEST_BUCKET_NAME, fileKey, new ByteArrayInputStream(partialData), null);
+    s3Client.putObject(PutObjectRequest.builder().bucket( S3_TEST_BUCKET_NAME).key( fileKey).build(), RequestBody.fromInputStream(new ByteArrayInputStream(partialData), partialData.length));
 
     // Accumulate rest of the records.
     sinkRecords.addAll(createRecords(5, 2));
@@ -297,6 +315,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     // due right away, so preCommit() sees the advanced offset together with the empty writer.
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "3");
     localProps.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "1");
+    faultInjectableS3 = true;
     setUp();
     replayAll();
     task = new S3SinkTask();
@@ -305,8 +324,8 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     verifyAll();
 
     // Simulate an S3 outage: completing the multipart upload fails with a retriable IO error.
-    PowerMockito.doThrow(new SdkClientException("Connect timed out", new IOException("timeout")))
-        .when(s3).completeMultipartUpload(any(CompleteMultipartUploadRequest.class));
+    PowerMockito.doThrow(SdkClientException.builder().message("Connect timed out").cause(new IOException("timeout")).build())
+        .when(s3Client).completeMultipartUpload(any(CompleteMultipartUploadRequest.class));
 
     // 3 records reach flush.size, so rotation (and the failing S3 commit) happens inside put().
     // The task swallows the RetriableException and asks the framework to rewind.
@@ -334,6 +353,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     // partition must stay protected for the whole outage, not just after the first failure.
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "3");
     localProps.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "1");
+    faultInjectableS3 = true;
     localProps.put("retry.backoff.ms", "1");
     setUp();
     replayAll();
@@ -342,8 +362,8 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     task.start(properties);
     verifyAll();
 
-    PowerMockito.doThrow(new SdkClientException("Connect timed out", new IOException("timeout")))
-        .when(s3).completeMultipartUpload(any(CompleteMultipartUploadRequest.class));
+    PowerMockito.doThrow(SdkClientException.builder().message("Connect timed out").cause(new IOException("timeout")).build())
+        .when(s3Client).completeMultipartUpload(any(CompleteMultipartUploadRequest.class));
 
     Map<TopicPartition, OffsetAndMetadata> frameworkOffsets = new HashMap<>();
     frameworkOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(3L));
@@ -368,6 +388,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     // again for later empty cycles.
     localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, "3");
     localProps.put(S3SinkConnectorConfig.S3_PART_RETRIES_CONFIG, "1");
+    faultInjectableS3 = true;
     localProps.put("retry.backoff.ms", "1");
     setUp();
     replayAll();
@@ -376,8 +397,8 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     task.start(properties);
     verifyAll();
 
-    PowerMockito.doThrow(new SdkClientException("Connect timed out", new IOException("timeout")))
-        .when(s3).completeMultipartUpload(any(CompleteMultipartUploadRequest.class));
+    PowerMockito.doThrow(SdkClientException.builder().message("Connect timed out").cause(new IOException("timeout")).build())
+        .when(s3Client).completeMultipartUpload(any(CompleteMultipartUploadRequest.class));
     task.put(createRecords(3));
 
     Map<TopicPartition, OffsetAndMetadata> frameworkOffsets = new HashMap<>();
@@ -388,7 +409,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
     );
 
     // S3 recovers. The framework redelivers offsets 0..2 after the rewind.
-    PowerMockito.doCallRealMethod().when(s3)
+    PowerMockito.doAnswer(AdditionalAnswers.delegatesTo(realS3Client)).when(s3Client)
         .completeMultipartUpload(any(CompleteMultipartUploadRequest.class));
     Thread.sleep(20);
     task.put(createRecords(3));
@@ -455,7 +476,7 @@ public class S3SinkTaskTest extends DataWriterAvroTest {
 
   @Test
   public void testAclCannedConfig() throws Exception {
-    localProps.put(S3SinkConnectorConfig.ACL_CANNED_CONFIG, CannedAccessControlList.BucketOwnerFullControl.toString());
+    localProps.put(S3SinkConnectorConfig.ACL_CANNED_CONFIG, ObjectCannedACL.BUCKET_OWNER_FULL_CONTROL.toString());
     setUp();
     replayAll();
     task = new S3SinkTask();

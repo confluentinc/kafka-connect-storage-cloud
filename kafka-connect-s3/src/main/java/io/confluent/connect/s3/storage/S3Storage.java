@@ -15,42 +15,52 @@
 
 package io.confluent.connect.s3.storage;
 
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.AmazonWebServiceRequest;
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.PredefinedClientConfigurations;
-import com.amazonaws.Request;
-import com.amazonaws.Response;
-import com.amazonaws.SdkClientException;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.client.builder.AwsClientBuilder;
-import com.amazonaws.handlers.HandlerContextKey;
-import com.amazonaws.handlers.RequestHandler2;
-import com.amazonaws.regions.Regions;
-import com.amazonaws.retry.PredefinedBackoffStrategies;
-import com.amazonaws.retry.PredefinedRetryPolicies;
-import com.amazonaws.retry.RetryPolicy;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.ObjectListing;
-import com.amazonaws.services.s3.model.ObjectTagging;
-import com.amazonaws.services.s3.model.SetObjectTaggingRequest;
-import com.amazonaws.services.s3.model.Tag;
-import org.apache.avro.file.SeekableInput;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.OutputStream;
-import java.util.Map;
-import java.util.stream.Collectors;
-
 import io.confluent.connect.s3.S3SinkConnectorConfig;
 import io.confluent.connect.s3.format.parquet.ParquetFormat;
+import io.confluent.connect.s3.util.S3FileUtils;
 import io.confluent.connect.s3.util.S3ProxyConfig;
 import io.confluent.connect.s3.util.Version;
 import io.confluent.connect.storage.Storage;
 import io.confluent.connect.storage.common.util.StringUtils;
+import org.apache.avro.file.SeekableInput;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
+import software.amazon.awssdk.core.client.config.SdkAdvancedClientOption;
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.interceptor.Context;
+import software.amazon.awssdk.core.interceptor.ExecutionAttribute;
+import software.amazon.awssdk.core.interceptor.ExecutionAttributes;
+import software.amazon.awssdk.core.interceptor.ExecutionInterceptor;
+import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.http.apache.ProxyConfiguration;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.retries.StandardRetryStrategy;
+import software.amazon.awssdk.retries.api.RetryStrategy;
+import software.amazon.awssdk.retries.api.BackoffStrategy;
+import software.amazon.awssdk.retries.api.internal.backoff.ExponentialDelayWithJitter;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3ClientBuilder;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
+import software.amazon.awssdk.services.s3.model.PutObjectTaggingRequest;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.model.Tag;
+import software.amazon.awssdk.services.s3.model.Tagging;
+
+import java.io.OutputStream;
+import java.net.URI;
+import java.time.Duration;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static io.confluent.connect.s3.S3SinkConnectorConfig.REGION_CONFIG;
 import static io.confluent.connect.s3.S3SinkConnectorConfig.S3_PATH_STYLE_ACCESS_ENABLED_CONFIG;
@@ -61,15 +71,18 @@ import static io.confluent.connect.s3.S3SinkConnectorConfig.WAN_MODE_CONFIG;
 /**
  * S3 implementation of the storage interface for Connect sinks.
  */
-public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> {
+public class S3Storage implements Storage<S3SinkConnectorConfig, ListObjectsResponse> {
 
   private static final Logger log = LoggerFactory.getLogger(S3Storage.class);
 
   private final String url;
   private final String bucketName;
-  private final AmazonS3 s3;
+  private final S3Client s3Client;
+  private final S3FileUtils s3FileUtils;
   private final S3SinkConnectorConfig conf;
   private static final String VERSION_FORMAT = "APN/1.0 Confluent/1.0 KafkaS3Connector/%s";
+
+  private static final String DEFAULT_URL_SCHEME = "https://";
 
   /**
    * Construct an S3 storage class given a configuration and an AWS S3 address.
@@ -81,7 +94,8 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     this.url = url;
     this.conf = conf;
     this.bucketName = conf.getBucketName();
-    this.s3 = newS3Client(conf);
+    this.s3Client = newS3Client(conf);
+    this.s3FileUtils = new S3FileUtils(s3Client);
   }
 
   /**
@@ -91,36 +105,41 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
    * @param config the S3 configuration.
    * @return S3 client
    */
-  public AmazonS3 newS3Client(S3SinkConnectorConfig config) {
+  public S3Client newS3Client(S3SinkConnectorConfig config) {
     log.info("Creating S3 client.");
-    ClientConfiguration clientConfiguration = newClientConfiguration(config);
-    AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
-        .withAccelerateModeEnabled(config.getBoolean(WAN_MODE_CONFIG))
-        .withPathStyleAccessEnabled(config.getBoolean(S3_PATH_STYLE_ACCESS_ENABLED_CONFIG))
-        .withCredentials(newCredentialsProvider(config))
-        .withClientConfiguration(clientConfiguration)
-        .withRequestHandlers(new RetrySummaryHandler());
+    ClientOverrideConfiguration clientConfiguration = newClientConfiguration(config);
+    S3ClientBuilder builder = S3Client.builder()
+        .accelerate(config.getBoolean(WAN_MODE_CONFIG))
+        .forcePathStyle(config.getBoolean(S3_PATH_STYLE_ACCESS_ENABLED_CONFIG))
+        .credentialsProvider(newCredentialsProvider(config))
+        .httpClientBuilder(newHttpClient(config))
+        .overrideConfiguration(clientConfiguration);
 
     String region = config.getString(REGION_CONFIG);
     if (StringUtils.isBlank(url)) {
-      builder = "us-east-1".equals(region)
-                ? builder.withRegion(Regions.US_EAST_1)
-                : builder.withRegion(region);
+      builder = Region.US_EAST_1.id().equals(region)
+                ? builder.region(Region.US_EAST_1)
+                : builder.region(Region.of(region));
     } else {
-      builder = builder.withEndpointConfiguration(
-          new AwsClientBuilder.EndpointConfiguration(url, region)
-      );
+      URI endpoint = URI.create(url);
+      if (endpoint.getScheme() == null) {
+        endpoint = URI.create(DEFAULT_URL_SCHEME + url);
+      }
+      builder = builder
+          .endpointOverride(endpoint)
+          .region(Region.of(region));
     }
     log.info("S3 client created");
     return builder.build();
   }
 
   // Visible for testing.
-  public S3Storage(S3SinkConnectorConfig conf, String url, String bucketName, AmazonS3 s3) {
+  public S3Storage(S3SinkConnectorConfig conf, String url, String bucketName, S3Client s3Client) {
     this.url = url;
     this.conf = conf;
     this.bucketName = bucketName;
-    this.s3 = s3;
+    this.s3Client = s3Client;
+    this.s3FileUtils = new S3FileUtils(this.s3Client);
   }
 
   /**
@@ -131,107 +150,101 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
    * @param config the S3 configuration.
    * @return S3 client's configuration
    */
-  public ClientConfiguration newClientConfiguration(S3SinkConnectorConfig config) {
+  public ClientOverrideConfiguration newClientConfiguration(S3SinkConnectorConfig config) {
     String version = String.format(VERSION_FORMAT, Version.getVersion());
 
-    ClientConfiguration clientConfiguration = PredefinedClientConfigurations.defaultConfig();
-    clientConfiguration.withUserAgentPrefix(version)
-        .withRetryPolicy(newFullJitterRetryPolicy(config));
-    if (StringUtils.isNotBlank(config.getString(S3_PROXY_URL_CONFIG))) {
-      S3ProxyConfig proxyConfig = new S3ProxyConfig(config);
-      clientConfiguration.withProtocol(proxyConfig.protocol())
-          .withProxyHost(proxyConfig.host())
-          .withProxyPort(proxyConfig.port())
-          .withProxyUsername(proxyConfig.user())
-          .withProxyPassword(proxyConfig.pass());
-    }
-    clientConfiguration.withUseExpectContinue(config.useExpectContinue());
+    ClientOverrideConfiguration clientConfiguration = ClientOverrideConfiguration.builder()
+        .retryStrategy(newRetryStrategy(conf))
+        .addExecutionInterceptor(new RetrySummaryInterceptor())
+        .advancedOptions(
+            Collections.singletonMap(SdkAdvancedClientOption.USER_AGENT_PREFIX, version))
+        .build();
 
     return clientConfiguration;
   }
 
+  public SdkHttpClient.Builder newHttpClient(S3SinkConnectorConfig config) {
+    ApacheHttpClient.Builder clientBuilder =
+        ApacheHttpClient.builder().expectContinueEnabled(config.useExpectContinue());
 
-  /**
-   * Creates a retry policy, based on full jitter backoff strategy
-   * and default retry condition.
-   * Visible for testing.
-   *
-   * @param config the S3 configuration.
-   * @return retry policy
-   * @see com.amazonaws.retry.PredefinedRetryPolicies.SDKDefaultRetryCondition
-   * @see PredefinedBackoffStrategies.FullJitterBackoffStrategy
-   */
-  protected RetryPolicy newFullJitterRetryPolicy(S3SinkConnectorConfig config) {
-    int maxRetries = conf.getS3PartRetries();
-    // Only called when the retry condition allows another attempt.
-    PredefinedBackoffStrategies.FullJitterBackoffStrategy backoffStrategy =
-        new PredefinedBackoffStrategies.FullJitterBackoffStrategy(
-            config.getLong(S3_RETRY_BACKOFF_CONFIG).intValue(),
-            (int) config.getS3RetryMaxBackoffMs()
-        ) {
-          @Override
-          public long delayBeforeNextRetry(AmazonWebServiceRequest request,
-              AmazonClientException exception, int retriesAttempted) {
-            long delayMs = super.delayBeforeNextRetry(request, exception, retriesAttempted);
-            if (request != null) {
-              Long totalDelayMs = request.getHandlerContext(RETRY_DELAY_MS);
-              request.addHandlerContext(RETRY_COUNT, retriesAttempted + 1);
-              request.addHandlerContext(RETRY_DELAY_MS,
-                  (totalDelayMs == null ? 0L : totalDelayMs) + delayMs);
-            }
-            log.debug("S3 request failed (retry {} of {}, status {}, error code {}), "
-                + "retrying in {} ms", retriesAttempted + 1, maxRetries, statusCode(exception),
-                errorCode(exception), delayMs);
-            return delayMs;
-          }
-        };
+    if (StringUtils.isNotBlank(config.getString(S3_PROXY_URL_CONFIG))) {
+      S3ProxyConfig proxyConfig = new S3ProxyConfig(config);
 
-    RetryPolicy retryPolicy = new RetryPolicy(
-        PredefinedRetryPolicies.DEFAULT_RETRY_CONDITION,
-        backoffStrategy,
-        maxRetries,
-        false
-    );
-    log.info("Created a retry policy for the connector");
-    return retryPolicy;
+      clientBuilder.proxyConfiguration(
+          ProxyConfiguration.builder()
+              .username(proxyConfig.user())
+              .password(proxyConfig.pass())
+              .endpoint(proxyConfig.getURI())
+              .build()
+      );
+    }
+
+    return clientBuilder;
   }
 
-  private static final HandlerContextKey<Integer> RETRY_COUNT =
-      new HandlerContextKey<>("S3RetryCount");
-  private static final HandlerContextKey<Long> RETRY_DELAY_MS =
-      new HandlerContextKey<>("S3RetryDelayMs");
+  protected RetryStrategy newRetryStrategy(S3SinkConnectorConfig conf) {
+    return StandardRetryStrategy.builder()
+        .maxAttempts(conf.getS3PartRetries())
+        .backoffStrategy(newExponentialBackoffStrategy())
+        .throttlingBackoffStrategy(newExponentialBackoffStrategy())
+        .build();
+  }
+
+  private BackoffStrategy newExponentialBackoffStrategy() {
+    BackoffStrategy backoffStrategy = new ExponentialDelayWithJitter(
+        Random::new,
+        Duration.ofMillis(conf.getLong(S3_RETRY_BACKOFF_CONFIG).intValue()),
+        Duration.ofMillis(conf.getS3RetryMaxBackoffMs()));
+    int maxRetries = conf.getS3PartRetries() - 1;
+    // Only called when the retry strategy allows another attempt; attempt is the
+    // number of the upcoming attempt, so the first retry is attempt 2.
+    return attempt -> {
+      Duration delay = backoffStrategy.computeDelay(attempt);
+      log.debug("S3 request failed (retry {} of {}), retrying in {} ms",
+          attempt - 1, maxRetries, delay.toMillis());
+      return delay;
+    };
+  }
 
   /**
    * Logs once per S3 call that succeeded only after SDK retries. Calls that run out of
    * retries are already reported through the exception thrown to the connector.
    */
-  private static class RetrySummaryHandler extends RequestHandler2 {
+  private static class RetrySummaryInterceptor implements ExecutionInterceptor {
+    private static final ExecutionAttribute<Long> START_NANOS =
+        new ExecutionAttribute<>("S3RetrySummaryStartNanos");
+    private static final ExecutionAttribute<Integer> ATTEMPTS =
+        new ExecutionAttribute<>("S3RetrySummaryAttempts");
+
     @Override
-    public void afterResponse(Request<?> request, Response<?> response) {
-      AmazonWebServiceRequest original = request.getOriginalRequest();
-      Integer retries = original == null ? null : original.getHandlerContext(RETRY_COUNT);
-      if (retries != null) {
-        log.info("S3 {} succeeded after {} retries ({} ms spent in backoff)",
-            original.getClass().getSimpleName(), retries,
-            original.getHandlerContext(RETRY_DELAY_MS));
+    public void beforeExecution(Context.BeforeExecution context,
+        ExecutionAttributes executionAttributes) {
+      executionAttributes.putAttribute(START_NANOS, System.nanoTime());
+      executionAttributes.putAttribute(ATTEMPTS, 0);
+    }
+
+    // Called once per HTTP attempt, including retries.
+    @Override
+    public void beforeTransmission(Context.BeforeTransmission context,
+        ExecutionAttributes executionAttributes) {
+      executionAttributes.putAttribute(ATTEMPTS,
+          executionAttributes.getAttribute(ATTEMPTS) + 1);
+    }
+
+    @Override
+    public void afterExecution(Context.AfterExecution context,
+        ExecutionAttributes executionAttributes) {
+      int retries = executionAttributes.getAttribute(ATTEMPTS) - 1;
+      if (retries > 0) {
+        log.info("S3 {} succeeded after {} retries ({} ms total)",
+            context.request().getClass().getSimpleName(), retries,
+            TimeUnit.NANOSECONDS.toMillis(
+                System.nanoTime() - executionAttributes.getAttribute(START_NANOS)));
       }
     }
   }
 
-  private static Object statusCode(AmazonClientException e) {
-    return e instanceof AmazonServiceException
-        ? ((AmazonServiceException) e).getStatusCode() : "none";
-  }
-
-  private static Object errorCode(AmazonClientException e) {
-    if (e == null) {
-      return "none";
-    }
-    return e instanceof AmazonServiceException
-        ? ((AmazonServiceException) e).getErrorCode() : e.getClass().getSimpleName();
-  }
-
-  protected AWSCredentialsProvider newCredentialsProvider(S3SinkConnectorConfig config) {
+  protected AwsCredentialsProvider newCredentialsProvider(S3SinkConnectorConfig config) {
     log.info("Returning new credentials provider based on the configured "
            + "credentials provider class");
     return config.getCredentialsProvider();
@@ -239,11 +252,15 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
 
   @Override
   public boolean exists(String name) {
-    return StringUtils.isNotBlank(name) && s3.doesObjectExist(bucketName, name);
+    if (StringUtils.isBlank(name)) {
+      log.debug("Name can not be empty!");
+      return false;
+    }
+    return s3FileUtils.fileExists(bucketName, name);
   }
 
   public boolean bucketExists() {
-    return StringUtils.isNotBlank(bucketName) && s3.doesBucketExistV2(bucketName);
+    return s3FileUtils.bucketExists(bucketName);
   }
 
   @Override
@@ -273,10 +290,10 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     if (ParquetFormat.class.isAssignableFrom(formatClass)) {
       log.info("Create S3ParquetOutputStream for bucket '{}' key '{}'",
               this.conf.getBucketName(), path);
-      return new S3ParquetOutputStream(path, this.conf, s3);
+      return new S3ParquetOutputStream(path, this.conf, s3Client);
     } else {
       // currently ignore what is passed as method argument.
-      return new S3OutputStream(path, this.conf, s3);
+      return new S3OutputStream(path, this.conf, s3Client);
     }
   }
 
@@ -292,23 +309,33 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
       // s3.deleteBucket(name);
       return;
     } else {
-      s3.deleteObject(bucketName, name);
+      s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucketName).key(name).build());
     }
   }
 
   @Override
   public void close() {}
 
-  public void addTags(String fileName, Map<String, String> tags) throws SdkClientException {
-    ObjectTagging objectTagging = new ObjectTagging(tags.entrySet().stream()
-        .map(e -> new Tag(e.getKey(), e.getValue()))
-        .collect(Collectors.toList()));
-    s3.setObjectTagging(new SetObjectTaggingRequest(this.bucketName, fileName, objectTagging));
+  public void addTags(String fileName, Map<String, String> tags) throws AwsServiceException,
+      SdkClientException,
+      S3Exception {
+    Collection<Tag> tagSet = tags.entrySet().stream()
+        .map(e -> Tag.builder()
+            .key(e.getKey())
+            .value(e.getValue())
+            .build())
+        .collect(Collectors.toList());
+    PutObjectTaggingRequest request = PutObjectTaggingRequest.builder().bucket(bucketName)
+            .key(fileName)
+                .tagging(Tagging.builder().tagSet(tagSet).build())
+                    .build();
+    s3Client.putObjectTagging(request);
   }
 
   @Override
-  public ObjectListing list(String path) {
-    return s3.listObjects(bucketName, path);
+  public ListObjectsResponse list(String path) {
+    return s3Client.listObjects(ListObjectsRequest.builder().bucket(bucketName).prefix(path)
+        .build());
   }
 
   @Override

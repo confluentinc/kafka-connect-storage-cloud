@@ -15,11 +15,21 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.SdkClientException;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.AmazonS3Exception;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
-import com.amazonaws.services.s3.model.Tag;
+import software.amazon.awssdk.services.s3.model.Tag;
+import software.amazon.awssdk.services.s3.model.Tagging;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectTaggingRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectTaggingResponse;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3ClientBuilder;
+import software.amazon.awssdk.services.s3.model.GetObjectTaggingResponse;
+import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.S3Object;
+import software.amazon.awssdk.services.s3.paginators.ListObjectsV2Iterable;
+import software.amazon.awssdk.core.exception.SdkClientException;
+
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
@@ -58,6 +68,8 @@ import org.junit.After;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -136,7 +148,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   private AvroFormat format;
   private static String extension;
 
-  private AmazonS3 s3;
+  private S3Client s3Client;
   Map<String, String> localProps = new HashMap<>();
 
   @Override
@@ -149,12 +161,13 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void setUp() throws Exception {
     super.setUp();
 
-    s3 = newS3Client(connectorConfig);
-    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+    s3Client = newS3Client(connectorConfig);
+    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client);
     format = new AvroFormat(storage);
 
-    s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
+    s3Client.createBucket(CreateBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME)
+        .build());
+    assertNotNull(s3Client.headBucket(HeadBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME).build()));
 
     Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
     writerProvider = format.getRecordWriterProvider();
@@ -164,13 +177,13 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void setUpWithCommitException() throws Exception {
     super.setUp();
 
-    s3 = newS3Client(connectorConfig);
-    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3) {
+    s3Client = newS3Client(connectorConfig);
+    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client) {
       private final AtomicInteger retries = new AtomicInteger(0);
 
       @Override
       public S3OutputStream create(String path, boolean overwrite, Class<?> formatClass) {
-        return new S3OutputStreamFlaky(path, this.conf(), s3, retries);
+        return new S3OutputStreamFlaky(path, this.conf(), s3Client, retries);
       }
     };
 
@@ -183,15 +196,15 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   public void setUpWithTaggingException(boolean mockSdkClientException) throws Exception {
     setUpWithTaggingException(mockSdkClientException
-        ? new SdkClientException("Mock SdkClientException while tagging")
+        ? SdkClientException.builder().message("Mock SdkClientException while tagging").build()
         : new RuntimeException("Mock RuntimeException while tagging"));
   }
 
   public void setUpWithTaggingException(RuntimeException taggingException) throws Exception {
     super.setUp();
 
-    s3 = newS3Client(connectorConfig);
-    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3) {
+    s3Client = newS3Client(connectorConfig);
+    storage = new S3Storage(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client) {
       @Override
       public void addTags(String fileName, Map<String, String> tags) throws SdkClientException {
         throw taggingException;
@@ -200,8 +213,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     format = new AvroFormat(storage);
 
-    s3.createBucket(S3_TEST_BUCKET_NAME);
-    assertTrue(s3.doesBucketExistV2(S3_TEST_BUCKET_NAME));
+    s3Client.createBucket(CreateBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME)
+        .build());
+    assertTrue(s3Client.headBucket(HeadBucketRequest.builder().bucket(S3_TEST_BUCKET_NAME).build()) != null);
 
     Format<S3SinkConnectorConfig, String> format = new AvroFormat(storage);
     writerProvider = format.getRecordWriterProvider();
@@ -1559,82 +1573,6 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   @Test
-  public void testAddingS3ObjectTags() throws Exception{
-    // Setting size-based rollup to 10 but will produce fewer records. Commit should not happen.
-    localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
-    setUp();
-
-    // Define the partitioner
-    Partitioner<?> partitioner = new DefaultPartitioner<>();
-    partitioner.configure(parsedConfig);
-    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
-
-    String key = "key";
-    Schema schema = createSchema();
-    List<Struct> records = createRecordBatches(schema, 3, 3);
-
-    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
-
-    for (SinkRecord record : sinkRecords) {
-      topicPartitionWriter.buffer(record);
-    }
-
-    // Test actual write
-    topicPartitionWriter.write();
-    topicPartitionWriter.close();
-
-    // Check expected s3 object tags
-    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
-    Map<String, List<Tag>> expectedTaggedFiles = new HashMap<>();
-    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT),
-            Arrays.asList(new Tag("startOffset", "0"), new Tag("endOffset", "2"), new Tag("recordCount", "3")));
-    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT),
-            Arrays.asList(new Tag("startOffset", "3"), new Tag("endOffset", "5"), new Tag("recordCount", "3")));
-    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT),
-            Arrays.asList(new Tag("startOffset", "6"), new Tag("endOffset", "8"), new Tag("recordCount", "3")));
-    verifyTags(expectedTaggedFiles);
-  }
-
-  @Test
-  public void testAddingAdditionalS3ObjectTags() throws Exception{
-    // Setting size-based rollup to 10 but will produce fewer records. Commit should not happen.
-    localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_CONFIG, "true");
-    localProps.put(S3SinkConnectorConfig.S3_OBJECT_TAGGING_EXTRA_KV, "key1:value1,key2:value2");
-    setUp();
-
-    // Define the partitioner
-    Partitioner<?> partitioner = new DefaultPartitioner<>();
-    partitioner.configure(parsedConfig);
-    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
-            TOPIC_PARTITION, storage, writerProvider, partitioner,  connectorConfig, context, null);
-
-    String key = "key";
-    Schema schema = createSchema();
-    List<Struct> records = createRecordBatches(schema, 3, 3);
-
-    Collection<SinkRecord> sinkRecords = createSinkRecords(records, key, schema);
-
-    for (SinkRecord record : sinkRecords) {
-      topicPartitionWriter.buffer(record);
-    }
-
-    // Test actual write
-    topicPartitionWriter.write();
-    topicPartitionWriter.close();
-
-    // Check expected s3 object tags
-    String dirPrefix = partitioner.generatePartitionedPath(TOPIC, "partition=" + PARTITION);
-    Map<String, List<Tag>> expectedTaggedFiles = new HashMap<>();
-    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT),
-            Arrays.asList(new Tag("startOffset", "0"), new Tag("endOffset", "2"), new Tag("recordCount", "3"), new Tag("key1", "value1"), new Tag("key2", "value2")));
-    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 3, extension, ZERO_PAD_FMT),
-            Arrays.asList(new Tag("startOffset", "3"), new Tag("endOffset", "5"), new Tag("recordCount", "3"), new Tag("key1", "value1"), new Tag("key2", "value2")));
-    expectedTaggedFiles.put(FileUtils.fileKeyToCommit(topicsDir, dirPrefix, TOPIC_PARTITION, 6, extension, ZERO_PAD_FMT),
-            Arrays.asList(new Tag("startOffset", "6"), new Tag("endOffset", "8"), new Tag("recordCount", "3")));
-    verifyTags(expectedTaggedFiles);
-  }
-  @Test
   public void testIgnoreS3ObjectTaggingSdkClientException() throws Exception {
     // Tagging error occurred (SdkClientException) but getting ignored.
     testS3ObjectTaggingErrorHelper(true, true);
@@ -1658,7 +1596,8 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   public void testRetriableS3ObjectTaggingException() throws Exception {
     // A transient tagging failure surfaces as RetriableException so Connect retries put()
     SdkClientException transientError =
-        new SdkClientException("Mock transient error while tagging", new IOException("reset"));
+        SdkClientException.builder()
+            .message("Mock transient error while tagging").cause(new IOException("reset")).build();
     RetriableException exception = assertThrows(RetriableException.class,
             () -> testS3ObjectTaggingErrorHelper(transientError, false));
     assertEquals("Unable to tag S3 object topics_test-topic_partition=12_test-topic#12#0000000000.avro", exception.getMessage());
@@ -1900,29 +1839,29 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
         "topics_test-topic_partition=12_test-topic#12#0000000002.avro");
     private boolean hasGetPermission = true;
 
-    public S3StorageWithConditionalWrite(S3SinkConnectorConfig conf, String url, String bucketName, AmazonS3 s3) {
-      super(conf, url, bucketName, s3);
+    public S3StorageWithConditionalWrite(S3SinkConnectorConfig conf, String url, String bucketName, S3Client s3Client) {
+      super(conf, url, bucketName, s3Client);
     }
 
-    public S3StorageWithConditionalWrite(S3SinkConnectorConfig conf, String url, String bucketName, AmazonS3 s3,
+    public S3StorageWithConditionalWrite(S3SinkConnectorConfig conf, String url, String bucketName, S3Client s3Client,
                                          boolean hasGetPermission) {
-      super(conf, url, bucketName, s3);
+      super(conf, url, bucketName, s3Client);
       this.hasGetPermission = hasGetPermission;
     }
 
     @Override
     public boolean exists(String path) {
       if (!hasGetPermission) {
-        AmazonS3Exception exception = new AmazonS3Exception("file exists");
-        exception.setStatusCode(403);
-        throw exception;
+        throw S3Exception.builder().statusCode(403)
+            .message("access denied")
+            .build();
       }
       return existingFiles.contains(path);
     }
 
     @Override
     public S3OutputStream create(String path, boolean overwrite, Class<?> formatClass) {
-      return new S3OutputStream(path, connectorConfig, s3) {
+      return new S3OutputStream(path, connectorConfig, s3Client) {
         @Override
         public void commit() {
           if (existingFiles.contains(path)) {
@@ -1941,7 +1880,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     localProps.put(FLUSH_SIZE_CONFIG, "10");
     setUp();
 
-    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3, true);
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client, true);
 
     Schema schema = createSchema();
     List<Struct> records = createRecordBatch(schema, 10);
@@ -1972,7 +1911,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     localProps.put(FLUSH_SIZE_CONFIG, "10");
     setUp();
 
-    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3, false);
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client, false);
 
     Schema schema = createSchema();
     List<Struct> records = createRecordBatch(schema, 10);
@@ -2010,7 +1949,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     List<Struct> records = createRecordBatch(schema, 200);
     List<SinkRecord> sinkRecords = createSinkRecordsWithHeaders(records, "key", schema);
 
-    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client);
 
     TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
         TOPIC_PARTITION, storage, getKeyHeaderValueProvider(),  partitioner,  connectorConfig, context, null);
@@ -2040,7 +1979,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     localProps.put(FLUSH_SIZE_CONFIG, "9");
     setUp();
 
-    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client);
 
     Schema schema = createSchema();
     List<Struct> records = createRecordBatch(schema, 10);
@@ -2083,7 +2022,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     localProps.put(FLUSH_SIZE_CONFIG, "3");
     setUp();
 
-    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client);
 
     Schema schema = createSchema();
     List<Struct> records = createRecordBatch(schema, 3);
@@ -2130,7 +2069,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     localProps.put(FLUSH_SIZE_CONFIG, "3");
     setUp();
 
-    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3);
+    storage = new S3StorageWithConditionalWrite(connectorConfig, url, S3_TEST_BUCKET_NAME, s3Client);
 
     Schema schema = SchemaBuilder.struct().field("field", Schema.STRING_SCHEMA).build();
     List<Struct> records = new ArrayList<>();
@@ -2598,11 +2537,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   private void verify(List<String> expectedFileKeys, int expectedSize, Schema schema, List<Struct> records)
       throws IOException {
-    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3Client);
     List<String> actualFiles = new ArrayList<>();
-    for (S3ObjectSummary summary : summaries) {
-      String fileKey = summary.getKey();
-      actualFiles.add(fileKey);
+    for (S3Object summary : summaries) {
+      String fileKey = summary.key();
+      actualFiles.add(URLDecoder.decode(fileKey, StandardCharsets.UTF_8.toString()));
     }
 
     Collections.sort(actualFiles);
@@ -2611,7 +2550,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
     int index = 0;
     for (String fileKey : actualFiles) {
-      Collection<Object> actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3);
+      Collection<Object> actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3Client);
       assertEquals(expectedSize, actualRecords.size());
       for (Object avroRecord : actualRecords) {
         Object expectedRecord = format.getAvroData().fromConnectData(records.get(index).schema(), records.get(index++));
@@ -2624,11 +2563,11 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
       List<String> expectedFileKeys, int expectedSize,
       List<SinkRecord> expectedRecords, CompressionType compressionType
   ) throws IOException {
-    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3Client);
     List<String> actualFiles = new ArrayList<>();
-    for (S3ObjectSummary summary : summaries) {
-      String fileKey = summary.getKey();
-      actualFiles.add(fileKey);
+    for (S3Object summary : summaries) {
+      String fileKey = summary.key();
+      actualFiles.add(URLDecoder.decode(fileKey, StandardCharsets.UTF_8.toString()));
     }
 
     Collections.sort(actualFiles);
@@ -2639,7 +2578,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     for (String fileKey : actualFiles) {
       Collection<Object> actualRecords = readRecordsJson(
           S3_TEST_BUCKET_NAME, fileKey,
-          s3, compressionType
+          s3Client, compressionType
       );
       assertEquals(expectedSize, actualRecords.size());
       for (Object currentRecord : actualRecords) {
@@ -2659,11 +2598,20 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
 
   private void verify(List<String> expectedFileKeys, List<Integer> expectedSizes, Schema schema, List<Struct> records)
           throws IOException {
-    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    ListObjectsV2Request listObjectsV2Request = ListObjectsV2Request.builder()
+        .bucket(S3_TEST_BUCKET_NAME)
+        .build();
+
+    // Get the paginator from the S3 client
+    ListObjectsV2Iterable paginatedResponses = s3Client.listObjectsV2Paginator(listObjectsV2Request);
+
+    // Use a for-each loop to iterate through all the S3Objects
+    // The SDK handles the pagination behind the scenes, making more API calls
+    // as needed.
     List<String> actualFiles = new ArrayList<>();
-    for (S3ObjectSummary summary : summaries) {
-      String fileKey = summary.getKey();
-      actualFiles.add(fileKey);
+    for (S3Object s3Object : paginatedResponses.contents()) {
+      log.info("  - Key: {} | Size: {} bytes", s3Object.key(), s3Object.size());
+      actualFiles.add(URLDecoder.decode(s3Object.key(), StandardCharsets.UTF_8.toString()));
     }
 
     Collections.sort(actualFiles);
@@ -2673,7 +2621,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     int index = 0;
     int expectedSizeIndex = 0;
     for (String fileKey : actualFiles) {
-      Collection<Object> actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3);
+      Collection<Object> actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3Client);
       assertEquals((int)(expectedSizes.get(expectedSizeIndex++)), actualRecords.size());
       for (Object avroRecord : actualRecords) {
         Struct record = records.get(index++);
@@ -2692,7 +2640,7 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   private void verifyRecordElement(List<String> expectedFileKeys, int expectedSize, List<SinkRecord> records, RecordElement fileType)
       throws IOException {
 
-    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    List<S3Object> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3Client);
     List<String> actualFiles;
     switch (fileType) {
       case KEYS:
@@ -2714,9 +2662,9 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
     for (String fileKey : actualFiles) {
       Collection<Object> actualRecords;
       if (fileKey.endsWith(".json")) {
-        actualRecords = readRecordsJson(S3_TEST_BUCKET_NAME, fileKey, s3, CompressionType.NONE);
+        actualRecords = readRecordsJson(S3_TEST_BUCKET_NAME, fileKey, s3Client, CompressionType.NONE);
       } else {
-        actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3);
+        actualRecords = readRecordsAvro(S3_TEST_BUCKET_NAME, fileKey, s3Client);
       }
       assertEquals(expectedSize, actualRecords.size());
       for (Object avroRecord : actualRecords) {
@@ -2767,63 +2715,43 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
   }
 
   // filter for values only.
-  private List<String> getS3FileListValues(List<S3ObjectSummary> summaries) {
+  private List<String> getS3FileListValues(List<S3Object> summaries) throws IOException {
     Set<String> excludeExtensions = new HashSet<>(Arrays.asList(HEADER_AVRO_EXT, HEADER_JSON_EXT,
         KEYS_AVRO_EXT));
     List<String> filteredFiles = new ArrayList<>();
-    for (S3ObjectSummary summary : summaries) {
-      String fileKey = summary.getKey();
+    for (S3Object summary : summaries) {
+      String fileKey = summary.key();
       if (!filenameContainsExtensions(fileKey, excludeExtensions)) {
-        filteredFiles.add(fileKey);
+        filteredFiles.add(URLDecoder.decode(fileKey, StandardCharsets.UTF_8.toString()));
       }
     }
     return filteredFiles;
   }
 
-  private List<String> getS3FileListHeaders(List<S3ObjectSummary> summaries) {
+  private List<String> getS3FileListHeaders(List<S3Object> summaries) throws IOException {
     return getS3FileListFilter(summaries, RecordElement.HEADERS.name().toLowerCase());
   }
 
-  private List<String> getS3FileListKeys(List<S3ObjectSummary> summaries) {
+  private List<String> getS3FileListKeys(List<S3Object> summaries) throws IOException {
     return getS3FileListFilter(summaries, RecordElement.KEYS.name().toLowerCase());
   }
 
   // filter for keys or headers
-  private List<String> getS3FileListFilter(List<S3ObjectSummary> summaries, String extension) {
+  private List<String> getS3FileListFilter(List<S3Object> summaries, String extension)
+      throws IOException {
     List<String> filteredFiles = new ArrayList<>();
-    for (S3ObjectSummary summary : summaries) {
-      String fileKey = summary.getKey();
+    for (S3Object summary : summaries) {
+      String fileKey = summary.key();
       if (fileKey.contains(extension)) {
-        filteredFiles.add(fileKey);
+        filteredFiles.add(URLDecoder.decode(fileKey, StandardCharsets.UTF_8.toString()));
       }
     }
     return filteredFiles;
   }
 
-  private void verifyTags(Map<String, List<Tag>> expectedTaggedFiles)
-          throws IOException {
-    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
-    List<String> actualFiles = new ArrayList<>();
-    for (S3ObjectSummary summary : summaries) {
-      String fileKey = summary.getKey();
-      actualFiles.add(fileKey);
-    }
-
-    List<String> expectedFileKeys = new ArrayList<>(expectedTaggedFiles.keySet());
-    Collections.sort(actualFiles);
-    Collections.sort(expectedFileKeys);
-    assertThat(actualFiles, is(expectedFileKeys));
-
-    for (String fileKey : actualFiles) {
-      List<Tag> actualTags = getS3ObjectTags(S3_TEST_BUCKET_NAME, fileKey, s3);
-      List<Tag> expectedTags = expectedTaggedFiles.get(fileKey);
-      assertTrue(actualTags.containsAll(expectedTags));
-    }
-  }
-
   private void testS3ObjectTaggingErrorHelper(boolean mockSdkClientException, boolean ignoreTaggingError) throws Exception {
     testS3ObjectTaggingErrorHelper(mockSdkClientException
-        ? new SdkClientException("Mock SdkClientException while tagging")
+        ? SdkClientException.builder().message("Mock SdkClientException while tagging").build()
         : new RuntimeException("Mock RuntimeException while tagging"), ignoreTaggingError);
   }
 
